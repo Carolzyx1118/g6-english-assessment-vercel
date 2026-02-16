@@ -893,7 +893,7 @@ export default function SectionContent() {
         {section.passage && (
           <div className="mb-8 p-5 rounded-xl bg-blue-50/50 border border-blue-200">
             <h3 className="font-bold text-sm text-blue-700 mb-3 uppercase tracking-wider">Reading Passage</h3>
-            <div className="text-sm text-slate-700 leading-relaxed space-y-3">
+            <div className="text-base text-slate-700 leading-relaxed space-y-3">
               {section.passage.split('\n\n').map((para, i) => (
                 <p key={i}>{para}</p>
               ))}

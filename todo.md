@@ -27,3 +27,4 @@
 - [x] Fix PDF generation error: html2canvas does not support oklch color format from Tailwind CSS 4
 - [x] Fix PDF download - replace html2canvas with reliable jsPDF text-based generation
 - [x] Remove time display (clock icon + time) from Section Breakdown cards
+- [x] Increase font size of Reading Passage text in SectionContent
