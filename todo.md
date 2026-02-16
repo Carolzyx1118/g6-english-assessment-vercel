@@ -8,3 +8,8 @@
 - [x] Add AI-powered semantic answer checking for Part 3 (Reading Comprehension)
 - [x] Add AI-powered writing evaluation for Part 4 (grammar correction, error highlighting, scoring)
 - [x] Test all changes end-to-end
+- [x] Add detailed explanations for wrong answers (all sections: listening, vocabulary, grammar, reading)
+- [x] Add timing tracking (overall time and per-section time)
+- [x] Rewrite essay feedback to show inline annotations on original text with error highlighting
+- [x] Add correction comparison view (original vs corrected) for writing
+- [x] Generate a comprehensive proficiency report (language level, timing, section breakdown)

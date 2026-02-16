@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { sections, type Section } from '@/data/questions';
 
 interface QuizState {
@@ -7,6 +7,12 @@ interface QuizState {
   submitted: boolean;
   startTime: number | null;
   endTime: number | null;
+}
+
+interface SectionTiming {
+  sectionId: string;
+  startTime: number;
+  totalTime: number; // accumulated ms
 }
 
 interface QuizContextType {
@@ -21,6 +27,8 @@ interface QuizContextType {
   isStarted: boolean;
   getScore: () => { correct: number; total: number; bySection: Record<string, { correct: number; total: number }> };
   getSectionProgress: (sectionId: string) => { answered: number; total: number };
+  getSectionTimings: () => Record<string, number>; // sectionId -> seconds
+  getTotalTime: () => number; // total seconds
 }
 
 const QuizContext = createContext<QuizContextType | null>(null);
@@ -35,7 +43,29 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   });
   const [isStarted, setIsStarted] = useState(false);
 
+  // Per-section timing
+  const sectionTimingsRef = useRef<Record<string, number>>({}); // sectionId -> accumulated ms
+  const sectionEnteredAtRef = useRef<number | null>(null);
+  const currentSectionIdRef = useRef<string>(sections[0]?.id || '');
+
   const currentSection = sections[state.currentSectionIndex];
+
+  // Track section timing when section changes
+  useEffect(() => {
+    if (!isStarted || state.submitted) return;
+
+    const now = Date.now();
+    // Accumulate time for previous section
+    if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
+      const elapsed = now - sectionEnteredAtRef.current;
+      sectionTimingsRef.current[currentSectionIdRef.current] =
+        (sectionTimingsRef.current[currentSectionIdRef.current] || 0) + elapsed;
+    }
+
+    // Start timing new section
+    currentSectionIdRef.current = currentSection?.id || '';
+    sectionEnteredAtRef.current = now;
+  }, [state.currentSectionIndex, isStarted, state.submitted]);
 
   const setCurrentSection = useCallback((index: number) => {
     setState(prev => ({ ...prev, currentSectionIndex: index }));
@@ -53,11 +83,22 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, [state.answers]);
 
   const submitQuiz = useCallback(() => {
-    setState(prev => ({ ...prev, submitted: true, endTime: Date.now() }));
+    const now = Date.now();
+    // Finalize timing for current section
+    if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
+      const elapsed = now - sectionEnteredAtRef.current;
+      sectionTimingsRef.current[currentSectionIdRef.current] =
+        (sectionTimingsRef.current[currentSectionIdRef.current] || 0) + elapsed;
+      sectionEnteredAtRef.current = null;
+    }
+    setState(prev => ({ ...prev, submitted: true, endTime: now }));
   }, []);
 
   const resetQuiz = useCallback(() => {
     setIsStarted(false);
+    sectionTimingsRef.current = {};
+    sectionEnteredAtRef.current = null;
+    currentSectionIdRef.current = sections[0]?.id || '';
     setState({
       currentSectionIndex: 0,
       answers: {},
@@ -69,7 +110,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const startQuiz = useCallback(() => {
     setIsStarted(true);
-    setState(prev => ({ ...prev, startTime: Date.now() }));
+    const now = Date.now();
+    sectionEnteredAtRef.current = now;
+    currentSectionIdRef.current = sections[0]?.id || '';
+    setState(prev => ({ ...prev, startTime: now }));
   }, []);
 
   const getScore = useCallback(() => {
@@ -132,6 +176,21 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     return { answered, total };
   }, [state.answers]);
 
+  const getSectionTimings = useCallback(() => {
+    const result: Record<string, number> = {};
+    for (const [sectionId, ms] of Object.entries(sectionTimingsRef.current)) {
+      result[sectionId] = Math.round(ms / 1000);
+    }
+    return result;
+  }, []);
+
+  const getTotalTime = useCallback(() => {
+    if (state.startTime && state.endTime) {
+      return Math.round((state.endTime - state.startTime) / 1000);
+    }
+    return 0;
+  }, [state.startTime, state.endTime]);
+
   const value = useMemo(() => ({
     state,
     currentSection,
@@ -144,7 +203,9 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     isStarted,
     getScore,
     getSectionProgress,
-  }), [state, currentSection, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress]);
+    getSectionTimings,
+    getTotalTime,
+  }), [state, currentSection, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>
