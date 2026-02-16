@@ -268,7 +268,7 @@ function DragDropGrammarSection({
       {/* Passage with inline blanks */}
       <div className="p-5 rounded-xl bg-white border border-slate-200">
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">Passage</h3>
-        <div className="text-sm text-slate-700 leading-[2.2] space-y-3">
+        <div className="text-base text-slate-700 leading-[2.2] space-y-3">
           {grammarPassage.split('\n\n').map((paragraph, pIdx) => (
             <p key={pIdx}>
               {(() => {
