@@ -1,8 +1,7 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import { sections } from '@/data/questions';
-import { BookOpen, Headphones, PenTool, FileText, CheckCircle2, Circle, AlertTriangle } from 'lucide-react';
+import { BookOpen, Headphones, PenTool, FileText, CheckCircle2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { useState } from 'react';
 
 const sectionIcons: Record<string, React.ReactNode> = {
   listening: <Headphones className="w-4 h-4" />,
@@ -32,57 +31,8 @@ interface SidebarProps {
   onNavigate: () => void;
 }
 
-function SubmitSection() {
-  const { submitQuiz, getSectionProgress } = useQuiz();
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  const totalAnswered = sections.reduce((sum, s) => sum + getSectionProgress(s.id).answered, 0);
-  const totalQuestions = sections.reduce((sum, s) => sum + getSectionProgress(s.id).total, 0);
-  const unanswered = totalQuestions - totalAnswered;
-
-  return (
-    <div className="p-4 border-t border-slate-100">
-      {showConfirm && (
-        <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm">
-          {unanswered > 0 && (
-            <div className="flex items-start gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-              <span className="text-amber-700">
-                You have <span className="font-bold">{unanswered}</span> unanswered question{unanswered > 1 ? 's' : ''}.
-              </span>
-            </div>
-          )}
-          <p className="text-slate-600 mb-3">Are you sure you want to submit?</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { submitQuiz(); setShowConfirm(false); }}
-              className="flex-1 py-2 px-3 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Yes, Submit
-            </button>
-            <button
-              onClick={() => setShowConfirm(false)}
-              className="flex-1 py-2 px-3 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {!showConfirm && (
-        <button
-          onClick={() => setShowConfirm(true)}
-          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-sm hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 hover:shadow-xl transition-all duration-300"
-        >
-          Submit Assessment
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function Sidebar({ onNavigate }: SidebarProps) {
-  const { state, setCurrentSection, getSectionProgress, submitQuiz } = useQuiz();
+  const { state, setCurrentSection, getSectionProgress } = useQuiz();
 
   const totalAnswered = sections.reduce((sum, s) => {
     const p = getSectionProgress(s.id);
@@ -163,8 +113,12 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* Submit Button */}
-      <SubmitSection />
+      {/* Tip at bottom */}
+      <div className="p-4 border-t border-slate-100">
+        <p className="text-xs text-slate-400 text-center">
+          Navigate to Part 4: Writing to submit your assessment
+        </p>
+      </div>
     </div>
   );
 }

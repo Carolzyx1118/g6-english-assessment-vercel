@@ -3,8 +3,8 @@ import { sections, AUDIO_URL } from '@/data/questions';
 import type { MCQQuestion, FillBlankQuestion, OpenEndedQuestion, TrueFalseQuestion, TableQuestion, ReferenceQuestion, OrderQuestion, PhraseQuestion, CheckboxQuestion, ListeningMCQ, WritingQuestion, Question } from '@/data/questions';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Volume2, Play, Pause } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Volume2, Play, Pause, Send, AlertTriangle, GripVertical } from 'lucide-react';
+import { useRef, useState, useCallback } from 'react';
 
 function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: string; onAnswer: (v: string) => void }) {
   return (
@@ -102,32 +102,230 @@ function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: s
   );
 }
 
-function FillBlankCard({ q, answer, onAnswer, wordBank }: { q: FillBlankQuestion; answer?: string; onAnswer: (v: string) => void; wordBank?: { letter: string; word: string }[] }) {
+// ========== DRAG & DROP WORD BANK ==========
+
+function DragDropGrammarSection({
+  questions,
+  wordBank,
+  grammarPassage,
+  getAnswer,
+  setAnswer,
+}: {
+  questions: FillBlankQuestion[];
+  wordBank: { letter: string; word: string }[];
+  grammarPassage: string;
+  getAnswer: (id: number) => string | string[] | number[] | undefined;
+  setAnswer: (id: number, v: string) => void;
+}) {
+  const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
+
+  // Get all used letters
+  const usedLetters = new Set<string>();
+  questions.forEach(q => {
+    const ans = getAnswer(q.id);
+    if (ans && typeof ans === 'string') usedLetters.add(ans);
+  });
+
+  const handleDragStart = (e: React.DragEvent, item: { letter: string; word: string }) => {
+    setDraggedWord(item);
+    e.dataTransfer.setData('text/plain', item.letter);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, questionId: number) => {
+    e.preventDefault();
+    const letter = e.dataTransfer.getData('text/plain');
+    if (letter) {
+      // If this blank already has a word, free it
+      const currentAnswer = getAnswer(questionId);
+      if (currentAnswer && typeof currentAnswer === 'string') {
+        // The old word is freed automatically since we just overwrite
+      }
+      setAnswer(questionId, letter);
+    }
+    setDraggedWord(null);
+  };
+
+  const handleRemoveWord = (questionId: number) => {
+    setAnswer(questionId, '');
+  };
+
+  // Also support click-to-fill: click a word, then click a blank
+  const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
+
+  const handleWordClick = (item: { letter: string; word: string }) => {
+    if (usedLetters.has(item.letter)) return; // already used
+    setSelectedWord(item);
+  };
+
+  const handleBlankClick = (questionId: number) => {
+    if (selectedWord) {
+      setAnswer(questionId, selectedWord.letter);
+      setSelectedWord(null);
+    }
+  };
+
+  // Render passage with interactive blanks
+  const renderPassageWithBlanks = () => {
+    // Split passage by blank markers like <b>(21) ___</b>
+    const parts = grammarPassage.split(/(<b>\(\d+\) ___<\/b>)/g);
+    return parts.map((part, i) => {
+      const match = part.match(/<b>\((\d+)\) ___<\/b>/);
+      if (match) {
+        const qId = parseInt(match[1]);
+        const answer = getAnswer(qId);
+        const answerWord = answer && typeof answer === 'string' ? wordBank.find(w => w.letter === answer) : null;
+
+        return (
+          <span
+            key={i}
+            className={`
+              inline-flex items-center min-w-[100px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
+              transition-all duration-200 cursor-pointer align-baseline
+              ${answerWord
+                ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
+                : draggedWord || selectedWord
+                  ? 'border-blue-400 bg-blue-50 animate-pulse'
+                  : 'border-slate-300 bg-slate-50 text-slate-400'
+              }
+            `}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, qId)}
+            onClick={() => {
+              if (answerWord) {
+                handleRemoveWord(qId);
+              } else {
+                handleBlankClick(qId);
+              }
+            }}
+          >
+            <span className="text-xs font-bold text-slate-400 mr-1">({qId})</span>
+            {answerWord ? (
+              <span className="flex items-center gap-1">
+                {answerWord.word}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRemoveWord(qId); }}
+                  className="ml-1 w-4 h-4 rounded-full bg-amber-200 text-amber-600 flex items-center justify-center text-xs hover:bg-amber-300"
+                >
+                  ×
+                </button>
+              </span>
+            ) : (
+              <span className="text-xs">___</span>
+            )}
+          </span>
+        );
+      }
+      // Regular text - render as HTML
+      return <span key={i} dangerouslySetInnerHTML={{ __html: part }} />;
+    });
+  };
+
   return (
-    <div className="space-y-3">
-      <p className="text-base text-slate-700">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        Blank ({q.id})
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {wordBank?.map(({ letter, word }) => {
-          const isSelected = answer === letter;
-          return (
-            <button
-              key={letter}
-              onClick={() => onAnswer(letter)}
-              className={`
-                px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all duration-200
-                ${isSelected
-                  ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
-                }
-              `}
-            >
-              <span className="font-bold mr-1">{letter})</span> {word}
-            </button>
-          );
-        })}
+    <div className="space-y-6">
+      {/* Word Bank - Draggable */}
+      <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200">
+        <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
+          Word Bank
+          <span className="ml-2 text-xs font-normal text-amber-500 normal-case">
+            (Drag words to blanks, or click to select)
+          </span>
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {wordBank.map(({ letter, word }) => {
+            const isUsed = usedLetters.has(letter);
+            const isSelected = selectedWord?.letter === letter;
+            return (
+              <div
+                key={letter}
+                draggable={!isUsed}
+                onDragStart={(e) => handleDragStart(e, { letter, word })}
+                onDragEnd={() => setDraggedWord(null)}
+                onClick={() => handleWordClick({ letter, word })}
+                className={`
+                  flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all duration-200
+                  ${isUsed
+                    ? 'border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed line-through opacity-50'
+                    : isSelected
+                      ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-md cursor-pointer ring-2 ring-blue-200'
+                      : 'border-amber-200 bg-white text-slate-700 cursor-grab hover:border-amber-400 hover:shadow-sm active:cursor-grabbing'
+                  }
+                `}
+              >
+                {!isUsed && <GripVertical className="w-3 h-3 text-slate-400" />}
+                <span className="font-bold text-amber-600">{letter})</span> {word}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Passage with inline blanks */}
+      <div className="p-5 rounded-xl bg-white border border-slate-200">
+        <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">Passage</h3>
+        <div className="text-sm text-slate-700 leading-[2.2] space-y-3">
+          {grammarPassage.split('\n\n').map((paragraph, pIdx) => (
+            <p key={pIdx}>
+              {(() => {
+                const parts = paragraph.split(/(<b>\(\d+\) ___<\/b>)/g);
+                return parts.map((part, i) => {
+                  const match = part.match(/<b>\((\d+)\) ___<\/b>/);
+                  if (match) {
+                    const qId = parseInt(match[1]);
+                    const answer = getAnswer(qId);
+                    const answerWord = answer && typeof answer === 'string' ? wordBank.find(w => w.letter === answer) : null;
+
+                    return (
+                      <span
+                        key={`${pIdx}-${i}`}
+                        className={`
+                          inline-flex items-center min-w-[90px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
+                          transition-all duration-200 cursor-pointer align-baseline
+                          ${answerWord
+                            ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
+                            : draggedWord || selectedWord
+                              ? 'border-blue-400 bg-blue-50'
+                              : 'border-slate-300 bg-slate-50 text-slate-400'
+                          }
+                        `}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, qId)}
+                        onClick={() => {
+                          if (answerWord) {
+                            handleRemoveWord(qId);
+                          } else {
+                            handleBlankClick(qId);
+                          }
+                        }}
+                      >
+                        <span className="text-xs font-bold text-slate-400 mr-1">({qId})</span>
+                        {answerWord ? (
+                          <span className="flex items-center gap-1">
+                            {answerWord.word}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRemoveWord(qId); }}
+                              className="ml-1 w-4 h-4 rounded-full bg-amber-200 text-amber-600 flex items-center justify-center text-xs hover:bg-amber-300"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="text-xs">___</span>
+                        )}
+                      </span>
+                    );
+                  }
+                  return <span key={`${pIdx}-${i}`} dangerouslySetInnerHTML={{ __html: part }} />;
+                });
+              })()}
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -546,8 +744,6 @@ function QuestionRenderer({ question, answer, onAnswer, wordBank }: {
       return <MCQQuestionCard q={question} answer={answer} onAnswer={onAnswer} />;
     case 'listening-mcq':
       return <ListeningMCQCard q={question} answer={answer} onAnswer={onAnswer} />;
-    case 'fill-blank':
-      return <FillBlankCard q={question} answer={answer} onAnswer={onAnswer} wordBank={wordBank} />;
     case 'open-ended':
       return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} />;
     case 'true-false':
@@ -564,14 +760,77 @@ function QuestionRenderer({ question, answer, onAnswer, wordBank }: {
       return <CheckboxCard q={question} answer={answer as number[]} onAnswer={onAnswer} />;
     case 'writing':
       return <WritingCard q={question} answer={answer} onAnswer={onAnswer} />;
+    case 'fill-blank':
+      // fill-blank is handled by DragDropGrammarSection, not individually
+      return null;
     default:
       return null;
   }
 }
 
+// ========== SUBMIT CONFIRMATION DIALOG ==========
+
+function SubmitConfirmation() {
+  const { submitQuiz, getSectionProgress } = useQuiz();
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const totalAnswered = sections.reduce((sum, s) => sum + getSectionProgress(s.id).answered, 0);
+  const totalQuestions = sections.reduce((sum, s) => sum + getSectionProgress(s.id).total, 0);
+  const unanswered = totalQuestions - totalAnswered;
+
+  if (showConfirm) {
+    return (
+      <div className="mt-6 p-5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+        {unanswered > 0 && (
+          <div className="flex items-start gap-2 mb-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+            <span className="text-sm text-amber-700">
+              You have <span className="font-bold">{unanswered}</span> unanswered question{unanswered > 1 ? 's' : ''}.
+            </span>
+          </div>
+        )}
+        <p className="text-sm text-slate-600 mb-4">Are you sure you want to submit your assessment? This action cannot be undone.</p>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => { submitQuiz(); setShowConfirm(false); }}
+            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Yes, Submit
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowConfirm(false)}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      onClick={() => setShowConfirm(true)}
+      size="lg"
+      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 hover:shadow-xl transition-all duration-300 gap-2"
+    >
+      <Send className="w-5 h-5" />
+      Submit Assessment
+    </Button>
+  );
+}
+
 export default function SectionContent() {
   const { state, currentSection, setCurrentSection, setAnswer, getAnswer } = useQuiz();
   const section = currentSection;
+  const isLastSection = state.currentSectionIndex === sections.length - 1;
+
+  // Check if this section is grammar (has fill-blank questions with wordBank)
+  const isGrammarSection = section.grammarPassage && section.wordBank;
+  const fillBlankQuestions = section.questions.filter(q => q.type === 'fill-blank') as FillBlankQuestion[];
+  const nonFillBlankQuestions = section.questions.filter(q => q.type !== 'fill-blank');
 
   return (
     <AnimatePresence mode="wait">
@@ -619,23 +878,15 @@ export default function SectionContent() {
           </div>
         )}
 
-        {/* Grammar Passage */}
-        {section.grammarPassage && (
-          <div className="mb-8 p-5 rounded-xl bg-amber-50/50 border border-amber-200">
-            <h3 className="font-bold text-sm text-amber-700 mb-2 uppercase tracking-wider">Word Bank</h3>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {section.wordBank?.map(({ letter, word }) => (
-                <span key={letter} className="px-3 py-1 rounded-lg bg-white border border-amber-200 text-sm">
-                  <span className="font-bold text-amber-600">{letter})</span> {word}
-                </span>
-              ))}
-            </div>
-            <h3 className="font-bold text-sm text-amber-700 mb-2 uppercase tracking-wider">Passage</h3>
-            <div
-              className="text-sm text-slate-700 leading-relaxed space-y-3 [&_b]:text-amber-600 [&_b]:font-bold"
-              dangerouslySetInnerHTML={{ __html: section.grammarPassage.replace(/\n\n/g, '</p><p>').replace(/^/, '<p>').replace(/$/, '</p>') }}
-            />
-          </div>
+        {/* Grammar Section with Drag & Drop */}
+        {isGrammarSection && (
+          <DragDropGrammarSection
+            questions={fillBlankQuestions}
+            wordBank={section.wordBank!}
+            grammarPassage={section.grammarPassage!}
+            getAnswer={getAnswer}
+            setAnswer={setAnswer}
+          />
         )}
 
         {/* Reading Passage */}
@@ -650,9 +901,9 @@ export default function SectionContent() {
           </div>
         )}
 
-        {/* Questions */}
+        {/* Questions (non-fill-blank for grammar, all for others) */}
         <div className="space-y-6">
-          {section.questions.map((q) => (
+          {(isGrammarSection ? nonFillBlankQuestions : section.questions).map((q) => (
             <div key={q.id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
               <QuestionRenderer
                 question={q}
@@ -675,14 +926,19 @@ export default function SectionContent() {
             <ChevronLeft className="w-4 h-4" />
             Previous Section
           </Button>
-          <Button
-            onClick={() => setCurrentSection(state.currentSectionIndex + 1)}
-            disabled={state.currentSectionIndex === sections.length - 1}
-            className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-          >
-            Next Section
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+
+          {isLastSection ? (
+            <SubmitConfirmation />
+          ) : (
+            <Button
+              onClick={() => setCurrentSection(state.currentSectionIndex + 1)}
+              disabled={state.currentSectionIndex === sections.length - 1}
+              className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            >
+              Next Section
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </motion.div>
     </AnimatePresence>

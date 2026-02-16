@@ -173,12 +173,12 @@ export const sections: Section[] = [
       { letter: 'F', word: 'being' },
       { letter: 'G', word: 'as' },
       { letter: 'H', word: 'what' },
+      { letter: 'I', word: 'it' },
       { letter: 'J', word: 'only' },
       { letter: 'K', word: 'where' },
       { letter: 'L', word: 'whether' },
       { letter: 'M', word: 'while' },
       { letter: 'N', word: 'had' },
-      { letter: 'P', word: 'it' },
     ],
     grammarPassage: `Education plays a vital role in shaping individuals and societies. <b>(21) ___</b> many people believe that academic success depends mainly on intelligence, research shows that motivation and effort are equally important. Students often perform well not <b>(22) ___</b> because they are naturally gifted, but because they develop effective learning habits.
 
@@ -197,7 +197,7 @@ Ultimately, education is not <b>(30) ___</b> a pathway to employment, but a life
       { id: 25, type: 'fill-blank', correctAnswer: 'H' },
       { id: 26, type: 'fill-blank', correctAnswer: 'F' },
       { id: 27, type: 'fill-blank', correctAnswer: 'N' },
-      { id: 28, type: 'fill-blank', correctAnswer: 'P' },
+      { id: 28, type: 'fill-blank', correctAnswer: 'I' },
       { id: 29, type: 'fill-blank', correctAnswer: 'B' },
       { id: 30, type: 'fill-blank', correctAnswer: 'J' },
     ],
