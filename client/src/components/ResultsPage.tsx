@@ -857,10 +857,7 @@ export default function ResultsPage() {
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-base text-slate-700">{section.title}</span>
-                      <div className="flex items-center gap-3">
-                        {timeStr && <span className="text-sm text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeStr}</span>}
-                        <span className="text-base font-bold text-slate-600">{sectionScore.correct}/{sectionScore.total}</span>
-                      </div>
+                      <span className="text-base font-bold text-slate-600">{sectionScore.correct}/{sectionScore.total}</span>
                     </div>
                     <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: 0.5 }} className={`h-full rounded-full bg-gradient-to-r ${sectionMeta[section.id]?.gradient}`} />
