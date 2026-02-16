@@ -29,3 +29,4 @@
 - [x] Remove time display (clock icon + time) from Section Breakdown cards
 - [x] Increase font size of Reading Passage text in SectionContent
 - [x] Increase font size of Grammar Passage text in SectionContent
+- [x] Remove closing parenthesis ")" from word bank letter labels (A) → A)

@@ -258,7 +258,7 @@ function DragDropGrammarSection({
                 `}
               >
                 {!isUsed && <GripVertical className="w-3 h-3 text-slate-400" />}
-                <span className="font-bold text-amber-600">{letter})</span> {word}
+                <span className="font-bold text-amber-600">{letter}</span> {word}
               </div>
             );
           })}
