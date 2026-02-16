@@ -18,3 +18,7 @@
 - [x] Change Part numbering from 0-4 to 1-5 throughout the app
 - [x] Increase font size for article text and explanation/analysis text
 - [x] Move Proficiency Report section before Section Breakdown in results page
+- [x] Increase font sizes further (one more level up)
+- [x] Add bilingual (EN/CN) toggle button on results page for explanations and report
+- [x] Update server AI prompts to return both English and Chinese versions
+- [x] Add download button to export report and data as TXT file
