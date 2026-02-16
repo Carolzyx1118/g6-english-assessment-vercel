@@ -315,6 +315,7 @@ But then, to our surprise, as we passed a café, we spotted the same old man. He
     color: 'text-[oklch(0.60_0.20_25)]',
     bgColor: 'bg-[oklch(0.95_0.05_25)]',
     description: 'Write a composition on the given topic.',
+    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/xFjnIMa2TcdacptdSFDCMw-img-1_1771267457000_na1fn_d3JpdGluZy1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L3hGam5JTWEyVGNkYWNwdGRTRkRDTXctaW1nLTFfMTc3MTI2NzQ1NzAwMF9uYTFmbl9kM0pwZEdsdVp5MXpaV04wYVc5dS5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=LJEGISP7BLcX3ICV0u0U0uADpcB7dDy7xrCPj0zDOtYa8mIL8-UwqQZuZMZ0mS8cPDZOeQTDRaKBnTMrlSAm61vpEuvXhACr~OwqCSh64Vr69SGO1iw3LJVADBH0Z3RaXrdWdf1VaXnveBmHVUgu7-PUHYNeC2Qey4tTTsDCVEWKiLsvAtPsghKp6HTe7pq4N-ORaa~Xz0Wkpn108IhnpvfeSYQFtBdvNyS~YUk6nxZ14Z4~htR9HfkXFIoIZwqgJKrNhFCOwbHyhN9c81KvznUTIRZOsOKgsh-GfnW3vpcEAM2htmDdlQYym94lcgT1IUS-mtReAQvUnylmw5SZ7A__',
     questions: [
       {
         id: 41,
