@@ -814,7 +814,7 @@ function SubmitConfirmation() {
     <Button
       onClick={() => setShowConfirm(true)}
       size="lg"
-      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 hover:shadow-xl transition-all duration-300 gap-2"
+      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 hover:shadow-xl transition-all duration-300 gap-2" style={{width: '180px'}}
     >
       <Send className="w-5 h-5" />
       Submit Assessment
