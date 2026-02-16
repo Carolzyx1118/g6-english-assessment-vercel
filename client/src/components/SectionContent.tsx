@@ -248,7 +248,7 @@ function DragDropGrammarSection({
                 onDragEnd={() => setDraggedWord(null)}
                 onClick={() => handleWordClick({ letter, word })}
                 className={`
-                  flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all duration-200
+                  flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-base font-medium transition-all duration-200
                   ${isUsed
                     ? 'border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed line-through opacity-50'
                     : isSelected

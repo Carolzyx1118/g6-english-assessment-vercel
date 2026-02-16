@@ -30,3 +30,4 @@
 - [x] Increase font size of Reading Passage text in SectionContent
 - [x] Increase font size of Grammar Passage text in SectionContent
 - [x] Remove closing parenthesis ")" from word bank letter labels (A) → A)
+- [x] Increase font size of Word Bank items from text-sm to text-base
