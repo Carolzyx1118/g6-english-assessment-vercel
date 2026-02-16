@@ -9,7 +9,6 @@ import {
   Download, Languages,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 
@@ -389,141 +388,206 @@ export default function ResultsPage() {
     return parseAnnotatedEssay(writingResult.annotatedEssay);
   }, [writingResult]);
 
-  // Download report as PDF
-  const reportRef = useRef<HTMLDivElement>(null);
+  // Download report as PDF using pure jsPDF text rendering (no html2canvas)
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleDownload = useCallback(async () => {
-    if (!reportRef.current) return;
+  const handleDownload = useCallback(() => {
     setIsDownloading(true);
     try {
-      // Temporarily expand all collapsed explanations for PDF capture
-      const collapsedEls = reportRef.current.querySelectorAll('[data-collapsed="true"]');
-      collapsedEls.forEach(el => {
-        (el as HTMLElement).style.display = 'block';
-        (el as HTMLElement).style.height = 'auto';
-        (el as HTMLElement).style.opacity = '1';
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const marginL = 15;
+      const marginR = 15;
+      const maxW = pageW - marginL - marginR;
+      let y = 20;
 
-      // html2canvas doesn't support oklch() colors from Tailwind CSS 4.
-      // Convert all oklch computed styles to rgb inline styles before capture.
-      const allEls = reportRef.current.querySelectorAll('*');
-      const originalStyles: { el: HTMLElement; props: Record<string, string> }[] = [];
-      const colorProps = ['color', 'background-color', 'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'box-shadow'];
+      const checkPage = (need: number) => {
+        if (y + need > pageH - 15) { pdf.addPage(); y = 20; }
+      };
 
-      allEls.forEach(node => {
-        const el = node as HTMLElement;
-        const computed = getComputedStyle(el);
-        const saved: Record<string, string> = {};
-        let hasOklch = false;
+      const addTitle = (text: string, size: number, r: number, g: number, b: number) => {
+        checkPage(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(size);
+        pdf.setTextColor(r, g, b);
+        pdf.text(text, marginL, y);
+        y += size * 0.5 + 2;
+      };
 
-        colorProps.forEach(prop => {
-          const val = computed.getPropertyValue(prop);
-          if (val && val.includes('oklch')) {
-            hasOklch = true;
-            saved[prop] = el.style.getPropertyValue(prop);
-            // Create a temporary element to convert oklch to rgb
-            const temp = document.createElement('div');
-            temp.style.color = val;
-            document.body.appendChild(temp);
-            const rgb = getComputedStyle(temp).color;
-            document.body.removeChild(temp);
-            el.style.setProperty(prop, rgb);
-          }
-        });
-
-        if (hasOklch) {
-          originalStyles.push({ el, props: saved });
+      const addText = (text: string, size = 10, bold = false) => {
+        pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+        pdf.setFontSize(size);
+        pdf.setTextColor(50, 50, 50);
+        const lines = pdf.splitTextToSize(text, maxW);
+        for (const line of lines) {
+          checkPage(size * 0.45 + 1);
+          pdf.text(line, marginL, y);
+          y += size * 0.45 + 1;
         }
-      });
+      };
 
-      // Also convert oklch CSS variables on the root reportRef element
-      const rootEl = reportRef.current;
-      const rootComputed = getComputedStyle(rootEl);
-      const savedRootBg = rootEl.style.backgroundColor;
-      const rootBg = rootComputed.backgroundColor;
-      if (rootBg && rootBg.includes('oklch')) {
-        const temp = document.createElement('div');
-        temp.style.color = rootBg;
-        document.body.appendChild(temp);
-        rootEl.style.backgroundColor = getComputedStyle(temp).color;
-        document.body.removeChild(temp);
+      const addLine = () => {
+        checkPage(6);
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.3);
+        pdf.line(marginL, y, pageW - marginR, y);
+        y += 4;
+      };
+
+      const addGap = (h = 4) => { y += h; };
+
+      // ===== HEADER =====
+      addTitle('G6 English Proficiency Assessment Report', 18, 37, 99, 235);
+      addGap(2);
+      addText(`Generated on ${new Date().toLocaleString()}`, 8);
+      addGap(2);
+      addLine();
+
+      // ===== SCORE SUMMARY =====
+      addTitle(`Grade: ${gradeInfo.grade}  —  ${lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}`, 14, 30, 30, 30);
+      addText(`Total Score: ${totalScore} / ${totalPossible}  (${percentage}%)`, 11, true);
+      addText(`Total Time: ${minutes}m ${seconds.toString().padStart(2, '0')}s`, 11);
+      addGap(2);
+      addLine();
+
+      // ===== PROFICIENCY REPORT =====
+      if (report) {
+        addTitle(lang === 'en' ? 'Proficiency Report' : '能力评估报告', 14, 99, 102, 241);
+        addGap(2);
+        addText(`CEFR Level: ${report.languageLevel}`, 11, true);
+        addGap(2);
+        addText(lang === 'en' ? 'Summary:' : '总结：', 10, true);
+        addText(lang === 'en' ? report.summary_en : report.summary_cn);
+        addGap(2);
+        addText(lang === 'en' ? 'Time Management:' : '时间管理：', 10, true);
+        addText(lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn);
+        addGap(2);
+        addText(lang === 'en' ? 'Strengths:' : '优势：', 10, true);
+        (lang === 'en' ? report.strengths_en : report.strengths_cn).forEach((s, i) => addText(`  ${i + 1}. ${s}`));
+        addGap(2);
+        addText(lang === 'en' ? 'Areas for Improvement:' : '待提高：', 10, true);
+        (lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).forEach((w, i) => addText(`  ${i + 1}. ${w}`));
+        addGap(2);
+        addText(lang === 'en' ? 'Recommendations:' : '学习建议：', 10, true);
+        (lang === 'en' ? report.recommendations_en : report.recommendations_cn).forEach((r, i) => addText(`  ${i + 1}. ${r}`));
+        addGap(2);
+        addLine();
       }
 
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#FAFBFD',
-        windowWidth: 900,
+      // ===== SECTION BREAKDOWN =====
+      addTitle(lang === 'en' ? 'Section Breakdown' : '各部分成绩', 14, 99, 102, 241);
+      addGap(2);
+      sections.forEach(section => {
+        const sTime = sectionTimings[section.id] || 0;
+        const timeStr = sTime > 0 ? formatTime(sTime) : 'N/A';
+        if (section.id === 'reading' && readingResults) {
+          const rc = readingResults.filter(r => r.isCorrect).length;
+          addText(`${section.title}: ${rc}/${readingResults.length}  (${timeStr})`, 10, true);
+        } else if (section.id === 'writing' && writingResult) {
+          addText(`${section.title}: ${writingResult.score}/${writingResult.maxScore}  (${timeStr})`, 10, true);
+        } else {
+          const bs = bySection[section.id];
+          if (bs) addText(`${section.title}: ${bs.correct}/${bs.total}  (${timeStr})`, 10, true);
+        }
       });
+      addGap(2);
+      addLine();
 
-      // Restore all original styles
-      rootEl.style.backgroundColor = savedRootBg;
-      originalStyles.forEach(({ el, props }) => {
-        Object.entries(props).forEach(([prop, val]) => {
-          if (val) {
-            el.style.setProperty(prop, val);
-          } else {
-            el.style.removeProperty(prop);
+      // ===== WRONG ANSWERS & EXPLANATIONS =====
+      addTitle(lang === 'en' ? 'Wrong Answers & Explanations' : '错题与解析', 14, 220, 50, 50);
+      addGap(2);
+
+      for (const section of detailedResults) {
+        const wrongQs = section.questions.filter(q => !q.isCorrect);
+        if (wrongQs.length === 0) continue;
+        addText(`【${section.sectionTitle}】`, 11, true);
+        addGap(1);
+        for (const q of wrongQs) {
+          addText(`Q${q.id}: ${q.question}`, 10, true);
+          pdf.setTextColor(220, 50, 50);
+          addText(`  ${lang === 'en' ? 'Your answer' : '你的答案'}: ${q.userAnswer}`);
+          pdf.setTextColor(34, 139, 34);
+          addText(`  ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${q.correctAnswer}`);
+          pdf.setTextColor(50, 50, 50);
+          const expl = getExplanation(q.id);
+          if (expl) {
+            addText(`  ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`);
+            addText(`  ${lang === 'en' ? 'Tip' : '提示'}: ${lang === 'en' ? expl.tip_en : expl.tip_cn}`);
           }
+          addGap(2);
+        }
+        addGap(2);
+      }
+
+      // Reading wrong answers
+      if (readingResults) {
+        const wrongReading = readingSubItems.filter(item => {
+          const r = getReadingResult(item.id);
+          return r && !r.isCorrect;
         });
-      });
+        if (wrongReading.length > 0) {
+          addText('【Part 4: Reading Comprehension】', 11, true);
+          addGap(1);
+          for (const item of wrongReading) {
+            const r = getReadingResult(item.id);
+            if (!r) continue;
+            addText(`${item.label}: ${item.questionText}`, 10, true);
+            pdf.setTextColor(220, 50, 50);
+            addText(`  ${lang === 'en' ? 'Your answer' : '你的答案'}: ${item.userAnswer}`);
+            pdf.setTextColor(34, 139, 34);
+            addText(`  ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${item.correctAnswer}`);
+            pdf.setTextColor(50, 50, 50);
+            addText(`  ${lang === 'en' ? 'Feedback' : '反馈'}: ${lang === 'en' ? r.feedback_en : r.feedback_cn}`);
+            addText(`  ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? r.explanation_en : r.explanation_cn}`);
+            addGap(2);
+          }
+        }
+      }
+      addLine();
 
-      // Restore collapsed elements
-      collapsedEls.forEach(el => {
-        (el as HTMLElement).style.display = '';
-        (el as HTMLElement).style.height = '';
-        (el as HTMLElement).style.opacity = '';
-      });
+      // ===== WRITING EVALUATION =====
+      if (writingResult) {
+        addTitle(lang === 'en' ? 'Writing Evaluation' : '写作评估', 14, 225, 29, 72);
+        addGap(2);
+        addText(`${lang === 'en' ? 'Score' : '分数'}: ${writingResult.score}/${writingResult.maxScore}`, 11, true);
+        addGap(1);
+        addText(`${lang === 'en' ? 'Overall Feedback' : '总体反馈'}:`, 10, true);
+        addText(lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn);
+        addGap(2);
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8;
-      const contentWidth = pdfWidth - margin * 2;
-      const imgAspect = canvas.height / canvas.width;
-      const contentHeight = contentWidth * imgAspect;
-
-      // Split into pages if content is taller than one page
-      const pageContentHeight = pdfHeight - margin * 2;
-      let remainingHeight = contentHeight;
-      let sourceY = 0;
-      let page = 0;
-
-      while (remainingHeight > 0) {
-        if (page > 0) pdf.addPage();
-        const sliceHeight = Math.min(remainingHeight, pageContentHeight);
-        const sourceSliceHeight = (sliceHeight / contentHeight) * canvas.height;
-
-        // Create a slice canvas for this page
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sourceSliceHeight;
-        const sliceCtx = sliceCanvas.getContext('2d');
-        if (sliceCtx) {
-          sliceCtx.fillStyle = '#FAFBFD';
-          sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-          sliceCtx.drawImage(
-            canvas,
-            0, sourceY, canvas.width, sourceSliceHeight,
-            0, 0, sliceCanvas.width, sourceSliceHeight
-          );
+        if (writingResult.grammarErrors.length > 0) {
+          addText(lang === 'en' ? 'Errors Found:' : '发现的错误：', 10, true);
+          writingResult.grammarErrors.forEach((err, i) => {
+            pdf.setTextColor(220, 50, 50);
+            addText(`  ${i + 1}. "${err.original}"`, 10);
+            pdf.setTextColor(34, 139, 34);
+            addText(`     → "${err.correction}"`, 10);
+            pdf.setTextColor(50, 50, 50);
+            addText(`     ${lang === 'en' ? err.explanation_en : err.explanation_cn}`, 9);
+          });
+          addGap(2);
         }
 
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(sliceData, 'JPEG', margin, margin, contentWidth, sliceHeight);
+        if (writingResult.correctedEssay) {
+          addText(lang === 'en' ? 'Corrected Essay:' : '修正后的作文：', 10, true);
+          addText(writingResult.correctedEssay);
+          addGap(2);
+        }
 
-        sourceY += sourceSliceHeight;
-        remainingHeight -= pageContentHeight;
-        page++;
+        const suggestions = lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn;
+        if (suggestions && suggestions.length > 0) {
+          addText(lang === 'en' ? 'Suggestions:' : '改进建议：', 10, true);
+          suggestions.forEach((s, i) => addText(`  ${i + 1}. ${s}`));
+        }
+        addLine();
       }
+
+      // ===== FOOTER =====
+      addGap(4);
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text('G6 English Proficiency Assessment — HCI Secondary 1 Entrance', marginL, y);
 
       pdf.save(`G6_Assessment_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
@@ -531,7 +595,8 @@ export default function ResultsPage() {
     } finally {
       setIsDownloading(false);
     }
-  }, []);
+  }, [lang, report, detailedResults, readingResults, writingResult, explanations, readingSubItems,
+      totalScore, totalPossible, percentage, gradeInfo, minutes, seconds, bySection, sectionTimings]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -552,7 +617,6 @@ export default function ResultsPage() {
           </Button>
         </div>
 
-        <div ref={reportRef}>
         {/* Score Card */}
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white mb-6 shadow-lg shadow-amber-200">
@@ -1046,8 +1110,6 @@ export default function ResultsPage() {
             </div>
           </motion.div>
         )}
-
-        </div>{/* end reportRef */}
 
         {/* Retry Button */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.8 }} className="text-center">
