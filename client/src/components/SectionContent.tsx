@@ -863,7 +863,6 @@ export default function SectionContent() {
                 <span className="text-3xl">{section.icon}</span>
                 <div>
                   <h2 className={`text-xl font-bold ${section.color}`}>{section.title}</h2>
-                  <p className="text-sm text-slate-500">{section.subtitle}</p>
                 </div>
               </div>
             </div>
