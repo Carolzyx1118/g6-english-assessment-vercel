@@ -345,14 +345,14 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
         </p>
         {q.subQuestions.map((sub) => (
           <div key={sub.label} className="ml-4 space-y-2">
-            <label className="text-sm font-medium text-slate-600">{sub.label}) {sub.question}</label>
+            <label className="text-base font-medium text-slate-600">{sub.label}) {sub.question}</label>
             <textarea
               value={parsed[sub.label] || ''}
               onChange={(e) => {
                 const newVal = { ...parsed, [sub.label]: e.target.value };
                 onAnswer(JSON.stringify(newVal));
               }}
-              className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-700 resize-none transition-all"
+              className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-base text-slate-700 resize-none transition-all"
               rows={2}
               placeholder="Type your answer here..."
             />
@@ -371,7 +371,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
       <textarea
         value={typeof answer === 'string' ? answer : ''}
         onChange={(e) => onAnswer(e.target.value)}
-        className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-700 resize-none transition-all"
+        className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-base text-slate-700 resize-none transition-all"
         rows={3}
         placeholder="Type your answer here..."
       />
@@ -397,14 +397,14 @@ function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?:
       </p>
       {q.statements.map((s) => (
         <div key={s.label} className="ml-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-          <p className="text-sm text-slate-700"><span className="font-bold">{s.label})</span> {s.statement}</p>
+          <p className="text-base text-slate-700"><span className="font-bold">{s.label})</span> {s.statement}</p>
           <div className="flex gap-3">
             {['True', 'False'].map((tf) => (
               <button
                 key={tf}
                 onClick={() => update(s.label, 'tf', tf)}
                 className={`
-                  px-4 py-1.5 rounded-lg border-2 text-sm font-medium transition-all
+                  px-4 py-1.5 rounded-lg border-2 text-base font-medium transition-all
                   ${parsed[s.label]?.tf === tf
                     ? tf === 'True' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-red-400 bg-red-50 text-red-700'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300'
@@ -418,7 +418,7 @@ function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?:
           <textarea
             value={parsed[s.label]?.reason || ''}
             onChange={(e) => update(s.label, 'reason', e.target.value)}
-            className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-sm text-slate-700 resize-none"
+            className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base text-slate-700 resize-none"
             rows={2}
             placeholder="Give your reason..."
           />
@@ -440,7 +440,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
         {q.question}
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full text-base border-collapse">
           <thead>
             <tr className="bg-slate-100">
               <th className="p-3 text-left font-semibold text-slate-600 border border-slate-200">Situation</th>
@@ -460,7 +460,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
                         const newVal = { ...parsed, [i]: { ...(parsed[i] || {}), thought: e.target.value } };
                         onAnswer(JSON.stringify(newVal));
                       }}
-                      className="w-full p-2 rounded-lg border border-slate-200 focus:border-blue-400 text-sm resize-none"
+                      className="w-full p-2 rounded-lg border border-slate-200 focus:border-blue-400 text-base resize-none"
                       rows={2}
                       placeholder="Your answer..."
                     />
@@ -476,7 +476,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
                         const newVal = { ...parsed, [i]: { ...(parsed[i] || {}), action: e.target.value } };
                         onAnswer(JSON.stringify(newVal));
                       }}
-                      className="w-full p-2 rounded-lg border border-slate-200 focus:border-blue-400 text-sm resize-none"
+                      className="w-full p-2 rounded-lg border border-slate-200 focus:border-blue-400 text-base resize-none"
                       rows={2}
                       placeholder="Your answer..."
                     />
@@ -506,7 +506,7 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
       </p>
       {q.items.map((item, i) => (
         <div key={i} className="ml-2 flex items-center gap-3">
-          <span className="text-sm font-medium text-slate-500 w-32 flex-shrink-0">
+          <span className="text-base font-medium text-slate-500 w-32 flex-shrink-0">
             <span className="font-bold">"{item.word}"</span> ({item.lineRef})
           </span>
           <input
@@ -516,7 +516,7 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
               const newVal = { ...parsed, [i]: e.target.value };
               onAnswer(JSON.stringify(newVal));
             }}
-            className="flex-1 p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-sm text-slate-700"
+            className="flex-1 p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base text-slate-700"
             placeholder="refers to..."
           />
         </div>
@@ -544,14 +544,14 @@ function OrderCard({ q, answer, onAnswer }: { q: OrderQuestion; answer?: string;
               const newVal = { ...parsed, [i]: e.target.value };
               onAnswer(JSON.stringify(newVal));
             }}
-            className="w-16 p-2 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-sm font-bold text-center"
+            className="w-16 p-2 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base font-bold text-center"
           >
             <option value="">—</option>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
           </select>
-          <span className="text-sm text-slate-600">{event}</span>
+          <span className="text-base text-slate-600">{event}</span>
         </div>
       ))}
     </div>
@@ -571,7 +571,7 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
       </p>
       {q.items.map((item, i) => (
         <div key={i} className="ml-2 space-y-2">
-          <p className="text-sm text-slate-600">{String.fromCharCode(97 + i)}) {item.clue}</p>
+          <p className="text-base text-slate-600">{String.fromCharCode(97 + i)}) {item.clue}</p>
           <input
             type="text"
             value={parsed[i] || ''}
@@ -579,7 +579,7 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
               const newVal = { ...parsed, [i]: e.target.value };
               onAnswer(JSON.stringify(newVal));
             }}
-            className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-sm text-slate-700"
+            className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base text-slate-700"
             placeholder="Type the phrase..."
           />
         </div>
@@ -613,7 +613,7 @@ function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: n
               key={i}
               onClick={() => toggle(i)}
               className={`
-                p-3 rounded-xl border-2 text-sm font-medium transition-all duration-200
+                p-3 rounded-xl border-2 text-base font-medium transition-all duration-200
                 ${isSelected
                   ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm'
                   : 'border-slate-200 text-slate-600 hover:border-slate-300'
@@ -636,9 +636,9 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
     <div className="space-y-4">
       <div className="p-5 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200">
         <h3 className="font-bold text-lg text-slate-800 mb-2">Topic: {q.topic}</h3>
-        <p className="text-sm text-slate-600 mb-3">{q.instructions}</p>
-        <p className="text-sm text-slate-500 mb-2">You may include:</p>
-        <ul className="list-disc list-inside text-sm text-slate-500 space-y-1">
+        <p className="text-base text-slate-600 mb-3">{q.instructions}</p>
+        <p className="text-base text-slate-500 mb-2">You may include:</p>
+        <ul className="list-disc list-inside text-base text-slate-500 space-y-1">
           {q.prompts.map((p, i) => (
             <li key={i}>{p}</li>
           ))}
@@ -649,7 +649,7 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
         <textarea
           value={typeof answer === 'string' ? answer : ''}
           onChange={(e) => onAnswer(e.target.value)}
-          className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-700 resize-none transition-all leading-relaxed"
+          className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-base text-slate-700 resize-none transition-all leading-relaxed"
           rows={12}
           placeholder="Write your composition here..."
         />
