@@ -18,10 +18,11 @@ export const appRouter = router({
 
   grading: router({
     // AI-powered reading comprehension answer checking with detailed explanations
+    // Now accepts string questionId to support sub-question IDs like "33-a", "33-b"
     checkReadingAnswers: publicProcedure
       .input(z.object({
         answers: z.array(z.object({
-          questionId: z.number(),
+          questionId: z.string(),
           questionType: z.string(),
           questionText: z.string(),
           userAnswer: z.string(),
@@ -42,7 +43,7 @@ For each question, provide:
 
 Questions:
 ${input.answers.map((a, i) => `
-${i + 1}. [Q${a.questionId}] Type: ${a.questionType}
+${i + 1}. [${a.questionId}] Type: ${a.questionType}
    Question: ${a.questionText}
    Student's Answer: ${a.userAnswer || '(no answer)'}
    Expected Answer: ${a.correctAnswer}
@@ -51,14 +52,14 @@ ${i + 1}. [Q${a.questionId}] Type: ${a.questionType}
 Respond in JSON format:
 {
   "results": [
-    { "questionId": <number>, "isCorrect": <boolean>, "score": <0|1>, "feedback": "<string>", "explanation": "<string>" }
+    { "questionId": "<string matching the question ID above>", "isCorrect": <boolean>, "score": <0|1>, "feedback": "<string>", "explanation": "<string>" }
   ]
 }`;
 
         try {
           const response = await invokeLLM({
             messages: [
-              { role: "system", content: "You are a fair and encouraging English teacher. Grade answers based on meaning, not exact wording. Provide detailed educational explanations. Always respond with valid JSON." },
+              { role: "system", content: "You are a fair and encouraging English teacher. Grade answers based on meaning, not exact wording. Provide detailed educational explanations. Always respond with valid JSON. The questionId in your response MUST be a string that exactly matches the questionId from the input." },
               { role: "user", content: prompt },
             ],
             response_format: {
@@ -74,7 +75,7 @@ Respond in JSON format:
                       items: {
                         type: "object",
                         properties: {
-                          questionId: { type: "number" },
+                          questionId: { type: "string" },
                           isCorrect: { type: "boolean" },
                           score: { type: "number" },
                           feedback: { type: "string" },
@@ -95,7 +96,7 @@ Respond in JSON format:
           const content = response.choices[0]?.message?.content;
           if (typeof content === 'string') {
             const parsed = JSON.parse(content);
-            return parsed.results as { questionId: number; isCorrect: boolean; score: number; feedback: string; explanation: string }[];
+            return parsed.results as { questionId: string; isCorrect: boolean; score: number; feedback: string; explanation: string }[];
           }
         } catch (err) {
           console.error("AI grading error:", err);
@@ -271,7 +272,7 @@ Respond in JSON format:
         try {
           const response = await invokeLLM({
             messages: [
-              { role: "system", content: "You are a patient, encouraging English teacher. Provide clear, educational explanations suitable for a Grade 6 student. Always respond with valid JSON." },
+              { role: "system", content: "You are a patient and encouraging English teacher. Provide clear, educational explanations that help students learn. Always respond with valid JSON." },
               { role: "user", content: prompt },
             ],
             response_format: {

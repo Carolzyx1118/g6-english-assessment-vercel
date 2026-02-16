@@ -107,7 +107,7 @@ export const AUDIO_URL = "https://files.manuscdn.com/user_upload_by_module/sessi
 export const sections: Section[] = [
   {
     id: 'listening',
-    title: 'Part 0: Listening',
+    title: 'Part 1: Listening',
     subtitle: 'Listen and Answer',
     icon: '🎧',
     color: 'text-[oklch(0.50_0.18_255)]',
@@ -125,7 +125,7 @@ export const sections: Section[] = [
   },
   {
     id: 'vocabulary',
-    title: 'Part 1: Vocabulary',
+    title: 'Part 2: Vocabulary',
     subtitle: 'Choose the Correct Meaning',
     icon: '📖',
     color: 'text-[oklch(0.55_0.16_160)]',
@@ -157,7 +157,7 @@ export const sections: Section[] = [
   },
   {
     id: 'grammar',
-    title: 'Part 2: Grammar',
+    title: 'Part 3: Grammar',
     subtitle: 'Fill in the Blanks',
     icon: '✏️',
     color: 'text-[oklch(0.65_0.15_75)]',
@@ -204,7 +204,7 @@ Ultimately, education is not <b>(30) ___</b> a pathway to employment, but a life
   },
   {
     id: 'reading',
-    title: 'Part 3: Reading Comprehension',
+    title: 'Part 4: Reading Comprehension',
     subtitle: 'Read and Answer',
     icon: '📚',
     color: 'text-[oklch(0.50_0.18_255)]',
@@ -309,7 +309,7 @@ But then, to our surprise, as we passed a café, we spotted the same old man. He
   },
   {
     id: 'writing',
-    title: 'Part 4: Writing',
+    title: 'Part 5: Writing',
     subtitle: 'Composition',
     icon: '✍️',
     color: 'text-[oklch(0.60_0.20_25)]',

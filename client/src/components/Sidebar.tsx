@@ -116,7 +116,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       {/* Tip at bottom */}
       <div className="p-4 border-t border-slate-100">
         <p className="text-xs text-slate-400 text-center">
-          Navigate to Part 4: Writing to submit your assessment
+          Navigate to Part 5: Writing to submit your assessment
         </p>
       </div>
     </div>

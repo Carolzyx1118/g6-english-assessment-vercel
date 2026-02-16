@@ -18,7 +18,7 @@ const sectionMeta: Record<string, { icon: React.ReactNode; gradient: string; bg:
   writing: { icon: <PenTool className="w-5 h-5" />, gradient: 'from-rose-500 to-rose-600', bg: 'bg-rose-50' },
 };
 
-type ReadingGradingResult = { questionId: number; isCorrect: boolean; score: number; feedback: string; explanation: string };
+type ReadingGradingResult = { questionId: string; isCorrect: boolean; score: number; feedback: string; explanation: string };
 type WritingEvalResult = {
   score: number;
   maxScore: number;
@@ -138,6 +138,17 @@ function formatTime(totalSeconds: number): string {
   return `${m}m ${s.toString().padStart(2, '0')}s`;
 }
 
+// Sub-question item for reading section
+interface ReadingSubItem {
+  id: string; // e.g. "33-a", "33-b"
+  parentId: number;
+  label: string; // e.g. "Q33(a)"
+  questionText: string;
+  userAnswer: string;
+  correctAnswer: string;
+  questionType: string;
+}
+
 export default function ResultsPage() {
   const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime } = useQuiz();
   const { correct, total, bySection } = getScore();
@@ -168,7 +179,126 @@ export default function ResultsPage() {
   const explainMutation = trpc.grading.explainWrongAnswers.useMutation();
   const reportMutation = trpc.grading.generateReport.useMutation();
 
-  // Detailed answer review for auto-gradable sections
+  // Build reading sub-items (split sub-questions into individual items)
+  const readingSubItems = useMemo((): ReadingSubItem[] => {
+    const readingSection = sections.find(s => s.id === 'reading');
+    if (!readingSection) return [];
+
+    const items: ReadingSubItem[] = [];
+
+    for (const q of readingSection.questions) {
+      const userAns = getAnswer(q.id);
+
+      if (q.type === 'true-false') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        for (const stmt of q.statements) {
+          items.push({
+            id: `${q.id}-${stmt.label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${stmt.label})`,
+            questionText: `True or False: "${stmt.statement}"`,
+            userAnswer: parsed[stmt.label] !== undefined ? (parsed[stmt.label] ? 'True' : 'False') : 'Not answered',
+            correctAnswer: stmt.isTrue ? 'True' : 'False',
+            questionType: 'true-false-sub',
+          });
+        }
+      } else if (q.type === 'open-ended' && q.subQuestions) {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        for (const sub of q.subQuestions) {
+          items.push({
+            id: `${q.id}-${sub.label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${sub.label})`,
+            questionText: `${q.question} — ${sub.question}`,
+            userAnswer: parsed[sub.label] || 'Not answered',
+            correctAnswer: sub.answer,
+            questionType: 'open-ended-sub',
+          });
+        }
+      } else if (q.type === 'open-ended' && !q.subQuestions) {
+        items.push({
+          id: `${q.id}`,
+          parentId: q.id,
+          label: `Q${q.id}`,
+          questionText: q.question,
+          userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
+          correctAnswer: q.answer || '',
+          questionType: 'open-ended',
+        });
+      } else if (q.type === 'table') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        q.rows.forEach((row, i) => {
+          const label = String.fromCharCode(97 + i); // a, b, c...
+          items.push({
+            id: `${q.id}-${label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${label})`,
+            questionText: `Complete the table for: "${row.situation}" — fill in the ${row.blankField}`,
+            userAnswer: parsed[`row${i}`] || parsed[row.blankField + i] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+            correctAnswer: row.answer,
+            questionType: 'table-sub',
+          });
+        });
+      } else if (q.type === 'reference') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        q.items.forEach((item, i) => {
+          const label = String.fromCharCode(97 + i);
+          items.push({
+            id: `${q.id}-${label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${label})`,
+            questionText: `What does "${item.word}" (${item.lineRef}) refer to?`,
+            userAnswer: parsed[item.word] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+            correctAnswer: item.answer,
+            questionType: 'reference-sub',
+          });
+        });
+      } else if (q.type === 'order') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        q.events.forEach((event, i) => {
+          const label = String.fromCharCode(97 + i);
+          items.push({
+            id: `${q.id}-${label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${label})`,
+            questionText: `Order: "${event}"`,
+            userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+            correctAnswer: String(q.correctOrder[i]),
+            questionType: 'order-sub',
+          });
+        });
+      } else if (q.type === 'phrase') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        q.items.forEach((item, i) => {
+          const label = String.fromCharCode(97 + i);
+          items.push({
+            id: `${q.id}-${label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${label})`,
+            questionText: item.clue,
+            userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+            correctAnswer: item.answer,
+            questionType: 'phrase-sub',
+          });
+        });
+      } else if (q.type === 'checkbox') {
+        const userArr = userAns as number[] | undefined;
+        items.push({
+          id: `${q.id}`,
+          parentId: q.id,
+          label: `Q${q.id}`,
+          questionText: q.question,
+          userAnswer: userArr ? userArr.map(i => q.options[i]).join(', ') : 'Not answered',
+          correctAnswer: q.correctAnswers.map(i => q.options[i]).join(', '),
+          questionType: 'checkbox',
+        });
+      }
+    }
+
+    return items;
+  }, [getAnswer]);
+
+  // Detailed answer review for auto-gradable sections (listening, vocabulary, grammar)
   const detailedResults = useMemo(() => {
     const results: { sectionId: string; sectionTitle: string; questions: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] }[] = [];
 
@@ -237,77 +367,29 @@ export default function ResultsPage() {
     return results;
   }, [getAnswer]);
 
-  // Auto-trigger AI grading on mount
+  // Send reading sub-items to AI for grading
   useEffect(() => {
     if (hasStartedGrading.current) return;
     hasStartedGrading.current = true;
 
-    // Grade reading comprehension answers
-    const readingSection = sections.find(s => s.id === 'reading');
-    if (readingSection) {
-      const readingAnswers: { questionId: number; questionType: string; questionText: string; userAnswer: string; correctAnswer: string }[] = [];
+    // Grade reading comprehension answers - send each sub-item individually
+    if (readingSubItems.length > 0) {
+      const readingAnswers = readingSubItems.map(item => ({
+        questionId: item.id, // Use string id like "33-a"
+        questionType: item.questionType,
+        questionText: item.questionText,
+        userAnswer: item.userAnswer,
+        correctAnswer: item.correctAnswer,
+      }));
 
-      for (const q of readingSection.questions) {
-        const userAns = getAnswer(q.id);
-        let questionText = '';
-        let correctAnswer = '';
-        let userAnswer = '';
-
-        if (q.type === 'true-false') {
-          questionText = 'True/False statements';
-          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-          userAnswer = JSON.stringify(parsed);
-          correctAnswer = JSON.stringify(q.statements.map(s => ({ label: s.label, isTrue: s.isTrue, reason: s.reason })));
-        } else if (q.type === 'table') {
-          questionText = q.question;
-          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-          userAnswer = JSON.stringify(parsed);
-          correctAnswer = JSON.stringify(q.rows.map(r => ({ situation: r.situation, [r.blankField]: r.answer })));
-        } else if (q.type === 'reference') {
-          questionText = q.question;
-          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-          userAnswer = JSON.stringify(parsed);
-          correctAnswer = JSON.stringify(q.items.map(item => ({ word: item.word, answer: item.answer })));
-        } else if (q.type === 'order') {
-          questionText = q.question;
-          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-          userAnswer = JSON.stringify(parsed);
-          correctAnswer = JSON.stringify(q.correctOrder);
-        } else if (q.type === 'phrase') {
-          questionText = q.question;
-          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-          userAnswer = JSON.stringify(parsed);
-          correctAnswer = JSON.stringify(q.items.map(item => item.answer));
-        } else if (q.type === 'open-ended') {
-          questionText = q.question;
-          userAnswer = typeof userAns === 'string' ? userAns : '';
-          if (q.subQuestions) {
-            correctAnswer = JSON.stringify(q.subQuestions.map(s => ({ label: s.label, answer: s.answer })));
-          } else {
-            correctAnswer = q.answer || '';
-          }
-        } else if (q.type === 'checkbox') {
-          questionText = q.question;
-          const userArr = userAns as number[] | undefined;
-          userAnswer = userArr ? userArr.map(i => q.options[i]).join(', ') : '';
-          correctAnswer = q.correctAnswers.map(i => q.options[i]).join(', ');
+      setIsGradingReading(true);
+      checkReadingMutation.mutate(
+        { answers: readingAnswers },
+        {
+          onSuccess: (data) => { setReadingResults(data); setIsGradingReading(false); },
+          onError: () => { setReadingError('Failed to grade reading answers.'); setIsGradingReading(false); },
         }
-
-        if (questionText) {
-          readingAnswers.push({ questionId: q.id, questionType: q.type, questionText, userAnswer, correctAnswer });
-        }
-      }
-
-      if (readingAnswers.length > 0) {
-        setIsGradingReading(true);
-        checkReadingMutation.mutate(
-          { answers: readingAnswers },
-          {
-            onSuccess: (data) => { setReadingResults(data); setIsGradingReading(false); },
-            onError: () => { setReadingError('Failed to grade reading answers.'); setIsGradingReading(false); },
-          }
-        );
-      }
+      );
     }
 
     // Grade writing
@@ -335,7 +417,6 @@ export default function ResultsPage() {
     if (isGradingReading || isGradingWriting) return;
     if (explanations !== null || isLoadingExplanations) return;
 
-    // Collect wrong answers from auto-graded sections
     const wrongAnswers: { questionId: number; sectionType: string; questionText: string; userAnswer: string; correctAnswer: string; context?: string }[] = [];
 
     for (const section of detailedResults) {
@@ -438,6 +519,11 @@ export default function ResultsPage() {
     return explanations?.find(e => e.questionId === questionId);
   };
 
+  // Get reading result for a sub-item
+  const getReadingResult = (subItemId: string): ReadingGradingResult | undefined => {
+    return readingResults?.find(r => r.questionId === subItemId);
+  };
+
   // Parse annotated essay
   const annotatedSegments = useMemo(() => {
     if (!writingResult?.annotatedEssay) return [];
@@ -503,7 +589,7 @@ export default function ResultsPage() {
           </div>
         </motion.div>
 
-        {/* Section Breakdown with Time */}
+        {/* Section Breakdown with Time and Scores */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -639,7 +725,7 @@ export default function ResultsPage() {
           </div>
         </motion.div>
 
-        {/* Answer Review with Explanations */}
+        {/* Answer Review with Explanations - Auto-graded sections */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -647,60 +733,64 @@ export default function ResultsPage() {
           className="space-y-6 mb-8"
         >
           <h2 className="font-bold text-lg text-slate-800">Answer Review</h2>
-          {detailedResults.map((section) => (
-            <div key={section.sectionId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className={`px-5 py-3 ${sectionMeta[section.sectionId]?.bg || 'bg-slate-50'} border-b border-slate-200`}>
-                <h3 className="font-bold text-sm text-slate-700">{section.sectionTitle}</h3>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {section.questions.map((q) => {
-                  const expl = getExplanation(q.id);
-                  return (
-                    <div key={q.id} className="px-5 py-3">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">
-                          {q.isCorrect ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                          ) : (
-                            <XCircle className="w-5 h-5 text-red-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-slate-600 mb-1">
-                            <span className="font-bold text-slate-500">Q{q.id}.</span> {q.question}
-                          </p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                            <span className={q.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
-                              Your answer: <span className="font-medium">{q.userAnswer}</span>
-                            </span>
-                            {!q.isCorrect && (
-                              <span className="text-emerald-600">
-                                Correct: <span className="font-medium">{q.correctAnswer}</span>
-                              </span>
+          {detailedResults.map((section) => {
+            const sectionScore = bySection[section.sectionId];
+            const scoreText = sectionScore ? `${sectionScore.correct} out of ${sectionScore.total}` : '';
+            return (
+              <div key={section.sectionId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className={`px-5 py-3 ${sectionMeta[section.sectionId]?.bg || 'bg-slate-50'} border-b border-slate-200 flex items-center justify-between`}>
+                  <h3 className="font-bold text-sm text-slate-700">{section.sectionTitle}</h3>
+                  {scoreText && <span className="text-sm font-bold text-slate-600">{scoreText}</span>}
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {section.questions.map((q) => {
+                    const expl = getExplanation(q.id);
+                    return (
+                      <div key={q.id} className="px-5 py-3">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5">
+                            {q.isCorrect ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            ) : (
+                              <XCircle className="w-5 h-5 text-red-400" />
                             )}
                           </div>
-                          {/* Explanation for wrong answers */}
-                          {!q.isCorrect && expl && (
-                            <CollapsibleExplanation explanation={expl.explanation} tip={expl.tip} />
-                          )}
-                          {!q.isCorrect && !expl && isLoadingExplanations && (
-                            <div className="mt-2 flex items-center gap-1.5 text-xs text-blue-500">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Generating explanation...
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-600 mb-1">
+                              <span className="font-bold text-slate-500">Q{q.id}.</span> {q.question}
+                            </p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                              <span className={q.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
+                                Your answer: <span className="font-medium">{q.userAnswer}</span>
+                              </span>
+                              {!q.isCorrect && (
+                                <span className="text-emerald-600">
+                                  Correct: <span className="font-medium">{q.correctAnswer}</span>
+                                </span>
+                              )}
                             </div>
-                          )}
+                            {!q.isCorrect && expl && (
+                              <CollapsibleExplanation explanation={expl.explanation} tip={expl.tip} />
+                            )}
+                            {!q.isCorrect && !expl && isLoadingExplanations && (
+                              <div className="mt-2 flex items-center gap-1.5 text-xs text-blue-500">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Generating explanation...
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </motion.div>
 
-        {/* AI Reading Comprehension Review */}
-        {readingResults && (
+        {/* AI Reading Comprehension Review - Sub-questions split */}
+        {(readingResults || isGradingReading) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -708,36 +798,68 @@ export default function ResultsPage() {
             className="mb-8"
           >
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 bg-indigo-50 border-b border-slate-200 flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-700">Part 3: Reading Comprehension</h3>
-                <Sparkles className="w-4 h-4 text-indigo-500" />
-                <span className="text-xs text-indigo-500 font-medium">AI Graded</span>
+              <div className="px-5 py-3 bg-indigo-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-slate-700">Part 4: Reading Comprehension</h3>
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs text-indigo-500 font-medium">AI Graded</span>
+                </div>
+                {readingResults && (
+                  <span className="text-sm font-bold text-slate-600">
+                    {readingResults.filter(r => r.isCorrect).length} out of {readingResults.length}
+                  </span>
+                )}
               </div>
-              <div className="divide-y divide-slate-100">
-                {readingResults.map((r) => (
-                  <div key={r.questionId} className="px-5 py-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5">
-                        {r.isCorrect ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-red-400" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-slate-700">Q{r.questionId}</p>
-                          <span className={`text-sm font-bold ${r.isCorrect ? 'text-emerald-500' : 'text-red-400'}`}>{r.score}/1</span>
+
+              {isGradingReading ? (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500 mx-auto mb-3" />
+                  <p className="text-sm text-slate-500">AI is grading your reading answers...</p>
+                </div>
+              ) : readingResults ? (
+                <div className="divide-y divide-slate-100">
+                  {readingSubItems.map((item) => {
+                    const result = getReadingResult(item.id);
+                    if (!result) return null;
+
+                    return (
+                      <div key={item.id} className="px-5 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5">
+                            {result.isCorrect ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-red-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-sm font-medium text-slate-700">{item.label}</p>
+                              <span className={`text-sm font-bold ${result.isCorrect ? 'text-emerald-500' : 'text-red-400'}`}>{result.score}/1</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mb-1">{item.questionText}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                              <span className={result.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
+                                Your answer: <span className="font-medium">{item.userAnswer}</span>
+                              </span>
+                              {!result.isCorrect && (
+                                <span className="text-emerald-600">
+                                  Correct: <span className="font-medium">{item.correctAnswer}</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">{result.feedback}</p>
+                            {!result.isCorrect && result.explanation && (
+                              <CollapsibleExplanation
+                                explanation={result.explanation}
+                                tip="Re-read the relevant paragraph carefully and look for key phrases that support the answer."
+                              />
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">{r.feedback}</p>
-                        {/* Detailed explanation for reading questions */}
-                        {!r.isCorrect && r.explanation && (
-                          <CollapsibleExplanation
-                            explanation={r.explanation}
-                            tip="Re-read the relevant paragraph carefully and look for key phrases that support the answer."
-                          />
-                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-5 text-center text-sm text-red-400">{readingError || 'Grading failed'}</div>
+              )}
             </div>
           </motion.div>
         )}
@@ -751,28 +873,16 @@ export default function ResultsPage() {
             className="mb-8"
           >
             <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-              <div className="px-5 py-3 bg-rose-50 border-b border-slate-200 flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-700">Part 4: Writing Evaluation</h3>
-                <Sparkles className="w-4 h-4 text-rose-500" />
-                <span className="text-xs text-rose-500 font-medium">AI Evaluated</span>
+              <div className="px-5 py-3 bg-rose-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-slate-700">Part 5: Writing Evaluation</h3>
+                  <Sparkles className="w-4 h-4 text-rose-500" />
+                  <span className="text-xs text-rose-500 font-medium">AI Evaluated</span>
+                </div>
+                <span className="text-sm font-bold text-slate-600">{writingResult.score} out of {writingResult.maxScore}</span>
               </div>
 
               <div className="p-6 space-y-6">
-                {/* Score & Grade */}
-                <div className="flex items-center gap-6">
-                  <div className="text-center">
-                    <div className="text-4xl font-extrabold text-slate-800">{writingResult.score}</div>
-                    <div className="text-xs text-slate-400">out of {writingResult.maxScore}</div>
-                  </div>
-                  <div className={`text-3xl font-extrabold ${
-                    writingResult.grade === 'A' ? 'text-emerald-600' :
-                    writingResult.grade === 'B' ? 'text-blue-600' :
-                    writingResult.grade === 'C' ? 'text-amber-600' : 'text-red-500'
-                  }`}>
-                    Grade {writingResult.grade}
-                  </div>
-                </div>
-
                 {/* Overall Feedback */}
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                   <h4 className="font-semibold text-sm text-slate-700 mb-2">Overall Feedback</h4>

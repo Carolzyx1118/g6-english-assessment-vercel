@@ -14,8 +14,8 @@ vi.mock("./_core/llm", () => ({
           message: {
             content: JSON.stringify({
               results: [
-                { questionId: 31, isCorrect: true, score: 1, feedback: "Correct answer.", explanation: "The student correctly identified the main idea from paragraph 1." },
-                { questionId: 32, isCorrect: false, score: 0, feedback: "Incorrect.", explanation: "The passage states the opposite. Re-read paragraph 2 carefully." },
+                { questionId: "31", isCorrect: true, score: 1, feedback: "Correct answer.", explanation: "The student correctly identified the main idea from paragraph 1." },
+                { questionId: "32-a", isCorrect: false, score: 0, feedback: "Incorrect.", explanation: "The passage states the opposite. Re-read paragraph 2 carefully." },
               ],
             }),
           },
@@ -98,18 +98,18 @@ describe("grading.checkReadingAnswers", () => {
 
     const result = await caller.grading.checkReadingAnswers({
       answers: [
-        { questionId: 31, questionType: "open-ended", questionText: "What is the main idea?", userAnswer: "The story is about friendship", correctAnswer: "friendship and loyalty" },
-        { questionId: 32, questionType: "true-false", questionText: "True/False statements", userAnswer: '{"a":true}', correctAnswer: '[{"label":"a","isTrue":false}]' },
+        { questionId: "31", questionType: "open-ended", questionText: "What is the main idea?", userAnswer: "The story is about friendship", correctAnswer: "friendship and loyalty" },
+        { questionId: "32-a", questionType: "true-false-sub", questionText: "True or False: The narrator went in the morning.", userAnswer: "True", correctAnswer: "False" },
       ],
     });
 
     expect(result).toHaveLength(2);
-    expect(result[0].questionId).toBe(31);
+    expect(result[0].questionId).toBe("31");
     expect(result[0].isCorrect).toBe(true);
     expect(result[0].score).toBe(1);
     expect(result[0].feedback).toBeTruthy();
     expect(result[0].explanation).toBeTruthy();
-    expect(result[1].questionId).toBe(32);
+    expect(result[1].questionId).toBe("32-a");
     expect(result[1].isCorrect).toBe(false);
     expect(result[1].explanation).toBeTruthy();
   });
