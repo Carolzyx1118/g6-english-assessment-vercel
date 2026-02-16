@@ -31,3 +31,4 @@
 - [x] Increase font size of Grammar Passage text in SectionContent
 - [x] Remove closing parenthesis ")" from word bank letter labels (A) → A)
 - [x] Increase font size of Word Bank items from text-sm to text-base
+- [x] Increase font size for Part 1 (Listening) and Part 2 (Vocabulary) question text and options

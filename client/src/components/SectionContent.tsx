@@ -45,7 +45,7 @@ function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: str
               `}>
                 {letter}
               </span>
-              <span className={`text-sm ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
+              <span className={`text-base ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
                 {opt}
               </span>
             </button>
@@ -91,7 +91,7 @@ function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: s
               `}>
                 {letter}
               </span>
-              <span className={`text-sm ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
+              <span className={`text-base ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
                 {opt}
               </span>
             </button>
