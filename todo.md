@@ -24,3 +24,4 @@
 - [x] Add download button to export report and data as TXT file
 - [x] Reduce font sizes by one level (revert the last increase)
 - [x] Change download report format from TXT to PDF
+- [x] Fix PDF generation error: html2canvas does not support oklch color format from Tailwind CSS 4

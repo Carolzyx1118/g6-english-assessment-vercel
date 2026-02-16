@@ -405,12 +405,69 @@ export default function ResultsPage() {
         (el as HTMLElement).style.opacity = '1';
       });
 
+      // html2canvas doesn't support oklch() colors from Tailwind CSS 4.
+      // Convert all oklch computed styles to rgb inline styles before capture.
+      const allEls = reportRef.current.querySelectorAll('*');
+      const originalStyles: { el: HTMLElement; props: Record<string, string> }[] = [];
+      const colorProps = ['color', 'background-color', 'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'box-shadow'];
+
+      allEls.forEach(node => {
+        const el = node as HTMLElement;
+        const computed = getComputedStyle(el);
+        const saved: Record<string, string> = {};
+        let hasOklch = false;
+
+        colorProps.forEach(prop => {
+          const val = computed.getPropertyValue(prop);
+          if (val && val.includes('oklch')) {
+            hasOklch = true;
+            saved[prop] = el.style.getPropertyValue(prop);
+            // Create a temporary element to convert oklch to rgb
+            const temp = document.createElement('div');
+            temp.style.color = val;
+            document.body.appendChild(temp);
+            const rgb = getComputedStyle(temp).color;
+            document.body.removeChild(temp);
+            el.style.setProperty(prop, rgb);
+          }
+        });
+
+        if (hasOklch) {
+          originalStyles.push({ el, props: saved });
+        }
+      });
+
+      // Also convert oklch CSS variables on the root reportRef element
+      const rootEl = reportRef.current;
+      const rootComputed = getComputedStyle(rootEl);
+      const savedRootBg = rootEl.style.backgroundColor;
+      const rootBg = rootComputed.backgroundColor;
+      if (rootBg && rootBg.includes('oklch')) {
+        const temp = document.createElement('div');
+        temp.style.color = rootBg;
+        document.body.appendChild(temp);
+        rootEl.style.backgroundColor = getComputedStyle(temp).color;
+        document.body.removeChild(temp);
+      }
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#FAFBFD',
         windowWidth: 900,
+      });
+
+      // Restore all original styles
+      rootEl.style.backgroundColor = savedRootBg;
+      originalStyles.forEach(({ el, props }) => {
+        Object.entries(props).forEach(([prop, val]) => {
+          if (val) {
+            el.style.setProperty(prop, val);
+          } else {
+            el.style.removeProperty(prop);
+          }
+        });
       });
 
       // Restore collapsed elements
