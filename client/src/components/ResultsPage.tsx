@@ -8,6 +8,8 @@ import {
   Clock, Target, TrendingUp, ChevronDown, ChevronUp, Globe,
   Download, Languages,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 
@@ -92,8 +94,8 @@ function CollapsibleExplanation({ explanation, tip, lang }: { explanation: strin
         {isOpen && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
             <div className="mt-2 p-4 rounded-lg bg-blue-50 border border-blue-200">
-              <p className="text-base text-slate-700 leading-relaxed mb-2">{explanation}</p>
-              <div className="flex items-start gap-2 text-base text-amber-700 bg-amber-50 p-3 rounded-md border border-amber-200">
+              <p className="text-sm text-slate-700 leading-relaxed mb-2">{explanation}</p>
+              <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 p-3 rounded-md border border-amber-200">
                 <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
                 <span className="font-medium">{tip}</span>
               </div>
@@ -387,154 +389,92 @@ export default function ResultsPage() {
     return parseAnnotatedEssay(writingResult.annotatedEssay);
   }, [writingResult]);
 
-  // Download report as text file
-  const handleDownload = useCallback(() => {
-    const lines: string[] = [];
-    const divider = '═'.repeat(60);
-    const thinDivider = '─'.repeat(60);
+  // Download report as PDF
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-    lines.push(divider);
-    lines.push('  G6 ENGLISH PROFICIENCY ASSESSMENT REPORT');
-    lines.push(`  ${lang === 'en' ? 'G6 英语水平测评报告' : 'G6 English Proficiency Assessment Report'}`);
-    lines.push(divider);
-    lines.push('');
-
-    // Score summary
-    lines.push(`Grade: ${gradeInfo.grade}  |  Score: ${totalScore}/${totalPossible} (${percentage}%)  |  Time: ${minutes}m ${seconds.toString().padStart(2, '0')}s`);
-    lines.push('');
-
-    // Proficiency report
-    if (report) {
-      lines.push(thinDivider);
-      lines.push(lang === 'en' ? '📊 PROFICIENCY REPORT' : '📊 能力评估报告');
-      lines.push(thinDivider);
-      lines.push('');
-      lines.push(`CEFR Level: ${report.languageLevel}`);
-      lines.push('');
-      lines.push(lang === 'en' ? '▸ Summary:' : '▸ 总结：');
-      lines.push(lang === 'en' ? report.summary_en : report.summary_cn);
-      lines.push('');
-      lines.push(lang === 'en' ? '▸ Time Management:' : '▸ 时间管理：');
-      lines.push(lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn);
-      lines.push('');
-      lines.push(lang === 'en' ? '▸ Strengths:' : '▸ 优势：');
-      (lang === 'en' ? report.strengths_en : report.strengths_cn).forEach((s, i) => lines.push(`  ${i + 1}. ${s}`));
-      lines.push('');
-      lines.push(lang === 'en' ? '▸ Areas for Improvement:' : '▸ 待提高：');
-      (lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).forEach((w, i) => lines.push(`  ${i + 1}. ${w}`));
-      lines.push('');
-      lines.push(lang === 'en' ? '▸ Recommendations:' : '▸ 学习建议：');
-      (lang === 'en' ? report.recommendations_en : report.recommendations_cn).forEach((r, i) => lines.push(`  ${i + 1}. ${r}`));
-      lines.push('');
-    }
-
-    // Section breakdown
-    lines.push(thinDivider);
-    lines.push(lang === 'en' ? '📋 SECTION BREAKDOWN' : '📋 各部分成绩');
-    lines.push(thinDivider);
-    lines.push('');
-    sections.forEach(section => {
-      const sTime = sectionTimings[section.id] || 0;
-      const timeStr = sTime > 0 ? formatTime(sTime) : 'N/A';
-      if (section.id === 'reading' && readingResults) {
-        const rc = readingResults.filter(r => r.isCorrect).length;
-        lines.push(`  ${section.title}: ${rc}/${readingResults.length}  (${timeStr})`);
-      } else if (section.id === 'writing' && writingResult) {
-        lines.push(`  ${section.title}: ${writingResult.score}/${writingResult.maxScore}  (${timeStr})`);
-      } else {
-        const bs = bySection[section.id];
-        if (bs) lines.push(`  ${section.title}: ${bs.correct}/${bs.total}  (${timeStr})`);
-      }
-    });
-    lines.push('');
-
-    // Wrong answers with explanations
-    lines.push(thinDivider);
-    lines.push(lang === 'en' ? '❌ WRONG ANSWERS & EXPLANATIONS' : '❌ 错题与解析');
-    lines.push(thinDivider);
-    lines.push('');
-
-    for (const section of detailedResults) {
-      const wrongQs = section.questions.filter(q => !q.isCorrect);
-      if (wrongQs.length === 0) continue;
-      lines.push(`【${section.sectionTitle}】`);
-      for (const q of wrongQs) {
-        lines.push(`  Q${q.id}: ${q.question}`);
-        lines.push(`    ${lang === 'en' ? 'Your answer' : '你的答案'}: ${q.userAnswer}`);
-        lines.push(`    ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${q.correctAnswer}`);
-        const expl = getExplanation(q.id);
-        if (expl) {
-          lines.push(`    ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`);
-          lines.push(`    ${lang === 'en' ? 'Tip' : '提示'}: ${lang === 'en' ? expl.tip_en : expl.tip_cn}`);
-        }
-        lines.push('');
-      }
-    }
-
-    // Reading wrong answers
-    if (readingResults) {
-      const wrongReading = readingSubItems.filter(item => {
-        const r = getReadingResult(item.id);
-        return r && !r.isCorrect;
+  const handleDownload = useCallback(async () => {
+    if (!reportRef.current) return;
+    setIsDownloading(true);
+    try {
+      // Temporarily expand all collapsed explanations for PDF capture
+      const collapsedEls = reportRef.current.querySelectorAll('[data-collapsed="true"]');
+      collapsedEls.forEach(el => {
+        (el as HTMLElement).style.display = 'block';
+        (el as HTMLElement).style.height = 'auto';
+        (el as HTMLElement).style.opacity = '1';
       });
-      if (wrongReading.length > 0) {
-        lines.push(`【Part 4: Reading Comprehension】`);
-        for (const item of wrongReading) {
-          const r = getReadingResult(item.id);
-          if (!r) continue;
-          lines.push(`  ${item.label}: ${item.questionText}`);
-          lines.push(`    ${lang === 'en' ? 'Your answer' : '你的答案'}: ${item.userAnswer}`);
-          lines.push(`    ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${item.correctAnswer}`);
-          lines.push(`    ${lang === 'en' ? 'Feedback' : '反馈'}: ${lang === 'en' ? r.feedback_en : r.feedback_cn}`);
-          lines.push(`    ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? r.explanation_en : r.explanation_cn}`);
-          lines.push('');
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#FAFBFD',
+        windowWidth: 900,
+      });
+
+      // Restore collapsed elements
+      collapsedEls.forEach(el => {
+        (el as HTMLElement).style.display = '';
+        (el as HTMLElement).style.height = '';
+        (el as HTMLElement).style.opacity = '';
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const contentWidth = pdfWidth - margin * 2;
+      const imgAspect = canvas.height / canvas.width;
+      const contentHeight = contentWidth * imgAspect;
+
+      // Split into pages if content is taller than one page
+      const pageContentHeight = pdfHeight - margin * 2;
+      let remainingHeight = contentHeight;
+      let sourceY = 0;
+      let page = 0;
+
+      while (remainingHeight > 0) {
+        if (page > 0) pdf.addPage();
+        const sliceHeight = Math.min(remainingHeight, pageContentHeight);
+        const sourceSliceHeight = (sliceHeight / contentHeight) * canvas.height;
+
+        // Create a slice canvas for this page
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sourceSliceHeight;
+        const sliceCtx = sliceCanvas.getContext('2d');
+        if (sliceCtx) {
+          sliceCtx.fillStyle = '#FAFBFD';
+          sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          sliceCtx.drawImage(
+            canvas,
+            0, sourceY, canvas.width, sourceSliceHeight,
+            0, 0, sliceCanvas.width, sourceSliceHeight
+          );
         }
+
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(sliceData, 'JPEG', margin, margin, contentWidth, sliceHeight);
+
+        sourceY += sourceSliceHeight;
+        remainingHeight -= pageContentHeight;
+        page++;
       }
+
+      pdf.save(`G6_Assessment_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      setIsDownloading(false);
     }
-
-    // Writing evaluation
-    if (writingResult) {
-      lines.push(thinDivider);
-      lines.push(lang === 'en' ? '✍️ WRITING EVALUATION' : '✍️ 写作评估');
-      lines.push(thinDivider);
-      lines.push('');
-      lines.push(`${lang === 'en' ? 'Score' : '分数'}: ${writingResult.score}/${writingResult.maxScore}`);
-      lines.push(`${lang === 'en' ? 'Overall Feedback' : '总体反馈'}: ${lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn}`);
-      lines.push('');
-      if (writingResult.grammarErrors.length > 0) {
-        lines.push(lang === 'en' ? '▸ Errors Found:' : '▸ 发现的错误：');
-        writingResult.grammarErrors.forEach((err, i) => {
-          lines.push(`  ${i + 1}. "${err.original}" → "${err.correction}"`);
-          lines.push(`     ${lang === 'en' ? err.explanation_en : err.explanation_cn}`);
-        });
-        lines.push('');
-      }
-      if (writingResult.correctedEssay) {
-        lines.push(lang === 'en' ? '▸ Corrected Essay:' : '▸ 修正后的作文：');
-        lines.push(writingResult.correctedEssay);
-        lines.push('');
-      }
-      const suggestions = lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn;
-      if (suggestions.length > 0) {
-        lines.push(lang === 'en' ? '▸ Suggestions:' : '▸ 改进建议：');
-        suggestions.forEach((s, i) => lines.push(`  ${i + 1}. ${s}`));
-      }
-    }
-
-    lines.push('');
-    lines.push(divider);
-    lines.push(`  Generated on ${new Date().toLocaleString()}`);
-    lines.push(divider);
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `G6_Assessment_Report_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [lang, report, detailedResults, readingResults, writingResult, explanations, readingSubItems,
-      totalScore, totalPossible, percentage, gradeInfo, minutes, seconds, bySection, sectionTimings]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -547,14 +487,15 @@ export default function ResultsPage() {
             onClick={handleDownload}
             variant="outline"
             size="sm"
-            disabled={isStillGrading || isLoadingReport}
+            disabled={isStillGrading || isLoadingReport || isDownloading}
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50"
           >
-            <Download className="w-4 h-4" />
-            {lang === 'en' ? 'Download Report' : '下载报告'}
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isDownloading ? (lang === 'en' ? 'Generating PDF...' : '生成PDF中...') : (lang === 'en' ? 'Download PDF' : '下载PDF')}
           </Button>
         </div>
 
+        <div ref={reportRef}>
         {/* Score Card */}
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white mb-6 shadow-lg shadow-amber-200">
@@ -566,10 +507,10 @@ export default function ResultsPage() {
           {isStillGrading ? (
             <div className="flex items-center justify-center gap-2 text-blue-600">
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span className="text-lg">{lang === 'en' ? 'AI is grading your answers...' : 'AI 正在批改你的答案...'}</span>
+              <span className="text-base">{lang === 'en' ? 'AI is grading your answers...' : 'AI 正在批改你的答案...'}</span>
             </div>
           ) : (
-            <p className="text-slate-500 text-lg">{lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}</p>
+            <p className="text-slate-500 text-base">{lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}</p>
           )}
         </motion.div>
 
@@ -630,7 +571,7 @@ export default function ResultsPage() {
 
                   {/* Summary */}
                   <div className="p-4 rounded-xl bg-violet-50 border border-violet-200">
-                    <p className="text-lg text-slate-700 leading-relaxed">{lang === 'en' ? report.summary_en : report.summary_cn}</p>
+                    <p className="text-base text-slate-700 leading-relaxed">{lang === 'en' ? report.summary_en : report.summary_cn}</p>
                   </div>
 
                   {/* Time Analysis */}
@@ -639,7 +580,7 @@ export default function ResultsPage() {
                       <Clock className="w-4 h-4 text-slate-500" />
                       {lang === 'en' ? 'Time Management' : '时间管理'}
                     </h4>
-                    <p className="text-lg text-slate-600 leading-relaxed">{lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn}</p>
+                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn}</p>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -650,7 +591,7 @@ export default function ResultsPage() {
                       </h4>
                       <ul className="space-y-2">
                         {(lang === 'en' ? report.strengths_en : report.strengths_cn).map((s, i) => (
-                          <li key={i} className="flex items-start gap-2 text-base text-slate-600">
+                          <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                             <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-1 shrink-0" />{s}
                           </li>
                         ))}
@@ -663,7 +604,7 @@ export default function ResultsPage() {
                       </h4>
                       <ul className="space-y-2">
                         {(lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).map((w, i) => (
-                          <li key={i} className="flex items-start gap-2 text-base text-slate-600">
+                          <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                             <XCircle className="w-4 h-4 text-amber-500 mt-1 shrink-0" />{w}
                           </li>
                         ))}
@@ -678,7 +619,7 @@ export default function ResultsPage() {
                     </h4>
                     <ul className="space-y-2">
                       {(lang === 'en' ? report.recommendations_en : report.recommendations_cn).map((r, i) => (
-                        <li key={i} className="flex items-start gap-2 text-base text-slate-600">
+                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                           <span className="text-blue-500 font-bold mt-0.5 shrink-0">{i + 1}.</span>{r}
                         </li>
                       ))}
@@ -832,10 +773,10 @@ export default function ResultsPage() {
                             {q.isCorrect ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-red-400" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-lg text-slate-600 mb-1">
+                            <p className="text-sm text-slate-600 mb-1">
                               <span className="font-bold text-slate-500">Q{q.id}.</span> {q.question}
                             </p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-base">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={q.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 {lang === 'en' ? 'Your answer' : '你的答案'}: <span className="font-medium">{q.userAnswer}</span>
                               </span>
@@ -907,8 +848,8 @@ export default function ResultsPage() {
                               <p className="text-base font-medium text-slate-700">{item.label}</p>
                               <span className={`text-base font-bold ${result.isCorrect ? 'text-emerald-500' : 'text-red-400'}`}>{result.score}/1</span>
                             </div>
-                            <p className="text-base text-slate-500 mb-1">{item.questionText}</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-base">
+                            <p className="text-sm text-slate-500 mb-1">{item.questionText}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={result.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 {lang === 'en' ? 'Your answer' : '你的答案'}: <span className="font-medium">{item.userAnswer}</span>
                               </span>
@@ -918,7 +859,7 @@ export default function ResultsPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-base text-slate-400 mt-1">{lang === 'en' ? result.feedback_en : result.feedback_cn}</p>
+                            <p className="text-sm text-slate-400 mt-1">{lang === 'en' ? result.feedback_en : result.feedback_cn}</p>
                             {!result.isCorrect && (lang === 'en' ? result.explanation_en : result.explanation_cn) && (
                               <CollapsibleExplanation
                                 explanation={lang === 'en' ? result.explanation_en : result.explanation_cn}
@@ -955,7 +896,7 @@ export default function ResultsPage() {
               <div className="p-6 space-y-6">
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                   <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Feedback' : '总体反馈'}</h4>
-                  <p className="text-lg text-slate-600 leading-relaxed">{lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn}</p>
+                  <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn}</p>
                 </div>
 
                 {/* Tab Navigation */}
@@ -981,7 +922,7 @@ export default function ResultsPage() {
                       <h4 className="font-semibold text-base text-slate-700">{lang === 'en' ? 'Your Essay with Inline Corrections' : '原文标注纠错'}</h4>
                       <span className="text-sm text-slate-400">{lang === 'en' ? '(hover/click errors for details)' : '(悬停/点击错误查看详情)'}</span>
                     </div>
-                    <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200 text-lg text-slate-700 leading-[2] whitespace-pre-wrap">
+                    <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200 text-base text-slate-700 leading-[2] whitespace-pre-wrap">
                       {annotatedSegments.length > 0 ? (
                         annotatedSegments.map((seg, i) =>
                           seg.type === 'text' ? <span key={i}>{seg.content}</span> : (
@@ -1003,7 +944,7 @@ export default function ResultsPage() {
                 {writingTab === 'corrected' && writingResult.correctedEssay && (
                   <div>
                     <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Corrected Version' : '修正版本'}</h4>
-                    <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-lg text-slate-700 leading-[2] whitespace-pre-wrap">
+                    <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-base text-slate-700 leading-[2] whitespace-pre-wrap">
                       {writingResult.correctedEssay}
                     </div>
                   </div>
@@ -1019,12 +960,12 @@ export default function ResultsPage() {
                     <div className="space-y-2">
                       {writingResult.grammarErrors.map((err, i) => (
                         <div key={i} className="p-3 rounded-lg bg-red-50 border border-red-200">
-                          <div className="flex items-start gap-2 text-base">
+                          <div className="flex items-start gap-2 text-sm">
                             <span className="text-red-500 line-through">{err.original}</span>
                             <span className="text-slate-400 shrink-0">→</span>
                             <span className="text-emerald-600 font-medium">{err.correction}</span>
                           </div>
-                          <p className="text-base text-slate-500 mt-1">{lang === 'en' ? err.explanation_en : err.explanation_cn}</p>
+                          <p className="text-sm text-slate-500 mt-1">{lang === 'en' ? err.explanation_en : err.explanation_cn}</p>
                         </div>
                       ))}
                     </div>
@@ -1037,8 +978,8 @@ export default function ResultsPage() {
                     <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Suggestions for Improvement' : '改进建议'}</h4>
                     <ul className="space-y-2">
                       {(lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn).map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-base text-slate-600">
-                          <span className="text-blue-500 font-bold mt-0.5">{i + 1}.</span>{s}
+<li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <span className="text-blue-500 font-bold mt-0.5">{i + 1}.</span>{s}
                         </li>
                       ))}
                     </ul>
@@ -1048,6 +989,8 @@ export default function ResultsPage() {
             </div>
           </motion.div>
         )}
+
+        </div>{/* end reportRef */}
 
         {/* Retry Button */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.8 }} className="text-center">

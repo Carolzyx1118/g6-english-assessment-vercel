@@ -22,3 +22,5 @@
 - [x] Add bilingual (EN/CN) toggle button on results page for explanations and report
 - [x] Update server AI prompts to return both English and Chinese versions
 - [x] Add download button to export report and data as TXT file
+- [x] Reduce font sizes by one level (revert the last increase)
+- [x] Change download report format from TXT to PDF
