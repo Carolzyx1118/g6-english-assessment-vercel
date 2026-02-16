@@ -119,8 +119,8 @@ function CollapsibleExplanation({ explanation, tip }: { explanation: string; tip
             className="overflow-hidden"
           >
             <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
-              <p className="text-xs text-slate-600 leading-relaxed mb-2">{explanation}</p>
-              <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 p-2 rounded-md border border-amber-200">
+              <p className="text-sm text-slate-600 leading-relaxed mb-2">{explanation}</p>
+              <div className="flex items-start gap-1.5 text-sm text-amber-700 bg-amber-50 p-2 rounded-md border border-amber-200">
                 <Lightbulb className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span className="font-medium">{tip}</span>
               </div>
@@ -589,6 +589,108 @@ export default function ResultsPage() {
           </div>
         </motion.div>
 
+        {/* Proficiency Report */}
+        {(report || isLoadingReport) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            className="mb-8"
+          >
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-slate-200 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-violet-600" />
+                <h3 className="font-bold text-sm text-slate-700">Proficiency Report</h3>
+                <Sparkles className="w-4 h-4 text-violet-500" />
+              </div>
+
+              {isLoadingReport ? (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-violet-500 mx-auto mb-3" />
+                  <p className="text-sm text-slate-500">Generating your proficiency report...</p>
+                </div>
+              ) : report ? (
+                <div className="p-6 space-y-5">
+                  {/* CEFR Level */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 text-white flex items-center justify-center shadow-lg shadow-violet-200">
+                      <span className="text-2xl font-extrabold">{report.languageLevel}</span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-700">CEFR Language Level</div>
+                      <p className="text-xs text-slate-500 mt-0.5">Common European Framework of Reference</p>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="p-4 rounded-xl bg-violet-50 border border-violet-200">
+                    <p className="text-base text-slate-700 leading-relaxed">{report.summary}</p>
+                  </div>
+
+                  {/* Time Analysis */}
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <h4 className="font-semibold text-sm text-slate-700 mb-2 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-slate-500" />
+                      Time Management
+                    </h4>
+                    <p className="text-base text-slate-600 leading-relaxed">{report.timeAnalysis}</p>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Strengths */}
+                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <h4 className="font-semibold text-sm text-emerald-700 mb-3 flex items-center gap-2">
+                        <Target className="w-4 h-4" />
+                        Strengths
+                      </h4>
+                      <ul className="space-y-2">
+                        {report.strengths.map((s, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Weaknesses */}
+                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                      <h4 className="font-semibold text-sm text-amber-700 mb-3 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        Areas for Improvement
+                      </h4>
+                      <ul className="space-y-2">
+                        {report.weaknesses.map((w, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                            <XCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                            {w}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Recommendations */}
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
+                    <h4 className="font-semibold text-sm text-blue-700 mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" />
+                      Study Recommendations
+                    </h4>
+                    <ul className="space-y-2">
+                      {report.recommendations.map((r, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                          <span className="text-blue-500 font-bold mt-0.5 shrink-0">{i + 1}.</span>
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
+        )}
+
         {/* Section Breakdown with Time and Scores */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -756,10 +858,10 @@ export default function ResultsPage() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-600 mb-1">
+                            <p className="text-base text-slate-600 mb-1">
                               <span className="font-bold text-slate-500">Q{q.id}.</span> {q.question}
                             </p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={q.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 Your answer: <span className="font-medium">{q.userAnswer}</span>
                               </span>
@@ -833,8 +935,8 @@ export default function ResultsPage() {
                               <p className="text-sm font-medium text-slate-700">{item.label}</p>
                               <span className={`text-sm font-bold ${result.isCorrect ? 'text-emerald-500' : 'text-red-400'}`}>{result.score}/1</span>
                             </div>
-                            <p className="text-xs text-slate-500 mb-1">{item.questionText}</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <p className="text-sm text-slate-500 mb-1">{item.questionText}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={result.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 Your answer: <span className="font-medium">{item.userAnswer}</span>
                               </span>
@@ -844,7 +946,7 @@ export default function ResultsPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 mt-1">{result.feedback}</p>
+                            <p className="text-sm text-slate-400 mt-1">{result.feedback}</p>
                             {!result.isCorrect && result.explanation && (
                               <CollapsibleExplanation
                                 explanation={result.explanation}
@@ -886,7 +988,7 @@ export default function ResultsPage() {
                 {/* Overall Feedback */}
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                   <h4 className="font-semibold text-sm text-slate-700 mb-2">Overall Feedback</h4>
-                  <p className="text-sm text-slate-600 leading-relaxed">{writingResult.overallFeedback}</p>
+                    <p className="text-base text-slate-600 leading-relaxed">{writingResult.overallFeedback}</p>
                 </div>
 
                 {/* Tab Navigation */}
@@ -924,7 +1026,7 @@ export default function ResultsPage() {
                       <h4 className="font-semibold text-sm text-slate-700">Your Essay with Inline Corrections</h4>
                       <span className="text-xs text-slate-400">(hover/click errors for details)</span>
                     </div>
-                    <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200 text-sm text-slate-700 leading-[1.8] whitespace-pre-wrap">
+                    <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200 text-base text-slate-700 leading-[2] whitespace-pre-wrap">
                       {annotatedSegments.length > 0 ? (
                         annotatedSegments.map((seg, i) =>
                           seg.type === 'text' ? (
@@ -959,7 +1061,7 @@ export default function ResultsPage() {
                 {writingTab === 'corrected' && writingResult.correctedEssay && (
                   <div>
                     <h4 className="font-semibold text-sm text-slate-700 mb-2">Corrected Version</h4>
-                    <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-slate-700 leading-[1.8] whitespace-pre-wrap">
+                    <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-base text-slate-700 leading-[2] whitespace-pre-wrap">
                       {writingResult.correctedEssay}
                     </div>
                   </div>
@@ -1006,107 +1108,6 @@ export default function ResultsPage() {
           </motion.div>
         )}
 
-        {/* Proficiency Report */}
-        {(report || isLoadingReport) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.7 }}
-            className="mb-8"
-          >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-              <div className="px-5 py-3 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-slate-200 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-violet-600" />
-                <h3 className="font-bold text-sm text-slate-700">Proficiency Report</h3>
-                <Sparkles className="w-4 h-4 text-violet-500" />
-              </div>
-
-              {isLoadingReport ? (
-                <div className="p-8 text-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-violet-500 mx-auto mb-3" />
-                  <p className="text-sm text-slate-500">Generating your proficiency report...</p>
-                </div>
-              ) : report ? (
-                <div className="p-6 space-y-5">
-                  {/* CEFR Level */}
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 text-white flex items-center justify-center shadow-lg shadow-violet-200">
-                      <span className="text-2xl font-extrabold">{report.languageLevel}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-700">CEFR Language Level</div>
-                      <p className="text-xs text-slate-500 mt-0.5">Common European Framework of Reference</p>
-                    </div>
-                  </div>
-
-                  {/* Summary */}
-                  <div className="p-4 rounded-xl bg-violet-50 border border-violet-200">
-                    <p className="text-sm text-slate-700 leading-relaxed">{report.summary}</p>
-                  </div>
-
-                  {/* Time Analysis */}
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <h4 className="font-semibold text-sm text-slate-700 mb-2 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-500" />
-                      Time Management
-                    </h4>
-                    <p className="text-sm text-slate-600 leading-relaxed">{report.timeAnalysis}</p>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {/* Strengths */}
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                      <h4 className="font-semibold text-sm text-emerald-700 mb-3 flex items-center gap-2">
-                        <Target className="w-4 h-4" />
-                        Strengths
-                      </h4>
-                      <ul className="space-y-2">
-                        {report.strengths.map((s, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                            {s}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Weaknesses */}
-                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                      <h4 className="font-semibold text-sm text-amber-700 mb-3 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        Areas for Improvement
-                      </h4>
-                      <ul className="space-y-2">
-                        {report.weaknesses.map((w, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <XCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-                            {w}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Recommendations */}
-                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
-                    <h4 className="font-semibold text-sm text-blue-700 mb-3 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" />
-                      Study Recommendations
-                    </h4>
-                    <ul className="space-y-2">
-                      {report.recommendations.map((r, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                          <span className="text-blue-500 font-bold mt-0.5 shrink-0">{i + 1}.</span>
-                          {r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </motion.div>
-        )}
 
         {/* Retry Button */}
         <motion.div

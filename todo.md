@@ -16,3 +16,5 @@
 - [x] Split sub-questions (a/b/c) in results page to show individual correctness per sub-item
 - [x] Remove grade display from Part 4 (Writing), add "x out of y" scoring next to each section title
 - [x] Change Part numbering from 0-4 to 1-5 throughout the app
+- [x] Increase font size for article text and explanation/analysis text
+- [x] Move Proficiency Report section before Section Breakdown in results page
