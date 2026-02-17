@@ -68,3 +68,10 @@
 - [x] Update grading for new question types (word bank fill-in, story comprehension)
 - [x] Update results page and PDF for WIDA structure
 - [x] Test complete WIDA assessment flow
+- [x] Implement multi-paper selection system with WIDA and HuaZhong papers coexisting
+- [x] Restore HuaZhong (华中) paper data from previous version
+- [x] Create paper selection page UI
+- [x] Update QuizContext to support paper selection
+- [x] Update SectionContent to handle both paper question types
+- [x] Update results page and PDF for multi-paper
+- [x] Test both paper flows end-to-end

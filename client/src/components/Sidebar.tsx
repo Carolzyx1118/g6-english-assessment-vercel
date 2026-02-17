@@ -1,6 +1,5 @@
 import { useQuiz } from '@/contexts/QuizContext';
-import { sections } from '@/data/questions';
-import { BookOpen, PenTool, FileText, CheckCircle2, Headphones } from 'lucide-react';
+import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const sectionIcons: Record<string, React.ReactNode> = {
@@ -8,6 +7,7 @@ const sectionIcons: Record<string, React.ReactNode> = {
   grammar: <PenTool className="w-4 h-4" />,
   listening: <Headphones className="w-4 h-4" />,
   reading: <FileText className="w-4 h-4" />,
+  writing: <Pencil className="w-4 h-4" />,
 };
 
 const activeColors: Record<string, string> = {
@@ -15,6 +15,7 @@ const activeColors: Record<string, string> = {
   grammar: 'bg-amber-50 border-amber-300 text-amber-700',
   listening: 'bg-purple-50 border-purple-300 text-purple-700',
   reading: 'bg-indigo-50 border-indigo-300 text-indigo-700',
+  writing: 'bg-orange-50 border-orange-300 text-orange-700',
 };
 
 const progressColors: Record<string, string> = {
@@ -22,6 +23,7 @@ const progressColors: Record<string, string> = {
   grammar: '[&>div]:bg-amber-500',
   listening: '[&>div]:bg-purple-500',
   reading: '[&>div]:bg-indigo-500',
+  writing: '[&>div]:bg-orange-500',
 };
 
 interface SidebarProps {
@@ -29,13 +31,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onNavigate }: SidebarProps) {
-  const { state, setCurrentSection, getSectionProgress } = useQuiz();
+  const { state, sections, selectedPaper, setCurrentSection, getSectionProgress } = useQuiz();
 
-  const totalAnswered = sections.reduce((sum, s) => {
+  const totalAnswered = sections.reduce((sum: number, s: { id: string }) => {
     const p = getSectionProgress(s.id);
     return sum + p.answered;
   }, 0);
-  const totalQuestions = sections.reduce((sum, s) => {
+  const totalQuestions = sections.reduce((sum: number, s: { id: string }) => {
     const p = getSectionProgress(s.id);
     return sum + p.total;
   }, 0);
@@ -46,8 +48,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       {/* Header */}
       <div className="p-5 border-b border-slate-100">
         <h1 className="font-extrabold text-lg text-slate-800 leading-tight">
-          WIDA English
-          <span className="block text-blue-600 text-sm font-bold">Proficiency Assessment</span>
+          {selectedPaper?.title || 'English Assessment'}
+          <span className="block text-blue-600 text-sm font-bold">{selectedPaper?.subtitle || ''}</span>
         </h1>
       </div>
 
@@ -62,7 +64,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
       {/* Section Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
-        {sections.map((section, index) => {
+        {sections.map((section: { id: string; title: string }, index: number) => {
           const isActive = state.currentSectionIndex === index;
           const progress = getSectionProgress(section.id);
           const isComplete = progress.answered === progress.total && progress.total > 0;

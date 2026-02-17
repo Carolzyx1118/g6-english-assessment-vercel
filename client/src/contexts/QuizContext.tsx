@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { sections, type Section } from '@/data/questions';
+import { papers, type Paper, type Section, type Question } from '@/data/papers';
 
 export interface StudentInfo {
   name: string;
@@ -18,7 +18,13 @@ interface QuizContextType {
   state: QuizState;
   studentInfo: StudentInfo | null;
   setStudentInfo: (info: StudentInfo) => void;
+  // Paper selection
+  selectedPaper: Paper | null;
+  selectPaper: (paperId: string) => void;
+  papers: Paper[];
+  // Current section
   currentSection: Section;
+  sections: Section[];
   setCurrentSection: (index: number) => void;
   setAnswer: (sectionId: string, questionId: number, answer: string | number) => void;
   getAnswer: (sectionId: string, questionId: number) => string | number | undefined;
@@ -34,12 +40,12 @@ interface QuizContextType {
 
 const QuizContext = createContext<QuizContextType | null>(null);
 
-// Build a composite key for answers: "sectionId:questionId"
 function answerKey(sectionId: string, questionId: number): string {
   return `${sectionId}:${questionId}`;
 }
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
+  const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [state, setState] = useState<QuizState>({
     currentSectionIndex: 0,
     answers: {},
@@ -52,12 +58,13 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
-  const currentSectionIdRef = useRef<string>(sections[0]?.id || '');
+  const currentSectionIdRef = useRef<string>('');
 
-  const currentSection = sections[state.currentSectionIndex];
+  const currentSections = selectedPaper?.sections || [];
+  const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];
 
   useEffect(() => {
-    if (!isStarted || state.submitted) return;
+    if (!isStarted || state.submitted || !selectedPaper) return;
 
     const now = Date.now();
     if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
@@ -68,7 +75,19 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     currentSectionIdRef.current = currentSection?.id || '';
     sectionEnteredAtRef.current = now;
-  }, [state.currentSectionIndex, isStarted, state.submitted]);
+  }, [state.currentSectionIndex, isStarted, state.submitted, selectedPaper]);
+
+  const selectPaper = useCallback((paperId: string) => {
+    if (!paperId) {
+      setSelectedPaper(null);
+      return;
+    }
+    const paper = papers.find(p => p.id === paperId);
+    if (paper) {
+      setSelectedPaper(paper);
+      currentSectionIdRef.current = paper.sections[0]?.id || '';
+    }
+  }, []);
 
   const setStudentInfo = useCallback((info: StudentInfo) => {
     setStudentInfoState(info);
@@ -102,10 +121,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const resetQuiz = useCallback(() => {
     setIsStarted(false);
+    setSelectedPaper(null);
     setStudentInfoState(null);
     sectionTimingsRef.current = {};
     sectionEnteredAtRef.current = null;
-    currentSectionIdRef.current = sections[0]?.id || '';
+    currentSectionIdRef.current = '';
     setState({
       currentSectionIndex: 0,
       answers: {},
@@ -119,16 +139,16 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setIsStarted(true);
     const now = Date.now();
     sectionEnteredAtRef.current = now;
-    currentSectionIdRef.current = sections[0]?.id || '';
+    currentSectionIdRef.current = currentSections[0]?.id || '';
     setState(prev => ({ ...prev, startTime: now }));
-  }, []);
+  }, [currentSections]);
 
   const getScore = useCallback(() => {
     let correct = 0;
     let total = 0;
     const bySection: Record<string, { correct: number; total: number }> = {};
 
-    for (const section of sections) {
+    for (const section of currentSections) {
       bySection[section.id] = { correct: 0, total: 0 };
       for (const q of section.questions) {
         total++;
@@ -149,8 +169,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           const userAnswer = String(answer).trim().toLowerCase();
           isCorrect = userAnswer === q.correctAnswer.trim().toLowerCase();
           if (!isCorrect && q.acceptableAnswers) {
-            isCorrect = q.acceptableAnswers.some(a => userAnswer === a.trim().toLowerCase());
+            isCorrect = q.acceptableAnswers.some((a: string) => userAnswer === a.trim().toLowerCase());
           }
+        } else if (q.type === 'checkbox') {
+          // Checkbox scoring handled separately
         }
 
         if (isCorrect) {
@@ -161,10 +183,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { correct, total, bySection };
-  }, [state.answers]);
+  }, [state.answers, currentSections]);
 
   const getSectionProgress = useCallback((sectionId: string) => {
-    const section = sections.find(s => s.id === sectionId);
+    const section = currentSections.find((s: Section) => s.id === sectionId);
     if (!section) return { answered: 0, total: 0 };
 
     let answered = 0;
@@ -178,7 +200,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { answered, total };
-  }, [state.answers]);
+  }, [state.answers, currentSections]);
 
   const getSectionTimings = useCallback(() => {
     const result: Record<string, number> = {};
@@ -199,7 +221,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     state,
     studentInfo,
     setStudentInfo,
+    selectedPaper,
+    selectPaper,
+    papers,
     currentSection,
+    sections: currentSections,
     setCurrentSection,
     setAnswer,
     getAnswer,
@@ -211,7 +237,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     getSectionProgress,
     getSectionTimings,
     getTotalTime,
-  }), [state, studentInfo, setStudentInfo, currentSection, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
+  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>

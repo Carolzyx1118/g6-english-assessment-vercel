@@ -332,7 +332,9 @@ Respond in JSON format:
           total: z.number(),
           timeSeconds: z.number(),
         })),
-
+        writingScore: z.number().optional(),
+        writingMaxScore: z.number().optional(),
+        writingGrade: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const prompt = `You are an English proficiency assessment expert. Based on the following WIDA English Proficiency Assessment results, generate a brief proficiency report in BOTH English and Chinese.

@@ -4,7 +4,7 @@
  */
 
 import { useQuiz } from '@/contexts/QuizContext';
-import { sections } from '@/data/questions';
+
 import Sidebar from '@/components/Sidebar';
 import SectionContent from '@/components/SectionContent';
 import ResultsPage from '@/components/ResultsPage';

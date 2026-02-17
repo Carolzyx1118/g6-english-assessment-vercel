@@ -1,93 +1,13 @@
 // WIDA English Proficiency Assessment (K-G3) - Question Data
+import type { Section, Paper } from './papers';
 
 // CDN base
 const CDN = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422';
 
 // Audio URL for listening section
-export const AUDIO_URL = `${CDN}/nobpXqQxSkaKHyNh.mp3`;
+const AUDIO_URL = `${CDN}/nobpXqQxSkaKHyNh.mp3`;
 
-// ===== Question Type Interfaces =====
-
-/** Picture-based MCQ: student sees images as options (a/b/c) */
-export interface PictureMCQ {
-  id: number;
-  type: 'picture-mcq';
-  question: string;
-  options: { label: string; imageUrl: string; text?: string }[];
-  correctAnswer: number; // index 0-2
-}
-
-/** Standard text MCQ with optional scene image */
-export interface MCQQuestion {
-  id: number;
-  type: 'mcq';
-  question: string;
-  highlightWord?: string;
-  options: string[];
-  correctAnswer: number;
-  imageUrl?: string;
-}
-
-/** Fill-in-the-blank with word bank (grammar Q9) */
-export interface FillBlankQuestion {
-  id: number;
-  type: 'fill-blank';
-  correctAnswer: string;
-}
-
-/** Listening picture MCQ: same as PictureMCQ but grouped under listening */
-export interface ListeningMCQ {
-  id: number;
-  type: 'listening-mcq';
-  question: string;
-  options: { label: string; imageUrl: string; text?: string }[];
-  correctAnswer: number;
-}
-
-/** Word-bank fill-in for reading Part 1 */
-export interface WordBankFillIn {
-  id: number;
-  type: 'wordbank-fill';
-  question: string;
-  correctAnswer: string;
-}
-
-/** Story comprehension fill-in for reading Part 2 */
-export interface StoryFillIn {
-  id: number;
-  type: 'story-fill';
-  question: string;
-  correctAnswer: string;
-  acceptableAnswers?: string[]; // alternative accepted answers
-}
-
-export type Question = PictureMCQ | MCQQuestion | FillBlankQuestion | ListeningMCQ | WordBankFillIn | StoryFillIn;
-
-export interface Section {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: string;
-  color: string;
-  bgColor: string;
-  description: string;
-  questions: Question[];
-  passage?: string;
-  wordBank?: { letter: string; word: string }[];
-  grammarPassage?: string;
-  imageUrl?: string;
-  audioUrl?: string;
-  /** Scene image for grammar fill-in-blank */
-  sceneImageUrl?: string;
-  /** Word bank images for reading Part 1 */
-  wordBankImageUrl?: string;
-  /** Story images for reading Part 2 */
-  storyImages?: string[];
-  /** Reading Part 2 story paragraphs */
-  storyParagraphs?: { text: string; questionIds: number[] }[];
-}
-
-export const sections: Section[] = [
+const sections: Section[] = [
   // ===== PART 1: VOCABULARY (12 picture MCQ) =====
   {
     id: 'vocabulary',
@@ -231,7 +151,6 @@ export const sections: Section[] = [
     bgColor: 'bg-[oklch(0.95_0.04_75)]',
     description: 'Look at the pictures and choose the correct sentence, or fill in the blanks with the correct word.',
     questions: [
-      // Q1: Boy playing football
       {
         id: 1, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -239,7 +158,6 @@ export const sections: Section[] = [
         options: ['He is playing football.', 'He is playing basketball.', 'She is playing football.'],
         correctAnswer: 0,
       },
-      // Q2: Boy running
       {
         id: 2, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -247,7 +165,6 @@ export const sections: Section[] = [
         options: ['He is running quickly.', 'He is running good.', 'He is running quick.'],
         correctAnswer: 0,
       },
-      // Q3: Clock showing 1:45
       {
         id: 3, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -255,7 +172,6 @@ export const sections: Section[] = [
         options: ["It's half past two.", "It's quarter past two.", "It's quarter to two."],
         correctAnswer: 2,
       },
-      // Q4: Buildings layout (picture MCQ)
       {
         id: 4, type: 'picture-mcq',
         question: 'There is a shop between the hospital and the café. Choose the correct picture.',
@@ -266,7 +182,6 @@ export const sections: Section[] = [
         ],
         correctAnswer: 2,
       },
-      // Q5: Bus stop
       {
         id: 5, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -274,7 +189,6 @@ export const sections: Section[] = [
         options: ['They are going to catch the bus.', 'They going to catch the bus.', 'They go to catch the bus.'],
         correctAnswer: 0,
       },
-      // Q6: Winter/January
       {
         id: 6, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -282,7 +196,6 @@ export const sections: Section[] = [
         options: ['The first month of the year is January.', 'The first month of the year is July.', 'They go to catch the bus.'],
         correctAnswer: 0,
       },
-      // Q7: Cold weather
       {
         id: 7, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -290,7 +203,6 @@ export const sections: Section[] = [
         options: ['They might need their coats.', 'They might to need their coats.', 'They may to need their coats.'],
         correctAnswer: 0,
       },
-      // Q8: Italian food
       {
         id: 8, type: 'mcq',
         question: 'Look at the picture. Choose the correct sentence.',
@@ -298,8 +210,6 @@ export const sections: Section[] = [
         options: ["I'm never eat Italy food before.", 'I never eat Italy food before.', 'I have never eaten Italian food before.'],
         correctAnswer: 2,
       },
-      // Q9: Fill-in-blank with word bank (5 sub-questions)
-      // Using fill-blank type, answers are words from the bank
       { id: 9, type: 'fill-blank', correctAnswer: 'next to' },
       { id: 10, type: 'fill-blank', correctAnswer: 'in' },
       { id: 11, type: 'fill-blank', correctAnswer: 'on' },
@@ -421,110 +331,27 @@ export const sections: Section[] = [
       },
     ],
     questions: [
-      // Part 1: Word bank fill-in (5 questions)
-      // Word bank: a dentist, a milkshake, coffee, a nurse, a farmer, a shower, a lamp, a salad
-      {
-        id: 1, type: 'wordbank-fill',
-        question: 'This has lots of green vegetables in it, but you don\'t cook it.',
-        correctAnswer: 'a salad',
-      },
-      {
-        id: 2, type: 'wordbank-fill',
-        question: 'You stand under this when you want to wash.',
-        correctAnswer: 'a shower',
-      },
-      {
-        id: 3, type: 'wordbank-fill',
-        question: 'This person works outside in the fields.',
-        correctAnswer: 'a farmer',
-      },
-      {
-        id: 4, type: 'wordbank-fill',
-        question: 'Some people put milk in this brown drink.',
-        correctAnswer: 'coffee',
-      },
-      {
-        id: 5, type: 'wordbank-fill',
-        question: 'This person helps people when their teeth hurt.',
-        correctAnswer: 'a dentist',
-      },
-      // Part 2: Story comprehension fill-in (10 questions)
-      {
-        id: 6, type: 'story-fill',
-        question: 'Jane carried a ___ for her mother.',
-        correctAnswer: 'bag',
-      },
-      {
-        id: 7, type: 'story-fill',
-        question: 'They went shopping in the big ___.',
-        correctAnswer: 'supermarket',
-      },
-      {
-        id: 8, type: 'story-fill',
-        question: "Jane didn't enjoy shopping because she thought it was ___.",
-        correctAnswer: 'boring',
-      },
-      {
-        id: 9, type: 'story-fill',
-        question: '___ found fruit and bread in the shop.',
-        correctAnswer: "Jane's mother",
-        acceptableAnswers: ["Jane's mum", "Her mother", "Her mum", "Janes mother", "Jane's mom"],
-      },
-      {
-        id: 10, type: 'story-fill',
-        question: 'The rice was under ___.',
-        correctAnswer: 'the pasta',
-        acceptableAnswers: ['pasta'],
-      },
-      {
-        id: 11, type: 'story-fill',
-        question: 'Jane climbed on a box to get a ___.',
-        correctAnswer: 'bottle of lemonade',
-        acceptableAnswers: ['lemonade', 'bottle'],
-      },
-      {
-        id: 12, type: 'story-fill',
-        question: 'Jane started ___ because she hurt her leg when she jumped down.',
-        correctAnswer: 'crying',
-        acceptableAnswers: ['to cry'],
-      },
-      {
-        id: 13, type: 'story-fill',
-        question: "Jane's mother gave Jane a ___.",
-        correctAnswer: 'strawberry ice cream',
-        acceptableAnswers: ['ice cream'],
-      },
-      {
-        id: 14, type: 'story-fill',
-        question: "Jane couldn't ___ quickly because her leg hurt.",
-        correctAnswer: 'walk',
-      },
-      {
-        id: 15, type: 'story-fill',
-        question: '___ took them home in the car.',
-        correctAnswer: "Jane's dad",
-        acceptableAnswers: ["Jane's father", "Her dad", "Her father", "Janes dad", "Jane's dad", "Jane's father"],
-      },
+      { id: 1, type: 'wordbank-fill', question: 'This has lots of green vegetables in it, but you don\'t cook it.', correctAnswer: 'a salad' },
+      { id: 2, type: 'wordbank-fill', question: 'You stand under this when you want to wash.', correctAnswer: 'a shower' },
+      { id: 3, type: 'wordbank-fill', question: 'This person works outside in the fields.', correctAnswer: 'a farmer' },
+      { id: 4, type: 'wordbank-fill', question: 'Some people put milk in this brown drink.', correctAnswer: 'coffee' },
+      { id: 5, type: 'wordbank-fill', question: 'This person helps people when their teeth hurt.', correctAnswer: 'a dentist' },
+      { id: 6, type: 'story-fill', question: 'Jane carried a ___ for her mother.', correctAnswer: 'bag' },
+      { id: 7, type: 'story-fill', question: 'They went shopping in the big ___.', correctAnswer: 'supermarket' },
+      { id: 8, type: 'story-fill', question: "Jane didn't enjoy shopping because she thought it was ___.", correctAnswer: 'boring' },
+      { id: 9, type: 'story-fill', question: '___ found fruit and bread in the shop.', correctAnswer: "Jane's mother", acceptableAnswers: ["Jane's mum", "Her mother", "Her mum", "Janes mother", "Jane's mom"] },
+      { id: 10, type: 'story-fill', question: 'The rice was under ___.', correctAnswer: 'the pasta', acceptableAnswers: ['pasta'] },
+      { id: 11, type: 'story-fill', question: 'Jane climbed on a box to get a ___.', correctAnswer: 'bottle of lemonade', acceptableAnswers: ['lemonade', 'bottle'] },
+      { id: 12, type: 'story-fill', question: 'Jane started ___ because she hurt her leg when she jumped down.', correctAnswer: 'crying', acceptableAnswers: ['to cry'] },
+      { id: 13, type: 'story-fill', question: "Jane's mother gave Jane a ___.", correctAnswer: 'strawberry ice cream', acceptableAnswers: ['ice cream'] },
+      { id: 14, type: 'story-fill', question: "Jane couldn't ___ quickly because her leg hurt.", correctAnswer: 'walk' },
+      { id: 15, type: 'story-fill', question: '___ took them home in the car.', correctAnswer: "Jane's dad", acceptableAnswers: ["Jane's father", "Her dad", "Her father", "Janes dad", "Jane's dad", "Jane's father"] },
     ],
   },
 ];
 
-// Helper to get total auto-gradable questions count
-export function getAutoGradableCount(): number {
-  let count = 0;
-  for (const section of sections) {
-    for (const q of section.questions) {
-      if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq' ||
-          q.type === 'fill-blank' || q.type === 'wordbank-fill' || q.type === 'story-fill') {
-        count++;
-      }
-    }
-  }
-  return count;
-}
-
 // Helper: reading word bank items for display
-export const readingWordBank = [
+const readingWordBank = [
   { word: 'a dentist', imageUrl: `${CDN}/HpVYuiWHGrdpskKj.png` },
   { word: 'a milkshake', imageUrl: `${CDN}/VHAdmbegoiVDkDJD.png` },
   { word: 'coffee', imageUrl: `${CDN}/xcXZVuhWNelGyHSx.png` },
@@ -534,3 +361,17 @@ export const readingWordBank = [
   { word: 'a lamp', imageUrl: `${CDN}/zMuxHUxUrcfpvIib.png` },
   { word: 'a salad', imageUrl: `${CDN}/KklExYGJRgiJgBdN.png` },
 ];
+
+export const widaPaper: Paper = {
+  id: 'wida',
+  title: 'WIDA English Proficiency Assessment',
+  subtitle: 'K-G3 Level',
+  description: 'Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Suitable for kindergarten to Grade 3 students.',
+  icon: '🌍',
+  color: '#4F46E5',
+  sections,
+  readingWordBank,
+  totalQuestions: sections.reduce((sum, s) => sum + s.questions.length, 0),
+  hasListening: true,
+  hasWriting: false,
+};

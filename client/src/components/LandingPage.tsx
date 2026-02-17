@@ -1,8 +1,8 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
-import { sections } from '@/data/questions';
+import type { Paper, Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap } from 'lucide-react';
 import { useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
 
@@ -13,6 +13,7 @@ const sectionIcons: Record<string, React.ReactNode> = {
   grammar: <PenTool className="w-6 h-6" />,
   listening: <Headphones className="w-6 h-6" />,
   reading: <FileText className="w-6 h-6" />,
+  writing: <Pencil className="w-6 h-6" />,
 };
 
 const sectionColors: Record<string, string> = {
@@ -20,6 +21,7 @@ const sectionColors: Record<string, string> = {
   grammar: 'from-amber-50 to-amber-100 border-amber-200 text-amber-700',
   listening: 'from-purple-50 to-purple-100 border-purple-200 text-purple-700',
   reading: 'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-700',
+  writing: 'from-orange-50 to-orange-100 border-orange-200 text-orange-700',
 };
 
 const iconBgColors: Record<string, string> = {
@@ -27,16 +29,13 @@ const iconBgColors: Record<string, string> = {
   grammar: 'bg-amber-100 text-amber-600',
   listening: 'bg-purple-100 text-purple-600',
   reading: 'bg-indigo-100 text-indigo-600',
+  writing: 'bg-orange-100 text-orange-600',
 };
 
-const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
+// ========== PAPER SELECTION PAGE ==========
 
-export default function LandingPage() {
-  const [showInfoForm, setShowInfoForm] = useState(false);
-
-  if (showInfoForm) {
-    return <StudentInfoForm />;
-  }
+function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
+  const { papers } = useQuiz();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -45,20 +44,145 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-blue-50/80 to-transparent z-0" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Text */}
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6 }}
             >
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
-                WIDA English
+                English
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
                   Proficiency Assessment
                 </span>
               </h1>
               <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-xl">
-                Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Complete all sections to receive your assessment results.
+                Choose an assessment paper to begin. Each paper tests different aspects of English proficiency with unique question formats and difficulty levels.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="hidden lg:block"
+            >
+              <div className="relative">
+                <div className="absolute -inset-4 bg-gradient-to-r from-blue-200 to-indigo-200 rounded-3xl blur-2xl opacity-30" />
+                <img
+                  src={HERO_IMAGE}
+                  alt="English Learning Illustration"
+                  className="relative w-full rounded-2xl"
+                />
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      {/* Paper Selection */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Choose Your Assessment</h2>
+          <p className="text-slate-500 mb-8">Select a paper to view its details and start the assessment.</p>
+        </motion.div>
+
+        <div className="grid sm:grid-cols-2 gap-6">
+          {papers.map((paper: Paper, i: number) => (
+            <motion.button
+              key={paper.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
+              onClick={() => onSelectPaper(paper.id)}
+              className="group relative text-left rounded-2xl border-2 border-slate-200 bg-white p-8 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl" style={{ backgroundColor: paper.color + '15', color: paper.color }}>
+                  {paper.icon}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{paper.title}</h3>
+                  <p className="text-sm text-slate-500">{paper.subtitle}</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
+              <div className="flex flex-wrap gap-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  {paper.sections.length} Sections
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  {paper.totalQuestions} Questions
+                </span>
+                {paper.hasListening && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold">
+                    <Headphones className="w-3.5 h-3.5" />
+                    Listening
+                  </span>
+                )}
+                {paper.hasWriting && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 text-xs font-semibold">
+                    <Pencil className="w-3.5 h-3.5" />
+                    Writing
+                  </span>
+                )}
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== PAPER LANDING PAGE (after selecting a paper) ==========
+
+function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void }) {
+  const [showInfoForm, setShowInfoForm] = useState(false);
+
+  if (showInfoForm) {
+    return <StudentInfoForm />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
+      {/* Header with back button */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-50/80 to-transparent z-0" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16 relative z-10">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Paper Selection
+          </button>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-4xl">{paper.icon}</span>
+              </div>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                {paper.title}
+                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 text-2xl sm:text-3xl mt-1">
+                  {paper.subtitle}
+                </span>
+              </h1>
+              <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-xl">
+                {paper.description}
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Button
@@ -72,23 +196,32 @@ export default function LandingPage() {
               </div>
               <div className="mt-8 flex items-center gap-6 text-sm text-slate-500">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">{sections.length}</div>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">{paper.sections.length}</div>
                   <span>Sections</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xs">{totalQuestions}</div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xs">{paper.totalQuestions}</div>
                   <span>Questions</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 font-bold text-xs">
-                    <Headphones className="w-4 h-4" />
+                {paper.hasListening && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                      <Headphones className="w-4 h-4" />
+                    </div>
+                    <span>Audio</span>
                   </div>
-                  <span>Audio</span>
-                </div>
+                )}
+                {paper.hasWriting && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                      <Pencil className="w-4 h-4" />
+                    </div>
+                    <span>Writing</span>
+                  </div>
+                )}
               </div>
             </motion.div>
 
-            {/* Right: Hero Image */}
             <motion.div
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
@@ -119,8 +252,8 @@ export default function LandingPage() {
           <p className="text-slate-500 mb-8">Complete each section to get your full proficiency score.</p>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {sections.map((section, i) => (
+        <div className={`grid sm:grid-cols-2 ${paper.sections.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-' + paper.sections.length} gap-5`}>
+          {paper.sections.map((section: Section, i: number) => (
             <motion.div
               key={section.id}
               initial={{ opacity: 0, y: 20 }}
@@ -143,4 +276,16 @@ export default function LandingPage() {
       </div>
     </div>
   );
+}
+
+// ========== MAIN LANDING PAGE ==========
+
+export default function LandingPage() {
+  const { selectedPaper, selectPaper } = useQuiz();
+
+  if (selectedPaper) {
+    return <PaperLandingPage paper={selectedPaper} onBack={() => selectPaper('')} />;
+  }
+
+  return <PaperSelectionPage onSelectPaper={selectPaper} />;
 }
