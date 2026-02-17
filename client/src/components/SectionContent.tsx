@@ -1,10 +1,10 @@
 import { useQuiz } from '@/contexts/QuizContext';
-import { sections, AUDIO_URL } from '@/data/questions';
-import type { MCQQuestion, FillBlankQuestion, OpenEndedQuestion, TrueFalseQuestion, TableQuestion, ReferenceQuestion, OrderQuestion, PhraseQuestion, CheckboxQuestion, ListeningMCQ, WritingQuestion, Question } from '@/data/questions';
+import { sections } from '@/data/questions';
+import type { MCQQuestion, FillBlankQuestion, OpenEndedQuestion, TrueFalseQuestion, TableQuestion, ReferenceQuestion, OrderQuestion, PhraseQuestion, CheckboxQuestion, WritingQuestion, Question } from '@/data/questions';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Volume2, Play, Pause, Send, AlertTriangle, GripVertical } from 'lucide-react';
-import { useRef, useState, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, Send, AlertTriangle, GripVertical } from 'lucide-react';
+import { useState, useCallback } from 'react';
 
 function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: string; onAnswer: (v: string) => void }) {
   return (
@@ -21,52 +21,6 @@ function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: str
             )}
           </span>
         ))}
-      </p>
-      <div className="grid gap-2.5">
-        {q.options.map((opt, i) => {
-          const isSelected = answer !== undefined && Number(answer) === i;
-          const letter = String.fromCharCode(65 + i);
-          return (
-            <button
-              key={i}
-              onClick={() => onAnswer(String(i))}
-              className={`
-                w-full text-left p-3.5 rounded-xl border-2 transition-all duration-200
-                flex items-center gap-3
-                ${isSelected
-                  ? 'border-blue-400 bg-blue-50 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }
-              `}
-            >
-              <span className={`
-                w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0
-                ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-500'}
-              `}>
-                {letter}
-              </span>
-              <span className={`text-base ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
-                {opt}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: string; onAnswer: (v: string) => void }) {
-  return (
-    <div className="space-y-4">
-      <p className="text-base text-slate-700 leading-relaxed">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id - 100}.</span>
-        {q.question}
-        {q.audioTimestamp && (
-          <span className="ml-2 text-xs text-blue-500 font-mono bg-blue-50 px-2 py-0.5 rounded">
-            {q.audioTimestamp}
-          </span>
-        )}
       </p>
       <div className="grid gap-2.5">
         {q.options.map((opt, i) => {
@@ -665,74 +619,6 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
   );
 }
 
-function AudioPlayer() {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
-
-  const formatTime = (t: number) => {
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  return (
-    <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
-      <audio
-        ref={audioRef}
-        src={AUDIO_URL}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onEnded={() => setIsPlaying(false)}
-      />
-      <div className="flex items-center gap-4">
-        <button
-          onClick={togglePlay}
-          className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg shadow-blue-200 transition-all"
-        >
-          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <Volume2 className="w-4 h-4 text-blue-500" />
-            <span className="text-sm font-semibold text-blue-700">Listening Audio</span>
-          </div>
-          <div
-            className="relative h-2 bg-blue-200 rounded-full overflow-hidden cursor-pointer"
-            onClick={(e) => {
-              if (!audioRef.current || duration === 0) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const pct = x / rect.width;
-              audioRef.current.currentTime = pct * duration;
-            }}
-          >
-            <div
-              className="absolute inset-y-0 left-0 bg-blue-500 rounded-full transition-all"
-              style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
-            />
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className="text-xs text-blue-400 font-mono">{formatTime(currentTime)}</span>
-            <span className="text-xs text-blue-400 font-mono">{formatTime(duration)}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function QuestionRenderer({ question, answer, onAnswer, wordBank }: {
   question: Question;
   answer: any;
@@ -742,8 +628,7 @@ function QuestionRenderer({ question, answer, onAnswer, wordBank }: {
   switch (question.type) {
     case 'mcq':
       return <MCQQuestionCard q={question} answer={answer} onAnswer={onAnswer} />;
-    case 'listening-mcq':
-      return <ListeningMCQCard q={question} answer={answer} onAnswer={onAnswer} />;
+
     case 'open-ended':
       return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} />;
     case 'true-false':
@@ -869,13 +754,6 @@ export default function SectionContent() {
           )}
           <p className="text-sm text-slate-500 leading-relaxed">{section.description}</p>
         </div>
-
-        {/* Audio Player for Listening Section */}
-        {section.id === 'listening' && (
-          <div className="mb-8">
-            <AudioPlayer />
-          </div>
-        )}
 
         {/* Grammar Section with Drag & Drop */}
         {isGrammarSection && (

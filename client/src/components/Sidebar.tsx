@@ -1,10 +1,9 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import { sections } from '@/data/questions';
-import { BookOpen, Headphones, PenTool, FileText, CheckCircle2 } from 'lucide-react';
+import { BookOpen, PenTool, FileText, CheckCircle2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const sectionIcons: Record<string, React.ReactNode> = {
-  listening: <Headphones className="w-4 h-4" />,
   vocabulary: <BookOpen className="w-4 h-4" />,
   grammar: <PenTool className="w-4 h-4" />,
   reading: <FileText className="w-4 h-4" />,
@@ -12,7 +11,6 @@ const sectionIcons: Record<string, React.ReactNode> = {
 };
 
 const activeColors: Record<string, string> = {
-  listening: 'bg-blue-50 border-blue-300 text-blue-700',
   vocabulary: 'bg-emerald-50 border-emerald-300 text-emerald-700',
   grammar: 'bg-amber-50 border-amber-300 text-amber-700',
   reading: 'bg-indigo-50 border-indigo-300 text-indigo-700',
@@ -20,7 +18,6 @@ const activeColors: Record<string, string> = {
 };
 
 const progressColors: Record<string, string> = {
-  listening: '[&>div]:bg-blue-500',
   vocabulary: '[&>div]:bg-emerald-500',
   grammar: '[&>div]:bg-amber-500',
   reading: '[&>div]:bg-indigo-500',
@@ -116,7 +113,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       {/* Tip at bottom */}
       <div className="p-4 border-t border-slate-100">
         <p className="text-xs text-slate-400 text-center">
-          Navigate to Part 5: Writing to submit your assessment
+          Navigate to Part 4: Writing to submit your assessment
         </p>
       </div>
     </div>

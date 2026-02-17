@@ -3,7 +3,7 @@ import { sections } from '@/data/questions';
 import { trpc } from '@/lib/trpc';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Trophy, RotateCcw, CheckCircle2, XCircle, BookOpen, Headphones,
+  Trophy, RotateCcw, CheckCircle2, XCircle, BookOpen,
   PenTool, FileText, Loader2, Sparkles, AlertCircle, Lightbulb,
   Clock, Target, TrendingUp, ChevronDown, ChevronUp, Globe,
   Download, Languages,
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 
 const sectionMeta: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
-  listening: { icon: <Headphones className="w-5 h-5" />, gradient: 'from-blue-500 to-blue-600', bg: 'bg-blue-50' },
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
   grammar: { icon: <PenTool className="w-5 h-5" />, gradient: 'from-amber-500 to-amber-600', bg: 'bg-amber-50' },
   reading: { icon: <FileText className="w-5 h-5" />, gradient: 'from-indigo-500 to-indigo-600', bg: 'bg-indigo-50' },
@@ -255,13 +254,6 @@ export default function ResultsPage() {
             userAnswer: userIdx >= 0 ? q.options[userIdx] : 'Not answered',
             correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
             context: `The word "${q.highlightWord}" means "${q.options[q.correctAnswer]}".` });
-        } else if (q.type === 'listening-mcq') {
-          const userAns = getAnswer(q.id);
-          const userIdx = userAns !== undefined ? Number(userAns) : -1;
-          sectionResults.push({ id: q.id, question: q.question,
-            userAnswer: userIdx >= 0 ? q.options[userIdx] : 'Not answered',
-            correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
-            context: `Listening question about: ${q.question}` });
         } else if (q.type === 'fill-blank') {
           const userAns = getAnswer(q.id);
           const wordBank = section.wordBank;
@@ -527,7 +519,7 @@ export default function ResultsPage() {
           return r && !r.isCorrect;
         });
         if (wrongReading.length > 0) {
-          addText('【Part 4: Reading Comprehension】', 11, true);
+          addText('【Part 3: Reading Comprehension】', 11, true);
           addGap(1);
           for (const item of wrongReading) {
             const r = getReadingResult(item.id);
@@ -934,7 +926,7 @@ export default function ResultsPage() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 bg-indigo-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-700">Part 4: {lang === 'en' ? 'Reading Comprehension' : '阅读理解'}</h3>
+                  <h3 className="font-bold text-base text-slate-700">Part 3: {lang === 'en' ? 'Reading Comprehension' : '阅读理解'}</h3>
                   <Sparkles className="w-4 h-4 text-indigo-500" />
                   <span className="text-sm text-indigo-500 font-medium">{lang === 'en' ? 'AI Graded' : 'AI 评分'}</span>
                 </div>
@@ -1004,7 +996,7 @@ export default function ResultsPage() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
               <div className="px-5 py-3 bg-rose-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-700">Part 5: {lang === 'en' ? 'Writing Evaluation' : '写作评估'}</h3>
+                  <h3 className="font-bold text-base text-slate-700">Part 4: {lang === 'en' ? 'Writing Evaluation' : '写作评估'}</h3>
                   <Sparkles className="w-4 h-4 text-rose-500" />
                   <span className="text-sm text-rose-500 font-medium">{lang === 'en' ? 'AI Evaluated' : 'AI 评估'}</span>
                 </div>

@@ -35,3 +35,11 @@
 - [x] Increase font size for Part 5 (Writing) and Q31-40 (Reading Comprehension questions)
 - [x] Remove section subtitle text from section header
 - [x] Generate a section image for Part 5 (Writing) matching the style of Part 1-4 images
+- [x] Remove Part 1 (Listening) section from questions data
+- [x] Remove audio player and listening-related UI from SectionContent
+- [x] Remove listening from sidebar navigation
+- [x] Update landing page to remove listening references and audio badge
+- [x] Update results page to handle no listening section
+- [x] Renumber remaining parts from Part 1-4 (Vocabulary, Grammar, Reading, Writing)
+- [x] Update total question count and section count
+- [x] Update server-side code if needed

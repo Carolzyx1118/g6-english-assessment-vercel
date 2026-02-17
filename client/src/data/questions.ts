@@ -67,15 +67,6 @@ export interface CheckboxQuestion {
   correctAnswers: number[];
 }
 
-export interface ListeningMCQ {
-  id: number;
-  type: 'listening-mcq';
-  question: string;
-  options: string[];
-  correctAnswer: number;
-  audioTimestamp?: string;
-}
-
 export interface WritingQuestion {
   id: number;
   type: 'writing';
@@ -85,7 +76,7 @@ export interface WritingQuestion {
   prompts: string[];
 }
 
-export type Question = MCQQuestion | FillBlankQuestion | OpenEndedQuestion | TrueFalseQuestion | TableQuestion | ReferenceQuestion | OrderQuestion | PhraseQuestion | CheckboxQuestion | ListeningMCQ | WritingQuestion;
+export type Question = MCQQuestion | FillBlankQuestion | OpenEndedQuestion | TrueFalseQuestion | TableQuestion | ReferenceQuestion | OrderQuestion | PhraseQuestion | CheckboxQuestion | WritingQuestion;
 
 export interface Section {
   id: string;
@@ -102,30 +93,10 @@ export interface Section {
   imageUrl?: string;
 }
 
-export const AUDIO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/nbRHvQQXlSOsLNKm.mp3";
-
 export const sections: Section[] = [
   {
-    id: 'listening',
-    title: 'Part 1: Listening',
-    subtitle: 'Listen and Answer',
-    icon: '🎧',
-    color: 'text-[oklch(0.50_0.18_255)]',
-    bgColor: 'bg-[oklch(0.92_0.05_255)]',
-    description: 'Listen to the audio carefully and answer the questions. You may replay the audio as many times as you need.',
-    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-2_1771255550000_na1fn_bGlzdGVuaW5nLXNlY3Rpb24.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTJfMTc3MTI1NTU1MDAwMF9uYTFmbl9iR2x6ZEdWdWFXNW5MWE5sWTNScGIyNC5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=EXpcvlAJ4VD3BObD1FRIKoQDFr1HywQSwMlDPuri3D~vVjRyWFxzKCFwz~SXOYBwDqLd1mZFeqm6jARX5trLUQHs-9zkODNFlJ8WwwP~FiQVvCbiVrhS9FcUkz8A~YWjZMMiRlcU2KRLExkxdf62NS-M~nhwVCehWBNI6qFzh2CQqBWMfFRAw-K0gpA7ttHMW6PHlod5rfGFDWwq0lr3zHi1LEgCQJZA5QcYRKUp3mVagKqF9AVgsjihhBCa3lTl9W3s97Dpuqni2ywvKETmnGX~T1-1C2Xl-hF46EhmCiOVUvZAlc0bymtpp8EhSK0JMdLuhXCjXh-zC~G89nGs3w__',
-    questions: [
-      { id: 101, type: 'listening-mcq', question: 'What is Dad doing?', options: ['Watching TV', 'Playing his guitar', 'Listening to the radio'], correctAnswer: 2, audioTimestamp: '0:16' },
-      { id: 102, type: 'listening-mcq', question: "Which is Anna's sister?", options: ['Girl with black hair in a white dress', 'Girl with brown hair in a white dress and boots', 'Girl with brown hair in a black dress'], correctAnswer: 1, audioTimestamp: '0:47' },
-      { id: 103, type: 'listening-mcq', question: "What is in Sam's school bag?", options: ['A ruler', 'Crayons', 'A tablet'], correctAnswer: 2, audioTimestamp: '1:18' },
-      { id: 104, type: 'listening-mcq', question: 'What did Anna do yesterday?', options: ['Went to the movies', 'Went shopping with friends', 'Went to a café'], correctAnswer: 1, audioTimestamp: '1:43' },
-      { id: 105, type: 'listening-mcq', question: "What job does Tom's sister have?", options: ['A nurse', 'A doctor', 'A driver'], correctAnswer: 2, audioTimestamp: '2:13' },
-      { id: 106, type: 'listening-mcq', question: 'Which toy did Jack buy for his sister?', options: ['A toy panda', 'A doll', 'A clown'], correctAnswer: 2, audioTimestamp: '2:45' },
-    ],
-  },
-  {
     id: 'vocabulary',
-    title: 'Part 2: Vocabulary',
+    title: 'Part 1: Vocabulary',
     subtitle: 'Choose the Correct Meaning',
     icon: '📖',
     color: 'text-[oklch(0.55_0.16_160)]',
@@ -157,7 +128,7 @@ export const sections: Section[] = [
   },
   {
     id: 'grammar',
-    title: 'Part 3: Grammar',
+    title: 'Part 2: Grammar',
     subtitle: 'Fill in the Blanks',
     icon: '✏️',
     color: 'text-[oklch(0.65_0.15_75)]',
@@ -204,7 +175,7 @@ Ultimately, education is not <b>(30) ___</b> a pathway to employment, but a life
   },
   {
     id: 'reading',
-    title: 'Part 4: Reading Comprehension',
+    title: 'Part 3: Reading Comprehension',
     subtitle: 'Read and Answer',
     icon: '📚',
     color: 'text-[oklch(0.50_0.18_255)]',
@@ -309,7 +280,7 @@ But then, to our surprise, as we passed a café, we spotted the same old man. He
   },
   {
     id: 'writing',
-    title: 'Part 5: Writing',
+    title: 'Part 4: Writing',
     subtitle: 'Composition',
     icon: '✍️',
     color: 'text-[oklch(0.60_0.20_25)]',
@@ -339,7 +310,7 @@ export function getAutoGradableCount(): number {
   let count = 0;
   for (const section of sections) {
     for (const q of section.questions) {
-      if (q.type === 'mcq' || q.type === 'fill-blank' || q.type === 'listening-mcq' || q.type === 'checkbox') {
+      if (q.type === 'mcq' || q.type === 'fill-blank' || q.type === 'checkbox') {
         count++;
       }
     }

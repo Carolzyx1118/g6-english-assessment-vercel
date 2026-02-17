@@ -192,7 +192,7 @@ describe("grading.generateReport", () => {
     const result = await caller.grading.generateReport({
       totalScore: 30, totalPossible: 50, percentage: 60, grade: "C", totalTimeSeconds: 1800,
       sectionResults: [
-        { sectionId: "listening", sectionTitle: "Part 1: Listening", correct: 4, total: 6, timeSeconds: 300 },
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 16, total: 20, timeSeconds: 300 },
       ],
     });
 
@@ -216,7 +216,7 @@ describe("grading.generateReport", () => {
     const result = await caller.grading.generateReport({
       totalScore: 20, totalPossible: 36, percentage: 56, grade: "C", totalTimeSeconds: 600,
       sectionResults: [
-        { sectionId: "listening", sectionTitle: "Part 1: Listening", correct: 3, total: 6, timeSeconds: 120 },
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 12, total: 20, timeSeconds: 120 },
       ],
     });
 

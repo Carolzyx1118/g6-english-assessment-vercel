@@ -124,7 +124,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     for (const section of sections) {
       bySection[section.id] = { correct: 0, total: 0 };
       for (const q of section.questions) {
-        if (q.type === 'mcq' || q.type === 'listening-mcq') {
+        if (q.type === 'mcq') {
           total++;
           bySection[section.id].total++;
           const answer = state.answers[q.id];
