@@ -389,205 +389,523 @@ export default function ResultsPage() {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
-      const marginL = 15;
-      const marginR = 15;
-      const maxW = pageW - marginL - marginR;
-      let y = 20;
+      const mL = 18;
+      const mR = 18;
+      const contentW = pageW - mL - mR;
+      let y = 0;
+      let pageNum = 1;
+
+      // ── Color palette ──
+      const C = {
+        primary: [37, 99, 235] as [number, number, number],
+        primaryLight: [239, 246, 255] as [number, number, number],
+        accent: [99, 102, 241] as [number, number, number],
+        accentLight: [238, 242, 255] as [number, number, number],
+        success: [22, 163, 74] as [number, number, number],
+        successLight: [220, 252, 231] as [number, number, number],
+        danger: [220, 38, 38] as [number, number, number],
+        dangerLight: [254, 226, 226] as [number, number, number],
+        amber: [217, 119, 6] as [number, number, number],
+        amberLight: [254, 243, 199] as [number, number, number],
+        rose: [225, 29, 72] as [number, number, number],
+        roseLight: [255, 228, 230] as [number, number, number],
+        text: [30, 41, 59] as [number, number, number],
+        textMuted: [100, 116, 139] as [number, number, number],
+        textLight: [148, 163, 184] as [number, number, number],
+        border: [226, 232, 240] as [number, number, number],
+        bgLight: [248, 250, 252] as [number, number, number],
+        white: [255, 255, 255] as [number, number, number],
+      };
+
+      // ── Page footer ──
+      const addPageFooter = () => {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(...C.textLight);
+        pdf.text('G6 English Proficiency Assessment Report', mL, pageH - 8);
+        pdf.text(`Page ${pageNum}`, pageW - mR, pageH - 8, { align: 'right' });
+        // Footer line
+        pdf.setDrawColor(...C.border);
+        pdf.setLineWidth(0.2);
+        pdf.line(mL, pageH - 12, pageW - mR, pageH - 12);
+      };
+
+      const newPage = () => {
+        addPageFooter();
+        pdf.addPage();
+        pageNum++;
+        y = 18;
+      };
 
       const checkPage = (need: number) => {
-        if (y + need > pageH - 15) { pdf.addPage(); y = 20; }
+        if (y + need > pageH - 18) { newPage(); }
       };
 
-      const addTitle = (text: string, size: number, r: number, g: number, b: number) => {
-        checkPage(12);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(size);
-        pdf.setTextColor(r, g, b);
-        pdf.text(text, marginL, y);
-        y += size * 0.5 + 2;
-      };
-
-      const addText = (text: string, size = 10, bold = false) => {
-        pdf.setFont('helvetica', bold ? 'bold' : 'normal');
-        pdf.setFontSize(size);
-        pdf.setTextColor(50, 50, 50);
-        const lines = pdf.splitTextToSize(text, maxW);
-        for (const line of lines) {
-          checkPage(size * 0.45 + 1);
-          pdf.text(line, marginL, y);
-          y += size * 0.45 + 1;
+      // ── Drawing helpers ──
+      const drawRect = (x: number, yPos: number, w: number, h: number, color: [number, number, number], radius = 0) => {
+        pdf.setFillColor(...color);
+        if (radius > 0) {
+          pdf.roundedRect(x, yPos, w, h, radius, radius, 'F');
+        } else {
+          pdf.rect(x, yPos, w, h, 'F');
         }
       };
 
-      const addLine = () => {
-        checkPage(6);
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.3);
-        pdf.line(marginL, y, pageW - marginR, y);
-        y += 4;
+      const addText = (text: string, x: number, size = 10, bold = false, color: [number, number, number] = C.text, maxWidth = contentW - (x - mL)) => {
+        pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+        pdf.setFontSize(size);
+        pdf.setTextColor(...color);
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        for (const line of lines) {
+          checkPage(size * 0.45 + 1.5);
+          pdf.text(line, x, y);
+          y += size * 0.45 + 1.5;
+        }
       };
 
       const addGap = (h = 4) => { y += h; };
 
-      // ===== HEADER =====
-      addTitle('G6 English Proficiency Assessment Report', 18, 37, 99, 235);
-      addGap(2);
+      const addDivider = (color: [number, number, number] = C.border, thick = 0.3) => {
+        checkPage(6);
+        addGap(3);
+        pdf.setDrawColor(...color);
+        pdf.setLineWidth(thick);
+        pdf.line(mL, y, pageW - mR, y);
+        y += 4;
+      };
+
+      // Section banner with colored left accent bar
+      const addSectionBanner = (title: string, color: [number, number, number], bgColor: [number, number, number]) => {
+        checkPage(16);
+        addGap(4);
+        // Background
+        drawRect(mL, y - 4, contentW, 12, bgColor, 2);
+        // Left accent bar
+        drawRect(mL, y - 4, 3, 12, color, 1);
+        // Title text
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(...color);
+        pdf.text(title, mL + 7, y + 3.5);
+        y += 12;
+      };
+
+      // ══════════════════════════════════════════════
+      // PAGE 1: COVER HEADER
+      // ══════════════════════════════════════════════
+
+      // Top gradient banner
+      drawRect(0, 0, pageW, 52, C.primary);
+      // Subtle overlay stripe
+      drawRect(0, 42, pageW, 10, [30, 85, 220]);
+
+      // Title on banner
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(22);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('G6 English Proficiency', mL, 22);
+      pdf.text('Assessment Report', mL, 32);
+
+      // Date on banner
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(200, 220, 255);
+      pdf.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), mL, 46);
+
+      y = 60;
+
+      // ── Student Info Card ──
       if (studentInfo) {
-        addText(`${lang === 'en' ? 'Name' : '\u59d3\u540d'}: ${studentInfo.name}`, 10, true);
-        const infoLine: string[] = [];
-        if (studentInfo.grade) infoLine.push(`${lang === 'en' ? 'Grade' : '\u5e74\u7ea7'}: ${studentInfo.grade}`);
-
-        if (infoLine.length > 0) addText(infoLine.join('    '), 10);
-        addGap(1);
-      }
-      addText(`Generated on ${new Date().toLocaleString()}`, 8);
-      addGap(2);
-      addLine();
-
-      // ===== SCORE SUMMARY =====
-      addTitle(`Grade: ${gradeInfo.grade}  —  ${lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}`, 14, 30, 30, 30);
-      addText(`Total Score: ${totalScore} / ${totalPossible}  (${percentage}%)`, 11, true);
-      addText(`Total Time: ${minutes}m ${seconds.toString().padStart(2, '0')}s`, 11);
-      addGap(2);
-      addLine();
-
-      // ===== PROFICIENCY REPORT =====
-      if (report) {
-        addTitle(lang === 'en' ? 'Proficiency Report' : '能力评估报告', 14, 99, 102, 241);
-        addGap(2);
-        addText(`CEFR Level: ${report.languageLevel}`, 11, true);
-        addGap(2);
-        addText(lang === 'en' ? 'Summary:' : '总结：', 10, true);
-        addText(lang === 'en' ? report.summary_en : report.summary_cn);
-        addGap(2);
-        addText(lang === 'en' ? 'Time Management:' : '时间管理：', 10, true);
-        addText(lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn);
-        addGap(2);
-        addText(lang === 'en' ? 'Strengths:' : '优势：', 10, true);
-        (lang === 'en' ? report.strengths_en : report.strengths_cn).forEach((s, i) => addText(`  ${i + 1}. ${s}`));
-        addGap(2);
-        addText(lang === 'en' ? 'Areas for Improvement:' : '待提高：', 10, true);
-        (lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).forEach((w, i) => addText(`  ${i + 1}. ${w}`));
-        addGap(2);
-        addText(lang === 'en' ? 'Recommendations:' : '学习建议：', 10, true);
-        (lang === 'en' ? report.recommendations_en : report.recommendations_cn).forEach((r, i) => addText(`  ${i + 1}. ${r}`));
-        addGap(2);
-        addLine();
+        drawRect(mL, y, contentW, studentInfo.grade ? 22 : 16, C.bgLight, 3);
+        // Left accent
+        drawRect(mL, y, 3, studentInfo.grade ? 22 : 16, C.accent, 1);
+        addText(studentInfo.name, mL + 8, 13, true, C.text);
+        if (studentInfo.grade) {
+          addText(`${lang === 'en' ? 'Grade' : '\u5e74\u7ea7'}: ${studentInfo.grade}`, mL + 8, 9.5, false, C.textMuted);
+        }
+        y += 4;
       }
 
-      // ===== SECTION BREAKDOWN =====
-      addTitle(lang === 'en' ? 'Section Breakdown' : '各部分成绩', 14, 99, 102, 241);
+      addGap(4);
+
+      // ══════════════════════════════════════════════
+      // SCORE SUMMARY CARD
+      // ══════════════════════════════════════════════
+      checkPage(45);
+      const cardY = y;
+      drawRect(mL, cardY, contentW, 40, C.white, 3);
+      // Border
+      pdf.setDrawColor(...C.border);
+      pdf.setLineWidth(0.3);
+      pdf.roundedRect(mL, cardY, contentW, 40, 3, 3, 'S');
+
+      const colW = contentW / 3;
+
+      // Grade column
+      const gradeColor = percentage >= 80 ? C.success : percentage >= 60 ? C.amber : C.danger;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(28);
+      pdf.setTextColor(...gradeColor);
+      pdf.text(gradeInfo.grade, mL + colW * 0.5, cardY + 20, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text(lang === 'en' ? 'GRADE' : '\u7b49\u7ea7', mL + colW * 0.5, cardY + 28, { align: 'center' });
+
+      // Score column
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(24);
+      pdf.setTextColor(...C.text);
+      pdf.text(`${totalScore}`, mL + colW * 1.5 - 4, cardY + 18, { align: 'center' });
+      pdf.setFontSize(14);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text(`/ ${totalPossible}`, mL + colW * 1.5 + 12, cardY + 18, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`${lang === 'en' ? 'SCORE' : '\u5206\u6570'} (${percentage}%)`, mL + colW * 1.5, cardY + 28, { align: 'center' });
+
+      // Time column
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(24);
+      pdf.setTextColor(...C.text);
+      pdf.text(`${minutes}:${seconds.toString().padStart(2, '0')}`, mL + colW * 2.5, cardY + 18, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text(lang === 'en' ? 'TIME' : '\u7528\u65f6', mL + colW * 2.5, cardY + 28, { align: 'center' });
+
+      // Vertical dividers in score card
+      pdf.setDrawColor(...C.border);
+      pdf.setLineWidth(0.2);
+      pdf.line(mL + colW, cardY + 8, mL + colW, cardY + 32);
+      pdf.line(mL + colW * 2, cardY + 8, mL + colW * 2, cardY + 32);
+
+      y = cardY + 46;
+
+      // Grade description
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...C.textMuted);
+      const gradeDesc = lang === 'en' ? gradeInfo.label : gradeInfo.label_cn;
+      pdf.text(gradeDesc, pageW / 2, y, { align: 'center' });
+      y += 8;
+
+      addDivider();
+
+      // ══════════════════════════════════════════════
+      // SECTION BREAKDOWN TABLE
+      // ══════════════════════════════════════════════
+      addSectionBanner(lang === 'en' ? 'Section Breakdown' : '\u5404\u90e8\u5206\u6210\u7ee9', C.accent, C.accentLight);
       addGap(2);
-      sections.forEach(section => {
+
+      // Table header
+      const tableX = mL;
+      const col1 = contentW * 0.45;
+      const col2 = contentW * 0.2;
+      const col3 = contentW * 0.15;
+      const col4 = contentW * 0.2;
+
+      checkPage(10);
+      drawRect(tableX, y - 3, contentW, 8, C.bgLight);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text(lang === 'en' ? 'SECTION' : '\u90e8\u5206', tableX + 3, y + 1.5);
+      pdf.text(lang === 'en' ? 'SCORE' : '\u5f97\u5206', tableX + col1 + 3, y + 1.5);
+      pdf.text('%', tableX + col1 + col2 + 3, y + 1.5);
+      pdf.text(lang === 'en' ? 'TIME' : '\u65f6\u95f4', tableX + col1 + col2 + col3 + 3, y + 1.5);
+      y += 8;
+
+      // Table rows
+      const sectionColors: Record<string, [number, number, number]> = {
+        vocabulary: [16, 185, 129],
+        grammar: [245, 158, 11],
+        reading: [99, 102, 241],
+        writing: [225, 29, 72],
+      };
+
+      sections.forEach((section, idx) => {
+        checkPage(10);
         const sTime = sectionTimings[section.id] || 0;
         const timeStr = sTime > 0 ? formatTime(sTime) : 'N/A';
+        let scoreStr = '';
+        let pctVal = 0;
+
         if (section.id === 'reading' && readingResults) {
           const rc = readingResults.filter(r => r.isCorrect).length;
-          addText(`${section.title}: ${rc}/${readingResults.length}  (${timeStr})`, 10, true);
+          scoreStr = `${rc} / ${readingResults.length}`;
+          pctVal = readingResults.length > 0 ? Math.round(rc / readingResults.length * 100) : 0;
         } else if (section.id === 'writing' && writingResult) {
-          addText(`${section.title}: ${writingResult.score}/${writingResult.maxScore}  (${timeStr})`, 10, true);
+          scoreStr = `${writingResult.score} / ${writingResult.maxScore}`;
+          pctVal = writingResult.maxScore > 0 ? Math.round(writingResult.score / writingResult.maxScore * 100) : 0;
         } else {
           const bs = bySection[section.id];
-          if (bs) addText(`${section.title}: ${bs.correct}/${bs.total}  (${timeStr})`, 10, true);
+          if (bs) {
+            scoreStr = `${bs.correct} / ${bs.total}`;
+            pctVal = bs.total > 0 ? Math.round(bs.correct / bs.total * 100) : 0;
+          }
         }
+
+        // Alternating row bg
+        if (idx % 2 === 0) drawRect(tableX, y - 3, contentW, 9, C.bgLight);
+
+        // Color dot
+        const dotColor = sectionColors[section.id] || C.text;
+        pdf.setFillColor(...dotColor);
+        pdf.circle(tableX + 4, y + 0.5, 1.5, 'F');
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...C.text);
+        pdf.text(section.title, tableX + 9, y + 1.5);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(scoreStr, tableX + col1 + 3, y + 1.5);
+
+        // Percentage with color
+        const pctColor = pctVal >= 80 ? C.success : pctVal >= 60 ? C.amber : C.danger;
+        pdf.setTextColor(...pctColor);
+        pdf.text(`${pctVal}%`, tableX + col1 + col2 + 3, y + 1.5);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...C.textMuted);
+        pdf.text(timeStr, tableX + col1 + col2 + col3 + 3, y + 1.5);
+
+        y += 9;
       });
-      addGap(2);
-      addLine();
 
-      // ===== WRONG ANSWERS & EXPLANATIONS =====
-      addTitle(lang === 'en' ? 'Wrong Answers & Explanations' : '错题与解析', 14, 220, 50, 50);
-      addGap(2);
+      addGap(4);
+      addDivider();
 
-      for (const section of detailedResults) {
-        const wrongQs = section.questions.filter(q => !q.isCorrect);
-        if (wrongQs.length === 0) continue;
-        addText(`【${section.sectionTitle}】`, 11, true);
-        addGap(1);
-        for (const q of wrongQs) {
-          addText(`Q${q.id}: ${q.question}`, 10, true);
-          pdf.setTextColor(220, 50, 50);
-          addText(`  ${lang === 'en' ? 'Your answer' : '你的答案'}: ${q.userAnswer}`);
-          pdf.setTextColor(34, 139, 34);
-          addText(`  ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${q.correctAnswer}`);
-          pdf.setTextColor(50, 50, 50);
-          const expl = getExplanation(q.id);
-          if (expl) {
-            addText(`  ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`);
-            addText(`  ${lang === 'en' ? 'Tip' : '提示'}: ${lang === 'en' ? expl.tip_en : expl.tip_cn}`);
-          }
-          addGap(2);
-        }
-        addGap(2);
-      }
+      // ══════════════════════════════════════════════
+      // PROFICIENCY REPORT
+      // ══════════════════════════════════════════════
+      if (report) {
+        addSectionBanner(lang === 'en' ? 'Proficiency Report' : '\u80fd\u529b\u8bc4\u4f30\u62a5\u544a', C.accent, C.accentLight);
+        addGap(3);
 
-      // Reading wrong answers
-      if (readingResults) {
-        const wrongReading = readingSubItems.filter(item => {
-          const r = getReadingResult(item.id);
-          return r && !r.isCorrect;
+        // CEFR Level badge
+        checkPage(14);
+        drawRect(mL, y - 2, 28, 10, C.accent, 2);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(report.languageLevel, mL + 14, y + 4.5, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...C.textMuted);
+        pdf.text(lang === 'en' ? 'CEFR Level' : 'CEFR \u7b49\u7ea7', mL + 32, y + 4.5);
+        y += 14;
+
+        // Summary
+        addText(lang === 'en' ? 'Summary' : '\u603b\u7ed3', mL, 10, true, C.text);
+        addText(lang === 'en' ? report.summary_en : report.summary_cn, mL + 2, 9.5, false, C.textMuted);
+        addGap(3);
+
+        // Time Management
+        addText(lang === 'en' ? 'Time Management' : '\u65f6\u95f4\u7ba1\u7406', mL, 10, true, C.text);
+        addText(lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn, mL + 2, 9.5, false, C.textMuted);
+        addGap(3);
+
+        // Strengths
+        checkPage(10);
+        drawRect(mL, y - 1, contentW, 1, C.success);
+        y += 3;
+        addText(lang === 'en' ? 'Strengths' : '\u4f18\u52bf', mL, 10, true, C.success);
+        (lang === 'en' ? report.strengths_en : report.strengths_cn).forEach((s, i) => {
+          addText(`\u2713  ${s}`, mL + 4, 9, false, C.text);
         });
-        if (wrongReading.length > 0) {
-          addText('【Part 3: Reading Comprehension】', 11, true);
-          addGap(1);
-          for (const item of wrongReading) {
+        addGap(3);
+
+        // Weaknesses
+        checkPage(10);
+        drawRect(mL, y - 1, contentW, 1, C.amber);
+        y += 3;
+        addText(lang === 'en' ? 'Areas for Improvement' : '\u5f85\u63d0\u9ad8', mL, 10, true, C.amber);
+        (lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).forEach((w, i) => {
+          addText(`\u25b3  ${w}`, mL + 4, 9, false, C.text);
+        });
+        addGap(3);
+
+        // Recommendations
+        checkPage(10);
+        drawRect(mL, y - 1, contentW, 1, C.primary);
+        y += 3;
+        addText(lang === 'en' ? 'Recommendations' : '\u5b66\u4e60\u5efa\u8bae', mL, 10, true, C.primary);
+        (lang === 'en' ? report.recommendations_en : report.recommendations_cn).forEach((r, i) => {
+          addText(`${i + 1}.  ${r}`, mL + 4, 9, false, C.text);
+        });
+        addGap(4);
+        addDivider();
+      }
+
+      // ══════════════════════════════════════════════
+      // WRONG ANSWERS & EXPLANATIONS
+      // ══════════════════════════════════════════════
+      const hasWrongAnswers = detailedResults.some(s => s.questions.some(q => !q.isCorrect)) ||
+        (readingResults && readingSubItems.some(item => { const r = getReadingResult(item.id); return r && !r.isCorrect; }));
+
+      if (hasWrongAnswers) {
+        addSectionBanner(lang === 'en' ? 'Wrong Answers & Explanations' : '\u9519\u9898\u4e0e\u89e3\u6790', C.danger, C.dangerLight);
+        addGap(3);
+
+        for (const section of detailedResults) {
+          const wrongQs = section.questions.filter(q => !q.isCorrect);
+          if (wrongQs.length === 0) continue;
+
+          // Sub-section header
+          checkPage(10);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(10);
+          pdf.setTextColor(...C.text);
+          pdf.text(`\u25cf  ${section.sectionTitle}`, mL, y + 2);
+          y += 8;
+
+          for (const q of wrongQs) {
+            checkPage(25);
+            // Question card background
+            const qLines = pdf.splitTextToSize(`Q${q.id}: ${q.question}`, contentW - 10);
+            const cardH = 18 + qLines.length * 4.5;
+            drawRect(mL, y - 2, contentW, Math.max(cardH, 28), C.bgLight, 2);
+
+            addText(`Q${q.id}: ${q.question}`, mL + 4, 9.5, true, C.text, contentW - 10);
+            addGap(1);
+
+            // Your answer (red)
+            pdf.setFillColor(...C.dangerLight);
+            pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
+            addText(`\u2717  ${lang === 'en' ? 'Your answer' : '\u4f60\u7684\u7b54\u6848'}: ${q.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
+            addGap(1);
+
+            // Correct answer (green)
+            pdf.setFillColor(...C.successLight);
+            pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
+            addText(`\u2713  ${lang === 'en' ? 'Correct answer' : '\u6b63\u786e\u7b54\u6848'}: ${q.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
+            addGap(1);
+
+            const expl = getExplanation(q.id);
+            if (expl) {
+              addText(`\u25b8 ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addText(`\u{1f4a1} ${lang === 'en' ? expl.tip_en : expl.tip_cn}`, mL + 6, 8.5, false, C.amber, contentW - 14);
+            }
+            addGap(5);
+          }
+          addGap(3);
+        }
+
+        // Reading wrong answers
+        if (readingResults) {
+          const wrongReading = readingSubItems.filter(item => {
             const r = getReadingResult(item.id);
-            if (!r) continue;
-            addText(`${item.label}: ${item.questionText}`, 10, true);
-            pdf.setTextColor(220, 50, 50);
-            addText(`  ${lang === 'en' ? 'Your answer' : '你的答案'}: ${item.userAnswer}`);
-            pdf.setTextColor(34, 139, 34);
-            addText(`  ${lang === 'en' ? 'Correct answer' : '正确答案'}: ${item.correctAnswer}`);
-            pdf.setTextColor(50, 50, 50);
-            addText(`  ${lang === 'en' ? 'Feedback' : '反馈'}: ${lang === 'en' ? r.feedback_en : r.feedback_cn}`);
-            addText(`  ${lang === 'en' ? 'Explanation' : '解析'}: ${lang === 'en' ? r.explanation_en : r.explanation_cn}`);
-            addGap(2);
+            return r && !r.isCorrect;
+          });
+          if (wrongReading.length > 0) {
+            checkPage(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(10);
+            pdf.setTextColor(...C.text);
+            pdf.text('\u25cf  Part 3: Reading Comprehension', mL, y + 2);
+            y += 8;
+
+            for (const item of wrongReading) {
+              const r = getReadingResult(item.id);
+              if (!r) continue;
+              checkPage(25);
+
+              const qLines2 = pdf.splitTextToSize(`${item.label}: ${item.questionText}`, contentW - 10);
+              const cardH2 = 18 + qLines2.length * 4.5;
+              drawRect(mL, y - 2, contentW, Math.max(cardH2, 28), C.bgLight, 2);
+
+              addText(`${item.label}: ${item.questionText}`, mL + 4, 9.5, true, C.text, contentW - 10);
+              addGap(1);
+
+              pdf.setFillColor(...C.dangerLight);
+              pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
+              addText(`\u2717  ${lang === 'en' ? 'Your answer' : '\u4f60\u7684\u7b54\u6848'}: ${item.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
+              addGap(1);
+
+              pdf.setFillColor(...C.successLight);
+              pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
+              addText(`\u2713  ${lang === 'en' ? 'Correct answer' : '\u6b63\u786e\u7b54\u6848'}: ${item.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
+              addGap(1);
+
+              addText(`\u25b8 ${lang === 'en' ? r.feedback_en : r.feedback_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addText(`\u25b8 ${lang === 'en' ? r.explanation_en : r.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addGap(5);
+            }
           }
         }
+        addDivider();
       }
-      addLine();
 
-      // ===== WRITING EVALUATION =====
+      // ══════════════════════════════════════════════
+      // WRITING EVALUATION
+      // ══════════════════════════════════════════════
       if (writingResult) {
-        addTitle(lang === 'en' ? 'Writing Evaluation' : '写作评估', 14, 225, 29, 72);
-        addGap(2);
-        addText(`${lang === 'en' ? 'Score' : '分数'}: ${writingResult.score}/${writingResult.maxScore}`, 11, true);
-        addGap(1);
-        addText(`${lang === 'en' ? 'Overall Feedback' : '总体反馈'}:`, 10, true);
-        addText(lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn);
-        addGap(2);
+        addSectionBanner(lang === 'en' ? 'Writing Evaluation' : '\u5199\u4f5c\u8bc4\u4f30', C.rose, C.roseLight);
+        addGap(3);
 
+        // Score badge
+        checkPage(14);
+        drawRect(mL, y - 2, 32, 10, C.rose, 2);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`${writingResult.score} / ${writingResult.maxScore}`, mL + 16, y + 4.5, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...C.textMuted);
+        pdf.text(lang === 'en' ? 'Writing Score' : '\u5199\u4f5c\u5206\u6570', mL + 36, y + 4.5);
+        y += 14;
+
+        // Overall feedback
+        addText(lang === 'en' ? 'Overall Feedback' : '\u603b\u4f53\u53cd\u9988', mL, 10, true, C.text);
+        addText(lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn, mL + 2, 9.5, false, C.textMuted);
+        addGap(4);
+
+        // Grammar errors
         if (writingResult.grammarErrors.length > 0) {
-          addText(lang === 'en' ? 'Errors Found:' : '发现的错误：', 10, true);
+          addText(lang === 'en' ? 'Errors Found' : '\u53d1\u73b0\u7684\u9519\u8bef', mL, 10, true, C.danger);
+          addGap(2);
           writingResult.grammarErrors.forEach((err, i) => {
-            pdf.setTextColor(220, 50, 50);
-            addText(`  ${i + 1}. "${err.original}"`, 10);
-            pdf.setTextColor(34, 139, 34);
-            addText(`     → "${err.correction}"`, 10);
-            pdf.setTextColor(50, 50, 50);
-            addText(`     ${lang === 'en' ? err.explanation_en : err.explanation_cn}`, 9);
+            checkPage(16);
+            drawRect(mL + 2, y - 2, contentW - 4, 1, C.dangerLight);
+            y += 2;
+            addText(`${i + 1}. "${err.original}"`, mL + 4, 9, false, C.danger);
+            addText(`   \u2192 "${err.correction}"`, mL + 4, 9, true, C.success);
+            addText(`   ${lang === 'en' ? err.explanation_en : err.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+            addGap(2);
           });
           addGap(2);
         }
 
+        // Corrected essay
         if (writingResult.correctedEssay) {
-          addText(lang === 'en' ? 'Corrected Essay:' : '修正后的作文：', 10, true);
-          addText(writingResult.correctedEssay);
-          addGap(2);
+          addText(lang === 'en' ? 'Corrected Essay' : '\u4fee\u6b63\u540e\u7684\u4f5c\u6587', mL, 10, true, C.text);
+          addGap(1);
+          checkPage(8);
+          drawRect(mL, y - 1, contentW, 1, C.accent);
+          y += 3;
+          addText(writingResult.correctedEssay, mL + 2, 9, false, C.text, contentW - 6);
+          addGap(4);
         }
 
+        // Suggestions
         const suggestions = lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn;
         if (suggestions && suggestions.length > 0) {
-          addText(lang === 'en' ? 'Suggestions:' : '改进建议：', 10, true);
-          suggestions.forEach((s, i) => addText(`  ${i + 1}. ${s}`));
+          checkPage(10);
+          drawRect(mL, y - 1, contentW, 1, C.primary);
+          y += 3;
+          addText(lang === 'en' ? 'Suggestions for Improvement' : '\u6539\u8fdb\u5efa\u8bae', mL, 10, true, C.primary);
+          suggestions.forEach((s, i) => {
+            addText(`${i + 1}.  ${s}`, mL + 4, 9, false, C.text);
+          });
         }
-        addLine();
+        addGap(4);
       }
 
-      // ===== FOOTER =====
-      addGap(4);
-      pdf.setFontSize(8);
-      pdf.setTextColor(150, 150, 150);
-      pdf.text('G6 English Proficiency Assessment — HCI Secondary 1 Entrance', marginL, y);
+      // ── Final page footer ──
+      addPageFooter();
 
       const nameSlug = studentInfo?.name ? `_${studentInfo.name.replace(/\s+/g, '_')}` : '';
       pdf.save(`G6_Assessment_Report${nameSlug}_${new Date().toISOString().slice(0, 10)}.pdf`);
