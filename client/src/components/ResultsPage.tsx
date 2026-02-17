@@ -136,7 +136,7 @@ function LangToggle({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void 
 }
 
 export default function ResultsPage() {
-  const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime } = useQuiz();
+  const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime, studentInfo } = useQuiz();
   const { correct, total, bySection } = getScore();
 
   const totalTime = getTotalTime();
@@ -432,6 +432,15 @@ export default function ResultsPage() {
       // ===== HEADER =====
       addTitle('G6 English Proficiency Assessment Report', 18, 37, 99, 235);
       addGap(2);
+      if (studentInfo) {
+        addText(`${lang === 'en' ? 'Name' : '\u59d3\u540d'}: ${studentInfo.name}`, 10, true);
+        const infoLine: string[] = [];
+        if (studentInfo.grade) infoLine.push(`${lang === 'en' ? 'Grade' : '\u5e74\u7ea7'}: ${studentInfo.grade}`);
+        if (studentInfo.className) infoLine.push(`${lang === 'en' ? 'Class' : '\u73ed\u7ea7'}: ${studentInfo.className}`);
+        if (studentInfo.studentId) infoLine.push(`${lang === 'en' ? 'Student ID' : '\u5b66\u53f7'}: ${studentInfo.studentId}`);
+        if (infoLine.length > 0) addText(infoLine.join('    '), 10);
+        addGap(1);
+      }
       addText(`Generated on ${new Date().toLocaleString()}`, 8);
       addGap(2);
       addLine();
@@ -581,14 +590,15 @@ export default function ResultsPage() {
       pdf.setTextColor(150, 150, 150);
       pdf.text('G6 English Proficiency Assessment — HCI Secondary 1 Entrance', marginL, y);
 
-      pdf.save(`G6_Assessment_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      const nameSlug = studentInfo?.name ? `_${studentInfo.name.replace(/\s+/g, '_')}` : '';
+      pdf.save(`G6_Assessment_Report${nameSlug}_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
     } finally {
       setIsDownloading(false);
     }
   }, [lang, report, detailedResults, readingResults, writingResult, explanations, readingSubItems,
-      totalScore, totalPossible, percentage, gradeInfo, minutes, seconds, bySection, sectionTimings]);
+      totalScore, totalPossible, percentage, gradeInfo, minutes, seconds, bySection, sectionTimings, studentInfo]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -626,6 +636,16 @@ export default function ResultsPage() {
             <p className="text-slate-500 text-base">{lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}</p>
           )}
         </motion.div>
+
+        {/* Student Info */}
+        {studentInfo && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }} className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6 text-sm text-slate-500">
+            <span className="font-semibold text-slate-700">{studentInfo.name}</span>
+            {studentInfo.grade && <span>{lang === 'en' ? 'Grade' : '年级'}: {studentInfo.grade}</span>}
+            {studentInfo.className && <span>{lang === 'en' ? 'Class' : '班级'}: {studentInfo.className}</span>}
+            {studentInfo.studentId && <span>{lang === 'en' ? 'ID' : '学号'}: {studentInfo.studentId}</span>}
+          </motion.div>
+        )}
 
         {/* Score Display */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-white rounded-2xl border border-slate-200 shadow-lg p-8 mb-8">

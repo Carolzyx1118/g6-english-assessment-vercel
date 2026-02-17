@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { sections } from '@/data/questions';
 import { motion } from 'framer-motion';
 import { BookOpen, PenTool, FileText, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import StudentInfoForm from '@/components/StudentInfoForm';
 
 const HERO_IMAGE = 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-1_1771255551000_na1fn_aGVyby1iYW5uZXI.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTFfMTc3MTI1NTU1MTAwMF9uYTFmbl9hR1Z5YnkxaVlXNXVaWEkucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=I5fojTC3dYU1azrXcxeOhHGaexKXmznPAcGFS~lV8L7Mg4foEr2gVTG8bWCRAFcNxWpHkpz6nN2LYnhtbkVgpR6LJgFhSgixOlBrFTrn10YhLyMDjFH395DUPFebb3vmNWW4AtScobvWAmQKFCbyRkSCwV2lqQjc6UtGXWp0UNZVGZU93MZ-Lc6Tnjz7Y-~D1BRvpGWq8tZLrE1EeyFCN-2QxJNOaJrlvv0Zqp443MkcRgAiOKhqYi8Jux0MB8ue0LLEMJZ7GIRQOzu1lbf6FHGk5jHn3ctuue-nzVHvjc~hX60cyBA3odGGtWFaxd56S8rofjTUDitaGRwWStBX7A__';
 
@@ -28,7 +30,11 @@ const iconBgColors: Record<string, string> = {
 };
 
 export default function LandingPage() {
-  const { startQuiz } = useQuiz();
+  const [showInfoForm, setShowInfoForm] = useState(false);
+
+  if (showInfoForm) {
+    return <StudentInfoForm />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -55,7 +61,7 @@ export default function LandingPage() {
               <div className="mt-8 flex flex-wrap gap-4">
                 <Button
                   size="lg"
-                  onClick={startQuiz}
+                  onClick={() => setShowInfoForm(true)}
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all duration-300"
                 >
                   Start Assessment

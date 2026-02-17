@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { sections, type Section } from '@/data/questions';
 
+export interface StudentInfo {
+  name: string;
+  grade: string;
+  className: string;
+  studentId: string;
+}
+
 interface QuizState {
   currentSectionIndex: number;
   answers: Record<number, string | string[] | number[]>;
@@ -17,6 +24,8 @@ interface SectionTiming {
 
 interface QuizContextType {
   state: QuizState;
+  studentInfo: StudentInfo | null;
+  setStudentInfo: (info: StudentInfo) => void;
   currentSection: Section;
   setCurrentSection: (index: number) => void;
   setAnswer: (questionId: number, answer: string | string[] | number[]) => void;
@@ -42,6 +51,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     endTime: null,
   });
   const [isStarted, setIsStarted] = useState(false);
+  const [studentInfo, setStudentInfoState] = useState<StudentInfo | null>(null);
 
   // Per-section timing
   const sectionTimingsRef = useRef<Record<string, number>>({}); // sectionId -> accumulated ms
@@ -66,6 +76,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     currentSectionIdRef.current = currentSection?.id || '';
     sectionEnteredAtRef.current = now;
   }, [state.currentSectionIndex, isStarted, state.submitted]);
+
+  const setStudentInfo = useCallback((info: StudentInfo) => {
+    setStudentInfoState(info);
+  }, []);
 
   const setCurrentSection = useCallback((index: number) => {
     setState(prev => ({ ...prev, currentSectionIndex: index }));
@@ -96,6 +110,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const resetQuiz = useCallback(() => {
     setIsStarted(false);
+    setStudentInfoState(null);
     sectionTimingsRef.current = {};
     sectionEnteredAtRef.current = null;
     currentSectionIdRef.current = sections[0]?.id || '';
@@ -193,6 +208,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({
     state,
+    studentInfo,
+    setStudentInfo,
     currentSection,
     setCurrentSection,
     setAnswer,
@@ -205,7 +222,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     getSectionProgress,
     getSectionTimings,
     getTotalTime,
-  }), [state, currentSection, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
+  }), [state, studentInfo, setStudentInfo, currentSection, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>

@@ -44,3 +44,7 @@
 - [x] Update total question count and section count
 - [x] Update server-side code if needed
 - [x] Remove "HCI Secondary 1 Entrance" badge from landing page
+- [x] Add student info form (name, grade, class) before starting assessment
+- [x] Store student info in QuizContext state
+- [x] Display student info on results page header
+- [x] Include student info in PDF report
