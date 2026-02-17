@@ -43,3 +43,4 @@
 - [x] Renumber remaining parts from Part 1-4 (Vocabulary, Grammar, Reading, Writing)
 - [x] Update total question count and section count
 - [x] Update server-side code if needed
+- [x] Remove "HCI Secondary 1 Entrance" badge from landing page
