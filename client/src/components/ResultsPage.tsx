@@ -713,7 +713,7 @@ export default function ResultsPage() {
         y += 3;
         addText(lang === 'en' ? 'Strengths' : '\u4f18\u52bf', mL, 10, true, C.success);
         (lang === 'en' ? report.strengths_en : report.strengths_cn).forEach((s, i) => {
-          addText(`\u2713  ${s}`, mL + 4, 9, false, C.text);
+          addText(`+  ${s}`, mL + 4, 9, false, C.text);
         });
         addGap(3);
 
@@ -723,7 +723,7 @@ export default function ResultsPage() {
         y += 3;
         addText(lang === 'en' ? 'Areas for Improvement' : '\u5f85\u63d0\u9ad8', mL, 10, true, C.amber);
         (lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).forEach((w, i) => {
-          addText(`\u25b3  ${w}`, mL + 4, 9, false, C.text);
+          addText(`-  ${w}`, mL + 4, 9, false, C.text);
         });
         addGap(3);
 
@@ -758,7 +758,9 @@ export default function ResultsPage() {
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(10);
           pdf.setTextColor(...C.text);
-          pdf.text(`\u25cf  ${section.sectionTitle}`, mL, y + 2);
+          pdf.setFillColor(...(sectionColors[section.sectionId] || C.text));
+          pdf.circle(mL + 2, y + 1.5, 1.5, 'F');
+          pdf.text(section.sectionTitle, mL + 7, y + 2);
           y += 8;
 
           for (const q of wrongQs) {
@@ -774,19 +776,19 @@ export default function ResultsPage() {
             // Your answer (red)
             pdf.setFillColor(...C.dangerLight);
             pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
-            addText(`\u2717  ${lang === 'en' ? 'Your answer' : '\u4f60\u7684\u7b54\u6848'}: ${q.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
+            addText(`X  ${lang === 'en' ? 'Your answer' : 'Your answer'}: ${q.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
             addGap(1);
 
             // Correct answer (green)
             pdf.setFillColor(...C.successLight);
             pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
-            addText(`\u2713  ${lang === 'en' ? 'Correct answer' : '\u6b63\u786e\u7b54\u6848'}: ${q.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
+            addText(`>>  ${lang === 'en' ? 'Correct answer' : 'Correct answer'}: ${q.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
             addGap(1);
 
             const expl = getExplanation(q.id);
             if (expl) {
-              addText(`\u25b8 ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-              addText(`\u{1f4a1} ${lang === 'en' ? expl.tip_en : expl.tip_cn}`, mL + 6, 8.5, false, C.amber, contentW - 14);
+              addText(`> ${lang === 'en' ? expl.explanation_en : expl.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addText(`Tip: ${lang === 'en' ? expl.tip_en : expl.tip_cn}`, mL + 6, 8.5, false, C.amber, contentW - 14);
             }
             addGap(5);
           }
@@ -804,7 +806,9 @@ export default function ResultsPage() {
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(10);
             pdf.setTextColor(...C.text);
-            pdf.text('\u25cf  Part 3: Reading Comprehension', mL, y + 2);
+            pdf.setFillColor(...sectionColors.reading);
+            pdf.circle(mL + 2, y + 1.5, 1.5, 'F');
+            pdf.text('Part 3: Reading Comprehension', mL + 7, y + 2);
             y += 8;
 
             for (const item of wrongReading) {
@@ -821,16 +825,16 @@ export default function ResultsPage() {
 
               pdf.setFillColor(...C.dangerLight);
               pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
-              addText(`\u2717  ${lang === 'en' ? 'Your answer' : '\u4f60\u7684\u7b54\u6848'}: ${item.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
+              addText(`X  ${lang === 'en' ? 'Your answer' : 'Your answer'}: ${item.userAnswer}`, mL + 7, 9, false, C.danger, contentW - 16);
               addGap(1);
 
               pdf.setFillColor(...C.successLight);
               pdf.roundedRect(mL + 4, y - 2.5, contentW - 10, 7, 1, 1, 'F');
-              addText(`\u2713  ${lang === 'en' ? 'Correct answer' : '\u6b63\u786e\u7b54\u6848'}: ${item.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
+              addText(`>>  ${lang === 'en' ? 'Correct answer' : 'Correct answer'}: ${item.correctAnswer}`, mL + 7, 9, false, C.success, contentW - 16);
               addGap(1);
 
-              addText(`\u25b8 ${lang === 'en' ? r.feedback_en : r.feedback_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-              addText(`\u25b8 ${lang === 'en' ? r.explanation_en : r.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addText(`> ${lang === 'en' ? r.feedback_en : r.feedback_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+              addText(`> ${lang === 'en' ? r.explanation_en : r.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
               addGap(5);
             }
           }
@@ -872,7 +876,7 @@ export default function ResultsPage() {
             drawRect(mL + 2, y - 2, contentW - 4, 1, C.dangerLight);
             y += 2;
             addText(`${i + 1}. "${err.original}"`, mL + 4, 9, false, C.danger);
-            addText(`   \u2192 "${err.correction}"`, mL + 4, 9, true, C.success);
+            addText(`   -> "${err.correction}"`, mL + 4, 9, true, C.success);
             addText(`   ${lang === 'en' ? err.explanation_en : err.explanation_cn}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
             addGap(2);
           });

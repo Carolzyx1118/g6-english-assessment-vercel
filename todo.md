@@ -50,3 +50,4 @@
 - [x] Include student info in PDF report
 - [x] Remove Class and Student ID fields from student info form, context, results page, and PDF
 - [x] Beautify PDF report with better layout, colors, typography, section dividers, and visual hierarchy
+- [x] Fix PDF font rendering - replace Unicode symbols with ASCII-safe alternatives to prevent Courier fallback
