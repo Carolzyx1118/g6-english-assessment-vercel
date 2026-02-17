@@ -436,8 +436,7 @@ export default function ResultsPage() {
         addText(`${lang === 'en' ? 'Name' : '\u59d3\u540d'}: ${studentInfo.name}`, 10, true);
         const infoLine: string[] = [];
         if (studentInfo.grade) infoLine.push(`${lang === 'en' ? 'Grade' : '\u5e74\u7ea7'}: ${studentInfo.grade}`);
-        if (studentInfo.className) infoLine.push(`${lang === 'en' ? 'Class' : '\u73ed\u7ea7'}: ${studentInfo.className}`);
-        if (studentInfo.studentId) infoLine.push(`${lang === 'en' ? 'Student ID' : '\u5b66\u53f7'}: ${studentInfo.studentId}`);
+
         if (infoLine.length > 0) addText(infoLine.join('    '), 10);
         addGap(1);
       }
@@ -642,8 +641,7 @@ export default function ResultsPage() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }} className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6 text-sm text-slate-500">
             <span className="font-semibold text-slate-700">{studentInfo.name}</span>
             {studentInfo.grade && <span>{lang === 'en' ? 'Grade' : '年级'}: {studentInfo.grade}</span>}
-            {studentInfo.className && <span>{lang === 'en' ? 'Class' : '班级'}: {studentInfo.className}</span>}
-            {studentInfo.studentId && <span>{lang === 'en' ? 'ID' : '学号'}: {studentInfo.studentId}</span>}
+
           </motion.div>
         )}
 

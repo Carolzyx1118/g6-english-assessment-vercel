@@ -3,15 +3,13 @@ import { useQuiz, type StudentInfo } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion } from 'framer-motion';
-import { ArrowRight, User, GraduationCap, Users, IdCard } from 'lucide-react';
+import { ArrowRight, User, GraduationCap } from 'lucide-react';
 
 export default function StudentInfoForm() {
   const { setStudentInfo, startQuiz } = useQuiz();
   const [form, setForm] = useState<StudentInfo>({
     name: '',
     grade: '',
-    className: '',
-    studentId: '',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof StudentInfo, string>>>({});
 
@@ -90,34 +88,6 @@ export default function StudentInfoForm() {
               value={form.grade}
               onChange={(e) => setForm(prev => ({ ...prev, grade: e.target.value }))}
               placeholder="e.g. Grade 6, P6"
-              className="h-12 text-base"
-            />
-          </div>
-
-          {/* Class */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-              <Users className="w-4 h-4 text-amber-500" />
-              Class
-            </label>
-            <Input
-              value={form.className}
-              onChange={(e) => setForm(prev => ({ ...prev, className: e.target.value }))}
-              placeholder="e.g. 6A, Class 3"
-              className="h-12 text-base"
-            />
-          </div>
-
-          {/* Student ID */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-              <IdCard className="w-4 h-4 text-indigo-500" />
-              Student ID
-            </label>
-            <Input
-              value={form.studentId}
-              onChange={(e) => setForm(prev => ({ ...prev, studentId: e.target.value }))}
-              placeholder="e.g. 2024001"
               className="h-12 text-base"
             />
           </div>

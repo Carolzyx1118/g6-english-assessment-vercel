@@ -48,3 +48,4 @@
 - [x] Store student info in QuizContext state
 - [x] Display student info on results page header
 - [x] Include student info in PDF report
+- [x] Remove Class and Student ID fields from student info form, context, results page, and PDF

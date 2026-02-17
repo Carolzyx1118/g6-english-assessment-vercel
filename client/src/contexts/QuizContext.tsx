@@ -4,8 +4,6 @@ import { sections, type Section } from '@/data/questions';
 export interface StudentInfo {
   name: string;
   grade: string;
-  className: string;
-  studentId: string;
 }
 
 interface QuizState {
