@@ -1,82 +1,67 @@
-// G6 English Proficiency Assessment - Question Data
-// Design: Fresh Educational Illustration Style (Scandinavian Minimalism + Playful Education)
+// WIDA English Proficiency Assessment (K-G3) - Question Data
 
+// CDN base
+const CDN = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422';
+
+// Audio URL for listening section
+export const AUDIO_URL = `${CDN}/nobpXqQxSkaKHyNh.mp3`;
+
+// ===== Question Type Interfaces =====
+
+/** Picture-based MCQ: student sees images as options (a/b/c) */
+export interface PictureMCQ {
+  id: number;
+  type: 'picture-mcq';
+  question: string;
+  options: { label: string; imageUrl: string; text?: string }[];
+  correctAnswer: number; // index 0-2
+}
+
+/** Standard text MCQ with optional scene image */
 export interface MCQQuestion {
   id: number;
   type: 'mcq';
   question: string;
   highlightWord?: string;
   options: string[];
-  correctAnswer: number; // index
+  correctAnswer: number;
+  imageUrl?: string;
 }
 
+/** Fill-in-the-blank with word bank (grammar Q9) */
 export interface FillBlankQuestion {
   id: number;
   type: 'fill-blank';
   correctAnswer: string;
 }
 
-export interface OpenEndedQuestion {
+/** Listening picture MCQ: same as PictureMCQ but grouped under listening */
+export interface ListeningMCQ {
   id: number;
-  type: 'open-ended';
+  type: 'listening-mcq';
   question: string;
-  subQuestions?: { label: string; question: string; answer: string }[];
-  answer?: string;
+  options: { label: string; imageUrl: string; text?: string }[];
+  correctAnswer: number;
 }
 
-export interface TrueFalseQuestion {
+/** Word-bank fill-in for reading Part 1 */
+export interface WordBankFillIn {
   id: number;
-  type: 'true-false';
-  statements: { label: string; statement: string; isTrue: boolean; reason: string }[];
-}
-
-export interface TableQuestion {
-  id: number;
-  type: 'table';
+  type: 'wordbank-fill';
   question: string;
-  rows: { situation: string; thought: string; action: string; blankField: 'thought' | 'action'; answer: string }[];
+  correctAnswer: string;
 }
 
-export interface ReferenceQuestion {
+/** Story comprehension fill-in for reading Part 2 */
+export interface StoryFillIn {
   id: number;
-  type: 'reference';
+  type: 'story-fill';
   question: string;
-  items: { word: string; lineRef: string; answer: string }[];
+  correctAnswer: string;
+  acceptableAnswers?: string[]; // alternative accepted answers
 }
 
-export interface OrderQuestion {
-  id: number;
-  type: 'order';
-  question: string;
-  events: string[];
-  correctOrder: number[];
-}
-
-export interface PhraseQuestion {
-  id: number;
-  type: 'phrase';
-  question: string;
-  items: { clue: string; answer: string }[];
-}
-
-export interface CheckboxQuestion {
-  id: number;
-  type: 'checkbox';
-  question: string;
-  options: string[];
-  correctAnswers: number[];
-}
-
-export interface WritingQuestion {
-  id: number;
-  type: 'writing';
-  topic: string;
-  instructions: string;
-  wordCount: string;
-  prompts: string[];
-}
-
-export type Question = MCQQuestion | FillBlankQuestion | OpenEndedQuestion | TrueFalseQuestion | TableQuestion | ReferenceQuestion | OrderQuestion | PhraseQuestion | CheckboxQuestion | WritingQuestion;
+export type Question = PictureMCQ | MCQQuestion | FillBlankQuestion | ListeningMCQ | WordBankFillIn | StoryFillIn;
 
 export interface Section {
   id: string;
@@ -91,215 +76,434 @@ export interface Section {
   wordBank?: { letter: string; word: string }[];
   grammarPassage?: string;
   imageUrl?: string;
+  audioUrl?: string;
+  /** Scene image for grammar fill-in-blank */
+  sceneImageUrl?: string;
+  /** Word bank images for reading Part 1 */
+  wordBankImageUrl?: string;
+  /** Story images for reading Part 2 */
+  storyImages?: string[];
+  /** Reading Part 2 story paragraphs */
+  storyParagraphs?: { text: string; questionIds: number[] }[];
 }
 
 export const sections: Section[] = [
+  // ===== PART 1: VOCABULARY (12 picture MCQ) =====
   {
     id: 'vocabulary',
     title: 'Part 1: Vocabulary',
-    subtitle: 'Choose the Correct Meaning',
+    subtitle: 'Circle the Correct Answer',
     icon: '📖',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'For each question, choose the option that is closest in meaning to the underlined word.',
-    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-3_1771255546000_na1fn_dm9jYWJ1bGFyeS1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTNfMTc3MTI1NTU0NjAwMF9uYTFmbl9kbTlqWVdKMWJHRnllUzF6WldOMGFXOXUucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=BZjyS-Isf91S8NuziKshvwAQDj74p44Jac426QEjneZhfzryHD1VaLsCXmrVP01uhxFyEgtCbHEAcoCHJIFJX5DQz~lH0eim~xW3tRp52moK98pbRlJwt81-mEEYib6BszzvHEWQbo3eUL~OgXZg2v5DeBRK4~k2KpUdSxmCREHzC~gzVdwyr0NXEBc~orX7uFxaM1B6YGYBzsZvFzzkdbuzYcWNNkOwS7B8My3TIl8kt9VZW83-d5rCXMPn~c-4lCc~ZhKBRoEU8EFFq-4wRwCmlTXA8wZaoqc5QzzJoIT95Vt3CvA27-5h1D9QDOs0IfzwSYeVkzg0sfEhwB7jpw__',
+    description: 'Look at the pictures. Choose the correct answer (a, b, or c).',
     questions: [
-      { id: 1, type: 'mcq', question: 'She felt ___ when she lost the game.', highlightWord: 'disappointed', options: ['angry', 'unhappy because of an unexpected result', 'excited', 'confused'], correctAnswer: 1 },
-      { id: 2, type: 'mcq', question: 'Please ___ me to call my teacher later.', highlightWord: 'remind', options: ['force', 'help someone remember', 'warn', 'advise'], correctAnswer: 1 },
-      { id: 3, type: 'mcq', question: 'The street was ___ during rush hour.', highlightWord: 'crowded', options: ['quiet', 'full of people', 'dangerous', 'narrow'], correctAnswer: 1 },
-      { id: 4, type: 'mcq', question: 'He made a ___ after thinking carefully.', highlightWord: 'decision', options: ['mistake', 'choice', 'excuse', 'plan'], correctAnswer: 1 },
-      { id: 5, type: 'mcq', question: 'The teacher ___ the students to speak up.', highlightWord: 'encouraged', options: ['forced', 'praised', 'gave confidence to', 'reminded'], correctAnswer: 2 },
-      { id: 6, type: 'mcq', question: 'This exercise is designed to ___ your writing skills.', highlightWord: 'improve', options: ['test', 'practise', 'make better', 'check'], correctAnswer: 2 },
-      { id: 7, type: 'mcq', question: 'There is a clear ___ between the two methods.', highlightWord: 'difference', options: ['connection', 'result', 'contrast', 'similarity'], correctAnswer: 2 },
-      { id: 8, type: 'mcq', question: 'He was ___ of the risks involved.', highlightWord: 'aware', options: ['afraid of', 'responsible for', 'conscious of', 'interested in'], correctAnswer: 2 },
-      { id: 9, type: 'mcq', question: 'The report was based on reliable ___.', highlightWord: 'evidence', options: ['opinion', 'explanation', 'proof', 'description'], correctAnswer: 2 },
-      { id: 10, type: 'mcq', question: 'The policy may have a negative ___ on small businesses.', highlightWord: 'impact', options: ['effect', 'intention', 'limit', 'cause'], correctAnswer: 0 },
-      { id: 11, type: 'mcq', question: 'The manager refused to ___ responsibility for the mistake.', highlightWord: 'accept', options: ['deny', 'take', 'explain', 'share'], correctAnswer: 1 },
-      { id: 12, type: 'mcq', question: 'Her explanation was ___.', highlightWord: 'convincing', options: ['confusing', 'detailed', 'believable', 'emotional'], correctAnswer: 2 },
-      { id: 13, type: 'mcq', question: 'The scientist proposed a new ___.', highlightWord: 'hypothesis', options: ['conclusion', 'theory to be tested', 'discovery', 'observation'], correctAnswer: 1 },
-      { id: 14, type: 'mcq', question: 'The committee reached a ___ after long discussion.', highlightWord: 'consensus', options: ['disagreement', 'decision by authority', 'shared agreement', 'compromise'], correctAnswer: 2 },
-      { id: 15, type: 'mcq', question: 'He was criticised for his ___.', highlightWord: 'negligence', options: ['carelessness', 'dishonesty', 'delay', 'impatience'], correctAnswer: 0 },
-      { id: 16, type: 'mcq', question: 'The plan aims to ___ long-term growth.', highlightWord: 'sustain', options: ['slow down', 'control', 'maintain', 'predict'], correctAnswer: 2 },
-      { id: 17, type: 'mcq', question: 'His argument was logically sound but ___.', highlightWord: 'untenable', options: ['unclear', 'difficult to understand', 'impossible to defend', 'unpopular'], correctAnswer: 2 },
-      { id: 18, type: 'mcq', question: 'The author adopts an ___ tone throughout the novel.', highlightWord: 'ambiguous', options: ['emotional', 'unclear and open to interpretation', 'aggressive', 'critical'], correctAnswer: 1 },
-      { id: 19, type: 'mcq', question: 'The policy was criticised for its ___ flaws.', highlightWord: 'inherent', options: ['hidden', 'avoidable', 'temporary', 'existing as a natural part'], correctAnswer: 3 },
-      { id: 20, type: 'mcq', question: 'She delivered a ___ summary of the issue.', highlightWord: 'succinct', options: ['detailed', 'lengthy', 'brief and precise', 'emotional'], correctAnswer: 2 },
+      {
+        id: 1, type: 'picture-mcq',
+        question: 'five',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/XGwEAlUDSgfrGGNj.jpeg`, text: 'four' },
+          { label: 'b', imageUrl: `${CDN}/ekljSQtaTMtrdkkq.jpeg`, text: 'five' },
+          { label: 'c', imageUrl: `${CDN}/QhTiLdAdgODmlGyi.jpeg`, text: 'six' },
+        ],
+        correctAnswer: 1,
+      },
+      {
+        id: 2, type: 'picture-mcq',
+        question: 'pencil',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/cdhHHwsPPIOPYZtV.jpeg`, text: 'pencil' },
+          { label: 'b', imageUrl: `${CDN}/LyvjoGnKqJILMZfm.jpeg`, text: 'umbrella' },
+          { label: 'c', imageUrl: `${CDN}/HedsSvbtNdESoRyQ.jpeg`, text: 'book' },
+        ],
+        correctAnswer: 0,
+      },
+      {
+        id: 3, type: 'picture-mcq',
+        question: 'ball',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/nyPqLtuKTzpgnOTS.jpeg`, text: 'doll' },
+          { label: 'b', imageUrl: `${CDN}/NDXvQiASYECcrYsj.jpeg`, text: 'sailboat' },
+          { label: 'c', imageUrl: `${CDN}/NorKIPbyveSeBomK.jpeg`, text: 'ball' },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 4, type: 'picture-mcq',
+        question: 'a big dog',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/iitGHVmmdcuFWMQs.jpeg` },
+          { label: 'b', imageUrl: `${CDN}/eIuaXboGkavikvUT.png` },
+          { label: 'c', imageUrl: `${CDN}/WpTlfGDMrxoKodwF.png` },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 5, type: 'picture-mcq',
+        question: 'eyes',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/yfEbdziFiBbdtFmz.jpeg`, text: 'eyes' },
+          { label: 'b', imageUrl: `${CDN}/pkuDVtpgsTNUWlOf.jpeg`, text: 'ears' },
+          { label: 'c', imageUrl: `${CDN}/CsSdaXHbWMElJqnH.jpeg`, text: 'nose' },
+        ],
+        correctAnswer: 0,
+      },
+      {
+        id: 6, type: 'picture-mcq',
+        question: "I've got a long tail.",
+        options: [
+          { label: 'a', imageUrl: `${CDN}/tmUvRUEVgjxhDtBf.jpeg`, text: 'hippo' },
+          { label: 'b', imageUrl: `${CDN}/ZyoswcaUIyTHZnCP.jpeg`, text: 'tiger' },
+          { label: 'c', imageUrl: `${CDN}/YFLpRPGNnqjOZzid.jpeg`, text: 'snake' },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 7, type: 'picture-mcq',
+        question: 'socks',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/gxcCZgbVIzNisTps.jpeg`, text: 'shoes' },
+          { label: 'b', imageUrl: `${CDN}/AxKgZLnjycKoEotD.jpeg`, text: 'skirt' },
+          { label: 'c', imageUrl: `${CDN}/rKCgRMCsZCBTMlPA.jpeg`, text: 'socks' },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 8, type: 'picture-mcq',
+        question: "I can't ride a bike.",
+        options: [
+          { label: 'a', imageUrl: `${CDN}/HLPKToYFUFZDoerq.jpeg` },
+          { label: 'b', imageUrl: `${CDN}/HATraddRFsUUNKri.jpeg` },
+          { label: 'c', imageUrl: `${CDN}/whIOczYYFOYbpeqZ.png` },
+        ],
+        correctAnswer: 0,
+      },
+      {
+        id: 9, type: 'picture-mcq',
+        question: 'bedroom',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/bqZiIRDQEPzeiJbR.jpeg` },
+          { label: 'b', imageUrl: `${CDN}/CExuhaVzVIyGeWYm.jpeg` },
+          { label: 'c', imageUrl: `${CDN}/azcpvDEBTWhSgMfn.jpeg` },
+        ],
+        correctAnswer: 1,
+      },
+      {
+        id: 10, type: 'picture-mcq',
+        question: 'I like ice cream.',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/ONUOfkwlilrTjHiI.png` },
+          { label: 'b', imageUrl: `${CDN}/qrqzWcjseBTYpSxk.png` },
+          { label: 'c', imageUrl: `${CDN}/XZiRjJWGsQbOvnuw.png` },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 11, type: 'picture-mcq',
+        question: 'There is a shop between the hospital and the café.',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/pBIsMpcMMxLshKDG.jpeg` },
+          { label: 'b', imageUrl: `${CDN}/opFogXzRSWHbAcqO.jpeg` },
+          { label: 'c', imageUrl: `${CDN}/cggypzYxizEbbTSN.jpeg` },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 12, type: 'picture-mcq',
+        question: "She's getting dressed.",
+        options: [
+          { label: 'a', imageUrl: `${CDN}/unhPFAYDaiNlvfca.jpeg` },
+          { label: 'b', imageUrl: `${CDN}/UsZqbGoiaOSgpvqW.jpeg` },
+          { label: 'c', imageUrl: `${CDN}/GiANjMNGmlqXzPlj.jpeg` },
+        ],
+        correctAnswer: 1,
+      },
     ],
   },
+
+  // ===== PART 2: GRAMMAR (8 MCQ + 1 fill-in with 5 sub-questions) =====
   {
     id: 'grammar',
     title: 'Part 2: Grammar',
-    subtitle: 'Fill in the Blanks',
+    subtitle: 'Choose or Fill In',
     icon: '✏️',
     color: 'text-[oklch(0.65_0.15_75)]',
     bgColor: 'bg-[oklch(0.95_0.04_75)]',
-    description: 'Fill in each blank with the correct word from the word bank. Each word may only be used once.',
-    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-4_1771255546000_na1fn_Z3JhbW1hci1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTRfMTc3MTI1NTU0NjAwMF9uYTFmbl9aM0poYlcxaGNpMXpaV04wYVc5dS5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=mvqSKDSJLTfUNZ55gJuBVmFJwDvC9x-RKfqQedSyL~A08NqeJwybLKKIxViKqBOUb6E5Z~98~a~SUzJ8~Kz0N35c4Hf8teAJc62rn1gepG~OUAp21ZaqLAOTIgwMzdmAK5nFRwp70IHpbbudZJ3pS4I1sJ4YCbnVw5JUAjj9ZvTiaPFQ4DzmdE2aBCXVdZK5-a8t~pE7c~GUt0VwIDN5KGgcLycbEz3G7KbMsHxKirX2WojgXuS0mzedLZP1Hsg8sCqnU~wxIQwEUlkYBWCdcnJ2nr9IpL23tnvEkb9Gxw7OgwbIHOFsNRqYSI0xzM57aJJ9uopgxzDiy8MYx6dEnA__',
-    wordBank: [
-      { letter: 'A', word: 'although' },
-      { letter: 'B', word: 'which' },
-      { letter: 'C', word: 'despite' },
-      { letter: 'D', word: 'has' },
-      { letter: 'E', word: 'whose' },
-      { letter: 'F', word: 'being' },
-      { letter: 'G', word: 'as' },
-      { letter: 'H', word: 'what' },
-      { letter: 'I', word: 'it' },
-      { letter: 'J', word: 'only' },
-      { letter: 'K', word: 'where' },
-      { letter: 'L', word: 'whether' },
-      { letter: 'M', word: 'while' },
-      { letter: 'N', word: 'had' },
-    ],
-    grammarPassage: `Education plays a vital role in shaping individuals and societies. <b>(21) ___</b> many people believe that academic success depends mainly on intelligence, research shows that motivation and effort are equally important. Students often perform well not <b>(22) ___</b> because they are naturally gifted, but because they develop effective learning habits.
-
-Supportive environments also matter. Families <b>(23) ___</b> attitudes towards education are positive tend to raise children who value learning. In contrast, students may struggle in situations <b>(24) ___</b> encouragement is lacking, even if they have strong potential.
-
-Studies suggest that success in education is closely linked to <b>(25) ___</b> learners believe about their own abilities. Teachers can influence this by recognising effort, <b>(26) ___</b> confidence gradually through constructive feedback. However, real improvement depends on <b>(27) ___</b> students are willing to reflect on mistakes and learn from them.
-
-<b>(28) ___</b> examinations remain an important part of most education systems, they cannot fully measure creativity or critical thinking. A learner <b>(29) ___</b> curiosity is encouraged is more likely to become independent than one who studies only to pass tests.
-
-Ultimately, education is not <b>(30) ___</b> a pathway to employment, but a lifelong process that shapes how people understand the world.`,
+    description: 'Look at the pictures and choose the correct sentence, or fill in the blanks with the correct word.',
     questions: [
-      { id: 21, type: 'fill-blank', correctAnswer: 'A' },
-      { id: 22, type: 'fill-blank', correctAnswer: 'K' },
-      { id: 23, type: 'fill-blank', correctAnswer: 'E' },
-      { id: 24, type: 'fill-blank', correctAnswer: 'L' },
-      { id: 25, type: 'fill-blank', correctAnswer: 'H' },
-      { id: 26, type: 'fill-blank', correctAnswer: 'F' },
-      { id: 27, type: 'fill-blank', correctAnswer: 'N' },
-      { id: 28, type: 'fill-blank', correctAnswer: 'I' },
-      { id: 29, type: 'fill-blank', correctAnswer: 'B' },
-      { id: 30, type: 'fill-blank', correctAnswer: 'J' },
+      // Q1: Boy playing football
+      {
+        id: 1, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/rqJcGIQJFuBuNBhd.png`,
+        options: ['He is playing football.', 'He is playing basketball.', 'She is playing football.'],
+        correctAnswer: 0,
+      },
+      // Q2: Boy running
+      {
+        id: 2, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/tOrjsfVAbZmFCIlT.png`,
+        options: ['He is running quickly.', 'He is running good.', 'He is running quick.'],
+        correctAnswer: 0,
+      },
+      // Q3: Clock showing 1:45
+      {
+        id: 3, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/WuytbXDZWMdgtnPW.png`,
+        options: ["It's half past two.", "It's quarter past two.", "It's quarter to two."],
+        correctAnswer: 2,
+      },
+      // Q4: Buildings layout (picture MCQ)
+      {
+        id: 4, type: 'picture-mcq',
+        question: 'There is a shop between the hospital and the café. Choose the correct picture.',
+        options: [
+          { label: 'a', imageUrl: `${CDN}/DohGexiZsmrcvBCQ.png` },
+          { label: 'b', imageUrl: `${CDN}/QukUERZfNmLWFTyd.png` },
+          { label: 'c', imageUrl: `${CDN}/xwKWFQLvqIEbEYvb.png` },
+        ],
+        correctAnswer: 2,
+      },
+      // Q5: Bus stop
+      {
+        id: 5, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/ltjpfeDuxRsUhRhs.png`,
+        options: ['They are going to catch the bus.', 'They going to catch the bus.', 'They go to catch the bus.'],
+        correctAnswer: 0,
+      },
+      // Q6: Winter/January
+      {
+        id: 6, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/FGTiiKatCjgOXalG.jpeg`,
+        options: ['The first month of the year is January.', 'The first month of the year is July.', 'They go to catch the bus.'],
+        correctAnswer: 0,
+      },
+      // Q7: Cold weather
+      {
+        id: 7, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/EFYvYtceeykZDELX.png`,
+        options: ['They might need their coats.', 'They might to need their coats.', 'They may to need their coats.'],
+        correctAnswer: 0,
+      },
+      // Q8: Italian food
+      {
+        id: 8, type: 'mcq',
+        question: 'Look at the picture. Choose the correct sentence.',
+        imageUrl: `${CDN}/NYOoNKymWvnsBHMH.png`,
+        options: ["I'm never eat Italy food before.", 'I never eat Italy food before.', 'I have never eaten Italian food before.'],
+        correctAnswer: 2,
+      },
+      // Q9: Fill-in-blank with word bank (5 sub-questions)
+      // Using fill-blank type, answers are words from the bank
+      { id: 9, type: 'fill-blank', correctAnswer: 'next to' },
+      { id: 10, type: 'fill-blank', correctAnswer: 'in' },
+      { id: 11, type: 'fill-blank', correctAnswer: 'on' },
+      { id: 12, type: 'fill-blank', correctAnswer: 'under' },
+      { id: 13, type: 'fill-blank', correctAnswer: 'next to' },
+    ],
+    sceneImageUrl: `${CDN}/somwxfPtOxzVhrjQ.png`,
+    wordBank: [
+      { letter: 'A', word: 'next to' },
+      { letter: 'B', word: 'on' },
+      { letter: 'C', word: 'in' },
+      { letter: 'D', word: 'under' },
+    ],
+    grammarPassage: `Look at the picture and fill in the blanks with the correct word from the word bank.
+
+<b>a.</b> The rubber is ___(9)___ the pencil case.
+<b>b.</b> The crayons are ___(10)___ the pencil case.
+<b>c.</b> The pencils are ___(11)___ the desk.
+<b>d.</b> The pen is ___(12)___ the book.
+<b>e.</b> The pencils are ___(13)___ the book.`,
+  },
+
+  // ===== PART 3: LISTENING (6 picture MCQ with audio) =====
+  {
+    id: 'listening',
+    title: 'Part 3: Listening',
+    subtitle: 'Listen and Choose',
+    icon: '🎧',
+    color: 'text-[oklch(0.55_0.18_280)]',
+    bgColor: 'bg-[oklch(0.92_0.05_280)]',
+    description: 'Listen to the audio and choose the correct picture (A, B, or C).',
+    audioUrl: AUDIO_URL,
+    questions: [
+      {
+        id: 1, type: 'listening-mcq',
+        question: 'What is dad doing?',
+        options: [
+          { label: 'A', imageUrl: `${CDN}/TyWjontfHLbeqrHO.png`, text: 'Playing guitar' },
+          { label: 'B', imageUrl: `${CDN}/DSenjMvtpYbZGfaQ.png`, text: 'Watching TV' },
+          { label: 'C', imageUrl: `${CDN}/IZWZmMxmBJbVSbXJ.png`, text: 'Listening to radio' },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 2, type: 'listening-mcq',
+        question: "Which is Anna's sister?",
+        options: [
+          { label: 'A', imageUrl: `${CDN}/ZILymncsOPlEmMYe.png` },
+          { label: 'B', imageUrl: `${CDN}/OunzyKSciwrKkLHf.png` },
+          { label: 'C', imageUrl: `${CDN}/AeGXVCeZqbsIZaBz.png` },
+        ],
+        correctAnswer: 0,
+      },
+      {
+        id: 3, type: 'listening-mcq',
+        question: "What is in Sam's school bag?",
+        options: [
+          { label: 'A', imageUrl: `${CDN}/zDJZAyZkWmntHVNq.png`, text: 'Pencil case' },
+          { label: 'B', imageUrl: `${CDN}/yOonVwbOQRKJJPJK.png`, text: 'Tablet' },
+          { label: 'C', imageUrl: `${CDN}/wePmzxIRGAyenqie.png`, text: 'Ruler' },
+        ],
+        correctAnswer: 1,
+      },
+      {
+        id: 4, type: 'listening-mcq',
+        question: 'What did Anna do yesterday?',
+        options: [
+          { label: 'A', imageUrl: `${CDN}/vaHvfUHUmOsRMyHG.png` },
+          { label: 'B', imageUrl: `${CDN}/TsRpPhRHhkWsoBcy.png` },
+          { label: 'C', imageUrl: `${CDN}/RkLyMWsielunHDOl.png` },
+        ],
+        correctAnswer: 2,
+      },
+      {
+        id: 5, type: 'listening-mcq',
+        question: "What job does Tom's sister have?",
+        options: [
+          { label: 'A', imageUrl: `${CDN}/kPgudsaJKUQLHZbi.png`, text: 'Ambulance driver' },
+          { label: 'B', imageUrl: `${CDN}/OqVmKwKNTDuHYKuM.png`, text: 'Doctor' },
+          { label: 'C', imageUrl: `${CDN}/HDcClvLAgGDZmfGU.png`, text: 'Nurse' },
+        ],
+        correctAnswer: 0,
+      },
+      {
+        id: 6, type: 'listening-mcq',
+        question: 'Which toy did Jack buy for his sister?',
+        options: [
+          { label: 'A', imageUrl: `${CDN}/bkwZnsDSPkKVeSIV.png`, text: 'Clown' },
+          { label: 'B', imageUrl: `${CDN}/hrsqlxhkFJMIIYoP.png`, text: 'Doll' },
+          { label: 'C', imageUrl: `${CDN}/UJvJgoTQIQkYGuZr.png`, text: 'Panda' },
+        ],
+        correctAnswer: 0,
+      },
     ],
   },
+
+  // ===== PART 4: READING =====
   {
     id: 'reading',
-    title: 'Part 3: Reading Comprehension',
+    title: 'Part 4: Reading',
     subtitle: 'Read and Answer',
     icon: '📚',
     color: 'text-[oklch(0.50_0.18_255)]',
     bgColor: 'bg-[oklch(0.92_0.05_255)]',
-    description: 'Read the passage carefully and answer the questions that follow.',
-    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-5_1771255555000_na1fn_cmVhZGluZy1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTVfMTc3MTI1NTU1NTAwMF9uYTFmbl9jbVZoWkdsdVp5MXpaV04wYVc5dS5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=AwYC4LsxiWVubbD2-PER5-SP1g02Jz6Wi4mNfU9In5zP96pfxPMFrYgj4s27r2PMtE0sBcWgJHXMJQGEc00gt5Hu9GRjRbOoNVFF4MZnUe2uoCSodvAaOnto3yBG3-qcl6Wvajc4BCOS0DL7ARH4PZa03EvmaTxSzWBJXqjcmkP7XJFNwTXEcBQlq02qPIapscDvVKIXN6ER0Ln0-H7ZIgrxEAZkEF3jKJbkyG5Uqsjddo9grQkgIML70lhhduX~wPFm5oBCxuUiNbe6TjgXafCVfWsEr4-Oy4uMutY7K6HwmufSy6cEreEJt-eJ3mMHZfeJFbAuV5trrqso8CMDww__',
-    passage: `Yesterday afternoon, Mother took me to the dentist for my annual check-up. After the visit, we decided to stop at a café for a quick drink. It had been a hot, sweltering day, and we were both thirsty. However, while we were inside, the weather changed dramatically. Dark clouds rolled in and it started to pour.
-
-We were completely unprepared — neither of us had brought an umbrella. When we stepped outside, the rain was coming down in sheets. We looked around desperately for a taxi, but every one that passed was already occupied. The few empty ones simply drove past without stopping, their drivers seemingly in a hurry to get somewhere else.
-
-As we stood there, getting wetter by the minute, a kind-looking old man approached us. He was carrying a large, rather nice umbrella. He smiled warmly and said he couldn't help noticing our predicament. He explained that he was "in a bit of a predicament" himself — he had left his wallet at home and had no money for a taxi. He offered to sell us his umbrella for five dollars.
-
-Mother looked at him suspiciously. She had a golden rule: the nicer a man seemed, the more suspicious one should be. She tightened her grip on my hand and drew me closer to her while looking at the man suspiciously. But the rain was getting heavier, and we were already soaked. Eventually, Mother sighed, opened her purse, and gave the man five dollars. He thanked us profusely, handed over the umbrella, and hurried off.
-
-We walked home under the umbrella, and Mother told me she had been cautious but was glad to help someone in need. "Perhaps I was too suspicious," she said thoughtfully.
-
-But then, to our surprise, as we passed a café, we spotted the same old man. He walked into the café, looked around casually, then picked up an umbrella from the umbrella stand near the door and walked out. We watched in astonishment as he approached another woman caught in the rain and began his little speech again. Mother shrieked, "So, that's his little game!"`,
-    questions: [
+    description: 'Part 1: Look at the pictures and read the sentences. Choose the correct word. Part 2: Read the story and fill in the blanks.',
+    wordBankImageUrl: `${CDN}/xgmyVsWshcOxjsUN.png`,
+    storyParagraphs: [
       {
-        id: 31,
-        type: 'open-ended',
-        question: 'Based on paragraph 1, what did the narrator do once a year?',
-        answer: 'The narrator went to the dentist for an annual check-up.',
+        text: `At the weekend, Jane's mum said, "I want to go shopping. Can you help me, Jane?" "Yes," she said. Jane and her mother took a bus to the town. Jane's mother carried one bag, and Jane carried another. The bus stopped outside a big supermarket, and they went inside. Jane wasn't very happy. She thought shopping was boring.`,
+        questionIds: [6, 7, 8],
       },
       {
-        id: 32,
-        type: 'open-ended',
-        question: 'Give two reasons why Mother would not be able to get home on time to cook dinner because of the heavy rain.',
-        subQuestions: [
-          { label: 'a', question: 'Reason 1:', answer: 'It was raining heavily / It had started to pour.' },
-          { label: 'b', question: 'Reason 2:', answer: 'There were no taxis available as most of them were occupied.' },
-        ],
+        text: `Inside the shop, Jane's mother picked up fruit and bread but she couldn't find any rice. Jane found some below the pasta. Her mum was pleased. "Clever girl!" she said. Then Jane's mother wanted a bottle of lemonade. Jane went to look for it. The bottles were in a place difficult to find but Jane climbed on a big box and got one. When she jumped down, she hurt her leg and started to cry.`,
+        questionIds: [9, 10, 11, 12],
       },
       {
-        id: 33,
-        type: 'true-false',
-        statements: [
-          { label: 'a', statement: 'The narrator and Mother went to the café in the morning.', isTrue: false, reason: 'They went there in the afternoon / "Yesterday afternoon".' },
-          { label: 'b', statement: 'It had been raining before the narrator and Mother left the house.', isTrue: false, reason: 'It was a hot, sweltering day when they left the house.' },
-          { label: 'c', statement: 'Mother believed that one had to be wary of men who were excessively nice.', isTrue: true, reason: 'Mother had a golden rule that the nicer a man seemed, the more suspicious one should be.' },
-        ],
-      },
-      {
-        id: 34,
-        type: 'open-ended',
-        question: 'The old man said he was "in a bit of a predicament". Explain clearly what the predicament was.',
-        answer: 'He had left his wallet at home and had no money to take a taxi home.',
-      },
-      {
-        id: 35,
-        type: 'table',
-        question: 'Based on the information, complete the following table:',
-        rows: [
-          { situation: 'The old man offered his umbrella for five dollars.', thought: 'Mother had doubts about the old man\'s intentions.', action: '', blankField: 'action', answer: 'She gave the old man five dollars.' },
-          { situation: 'Mother spotted the old man enter the café.', thought: '', action: 'Mother followed him to the café.', blankField: 'thought', answer: 'Mother suspected that the old man might not be telling the truth / doubted his intentions.' },
-        ],
-      },
-      {
-        id: 36,
-        type: 'open-ended',
-        question: 'The narrator asked Mother why she had initially been so suspicious of the man. What had Mother done earlier to make her ask that question?',
-        answer: 'Mother tightened her grip on the narrator\'s hand and drew the narrator closer to her while looking at the man suspiciously.',
-      },
-      {
-        id: 37,
-        type: 'reference',
-        question: 'What do the following words refer to in the passage?',
-        items: [
-          { word: 'it', lineRef: 'paragraph 1', answer: 'the rain / the weather' },
-          { word: 'them', lineRef: 'paragraph 2', answer: 'the taxis' },
-          { word: 'she', lineRef: 'last paragraph', answer: 'the woman the old man spoke to' },
-        ],
-      },
-      {
-        id: 38,
-        type: 'order',
-        question: 'Write 1, 2, and 3 to indicate the correct order of events:',
-        events: [
-          'The narrator and Mother witnessed the old man take an umbrella before walking out of the door.',
-          'The narrator noticed that the old man was carrying a nice umbrella.',
-          'The narrator and Mother saw a woman with an umbrella.',
-        ],
-        correctOrder: [2, 1, 3],
-      },
-      {
-        id: 39,
-        type: 'phrase',
-        question: 'Complete the table by identifying the correct word/phrase from the passage:',
-        items: [
-          { clue: 'Which three-word phrase tells you that the narrator and Mother did not expect to see the old man again?', answer: 'to our surprise' },
-          { clue: 'Which three-word phrase tells you that Mother finally knew the old man had an ulterior motive?', answer: 'his little game' },
-        ],
-      },
-      {
-        id: 40,
-        type: 'checkbox',
-        question: 'Based on the passage, which two of the following words best describe the old man?',
-        options: ['devious', 'reliable', 'gullible', 'thoughtful', 'clever', 'honest'],
-        correctAnswers: [0, 4],
+        text: `Jane's mother bought Jane a strawberry ice cream. She sat down and ate it. She stopped crying, but her leg hurt, and she could only walk very slowly. Jane's mother phoned home, and Jane's father came to the supermarket to drive them home. When they got back, Jane's mother said, "Oh dear! I can't take you shopping again!"`,
+        questionIds: [13, 14, 15],
       },
     ],
-  },
-  {
-    id: 'writing',
-    title: 'Part 4: Writing',
-    subtitle: 'Composition',
-    icon: '✍️',
-    color: 'text-[oklch(0.60_0.20_25)]',
-    bgColor: 'bg-[oklch(0.95_0.05_25)]',
-    description: 'Write a composition on the given topic.',
-    imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/xFjnIMa2TcdacptdSFDCMw-img-1_1771267457000_na1fn_d3JpdGluZy1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L3hGam5JTWEyVGNkYWNwdGRTRkRDTXctaW1nLTFfMTc3MTI2NzQ1NzAwMF9uYTFmbl9kM0pwZEdsdVp5MXpaV04wYVc5dS5wbmc~eC1vc3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsd18xOTIwLGhfMTkyMC9mb3JtYXQsd2VicC9xdWFsaXR5LHFfODAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=LJEGISP7BLcX3ICV0u0U0uADpcB7dDy7xrCPj0zDOtYa8mIL8-UwqQZuZMZ0mS8cPDZOeQTDRaKBnTMrlSAm61vpEuvXhACr~OwqCSh64Vr69SGO1iw3LJVADBH0Z3RaXrdWdf1VaXnveBmHVUgu7-PUHYNeC2Qey4tTTsDCVEWKiLsvAtPsghKp6HTe7pq4N-ORaa~Xz0Wkpn108IhnpvfeSYQFtBdvNyS~YUk6nxZ14Z4~htR9HfkXFIoIZwqgJKrNhFCOwbHyhN9c81KvznUTIRZOsOKgsh-GfnW3vpcEAM2htmDdlQYym94lcgT1IUS-mtReAQvUnylmw5SZ7A__',
     questions: [
+      // Part 1: Word bank fill-in (5 questions)
+      // Word bank: a dentist, a milkshake, coffee, a nurse, a farmer, a shower, a lamp, a salad
       {
-        id: 41,
-        type: 'writing',
-        topic: 'An Unexpected Encounter',
-        instructions: 'Write about an unexpected encounter that changed the way you looked at someone or something.',
-        wordCount: '200-250 words',
-        prompts: [
-          'where and when the encounter happened',
-          'who you met',
-          'what happened during the encounter',
-          'how your thoughts or feelings changed afterwards',
-        ],
+        id: 1, type: 'wordbank-fill',
+        question: 'This has lots of green vegetables in it, but you don\'t cook it.',
+        correctAnswer: 'a salad',
+      },
+      {
+        id: 2, type: 'wordbank-fill',
+        question: 'You stand under this when you want to wash.',
+        correctAnswer: 'a shower',
+      },
+      {
+        id: 3, type: 'wordbank-fill',
+        question: 'This person works outside in the fields.',
+        correctAnswer: 'a farmer',
+      },
+      {
+        id: 4, type: 'wordbank-fill',
+        question: 'Some people put milk in this brown drink.',
+        correctAnswer: 'coffee',
+      },
+      {
+        id: 5, type: 'wordbank-fill',
+        question: 'This person helps people when their teeth hurt.',
+        correctAnswer: 'a dentist',
+      },
+      // Part 2: Story comprehension fill-in (10 questions)
+      {
+        id: 6, type: 'story-fill',
+        question: 'Jane carried a ___ for her mother.',
+        correctAnswer: 'bag',
+      },
+      {
+        id: 7, type: 'story-fill',
+        question: 'They went shopping in the big ___.',
+        correctAnswer: 'supermarket',
+      },
+      {
+        id: 8, type: 'story-fill',
+        question: "Jane didn't enjoy shopping because she thought it was ___.",
+        correctAnswer: 'boring',
+      },
+      {
+        id: 9, type: 'story-fill',
+        question: '___ found fruit and bread in the shop.',
+        correctAnswer: "Jane's mother",
+        acceptableAnswers: ["Jane's mum", "Her mother", "Her mum", "Janes mother", "Jane's mom"],
+      },
+      {
+        id: 10, type: 'story-fill',
+        question: 'The rice was under ___.',
+        correctAnswer: 'the pasta',
+        acceptableAnswers: ['pasta'],
+      },
+      {
+        id: 11, type: 'story-fill',
+        question: 'Jane climbed on a box to get a ___.',
+        correctAnswer: 'bottle of lemonade',
+        acceptableAnswers: ['lemonade', 'bottle'],
+      },
+      {
+        id: 12, type: 'story-fill',
+        question: 'Jane started ___ because she hurt her leg when she jumped down.',
+        correctAnswer: 'crying',
+        acceptableAnswers: ['to cry'],
+      },
+      {
+        id: 13, type: 'story-fill',
+        question: "Jane's mother gave Jane a ___.",
+        correctAnswer: 'strawberry ice cream',
+        acceptableAnswers: ['ice cream'],
+      },
+      {
+        id: 14, type: 'story-fill',
+        question: "Jane couldn't ___ quickly because her leg hurt.",
+        correctAnswer: 'walk',
+      },
+      {
+        id: 15, type: 'story-fill',
+        question: '___ took them home in the car.',
+        correctAnswer: "Jane's dad",
+        acceptableAnswers: ["Jane's father", "Her dad", "Her father", "Janes dad", "Jane's dad", "Jane's father"],
       },
     ],
   },
@@ -310,10 +514,23 @@ export function getAutoGradableCount(): number {
   let count = 0;
   for (const section of sections) {
     for (const q of section.questions) {
-      if (q.type === 'mcq' || q.type === 'fill-blank' || q.type === 'checkbox') {
+      if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq' ||
+          q.type === 'fill-blank' || q.type === 'wordbank-fill' || q.type === 'story-fill') {
         count++;
       }
     }
   }
   return count;
 }
+
+// Helper: reading word bank items for display
+export const readingWordBank = [
+  { word: 'a dentist', imageUrl: `${CDN}/HpVYuiWHGrdpskKj.png` },
+  { word: 'a milkshake', imageUrl: `${CDN}/VHAdmbegoiVDkDJD.png` },
+  { word: 'coffee', imageUrl: `${CDN}/xcXZVuhWNelGyHSx.png` },
+  { word: 'a nurse', imageUrl: `${CDN}/XAdfpbQZgLhntZpB.png` },
+  { word: 'a farmer', imageUrl: `${CDN}/ZnObHJdBXVoBoKnU.png` },
+  { word: 'a shower', imageUrl: `${CDN}/SQrBlhHjJGLHNFsE.png` },
+  { word: 'a lamp', imageUrl: `${CDN}/zMuxHUxUrcfpvIib.png` },
+  { word: 'a salad', imageUrl: `${CDN}/KklExYGJRgiJgBdN.png` },
+];

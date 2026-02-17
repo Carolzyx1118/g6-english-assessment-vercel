@@ -2,7 +2,7 @@ import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import { sections } from '@/data/questions';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones } from 'lucide-react';
 import { useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
 
@@ -11,23 +11,25 @@ const HERO_IMAGE = 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S
 const sectionIcons: Record<string, React.ReactNode> = {
   vocabulary: <BookOpen className="w-6 h-6" />,
   grammar: <PenTool className="w-6 h-6" />,
+  listening: <Headphones className="w-6 h-6" />,
   reading: <FileText className="w-6 h-6" />,
-  writing: <PenTool className="w-6 h-6" />,
 };
 
 const sectionColors: Record<string, string> = {
   vocabulary: 'from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-700',
   grammar: 'from-amber-50 to-amber-100 border-amber-200 text-amber-700',
+  listening: 'from-purple-50 to-purple-100 border-purple-200 text-purple-700',
   reading: 'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-700',
-  writing: 'from-rose-50 to-rose-100 border-rose-200 text-rose-700',
 };
 
 const iconBgColors: Record<string, string> = {
   vocabulary: 'bg-emerald-100 text-emerald-600',
   grammar: 'bg-amber-100 text-amber-600',
+  listening: 'bg-purple-100 text-purple-600',
   reading: 'bg-indigo-100 text-indigo-600',
-  writing: 'bg-rose-100 text-rose-600',
 };
+
+const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
 
 export default function LandingPage() {
   const [showInfoForm, setShowInfoForm] = useState(false);
@@ -50,13 +52,13 @@ export default function LandingPage() {
               transition={{ duration: 0.6 }}
             >
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
-                G6 English
+                WIDA English
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
                   Proficiency Assessment
                 </span>
               </h1>
               <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-xl">
-                Test your English proficiency across vocabulary, grammar, reading comprehension, and writing. Complete all sections to receive your assessment results.
+                Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Complete all sections to receive your assessment results.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Button
@@ -70,12 +72,18 @@ export default function LandingPage() {
               </div>
               <div className="mt-8 flex items-center gap-6 text-sm text-slate-500">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">4</div>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">{sections.length}</div>
                   <span>Sections</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xs">41</div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xs">{totalQuestions}</div>
                   <span>Questions</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 font-bold text-xs">
+                    <Headphones className="w-4 h-4" />
+                  </div>
+                  <span>Audio</span>
                 </div>
               </div>
             </motion.div>
@@ -111,21 +119,21 @@ export default function LandingPage() {
           <p className="text-slate-500 mb-8">Complete each section to get your full proficiency score.</p>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {sections.map((section, i) => (
             <motion.div
               key={section.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.5 + i * 0.1 }}
-              className={`relative group rounded-xl border bg-gradient-to-br ${sectionColors[section.id]} p-6 hover:shadow-lg transition-all duration-300 hover:-translate-y-1`}
+              className={`relative group rounded-xl border bg-gradient-to-br ${sectionColors[section.id] || 'from-slate-50 to-slate-100 border-slate-200 text-slate-700'} p-6 hover:shadow-lg transition-all duration-300 hover:-translate-y-1`}
             >
-              <div className={`w-12 h-12 rounded-xl ${iconBgColors[section.id]} flex items-center justify-center mb-4`}>
-                {sectionIcons[section.id]}
+              <div className={`w-12 h-12 rounded-xl ${iconBgColors[section.id] || 'bg-slate-100 text-slate-600'} flex items-center justify-center mb-4`}>
+                {sectionIcons[section.id] || <BookOpen className="w-6 h-6" />}
               </div>
               <h3 className="font-bold text-lg mb-1">{section.title}</h3>
               <p className="text-sm opacity-80 mb-3">{section.subtitle}</p>
-              <p className="text-sm opacity-70 leading-relaxed">{section.description}</p>
+              <p className="text-sm opacity-70 leading-relaxed line-clamp-2">{section.description}</p>
               <div className="mt-4 text-xs font-medium opacity-60">
                 {section.questions.length} question{section.questions.length > 1 ? 's' : ''}
               </div>

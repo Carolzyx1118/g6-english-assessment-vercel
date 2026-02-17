@@ -8,16 +8,10 @@ export interface StudentInfo {
 
 interface QuizState {
   currentSectionIndex: number;
-  answers: Record<number, string | string[] | number[]>;
+  answers: Record<string, string | number>;
   submitted: boolean;
   startTime: number | null;
   endTime: number | null;
-}
-
-interface SectionTiming {
-  sectionId: string;
-  startTime: number;
-  totalTime: number; // accumulated ms
 }
 
 interface QuizContextType {
@@ -26,19 +20,24 @@ interface QuizContextType {
   setStudentInfo: (info: StudentInfo) => void;
   currentSection: Section;
   setCurrentSection: (index: number) => void;
-  setAnswer: (questionId: number, answer: string | string[] | number[]) => void;
-  getAnswer: (questionId: number) => string | string[] | number[] | undefined;
+  setAnswer: (sectionId: string, questionId: number, answer: string | number) => void;
+  getAnswer: (sectionId: string, questionId: number) => string | number | undefined;
   submitQuiz: () => void;
   resetQuiz: () => void;
   startQuiz: () => void;
   isStarted: boolean;
   getScore: () => { correct: number; total: number; bySection: Record<string, { correct: number; total: number }> };
   getSectionProgress: (sectionId: string) => { answered: number; total: number };
-  getSectionTimings: () => Record<string, number>; // sectionId -> seconds
-  getTotalTime: () => number; // total seconds
+  getSectionTimings: () => Record<string, number>;
+  getTotalTime: () => number;
 }
 
 const QuizContext = createContext<QuizContextType | null>(null);
+
+// Build a composite key for answers: "sectionId:questionId"
+function answerKey(sectionId: string, questionId: number): string {
+  return `${sectionId}:${questionId}`;
+}
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<QuizState>({
@@ -51,26 +50,22 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [isStarted, setIsStarted] = useState(false);
   const [studentInfo, setStudentInfoState] = useState<StudentInfo | null>(null);
 
-  // Per-section timing
-  const sectionTimingsRef = useRef<Record<string, number>>({}); // sectionId -> accumulated ms
+  const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>(sections[0]?.id || '');
 
   const currentSection = sections[state.currentSectionIndex];
 
-  // Track section timing when section changes
   useEffect(() => {
     if (!isStarted || state.submitted) return;
 
     const now = Date.now();
-    // Accumulate time for previous section
     if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
       const elapsed = now - sectionEnteredAtRef.current;
       sectionTimingsRef.current[currentSectionIdRef.current] =
         (sectionTimingsRef.current[currentSectionIdRef.current] || 0) + elapsed;
     }
 
-    // Start timing new section
     currentSectionIdRef.current = currentSection?.id || '';
     sectionEnteredAtRef.current = now;
   }, [state.currentSectionIndex, isStarted, state.submitted]);
@@ -83,20 +78,19 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, currentSectionIndex: index }));
   }, []);
 
-  const setAnswer = useCallback((questionId: number, answer: string | string[] | number[]) => {
+  const setAnswer = useCallback((sectionId: string, questionId: number, answer: string | number) => {
     setState(prev => ({
       ...prev,
-      answers: { ...prev.answers, [questionId]: answer },
+      answers: { ...prev.answers, [answerKey(sectionId, questionId)]: answer },
     }));
   }, []);
 
-  const getAnswer = useCallback((questionId: number) => {
-    return state.answers[questionId];
+  const getAnswer = useCallback((sectionId: string, questionId: number) => {
+    return state.answers[answerKey(sectionId, questionId)];
   }, [state.answers]);
 
   const submitQuiz = useCallback(() => {
     const now = Date.now();
-    // Finalize timing for current section
     if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
       const elapsed = now - sectionEnteredAtRef.current;
       sectionTimingsRef.current[currentSectionIdRef.current] =
@@ -137,34 +131,31 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     for (const section of sections) {
       bySection[section.id] = { correct: 0, total: 0 };
       for (const q of section.questions) {
-        if (q.type === 'mcq') {
-          total++;
-          bySection[section.id].total++;
-          const answer = state.answers[q.id];
-          if (answer !== undefined && Number(answer) === q.correctAnswer) {
-            correct++;
-            bySection[section.id].correct++;
-          }
+        total++;
+        bySection[section.id].total++;
+        const answer = state.answers[answerKey(section.id, q.id)];
+
+        if (answer === undefined || answer === '') continue;
+
+        let isCorrect = false;
+
+        if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') {
+          isCorrect = Number(answer) === q.correctAnswer;
         } else if (q.type === 'fill-blank') {
-          total++;
-          bySection[section.id].total++;
-          const answer = state.answers[q.id];
-          if (answer !== undefined && String(answer).toUpperCase() === q.correctAnswer.toUpperCase()) {
-            correct++;
-            bySection[section.id].correct++;
+          isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+        } else if (q.type === 'wordbank-fill') {
+          isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+        } else if (q.type === 'story-fill') {
+          const userAnswer = String(answer).trim().toLowerCase();
+          isCorrect = userAnswer === q.correctAnswer.trim().toLowerCase();
+          if (!isCorrect && q.acceptableAnswers) {
+            isCorrect = q.acceptableAnswers.some(a => userAnswer === a.trim().toLowerCase());
           }
-        } else if (q.type === 'checkbox') {
-          total++;
-          bySection[section.id].total++;
-          const answer = state.answers[q.id] as number[] | undefined;
-          if (answer && Array.isArray(answer)) {
-            const sorted1 = [...answer].sort();
-            const sorted2 = [...q.correctAnswers].sort();
-            if (JSON.stringify(sorted1) === JSON.stringify(sorted2)) {
-              correct++;
-              bySection[section.id].correct++;
-            }
-          }
+        }
+
+        if (isCorrect) {
+          correct++;
+          bySection[section.id].correct++;
         }
       }
     }
@@ -175,17 +166,17 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const getSectionProgress = useCallback((sectionId: string) => {
     const section = sections.find(s => s.id === sectionId);
     if (!section) return { answered: 0, total: 0 };
-    
+
     let answered = 0;
     const total = section.questions.length;
-    
+
     for (const q of section.questions) {
-      const answer = state.answers[q.id];
-      if (answer !== undefined && answer !== '' && !(Array.isArray(answer) && answer.length === 0)) {
+      const answer = state.answers[answerKey(sectionId, q.id)];
+      if (answer !== undefined && answer !== '') {
         answered++;
       }
     }
-    
+
     return { answered, total };
   }, [state.answers]);
 

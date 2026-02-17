@@ -29,7 +29,7 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input }) => {
-        const prompt = `You are an English teacher grading a G6 (Grade 6) student's reading comprehension answers. 
+        const prompt = `You are an English teacher grading a student's WIDA English Proficiency Assessment reading comprehension answers. 
 For each question below, compare the student's answer with the correct answer. 
 The student's answer does NOT need to match word-for-word. Accept answers that convey the same meaning, even if worded differently.
 Be lenient with minor spelling errors, but the core meaning must be correct.
@@ -239,7 +239,7 @@ Respond in JSON format.`;
       .mutation(async ({ input }) => {
         if (input.wrongAnswers.length === 0) return [];
 
-        const prompt = `You are an English teacher providing detailed explanations for a G6 student's wrong answers.
+        const prompt = `You are an English teacher providing detailed explanations for a student's wrong answers on a WIDA English Proficiency Assessment.
 For each wrong answer, provide explanations in BOTH English and Chinese:
 - explanation_en: Why the answer is wrong and why the correct answer is right (English)
 - explanation_cn: Same explanation in Chinese
@@ -332,12 +332,10 @@ Respond in JSON format:
           total: z.number(),
           timeSeconds: z.number(),
         })),
-        writingScore: z.number().optional(),
-        writingMaxScore: z.number().optional(),
-        writingGrade: z.string().optional(),
+
       }))
       .mutation(async ({ input }) => {
-        const prompt = `You are an English proficiency assessment expert. Based on the following test results for a Grade 6 student, generate a brief proficiency report in BOTH English and Chinese.
+        const prompt = `You are an English proficiency assessment expert. Based on the following WIDA English Proficiency Assessment results, generate a brief proficiency report in BOTH English and Chinese.
 
 Overall Results:
 - Total Score: ${input.totalScore}/${input.totalPossible} (${input.percentage}%)
@@ -346,7 +344,7 @@ Overall Results:
 
 Section Breakdown:
 ${input.sectionResults.map(s => `- ${s.sectionTitle}: ${s.correct}/${s.total} (${s.timeSeconds > 0 ? `${Math.floor(s.timeSeconds / 60)}m ${s.timeSeconds % 60}s` : 'N/A'})`).join('\n')}
-${input.writingScore !== undefined ? `- Writing: ${input.writingScore}/${input.writingMaxScore} (Grade: ${input.writingGrade})` : ''}
+
 
 Provide ALL fields in both English and Chinese:
 1. languageLevel: CEFR level (A1/A2/B1/B2/C1/C2)

@@ -51,3 +51,20 @@
 - [x] Remove Class and Student ID fields from student info form, context, results page, and PDF
 - [x] Beautify PDF report with better layout, colors, typography, section dividers, and visual hierarchy
 - [x] Fix PDF font rendering - replace Unicode symbols with ASCII-safe alternatives to prevent Courier fallback
+- [x] Extract questions from WIDA assessment PDF
+- [x] Extract answers from WIDA feedback PDF
+- [x] Create WIDA paper data file matching existing question structure
+- [x] Implement multi-paper selection system (paper picker UI, context updates) — Changed to single WIDA paper replacement
+- [x] Upload and integrate listening audio file for WIDA paper
+- [x] Add listening section support back for papers that have it
+- [x] Update landing page with paper selection — Updated to WIDA landing page
+- [x] Update results page and PDF to show paper name
+- [x] Test complete multi-paper flow — Tested as single WIDA paper
+- [x] Extract question images from WIDA PDF
+- [x] Upload images and audio to S3
+- [x] Replace all questions with WIDA content
+- [x] Restore listening section with audio player
+- [x] Update UI for picture-based MCQ questions
+- [x] Update grading for new question types (word bank fill-in, story comprehension)
+- [x] Update results page and PDF for WIDA structure
+- [x] Test complete WIDA assessment flow
