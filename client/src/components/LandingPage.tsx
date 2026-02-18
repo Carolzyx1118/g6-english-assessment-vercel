@@ -122,18 +122,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   <GraduationCap className="w-3.5 h-3.5" />
                   {paper.totalQuestions} Questions
                 </span>
-                {paper.hasListening && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold">
-                    <Headphones className="w-3.5 h-3.5" />
-                    Listening
-                  </span>
-                )}
-                {paper.hasWriting && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 text-xs font-semibold">
-                    <Pencil className="w-3.5 h-3.5" />
-                    Writing
-                  </span>
-                )}
+
               </div>
             </motion.button>
           ))}

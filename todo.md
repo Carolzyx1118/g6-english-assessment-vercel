@@ -78,3 +78,4 @@
 - [x] Rename WIDA paper title from "WIDA English Proficiency Assessment" to "G2-3 English Proficiency Assessment"
 - [x] Change WIDA subtitle from "K-G3 Level" to "G2-3 Level" everywhere
 - [x] Change "HuaZhong G6 English Assessment" to "G6 English Assessment" everywhere
+- [x] Remove Listening and Writing badge spans from paper selection cards
