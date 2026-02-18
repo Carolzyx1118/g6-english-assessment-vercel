@@ -83,3 +83,4 @@
 - [x] Update G2-3 description from "kindergarten to Grade 3" to "Grade 2-3"
 - [x] Remove parentheses from grammar word bank labels (e.g. "A) although" → "A although")
 - [x] Remove Writing badge from paper detail view in LandingPage
+- [x] Adjust Word Bank section spacing: reduce bottom margin to 10px, add 30px bottom margin to Passage section

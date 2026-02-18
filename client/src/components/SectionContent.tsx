@@ -883,7 +883,7 @@ function HuaZhongDragDropGrammarSection({
 
   return (
     <div className="space-y-6">
-      <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200">
+      <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200" style={{marginBottom: '10px'}}>
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
           Word Bank
           <span className="ml-2 text-xs font-normal text-amber-500 normal-case">
@@ -919,7 +919,7 @@ function HuaZhongDragDropGrammarSection({
         </div>
       </div>
 
-      <div className="p-5 rounded-xl bg-white border border-slate-200">
+      <div className="p-5 rounded-xl bg-white border border-slate-200" style={{marginBottom: '30px'}}>
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">Passage</h3>
         <div className="text-base text-slate-700 leading-[2.2] space-y-3">
           {grammarPassage.split('\n\n').map((paragraph, pIdx) => (
