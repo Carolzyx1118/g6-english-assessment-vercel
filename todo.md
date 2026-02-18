@@ -81,3 +81,4 @@
 - [x] Remove Listening and Writing badge spans from paper selection cards
 - [x] Remove subtitle line from paper selection cards
 - [x] Update G2-3 description from "kindergarten to Grade 3" to "Grade 2-3"
+- [x] Remove parentheses from grammar word bank labels (e.g. "A) although" → "A although")

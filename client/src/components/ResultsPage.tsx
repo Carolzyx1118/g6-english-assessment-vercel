@@ -262,8 +262,8 @@ export default function ResultsPage() {
           const correctWord = wordBank?.find((w: any) => w.letter === q.correctAnswer);
           const userWord = wordBank?.find((w: any) => w.letter === String(userAns));
           sectionResults.push({ id: q.id, question: `Fill in blank ${q.id}`,
-            userAnswer: userWord ? `${userWord.letter}) ${userWord.word}` : (userAns ? String(userAns) : 'Not answered'),
-            correctAnswer: correctWord ? `${correctWord.letter}) ${correctWord.word}` : q.correctAnswer,
+            userAnswer: userWord ? `${userWord.letter} ${userWord.word}` : (userAns ? String(userAns) : 'Not answered'),
+            correctAnswer: correctWord ? `${correctWord.letter} ${correctWord.word}` : q.correctAnswer,
             isCorrect: String(userAns).toUpperCase() === q.correctAnswer.toUpperCase(),
             context: `Grammar fill-in-the-blank. The correct word is "${correctWord?.word}".` });
         } else if (q.type === 'checkbox') {
