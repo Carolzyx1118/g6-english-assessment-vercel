@@ -79,3 +79,4 @@
 - [x] Change WIDA subtitle from "K-G3 Level" to "G2-3 Level" everywhere
 - [x] Change "HuaZhong G6 English Assessment" to "G6 English Assessment" everywhere
 - [x] Remove Listening and Writing badge spans from paper selection cards
+- [x] Remove subtitle and description text from paper selection cards

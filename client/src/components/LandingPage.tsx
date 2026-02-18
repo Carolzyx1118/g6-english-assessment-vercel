@@ -109,10 +109,10 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{paper.title}</h3>
-                  <p className="text-sm text-slate-500">{paper.subtitle}</p>
+
                 </div>
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
+
               <div className="flex flex-wrap gap-3">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
                   <BookOpen className="w-3.5 h-3.5" />
