@@ -706,12 +706,15 @@ function WIDADragDropGrammarSection({
     setAnswer(sectionId, questionId, '');
   };
 
+  // Calculate global question number offset: Part 1 has 12 questions, so grammar MCQs are 13-20, fill-blanks start at 21
+  const mcqCount = 8; // 8 MCQ questions before fill-blanks in grammar section
+  const vocabCount = 12; // 12 questions in vocabulary section
   const blanks = [
-    { id: questions[0]?.id, label: 'a', text: 'The rubber is ___ the pencil case.' },
-    { id: questions[1]?.id, label: 'b', text: 'The crayons are ___ the pencil case.' },
-    { id: questions[2]?.id, label: 'c', text: 'The pencils are ___ the desk.' },
-    { id: questions[3]?.id, label: 'd', text: 'The pen is ___ the book.' },
-    { id: questions[4]?.id, label: 'e', text: 'The pencils are ___ the book.' },
+    { id: questions[0]?.id, label: 'a', globalNum: vocabCount + mcqCount + 1, text: 'The rubber is ___ the pencil case.' },
+    { id: questions[1]?.id, label: 'b', globalNum: vocabCount + mcqCount + 2, text: 'The crayons are ___ the pencil case.' },
+    { id: questions[2]?.id, label: 'c', globalNum: vocabCount + mcqCount + 3, text: 'The pencils are ___ the desk.' },
+    { id: questions[3]?.id, label: 'd', globalNum: vocabCount + mcqCount + 4, text: 'The pen is ___ the book.' },
+    { id: questions[4]?.id, label: 'e', globalNum: vocabCount + mcqCount + 5, text: 'The pencils are ___ the book.' },
   ];
 
   return (
@@ -773,7 +776,8 @@ function WIDADragDropGrammarSection({
           const parts = blank.text.split('___');
           return (
             <div key={blank.id} className="flex items-center gap-2 text-base text-slate-700">
-              <span className="font-bold text-slate-500 w-6">{blank.label})</span>
+              <span className="font-bold text-slate-500 mr-1">Q{blank.globalNum}.</span>
+              <span className="font-bold text-slate-400 w-6">{blank.label})</span>
               <span>{parts[0]}</span>
               <span
                 className={`
@@ -825,6 +829,7 @@ function HuaZhongDragDropGrammarSection({
   questions,
   wordBank,
   grammarPassage,
+  sceneImageUrl,
   sectionId,
   getAnswer,
   setAnswer,
@@ -832,6 +837,7 @@ function HuaZhongDragDropGrammarSection({
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
   grammarPassage: string;
+  sceneImageUrl?: string;
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
@@ -883,6 +889,17 @@ function HuaZhongDragDropGrammarSection({
 
   return (
     <div className="space-y-6">
+      {sceneImageUrl && (
+        <div className="flex justify-center">
+          <img
+            src={sceneImageUrl}
+            alt="Scene for fill-in-the-blank"
+            className="max-h-56 object-contain rounded-xl border border-slate-200 shadow-sm"
+            loading="lazy"
+          />
+        </div>
+      )}
+
       <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200" style={{marginBottom: '10px'}}>
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
           Word Bank
@@ -1002,34 +1019,175 @@ function WIDAReadingSection({
   const wordBankQuestions = section.questions.filter((q: Question) => q.type === 'wordbank-fill') as WordBankFillIn[];
   const storyQuestions = section.questions.filter((q: Question) => q.type === 'story-fill') as StoryFillIn[];
 
+  // Track which words have been used (assigned to a question)
+  const usedWords = new Set<string>();
+  wordBankQuestions.forEach(q => {
+    const ans = getAnswer(sectionId, q.id);
+    if (ans && typeof ans === 'string') usedWords.add(ans);
+  });
+
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+
+  const handleImageDragStart = (e: React.DragEvent, word: string) => {
+    setDraggedItem(word);
+    e.dataTransfer.setData('text/plain', word);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleImageDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleImageDrop = (e: React.DragEvent, questionId: number) => {
+    e.preventDefault();
+    const word = e.dataTransfer.getData('text/plain');
+    if (word) {
+      setAnswer(sectionId, questionId, word);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleImageClick = (word: string) => {
+    if (usedWords.has(word)) return;
+    setSelectedItem(prev => prev === word ? null : word);
+  };
+
+  const handleDropTargetClick = (questionId: number) => {
+    if (selectedItem) {
+      setAnswer(sectionId, questionId, selectedItem);
+      setSelectedItem(null);
+    }
+  };
+
+  const handleRemoveAnswer = (questionId: number) => {
+    setAnswer(sectionId, questionId, '');
+  };
+
+  // Global question number offset for reading Part 1
+  // Vocab: 12, Grammar MCQ: 8, Grammar fill: 5, Listening: 6 = 31
+  const globalOffset = 31;
+
   return (
     <div className="space-y-8">
       <div>
         <div className="mb-4 p-4 rounded-xl bg-blue-50/50 border border-blue-200">
           <h3 className="font-bold text-blue-700 mb-2">Part 1: Look and Read</h3>
-          <p className="text-sm text-slate-600 mb-3">Choose the correct word from the word bank for each description.</p>
-          {section.wordBankImageUrl && (
-            <div className="flex justify-center">
-              <img
-                src={section.wordBankImageUrl}
-                alt="Word bank items"
-                className="max-h-32 object-contain rounded-lg"
-                loading="lazy"
-              />
-            </div>
-          )}
+          <p className="text-sm text-slate-600">Drag the correct image to match each description, or click an image then click a description.</p>
         </div>
+
+        {/* Draggable Image Bank */}
+        <div className="p-5 rounded-xl bg-indigo-50/50 border border-indigo-200 mb-6">
+          <h3 className="font-bold text-sm text-indigo-700 mb-3 uppercase tracking-wider">
+            Word Bank
+            <span className="ml-2 text-xs font-normal text-indigo-400 normal-case">
+              (Drag images to descriptions, or click to select)
+            </span>
+          </h3>
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+            {readingWordBank.map((item) => {
+              const isUsed = usedWords.has(item.word);
+              const isSelected = selectedItem === item.word;
+              return (
+                <div
+                  key={item.word}
+                  draggable={!isUsed}
+                  onDragStart={(e) => handleImageDragStart(e, item.word)}
+                  onDragEnd={() => setDraggedItem(null)}
+                  onClick={() => handleImageClick(item.word)}
+                  className={`
+                    flex flex-col items-center p-2 rounded-xl border-2 transition-all duration-200
+                    ${isUsed
+                      ? 'border-slate-200 bg-slate-100 opacity-40 cursor-not-allowed'
+                      : isSelected
+                        ? 'border-blue-400 bg-blue-50 shadow-md ring-2 ring-blue-200 cursor-pointer'
+                        : 'border-indigo-200 bg-white cursor-grab hover:border-indigo-400 hover:shadow-sm active:cursor-grabbing'
+                    }
+                  `}
+                >
+                  <img
+                    src={item.imageUrl}
+                    alt={item.word}
+                    className={`w-14 h-14 sm:w-16 sm:h-16 object-contain rounded-lg mb-1 ${isUsed ? 'grayscale' : ''}`}
+                    loading="lazy"
+                  />
+                  <span className={`text-[10px] sm:text-xs font-medium text-center leading-tight ${isUsed ? 'text-slate-400 line-through' : isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                    {item.word}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Description Drop Targets */}
         <div className="space-y-4">
           {wordBankQuestions.map((q) => {
             const answer = getAnswer(sectionId, q.id);
+            const answerStr = typeof answer === 'string' ? answer : undefined;
+            const matchedItem = answerStr ? readingWordBank.find(item => item.word === answerStr) : null;
+
             return (
-              <div key={q.id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <WordBankFillInCard
-                  q={q}
-                  answer={typeof answer === 'string' ? answer : undefined}
-                  onAnswer={(v) => setAnswer(sectionId, q.id, v)}
-                  wordBankItems={readingWordBank}
-                />
+              <div
+                key={q.id}
+                className={`p-5 rounded-xl border-2 transition-all duration-200 ${
+                  matchedItem
+                    ? 'border-emerald-300 bg-emerald-50/50'
+                    : draggedItem || selectedItem
+                      ? 'border-blue-300 bg-blue-50/30 border-dashed'
+                      : 'border-slate-200 bg-white'
+                } shadow-sm hover:shadow-md`}
+                onDragOver={handleImageDragOver}
+                onDrop={(e) => handleImageDrop(e, q.id)}
+                onClick={() => {
+                  if (matchedItem) return;
+                  handleDropTargetClick(q.id);
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  {/* Drop zone for image */}
+                  <div
+                    className={`flex-shrink-0 w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center transition-all duration-200 ${
+                      matchedItem
+                        ? 'border-emerald-400 bg-white'
+                        : draggedItem || selectedItem
+                          ? 'border-blue-400 bg-blue-50 animate-pulse'
+                          : 'border-slate-300 bg-slate-50'
+                    }`}
+                  >
+                    {matchedItem ? (
+                      <div className="relative">
+                        <img
+                          src={matchedItem.imageUrl}
+                          alt={matchedItem.word}
+                          className="w-16 h-16 object-contain rounded-lg"
+                        />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveAnswer(q.id); }}
+                          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-400 text-white flex items-center justify-center text-xs hover:bg-red-500 shadow-sm"
+                        >
+                          x
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">Drop here</span>
+                    )}
+                  </div>
+
+                  {/* Question text */}
+                  <div className="flex-1">
+                    <p className="text-base text-slate-700 leading-relaxed">
+                      <span className="font-bold text-slate-500 mr-2">Q{globalOffset + q.id}.</span>
+                      {q.question}
+                    </p>
+                    {matchedItem && (
+                      <p className="text-sm text-emerald-600 font-medium mt-1">
+                        Answer: {matchedItem.word}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -1269,6 +1427,7 @@ export default function SectionContent() {
                 questions={section.questions.filter(q => q.type === 'fill-blank') as FillBlankQuestion[]}
                 wordBank={section.wordBank!}
                 grammarPassage={section.grammarPassage!}
+                sceneImageUrl={section.sceneImageUrl}
                 sectionId={section.id}
                 getAnswer={getAnswer}
                 setAnswer={setAnswer}

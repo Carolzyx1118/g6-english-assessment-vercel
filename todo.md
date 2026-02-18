@@ -85,3 +85,5 @@
 - [x] Remove Writing badge from paper detail view in LandingPage
 - [x] Adjust Word Bank section spacing: reduce bottom margin to 10px, add 30px bottom margin to Passage section
 - [x] Remove Audio badge from paper detail view in LandingPage
+- [x] G2-3 Part 2: Add images to grammar word bank fill-in questions and include question numbers
+- [x] G2-3 Part 4 Reading Part 1: Implement drag-and-drop image matching to avoid duplicate images

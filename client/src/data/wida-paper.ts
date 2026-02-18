@@ -216,7 +216,7 @@ const sections: Section[] = [
       { id: 12, type: 'fill-blank', correctAnswer: 'under' },
       { id: 13, type: 'fill-blank', correctAnswer: 'next to' },
     ],
-    sceneImageUrl: `${CDN}/somwxfPtOxzVhrjQ.png`,
+    sceneImageUrl: `${CDN}/vNalAIQYvYJkiujn.png`,
     wordBank: [
       { letter: 'A', word: 'next to' },
       { letter: 'B', word: 'on' },
