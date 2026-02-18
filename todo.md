@@ -91,3 +91,5 @@
 - [x] Fix G2-3 PDF export: fix Chinese font garbled text and include student info
 - [x] Allow word bank items to be reusable (multi-select/drag) - same word can be placed in multiple blanks
 - [x] Fix G6 Part 1 Vocabulary to match PDF - correct questions, bolded keywords, and answer options
+- [x] Fix G6 Part 3 Reading Comprehension missing header/title image → removed all section images instead
+- [x] Remove all section header images from G6 paper (use plain color+icon style like G2-3)
