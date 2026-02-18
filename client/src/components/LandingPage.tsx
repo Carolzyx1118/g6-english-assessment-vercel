@@ -192,14 +192,6 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
                   <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xs">{paper.totalQuestions}</div>
                   <span>Questions</span>
                 </div>
-                {paper.hasListening && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
-                      <Headphones className="w-4 h-4" />
-                    </div>
-                    <span>Audio</span>
-                  </div>
-                )}
 
               </div>
             </motion.div>

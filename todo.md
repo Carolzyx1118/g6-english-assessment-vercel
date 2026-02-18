@@ -84,3 +84,4 @@
 - [x] Remove parentheses from grammar word bank labels (e.g. "A) although" → "A although")
 - [x] Remove Writing badge from paper detail view in LandingPage
 - [x] Adjust Word Bank section spacing: reduce bottom margin to 10px, add 30px bottom margin to Passage section
+- [x] Remove Audio badge from paper detail view in LandingPage
