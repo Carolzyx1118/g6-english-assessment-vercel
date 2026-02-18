@@ -9,7 +9,7 @@ const sections: Section[] = [
     icon: '📖',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'For each question, choose the option that is closest in meaning to the underlined word.',
+    description: 'Choose the correct meaning. For each question, choose the option that is closest in meaning to the bolded word.',
     imageUrl: 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-3_1771255546000_na1fn_dm9jYWJ1bGFyeS1zZWN0aW9u.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTNfMTc3MTI1NTU0NjAwMF9uYTFmbl9kbTlqWVdKMWJHRnllUzF6WldOMGFXOXUucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=BZjyS-Isf91S8NuziKshvwAQDj74p44Jac426QEjneZhfzryHD1VaLsCXmrVP01uhxFyEgtCbHEAcoCHJIFJX5DQz~lH0eim~xW3tRp52moK98pbRlJwt81-mEEYib6BszzvHEWQbo3eUL~OgXZg2v5DeBRK4~k2KpUdSxmCREHzC~gzVdwyr0NXEBc~orX7uFxaM1B6YGYBzsZvFzzkdbuzYcWNNkOwS7B8My3TIl8kt9VZW83-d5rCXMPn~c-4lCc~ZhKBRoEU8EFFq-4wRwCmlTXA8wZaoqc5QzzJoIT95Vt3CvA27-5h1D9QDOs0IfzwSYeVkzg0sfEhwB7jpw__',
     questions: [
       { id: 1, type: 'mcq', question: 'She felt ___ when she lost the game.', highlightWord: 'disappointed', options: ['angry', 'unhappy because of an unexpected result', 'excited', 'confused'], correctAnswer: 1 },

@@ -90,3 +90,4 @@
 - [x] Fix G2-3 Part 2 Grammar: display each fill-in sentence on its own line with sequential question numbers from Q1
 - [x] Fix G2-3 PDF export: fix Chinese font garbled text and include student info
 - [x] Allow word bank items to be reusable (multi-select/drag) - same word can be placed in multiple blanks
+- [x] Fix G6 Part 1 Vocabulary to match PDF - correct questions, bolded keywords, and answer options

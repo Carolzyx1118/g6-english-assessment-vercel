@@ -62,11 +62,26 @@ function PictureMCQCard({ q, answer, onAnswer }: { q: PictureMCQ; answer?: numbe
 // ========== TEXT MCQ (Both papers) ==========
 
 function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: number; onAnswer: (v: number) => void }) {
+  // Render question with highlightWord bolded if present
+  const renderQuestion = () => {
+    if (q.highlightWord) {
+      const parts = q.question.split('___');
+      if (parts.length === 2) {
+        return (
+          <>
+            {parts[0]}<span className="font-bold text-slate-900 underline decoration-2 decoration-blue-400 underline-offset-2">{q.highlightWord}</span>{parts[1]}
+          </>
+        );
+      }
+    }
+    return q.question;
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-base text-slate-700 leading-relaxed">
         <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        {q.question}
+        {renderQuestion()}
       </p>
       {q.imageUrl && (
         <div className="flex justify-center">
