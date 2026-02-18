@@ -364,7 +364,7 @@ const readingWordBank = [
 
 export const widaPaper: Paper = {
   id: 'wida',
-  title: 'WIDA English Proficiency Assessment',
+  title: 'G2-3 English Proficiency Assessment',
   subtitle: 'K-G3 Level',
   description: 'Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Suitable for kindergarten to Grade 3 students.',
   icon: '🌍',

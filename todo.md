@@ -75,3 +75,4 @@
 - [x] Update SectionContent to handle both paper question types
 - [x] Update results page and PDF for multi-paper
 - [x] Test both paper flows end-to-end
+- [x] Rename WIDA paper title from "WIDA English Proficiency Assessment" to "G2-3 English Proficiency Assessment"
