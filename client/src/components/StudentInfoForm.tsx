@@ -3,10 +3,10 @@ import { useQuiz, type StudentInfo } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion } from 'framer-motion';
-import { ArrowRight, User, GraduationCap } from 'lucide-react';
+import { ArrowRight, ArrowLeft, User, GraduationCap } from 'lucide-react';
 
 export default function StudentInfoForm() {
-  const { setStudentInfo, startQuiz } = useQuiz();
+  const { setStudentInfo, startQuiz, resetQuiz } = useQuiz();
   const [form, setForm] = useState<StudentInfo>({
     name: '',
     grade: '',
@@ -106,6 +106,16 @@ export default function StudentInfoForm() {
           <p className="text-xs text-slate-400 text-center">
             Fields marked with <span className="text-red-400">*</span> are required. Other fields are optional.
           </p>
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={resetQuiz}
+            className="w-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 py-3 rounded-xl transition-all duration-200"
+          >
+            <ArrowLeft className="mr-2 w-4 h-4" />
+            Back to Home
+          </Button>
         </motion.form>
       </div>
     </motion.div>
