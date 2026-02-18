@@ -366,7 +366,7 @@ export const widaPaper: Paper = {
   id: 'wida',
   title: 'G2-3 English Proficiency Assessment',
   subtitle: 'G2-3 Level',
-  description: 'Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Suitable for kindergarten to Grade 3 students.',
+  description: 'Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Suitable for Grade 2-3 students.',
   icon: '🌍',
   color: '#4F46E5',
   sections,

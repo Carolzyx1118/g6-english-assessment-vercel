@@ -109,7 +109,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{paper.title}</h3>
-                  <p className="text-sm text-slate-500">{paper.subtitle}</p>
+
                 </div>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
