@@ -1,4 +1,4 @@
-// HuaZhong (华中) G6 English Proficiency Assessment - Question Data
+// G6 English Proficiency Assessment - Question Data
 import type { Section, Paper } from './papers';
 
 const sections: Section[] = [
@@ -204,7 +204,7 @@ But then, to our surprise, as we passed a café, we spotted the same old man. He
 
 export const huazhongPaper: Paper = {
   id: 'huazhong',
-  title: 'HuaZhong G6 English Assessment',
+  title: 'G6 English Assessment',
   subtitle: 'Secondary 1 Entrance Level',
   description: 'Comprehensive English assessment covering vocabulary, grammar, reading comprehension, and writing. Designed for Grade 6 students preparing for secondary school entrance.',
   icon: '🏫',

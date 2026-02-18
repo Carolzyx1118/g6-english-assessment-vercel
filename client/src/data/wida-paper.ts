@@ -1,4 +1,4 @@
-// WIDA English Proficiency Assessment (K-G3) - Question Data
+// G2-3 English Proficiency Assessment - Question Data
 import type { Section, Paper } from './papers';
 
 // CDN base
@@ -365,7 +365,7 @@ const readingWordBank = [
 export const widaPaper: Paper = {
   id: 'wida',
   title: 'G2-3 English Proficiency Assessment',
-  subtitle: 'K-G3 Level',
+  subtitle: 'G2-3 Level',
   description: 'Test your English proficiency across vocabulary, grammar, listening, and reading comprehension. Suitable for kindergarten to Grade 3 students.',
   icon: '🌍',
   color: '#4F46E5',

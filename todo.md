@@ -76,3 +76,5 @@
 - [x] Update results page and PDF for multi-paper
 - [x] Test both paper flows end-to-end
 - [x] Rename WIDA paper title from "WIDA English Proficiency Assessment" to "G2-3 English Proficiency Assessment"
+- [x] Change WIDA subtitle from "K-G3 Level" to "G2-3 Level" everywhere
+- [x] Change "HuaZhong G6 English Assessment" to "G6 English Assessment" everywhere
