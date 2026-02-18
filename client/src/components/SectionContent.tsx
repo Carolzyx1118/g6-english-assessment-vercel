@@ -706,15 +706,13 @@ function WIDADragDropGrammarSection({
     setAnswer(sectionId, questionId, '');
   };
 
-  // Calculate global question number offset: Part 1 has 12 questions, so grammar MCQs are 13-20, fill-blanks start at 21
-  const mcqCount = 8; // 8 MCQ questions before fill-blanks in grammar section
-  const vocabCount = 12; // 12 questions in vocabulary section
+  // Build blanks from questions - each sentence on its own line with question id as the number
   const blanks = [
-    { id: questions[0]?.id, label: 'a', globalNum: vocabCount + mcqCount + 1, text: 'The rubber is ___ the pencil case.' },
-    { id: questions[1]?.id, label: 'b', globalNum: vocabCount + mcqCount + 2, text: 'The crayons are ___ the pencil case.' },
-    { id: questions[2]?.id, label: 'c', globalNum: vocabCount + mcqCount + 3, text: 'The pencils are ___ the desk.' },
-    { id: questions[3]?.id, label: 'd', globalNum: vocabCount + mcqCount + 4, text: 'The pen is ___ the book.' },
-    { id: questions[4]?.id, label: 'e', globalNum: vocabCount + mcqCount + 5, text: 'The pencils are ___ the book.' },
+    { id: questions[0]?.id, text: 'The rubber is ___ the pencil case.' },
+    { id: questions[1]?.id, text: 'The crayons are ___ the pencil case.' },
+    { id: questions[2]?.id, text: 'The pencils are ___ the desk.' },
+    { id: questions[3]?.id, text: 'The pen is ___ the book.' },
+    { id: questions[4]?.id, text: 'The pencils are ___ the book.' },
   ];
 
   return (
@@ -776,8 +774,7 @@ function WIDADragDropGrammarSection({
           const parts = blank.text.split('___');
           return (
             <div key={blank.id} className="flex items-center gap-2 text-base text-slate-700">
-              <span className="font-bold text-slate-500 mr-1">Q{blank.globalNum}.</span>
-              <span className="font-bold text-slate-400 w-6">{blank.label})</span>
+              <span className="font-bold text-slate-500 mr-1">Q{blank.id}.</span>
               <span>{parts[0]}</span>
               <span
                 className={`

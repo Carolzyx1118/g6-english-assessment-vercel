@@ -223,13 +223,7 @@ const sections: Section[] = [
       { letter: 'C', word: 'in' },
       { letter: 'D', word: 'under' },
     ],
-    grammarPassage: `Look at the picture and fill in the blanks with the correct word from the word bank.
 
-<b>a.</b> The rubber is ___(9)___ the pencil case.
-<b>b.</b> The crayons are ___(10)___ the pencil case.
-<b>c.</b> The pencils are ___(11)___ the desk.
-<b>d.</b> The pen is ___(12)___ the book.
-<b>e.</b> The pencils are ___(13)___ the book.`,
   },
 
   // ===== PART 3: LISTENING (6 picture MCQ with audio) =====

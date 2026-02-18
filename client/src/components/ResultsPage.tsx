@@ -382,12 +382,12 @@ export default function ResultsPage() {
   }, [writingResult]);
 
   // Paper name for display
-  const paperName = selectedPaper || 'Assessment';
+  const paperName = selectedPaper?.title || 'Assessment';
 
   // Download report as PDF
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     setIsDownloading(true);
     try {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -395,6 +395,25 @@ export default function ResultsPage() {
       const pageH = pdf.internal.pageSize.getHeight();
       const mL = 18; const mR = 18; const contentW = pageW - mL - mR;
       let y = 0; let pageNum = 1;
+
+      // Load Chinese font for CJK support (embedded base64)
+      let hasCJKFont = false;
+      try {
+        const { CJK_FONT_BASE64 } = await import('@/lib/cjk-font-base64');
+        pdf.addFileToVFS('DroidSansCJK.ttf', CJK_FONT_BASE64);
+        pdf.addFont('DroidSansCJK.ttf', 'DroidSans', 'normal');
+        hasCJKFont = true;
+      } catch (e) { console.warn('[PDF] Failed to load CJK font, Chinese text may not render:', e); }
+
+      const hasChinese = (s: string) => /[\u4e00-\u9fff\u3400-\u4dbf]/.test(s);
+      const setFont = (bold: boolean, txt?: string) => {
+        if (hasCJKFont && txt && hasChinese(txt)) {
+          // CJK font only has normal style; simulate bold isn't possible with single TTF
+          pdf.setFont('DroidSans', 'normal');
+        } else {
+          pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+        }
+      };
 
       const C = {
         primary: [37, 99, 235] as [number, number, number],
@@ -420,14 +439,14 @@ export default function ResultsPage() {
         pdf.setDrawColor(...C.border); pdf.setLineWidth(0.3);
         pdf.line(mL, pageH - 12, pageW - mR, pageH - 12);
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...C.textMuted);
-        pdf.text(`${paperName} English Proficiency Assessment Report`, mL, pageH - 8);
+        pdf.text(`${paperName} - Assessment Report`, mL, pageH - 8);
         pdf.text(`Page ${pageNum}`, pageW - mR, pageH - 8, { align: 'right' });
       };
       const checkPage = (need: number) => {
         if (y + need > pageH - 18) { addPageFooter(); pdf.addPage(); pageNum++; y = 15; }
       };
       const addText = (txt: string, x: number, size: number, bold = false, color: [number, number, number] = C.text, maxW = contentW) => {
-        pdf.setFont('helvetica', bold ? 'bold' : 'normal'); pdf.setFontSize(size); pdf.setTextColor(...color);
+        setFont(bold, txt); pdf.setFontSize(size); pdf.setTextColor(...color);
         const lines = pdf.splitTextToSize(txt, maxW); checkPage(lines.length * (size * 0.45) + 2);
         pdf.text(lines, x, y); y += lines.length * (size * 0.45) + 1;
       };
@@ -442,7 +461,7 @@ export default function ResultsPage() {
       const addSectionBanner = (title: string, color: [number, number, number], bgColor: [number, number, number]) => {
         checkPage(14); drawRect(mL, y - 2, contentW, 12, bgColor, 3);
         drawRect(mL, y - 2, 3, 12, color, 1);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...color);
+        setFont(true, title); pdf.setFontSize(12); pdf.setTextColor(...color);
         pdf.text(title, mL + 7, y + 6); y += 14;
       };
 
@@ -450,7 +469,7 @@ export default function ResultsPage() {
       drawRect(0, 0, pageW, 28, C.primary);
       drawRect(0, 24, pageW, 8, C.accent);
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16); pdf.setTextColor(255, 255, 255);
-      pdf.text(`${paperName} English Proficiency Assessment`, pageW / 2, 14, { align: 'center' });
+      pdf.text(paperName, pageW / 2, 14, { align: 'center' });
       pdf.setFontSize(9); pdf.setTextColor(200, 210, 255);
       pdf.text(`Report generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, pageW / 2, 22, { align: 'center' });
       y = 38;
@@ -459,9 +478,20 @@ export default function ResultsPage() {
       if (studentInfo) {
         drawRect(mL, y - 2, contentW, 14, C.bgLight, 3);
         drawRect(mL, y - 2, 3, 14, C.primary, 1);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...C.text);
-        pdf.text(`Student: ${studentInfo.name}`, mL + 7, y + 5);
-        if (studentInfo.grade) { pdf.setFont('helvetica', 'normal'); pdf.text(`Grade: ${studentInfo.grade}`, mL + 90, y + 5); }
+        pdf.setFontSize(10); pdf.setTextColor(...C.text);
+        // Render student name: split English prefix and potentially Chinese name
+        const namePrefix = 'Student: ';
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(namePrefix, mL + 7, y + 5);
+        const prefixWidth = pdf.getTextWidth(namePrefix);
+        if (hasCJKFont && hasChinese(studentInfo.name)) {
+          pdf.setFont('DroidSans', 'normal');
+        }
+        pdf.text(studentInfo.name, mL + 7 + prefixWidth, y + 5);
+        if (studentInfo.grade) {
+          const gradeText = `Grade: ${studentInfo.grade}`;
+          setFont(false, gradeText); pdf.text(gradeText, mL + 90, y + 5);
+        }
         y += 18;
       }
 
@@ -504,7 +534,7 @@ export default function ResultsPage() {
         if (idx % 2 === 0) { pdf.setFillColor(248, 250, 252); pdf.rect(mL, y, contentW, 7, 'F'); }
         const sc = sectionColors[section.id] || C.text;
         pdf.setFillColor(...sc); pdf.circle(mL + 4, y + 3.5, 1.5, 'F');
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...C.text);
+        setFont(false, section.title); pdf.setFontSize(8.5); pdf.setTextColor(...C.text);
         pdf.text(section.title, mL + 9, y + 5);
         const scoreStr = sTotal > 0 ? `${sCorrect}/${sTotal} (${pct}%)` : (isStillGrading ? 'Grading...' : 'N/A');
         pdf.text(scoreStr, mL + contentW - 40, y + 5, { align: 'center' });
@@ -518,7 +548,7 @@ export default function ResultsPage() {
         addSectionBanner(lang === 'en' ? 'Proficiency Report' : '\u80fd\u529b\u8bc4\u4f30\u62a5\u544a', C.accent, [237, 233, 254]);
         checkPage(14);
         drawRect(mL, y - 2, 28, 10, C.accent, 2);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
+        setFont(true, report.languageLevel); pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
         pdf.text(report.languageLevel, mL + 14, y + 4.5, { align: 'center' });
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...C.textMuted);
         pdf.text('CEFR Level', mL + 32, y + 4.5); y += 14;
@@ -557,7 +587,7 @@ export default function ResultsPage() {
           const wrongQs = section.questions.filter(q => !q.isCorrect);
           if (wrongQs.length === 0) continue;
           checkPage(10);
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...C.text);
+          setFont(true, section.sectionTitle); pdf.setFontSize(10); pdf.setTextColor(...C.text);
           pdf.setFillColor(...(sectionColors[section.sectionId] || C.text));
           pdf.circle(mL + 2, y + 1.5, 1.5, 'F');
           pdf.text(section.sectionTitle, mL + 7, y + 2); y += 8;
@@ -592,10 +622,11 @@ export default function ResultsPage() {
           const wrongReading = readingSubItems.filter(item => { const r = getReadingResult(item.id); return r && !r.isCorrect; });
           if (wrongReading.length > 0) {
             checkPage(10);
-            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...C.text);
+            const readingTitle = lang === 'en' ? 'Reading Comprehension' : '\u9605\u8bfb\u7406\u89e3';
+            setFont(true, readingTitle); pdf.setFontSize(10); pdf.setTextColor(...C.text);
             pdf.setFillColor(...sectionColors.reading);
             pdf.circle(mL + 2, y + 1.5, 1.5, 'F');
-            pdf.text(lang === 'en' ? 'Reading Comprehension' : '\u9605\u8bfb\u7406\u89e3', mL + 7, y + 2); y += 8;
+            pdf.text(readingTitle, mL + 7, y + 2); y += 8;
 
             for (const item of wrongReading) {
               const r = getReadingResult(item.id);
@@ -631,8 +662,9 @@ export default function ResultsPage() {
         drawRect(mL, y - 2, 32, 10, C.rose, 2);
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
         pdf.text(`${writingResult.score} / ${writingResult.maxScore}`, mL + 16, y + 4.5, { align: 'center' });
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...C.textMuted);
-        pdf.text(lang === 'en' ? 'Writing Score' : '\u5199\u4f5c\u5206\u6570', mL + 36, y + 4.5);
+        const writingScoreLabel = lang === 'en' ? 'Writing Score' : '\u5199\u4f5c\u5206\u6570';
+        setFont(false, writingScoreLabel); pdf.setFontSize(9); pdf.setTextColor(...C.textMuted);
+        pdf.text(writingScoreLabel, mL + 36, y + 4.5);
         y += 14;
         addText(lang === 'en' ? 'Overall Feedback' : '\u603b\u4f53\u53cd\u9988', mL, 10, true, C.text);
         addText(lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn, mL + 2, 9.5, false, C.textMuted);
@@ -670,9 +702,19 @@ export default function ResultsPage() {
 
       addPageFooter();
       const nameSlug = studentInfo?.name ? `_${studentInfo.name.replace(/\s+/g, '_')}` : '';
-      pdf.save(`${paperName}_Assessment_Report${nameSlug}_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (err) {
-      console.error('PDF generation failed:', err);
+      const fileName = `${paperName}_Report${nameSlug}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      // Use manual blob download instead of pdf.save() to avoid 0-byte file issue
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err: any) {
+      console.error('[PDF] PDF generation failed:', err?.message || err, err?.stack);
     } finally {
       setIsDownloading(false);
     }
