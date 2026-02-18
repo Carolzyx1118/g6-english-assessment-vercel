@@ -664,21 +664,17 @@ function WIDADragDropGrammarSection({
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
   const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
 
-  const usedWords = new Set<string>();
-  questions.forEach(q => {
-    const ans = getAnswer(sectionId, q.id);
-    if (ans && typeof ans === 'string') usedWords.add(ans);
-  });
+  // Words are reusable - no tracking of used words
 
   const handleDragStart = (e: React.DragEvent, item: { letter: string; word: string }) => {
     setDraggedWord(item);
     e.dataTransfer.setData('text/plain', item.word);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = 'copy';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleDrop = (e: React.DragEvent, questionId: number) => {
@@ -691,8 +687,7 @@ function WIDADragDropGrammarSection({
   };
 
   const handleWordClick = (item: { letter: string; word: string }) => {
-    if (usedWords.has(item.word) && !questions.some(q => getAnswer(sectionId, q.id) === item.word)) return;
-    setSelectedWord(item);
+    setSelectedWord(prev => prev?.word === item.word ? null : item);
   };
 
   const handleBlankClick = (questionId: number) => {
@@ -732,12 +727,12 @@ function WIDADragDropGrammarSection({
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
           Word Bank
           <span className="ml-2 text-xs font-normal text-amber-500 normal-case">
-            (Drag words to blanks, or click to select)
+            (Drag words to blanks — words can be reused)
           </span>
         </h3>
         <div className="flex flex-wrap gap-2">
           {wordBank.map(({ letter, word }) => {
-            const isUsed = usedWords.has(word);
+            const isUsed = false; // Words are always available for reuse
             const isSelected = selectedWord?.word === word;
             return (
               <div

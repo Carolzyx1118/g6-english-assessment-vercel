@@ -89,3 +89,4 @@
 - [x] G2-3 Part 4 Reading Part 1: Implement drag-and-drop image matching to avoid duplicate images
 - [x] Fix G2-3 Part 2 Grammar: display each fill-in sentence on its own line with sequential question numbers from Q1
 - [x] Fix G2-3 PDF export: fix Chinese font garbled text and include student info
+- [x] Allow word bank items to be reusable (multi-select/drag) - same word can be placed in multiple blanks
