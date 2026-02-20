@@ -123,29 +123,18 @@ function HistoryContent() {
     return { grade: 'D', color: 'bg-red-100 text-red-700 border-red-200' };
   };
 
-  const handleDownloadPDF = async (recordId: number) => {
-    setDownloadingId(recordId);
+  const handleDownloadPDF = (fullRecord: NonNullable<typeof detail>) => {
+    setDownloadingId(fullRecord.id);
     try {
-      // Fetch the full record from the API
-      // We need to use the detail if it's already loaded, otherwise we'll use the trpc client directly
-      const fullRecord = selectedId === recordId && detail ? detail : null;
-      if (!fullRecord) {
-        // We need to expand this record first to load its data
-        setSelectedId(recordId);
-        // Wait a bit for the query to load
-        setTimeout(async () => {
-          setDownloadingId(null);
-        }, 500);
-        return;
-      }
-
       const pdfData: PDFData = {
         studentName: fullRecord.studentName,
         studentGrade: fullRecord.studentGrade,
+        paperId: fullRecord.paperId,
         paperTitle: fullRecord.paperTitle,
         totalCorrect: fullRecord.totalCorrect,
         totalQuestions: fullRecord.totalQuestions,
         totalTimeSeconds: fullRecord.totalTimeSeconds,
+        answersJson: fullRecord.answersJson,
         scoreBySectionJson: fullRecord.scoreBySectionJson,
         sectionTimingsJson: fullRecord.sectionTimingsJson,
         readingResultsJson: fullRecord.readingResultsJson,
@@ -155,7 +144,7 @@ function HistoryContent() {
         createdAt: fullRecord.createdAt,
       };
 
-      await generateReportPDF(pdfData);
+      generateReportPDF(pdfData);
     } catch (err) {
       console.error('[History] PDF download failed:', err);
     } finally {
@@ -363,7 +352,7 @@ function HistoryContent() {
                               disabled={downloadingId === r.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDownloadPDF(r.id);
+                                if (detail) handleDownloadPDF(detail);
                               }}
                             >
                               {downloadingId === r.id ? (

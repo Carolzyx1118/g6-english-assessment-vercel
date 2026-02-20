@@ -1,8 +1,10 @@
 /**
  * Shared PDF generation utility for admin history page.
  * Generates English-only assessment reports from database records.
+ * Shows EVERY question with full details including unanswered ones.
  */
 import jsPDF from 'jspdf';
+import { getPaperById, type Paper, type Section, type Question } from '@/data/papers';
 
 // ── Type definitions matching the JSON stored in the database ──
 
@@ -54,10 +56,12 @@ type ReportResult = {
 export interface PDFData {
   studentName: string;
   studentGrade: string | null;
+  paperId: string;
   paperTitle: string;
   totalCorrect: number;
   totalQuestions: number;
   totalTimeSeconds: number | null;
+  answersJson: string;
   scoreBySectionJson: string | null;
   sectionTimingsJson: string | null;
   readingResultsJson: string | null;
@@ -65,6 +69,18 @@ export interface PDFData {
   explanationsJson: string | null;
   reportJson: string | null;
   createdAt: Date | string;
+}
+
+// ── Represents a single question detail for the PDF ──
+interface QuestionDetail {
+  questionNum: string;       // e.g. "Q1", "Q5(a)"
+  questionText: string;      // The question text
+  userAnswer: string;        // Student's answer or "Not Answered"
+  correctAnswer: string;     // The correct answer
+  isCorrect: boolean;        // Whether the student got it right
+  isAnswered: boolean;       // Whether the student answered at all
+  explanation?: string;      // AI explanation if available
+  tip?: string;              // AI tip if available
 }
 
 function formatTime(totalSeconds: number): string {
@@ -78,7 +94,261 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
   try { return JSON.parse(json) as T; } catch { return fallback; }
 }
 
-export async function generateReportPDF(data: PDFData): Promise<void> {
+/**
+ * Build detailed question info for auto-gradable sections (vocabulary, grammar, listening).
+ * This reconstructs the same logic as ResultsPage's detailedResults.
+ */
+function buildAutoGradableDetails(
+  section: Section,
+  answers: Record<string, string | number>,
+  explanationsMap: Map<number, ExplanationResult>,
+): QuestionDetail[] {
+  const details: QuestionDetail[] = [];
+  for (const q of section.questions) {
+    const key = `${section.id}:${q.id}`;
+    const userAns = answers[key];
+    const isAnswered = userAns !== undefined && userAns !== '';
+
+    if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
+      const userIdx = isAnswered ? Number(userAns) : -1;
+      const userText = userIdx >= 0 ? (q.options[userIdx]?.text || q.options[userIdx]?.label || `Option ${userIdx + 1}`) : 'Not Answered';
+      const correctText = q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label || `Option ${q.correctAnswer + 1}`;
+      const isCorrect = userIdx === q.correctAnswer;
+      const expl = explanationsMap.get(q.id);
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: userText,
+        correctAnswer: correctText,
+        isCorrect: isAnswered && isCorrect,
+        isAnswered,
+        explanation: expl?.explanation_en,
+        tip: expl?.tip_en,
+      });
+    } else if (q.type === 'mcq') {
+      const userIdx = isAnswered ? Number(userAns) : -1;
+      const userText = userIdx >= 0 ? q.options[userIdx] : 'Not Answered';
+      const isCorrect = userIdx === q.correctAnswer;
+      const expl = explanationsMap.get(q.id);
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question.replace('___', q.highlightWord || '___'),
+        userAnswer: userText,
+        correctAnswer: q.options[q.correctAnswer],
+        isCorrect: isAnswered && isCorrect,
+        isAnswered,
+        explanation: expl?.explanation_en,
+        tip: expl?.tip_en,
+      });
+    } else if (q.type === 'fill-blank') {
+      const wordBank = section.wordBank;
+      const correctWord = wordBank?.find((w: any) => w.letter === q.correctAnswer);
+      const userWord = isAnswered ? wordBank?.find((w: any) => w.letter === String(userAns)) : null;
+      const isCorrect = isAnswered && String(userAns).toUpperCase() === q.correctAnswer.toUpperCase();
+      const expl = explanationsMap.get(q.id);
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: `Fill in blank ${q.id}`,
+        userAnswer: isAnswered ? (userWord ? `${userWord.letter} (${userWord.word})` : String(userAns)) : 'Not Answered',
+        correctAnswer: correctWord ? `${correctWord.letter} (${correctWord.word})` : q.correctAnswer,
+        isCorrect,
+        isAnswered,
+        explanation: expl?.explanation_en,
+        tip: expl?.tip_en,
+      });
+    } else if (q.type === 'checkbox') {
+      const userArr = isAnswered ? (userAns as unknown as number[]) : [];
+      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not Answered';
+      const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
+      const sorted1 = Array.isArray(userArr) ? [...userArr].sort() : [];
+      const sorted2 = [...q.correctAnswers].sort();
+      const isCorrect = JSON.stringify(sorted1) === JSON.stringify(sorted2);
+      const expl = explanationsMap.get(q.id);
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: userLabels,
+        correctAnswer: correctLabels,
+        isCorrect: isAnswered && isCorrect,
+        isAnswered: Array.isArray(userArr) && userArr.length > 0,
+        explanation: expl?.explanation_en,
+        tip: expl?.tip_en,
+      });
+    }
+  }
+  return details;
+}
+
+/**
+ * Build detailed question info for reading section.
+ * Reading questions may be AI-graded (open-ended types) or auto-gradable (wordbank-fill, story-fill).
+ */
+function buildReadingDetails(
+  section: Section,
+  answers: Record<string, string | number>,
+  readingResults: ReadingGradingResult[] | null,
+  explanationsMap: Map<number, ExplanationResult>,
+): QuestionDetail[] {
+  const details: QuestionDetail[] = [];
+  const readingMap = new Map<string, ReadingGradingResult>();
+  if (readingResults) {
+    for (const r of readingResults) readingMap.set(String(r.questionId), r);
+  }
+
+  for (const q of section.questions) {
+    const key = `${section.id}:${q.id}`;
+    const userAns = answers[key];
+    const isAnswered = userAns !== undefined && userAns !== '';
+
+    if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
+      // These are AI-graded via readingResults
+      const rr = readingMap.get(String(q.id));
+      const expl = explanationsMap.get(q.id);
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: isAnswered ? String(userAns) : 'Not Answered',
+        correctAnswer: q.correctAnswer,
+        isCorrect: rr ? rr.isCorrect : (isAnswered && String(userAns).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()),
+        isAnswered,
+        explanation: rr?.explanation_en || expl?.explanation_en,
+        tip: expl?.tip_en,
+      });
+    } else if (q.type === 'true-false') {
+      const parsed: Record<string, boolean> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      for (const stmt of q.statements) {
+        const subKey = `${q.id}-${stmt.label}`;
+        const rr = readingMap.get(subKey);
+        const subAnswered = parsed[stmt.label] !== undefined;
+        details.push({
+          questionNum: `Q${q.id}(${stmt.label})`,
+          questionText: `True or False: "${stmt.statement}"`,
+          userAnswer: subAnswered ? (parsed[stmt.label] ? 'True' : 'False') : 'Not Answered',
+          correctAnswer: stmt.isTrue ? 'True' : 'False',
+          isCorrect: rr ? rr.isCorrect : (subAnswered && parsed[stmt.label] === stmt.isTrue),
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      }
+    } else if (q.type === 'open-ended' && q.subQuestions) {
+      const parsed: Record<string, string> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      for (const sub of q.subQuestions) {
+        const subKey = `${q.id}-${sub.label}`;
+        const rr = readingMap.get(subKey);
+        const subAnswered = !!parsed[sub.label];
+        details.push({
+          questionNum: `Q${q.id}(${sub.label})`,
+          questionText: `${q.question} — ${sub.question}`,
+          userAnswer: subAnswered ? parsed[sub.label] : 'Not Answered',
+          correctAnswer: sub.answer,
+          isCorrect: rr ? rr.isCorrect : false,
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      }
+    } else if (q.type === 'open-ended' && !q.subQuestions) {
+      const rr = readingMap.get(String(q.id));
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: isAnswered ? String(userAns) : 'Not Answered',
+        correctAnswer: q.answer || '',
+        isCorrect: rr ? rr.isCorrect : false,
+        isAnswered,
+        explanation: rr?.explanation_en,
+      });
+    } else if (q.type === 'table') {
+      const parsed: Record<string, string> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      q.rows.forEach((row: any, i: number) => {
+        const label = String.fromCharCode(97 + i);
+        const subKey = `${q.id}-${label}`;
+        const rr = readingMap.get(subKey);
+        const val = parsed[`row${i}`] || parsed[row.blankField + i] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
+        const subAnswered = !!val;
+        details.push({
+          questionNum: `Q${q.id}(${label})`,
+          questionText: `Complete the table for: "${row.situation}" — fill in the ${row.blankField}`,
+          userAnswer: subAnswered ? val : 'Not Answered',
+          correctAnswer: row.answer,
+          isCorrect: rr ? rr.isCorrect : false,
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      });
+    } else if (q.type === 'reference') {
+      const parsed: Record<string, string> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      q.items.forEach((item: any, i: number) => {
+        const label = String.fromCharCode(97 + i);
+        const subKey = `${q.id}-${label}`;
+        const rr = readingMap.get(subKey);
+        const val = parsed[item.word] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
+        const subAnswered = !!val;
+        details.push({
+          questionNum: `Q${q.id}(${label})`,
+          questionText: `What does "${item.word}" (${item.lineRef}) refer to?`,
+          userAnswer: subAnswered ? val : 'Not Answered',
+          correctAnswer: item.answer,
+          isCorrect: rr ? rr.isCorrect : false,
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      });
+    } else if (q.type === 'order') {
+      const parsed: Record<string, any> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      q.events.forEach((event: string, i: number) => {
+        const label = String.fromCharCode(97 + i);
+        const subKey = `${q.id}-${label}`;
+        const rr = readingMap.get(subKey);
+        const val = parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
+        const subAnswered = !!val;
+        details.push({
+          questionNum: `Q${q.id}(${label})`,
+          questionText: `Order: "${event}"`,
+          userAnswer: subAnswered ? String(val) : 'Not Answered',
+          correctAnswer: String(q.correctOrder[i]),
+          isCorrect: rr ? rr.isCorrect : false,
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      });
+    } else if (q.type === 'phrase') {
+      const parsed: Record<string, any> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+      q.items.forEach((item: any, i: number) => {
+        const label = String.fromCharCode(97 + i);
+        const subKey = `${q.id}-${label}`;
+        const rr = readingMap.get(subKey);
+        const val = parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
+        const subAnswered = !!val;
+        details.push({
+          questionNum: `Q${q.id}(${label})`,
+          questionText: item.clue,
+          userAnswer: subAnswered ? String(val) : 'Not Answered',
+          correctAnswer: item.answer,
+          isCorrect: rr ? rr.isCorrect : false,
+          isAnswered: subAnswered,
+          explanation: rr?.explanation_en,
+        });
+      });
+    } else if (q.type === 'checkbox') {
+      const userArr = isAnswered ? (userAns as unknown as number[]) : [];
+      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not Answered';
+      const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
+      const rr = readingMap.get(String(q.id));
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: userLabels,
+        correctAnswer: correctLabels,
+        isCorrect: rr ? rr.isCorrect : false,
+        isAnswered: Array.isArray(userArr) && userArr.length > 0,
+        explanation: rr?.explanation_en,
+      });
+    }
+  }
+  return details;
+}
+
+export function generateReportPDF(data: PDFData): void {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -88,24 +358,9 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
   let y = 0;
   let pageNum = 1;
 
-  // Load Chinese font for CJK support (student names may be Chinese)
-  let hasCJKFont = false;
-  try {
-    const { CJK_FONT_BASE64 } = await import('@/lib/cjk-font-base64');
-    pdf.addFileToVFS('DroidSansCJK.ttf', CJK_FONT_BASE64);
-    pdf.addFont('DroidSansCJK.ttf', 'DroidSans', 'normal');
-    hasCJKFont = true;
-  } catch (e) {
-    console.warn('[PDF] Failed to load CJK font:', e);
-  }
-
-  const hasChinese = (s: string) => /[\u4e00-\u9fff\u3400-\u4dbf]/.test(s);
-  const setFont = (bold: boolean, txt?: string) => {
-    if (hasCJKFont && txt && hasChinese(txt)) {
-      pdf.setFont('DroidSans', 'normal');
-    } else {
-      pdf.setFont('helvetica', bold ? 'bold' : 'normal');
-    }
+  // English-only report — use built-in helvetica font
+  const setFont = (bold: boolean, _txt?: string) => {
+    pdf.setFont('helvetica', bold ? 'bold' : 'normal');
   };
 
   // ── Color palette ──
@@ -123,6 +378,8 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
     textMuted: [100, 116, 139] as [number, number, number],
     bgLight: [248, 250, 252] as [number, number, number],
     border: [226, 232, 240] as [number, number, number],
+    notAnswered: [156, 163, 175] as [number, number, number],
+    notAnsweredBg: [243, 244, 246] as [number, number, number],
   };
   const sectionColors: Record<string, [number, number, number]> = {
     vocabulary: [16, 185, 129],
@@ -191,12 +448,22 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
   };
 
   // ── Parse stored JSON data ──
+  const answers = safeParseJSON<Record<string, string | number>>(data.answersJson, {});
   const bySection = safeParseJSON<Record<string, { correct: number; total: number }>>(data.scoreBySectionJson, {});
   const sectionTimings = safeParseJSON<Record<string, number>>(data.sectionTimingsJson, {});
   const readingResults = safeParseJSON<ReadingGradingResult[] | null>(data.readingResultsJson, null);
   const writingResult = safeParseJSON<WritingEvalResult | null>(data.writingResultJson, null);
   const explanations = safeParseJSON<ExplanationResult[] | null>(data.explanationsJson, null);
   const report = safeParseJSON<ReportResult | null>(data.reportJson, null);
+
+  // Build explanations lookup map
+  const explanationsMap = new Map<number, ExplanationResult>();
+  if (explanations) {
+    for (const e of explanations) explanationsMap.set(e.questionId, e);
+  }
+
+  // Get paper data for question details
+  const paper = getPaperById(data.paperId);
 
   // Calculate total score including AI-graded sections
   const readingAIScore = readingResults ? readingResults.reduce((sum, r) => sum + r.score, 0) : 0;
@@ -241,9 +508,7 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
   pdf.setFont('helvetica', 'bold');
   pdf.text(namePrefix, mL + 7, y + 5);
   const prefixWidth = pdf.getTextWidth(namePrefix);
-  if (hasCJKFont && hasChinese(data.studentName)) {
-    pdf.setFont('DroidSans', 'normal');
-  }
+  pdf.setFont('helvetica', 'normal');
   pdf.text(data.studentName, mL + 7 + prefixWidth, y + 5);
   if (data.studentGrade) {
     const gradeText = `Grade: ${data.studentGrade}`;
@@ -295,10 +560,8 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
   if (readingResults && !allSectionIds.includes('reading')) allSectionIds.push('reading');
   if (writingResult && !allSectionIds.includes('writing')) allSectionIds.push('writing');
 
-  // Preferred order
   const sectionOrder = ['vocabulary', 'grammar', 'listening', 'reading', 'writing'];
   const orderedSections = sectionOrder.filter(s => allSectionIds.includes(s));
-  // Add any remaining sections not in the preferred order
   allSectionIds.forEach(s => { if (!orderedSections.includes(s)) orderedSections.push(s); });
 
   orderedSections.forEach((sectionId, idx) => {
@@ -381,41 +644,125 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
     addDivider();
   }
 
-  // ── READING WRONG ANSWERS ──
-  if (readingResults) {
-    const wrongReading = readingResults.filter(r => !r.isCorrect);
-    if (wrongReading.length > 0) {
-      addSectionBanner('Wrong Answers - Reading Comprehension', C.danger, C.dangerLight);
-      addGap(3);
+  // ══════════════════════════════════════════════════════════════
+  // ── COMPLETE QUESTION DETAILS (ALL QUESTIONS, EVERY SECTION) ──
+  // ══════════════════════════════════════════════════════════════
+  if (paper) {
+    for (const section of paper.sections) {
+      if (section.id === 'writing') continue; // Writing handled separately below
 
-      for (const r of wrongReading) {
-        checkPage(20);
-        drawRect(mL, y - 2, contentW, 14, C.bgLight, 2);
-        addText(`Q${r.questionId}`, mL + 4, 9.5, true, C.text, contentW - 10);
-        addGap(1);
-        addText(`> ${r.feedback_en}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-        addText(`> ${r.explanation_en}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-        addGap(4);
+      const sc = sectionColors[section.id] || C.primary;
+      const sectionTitle = section.id.charAt(0).toUpperCase() + section.id.slice(1);
+      addSectionBanner(`${sectionTitle} — Question Details`, sc, [
+        Math.min(255, sc[0] + 200),
+        Math.min(255, sc[1] + 200),
+        Math.min(255, sc[2] + 200),
+      ]);
+
+      let details: QuestionDetail[];
+      if (section.id === 'reading') {
+        details = buildReadingDetails(section, answers, readingResults, explanationsMap);
+      } else {
+        details = buildAutoGradableDetails(section, answers, explanationsMap);
       }
-      addDivider();
-    }
-  }
 
-  // ── WRONG ANSWERS WITH EXPLANATIONS ──
-  if (explanations && explanations.length > 0) {
-    addSectionBanner('Wrong Answers & Explanations', C.danger, C.dangerLight);
-    addGap(3);
+      if (details.length === 0) {
+        addText('No questions found for this section.', mL + 4, 9, false, C.textMuted);
+        addGap(4);
+        continue;
+      }
 
-    for (const expl of explanations) {
-      checkPage(20);
-      drawRect(mL, y - 2, contentW, 14, C.bgLight, 2);
-      addText(`Q${expl.questionId}`, mL + 4, 9.5, true, C.text, contentW - 10);
-      addGap(1);
-      addText(`> ${expl.explanation_en}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-      addText(`Tip: ${expl.tip_en}`, mL + 6, 8.5, false, C.amber, contentW - 14);
-      addGap(4);
+      for (const detail of details) {
+        // Estimate space needed for this question block
+        checkPage(28);
+
+        // Question number badge + status indicator
+        const statusColor = !detail.isAnswered ? C.notAnswered : detail.isCorrect ? C.success : C.danger;
+        const statusBg = !detail.isAnswered ? C.notAnsweredBg : detail.isCorrect ? C.successLight : C.dangerLight;
+        const statusLabel = !detail.isAnswered ? 'NOT ANSWERED' : detail.isCorrect ? 'CORRECT' : 'WRONG';
+
+        // Background card for the question
+        drawRect(mL, y - 1, contentW, 6, C.bgLight, 2);
+
+        // Question number
+        setFont(true);
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(...C.text);
+        pdf.text(detail.questionNum, mL + 4, y + 3);
+
+        // Status badge
+        const badgeX = mL + contentW - 30;
+        drawRect(badgeX, y - 0.5, 28, 5, statusBg, 2);
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(...statusColor);
+        setFont(true);
+        pdf.text(statusLabel, badgeX + 14, y + 2.8, { align: 'center' });
+
+        y += 8;
+
+        // Question text
+        addText(detail.questionText, mL + 6, 8.5, false, C.text, contentW - 14);
+        addGap(1);
+
+        // Student's answer
+        if (detail.isAnswered) {
+          const ansColor = detail.isCorrect ? C.success : C.danger;
+          setFont(true);
+          pdf.setFontSize(8);
+          pdf.setTextColor(...C.textMuted);
+          pdf.text('Student Answer:', mL + 6, y);
+          const labelW = pdf.getTextWidth('Student Answer: ');
+          setFont(false, detail.userAnswer);
+          pdf.setTextColor(...ansColor);
+          const ansLines = pdf.splitTextToSize(detail.userAnswer, contentW - 14 - labelW);
+          pdf.text(ansLines, mL + 6 + labelW, y);
+          y += ansLines.length * 3.6 + 1;
+        } else {
+          setFont(true);
+          pdf.setFontSize(8);
+          pdf.setTextColor(...C.textMuted);
+          pdf.text('Student Answer:', mL + 6, y);
+          const labelW = pdf.getTextWidth('Student Answer: ');
+          setFont(false);
+          pdf.setTextColor(...C.notAnswered);
+          pdf.text('Not Answered', mL + 6 + labelW, y);
+          y += 4;
+        }
+
+        // Correct answer
+        setFont(true);
+        pdf.setFontSize(8);
+        pdf.setTextColor(...C.textMuted);
+        pdf.text('Correct Answer:', mL + 6, y);
+        const correctLabelW = pdf.getTextWidth('Correct Answer: ');
+        setFont(false, detail.correctAnswer);
+        pdf.setTextColor(...C.success);
+        const correctLines = pdf.splitTextToSize(detail.correctAnswer, contentW - 14 - correctLabelW);
+        pdf.text(correctLines, mL + 6 + correctLabelW, y);
+        y += correctLines.length * 3.6 + 1;
+
+        // Explanation (if available and question was answered wrong — not for unanswered questions)
+        if (detail.explanation && detail.isAnswered && !detail.isCorrect) {
+          addGap(1);
+          addText(`Explanation: ${detail.explanation}`, mL + 6, 8, false, C.textMuted, contentW - 14);
+        }
+
+        // Tip (if available, only for answered-wrong questions)
+        if (detail.tip && detail.isAnswered && !detail.isCorrect) {
+          addText(`Tip: ${detail.tip}`, mL + 6, 8, false, C.amber, contentW - 14);
+        }
+
+        addGap(4);
+
+        // Thin separator between questions
+        pdf.setDrawColor(...C.border);
+        pdf.setLineWidth(0.15);
+        pdf.line(mL + 4, y, pageW - mR - 4, y);
+        addGap(3);
+      }
+
+      addGap(2);
     }
-    addDivider();
   }
 
   // ── WRITING EVALUATION ──
@@ -480,13 +827,5 @@ export async function generateReportPDF(data: PDFData): Promise<void> {
   // ── Download ──
   const nameSlug = data.studentName ? `_${data.studentName.replace(/\s+/g, '_')}` : '';
   const fileName = `${data.paperTitle}_Report${nameSlug}_${new Date(data.createdAt).toISOString().slice(0, 10)}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const blobUrl = URL.createObjectURL(pdfBlob);
-  const link = document.createElement('a');
-  link.href = blobUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  pdf.save(fileName);
 }
