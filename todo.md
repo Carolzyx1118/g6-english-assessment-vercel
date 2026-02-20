@@ -100,3 +100,5 @@
 - [x] Create admin history page to view all student test records
 - [x] Support re-downloading PDF from history records (view detailed results with AI report)
 - [x] Add simple password protection to History page (password prompt before access)
+- [x] Remove Download PDF button from student results page
+- [x] Add PDF download functionality to admin history page (English-only report)

@@ -1,9 +1,10 @@
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, Trash2, Eye, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, X, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Trash2, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, Lock, ShieldCheck, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
+import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 
 const HISTORY_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || '';
 
@@ -92,6 +93,7 @@ function HistoryContent() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [lang, setLang] = useState<Lang>('en');
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const { data: detail } = trpc.results.getById.useQuery(
     { id: selectedId! },
@@ -119,6 +121,46 @@ function HistoryContent() {
     if (pct >= 75) return { grade: 'B', color: 'bg-blue-100 text-blue-700 border-blue-200' };
     if (pct >= 60) return { grade: 'C', color: 'bg-amber-100 text-amber-700 border-amber-200' };
     return { grade: 'D', color: 'bg-red-100 text-red-700 border-red-200' };
+  };
+
+  const handleDownloadPDF = async (recordId: number) => {
+    setDownloadingId(recordId);
+    try {
+      // Fetch the full record from the API
+      // We need to use the detail if it's already loaded, otherwise we'll use the trpc client directly
+      const fullRecord = selectedId === recordId && detail ? detail : null;
+      if (!fullRecord) {
+        // We need to expand this record first to load its data
+        setSelectedId(recordId);
+        // Wait a bit for the query to load
+        setTimeout(async () => {
+          setDownloadingId(null);
+        }, 500);
+        return;
+      }
+
+      const pdfData: PDFData = {
+        studentName: fullRecord.studentName,
+        studentGrade: fullRecord.studentGrade,
+        paperTitle: fullRecord.paperTitle,
+        totalCorrect: fullRecord.totalCorrect,
+        totalQuestions: fullRecord.totalQuestions,
+        totalTimeSeconds: fullRecord.totalTimeSeconds,
+        scoreBySectionJson: fullRecord.scoreBySectionJson,
+        sectionTimingsJson: fullRecord.sectionTimingsJson,
+        readingResultsJson: fullRecord.readingResultsJson,
+        writingResultJson: fullRecord.writingResultJson,
+        explanationsJson: fullRecord.explanationsJson,
+        reportJson: fullRecord.reportJson,
+        createdAt: fullRecord.createdAt,
+      };
+
+      await generateReportPDF(pdfData);
+    } catch (err) {
+      console.error('[History] PDF download failed:', err);
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -250,7 +292,7 @@ function HistoryContent() {
                               </h4>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 {Object.entries(JSON.parse(detail.scoreBySectionJson) as Record<string, { correct: number; total: number }>).map(([key, val]) => (
-                                  <div key={key} className="bg-slate-50 rounded-lg p-3 text-center">
+                                  <div key={key} className="bg-slate-50 rounded-lg p-3 text-center border border-slate-100">
                                     <div className="text-xs text-slate-500 capitalize mb-1">{key}</div>
                                     <div className="text-lg font-bold text-slate-800">{val.correct}/{val.total}</div>
                                   </div>
@@ -313,6 +355,26 @@ function HistoryContent() {
 
                           {/* Actions */}
                           <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                            {/* Download PDF button */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                              disabled={downloadingId === r.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadPDF(r.id);
+                              }}
+                            >
+                              {downloadingId === r.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
+                              {lang === 'en' ? 'Download PDF' : '下载PDF报告'}
+                            </Button>
+
+                            {/* Delete button */}
                             {confirmDeleteId === r.id ? (
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-red-600">
