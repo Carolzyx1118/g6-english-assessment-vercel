@@ -99,3 +99,4 @@
 - [x] Auto-save test results to database after submission
 - [x] Create admin history page to view all student test records
 - [x] Support re-downloading PDF from history records (view detailed results with AI report)
+- [x] Add simple password protection to History page (password prompt before access)
