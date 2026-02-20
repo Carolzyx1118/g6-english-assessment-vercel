@@ -94,3 +94,8 @@
 - [x] Fix G6 Part 3 Reading Comprehension missing header/title image → removed all section images instead
 - [x] Remove all section header images from G6 paper (use plain color+icon style like G2-3)
 - [x] Add back-to-home button on student info form page
+- [x] Create database table for test results (student info, scores, answers, AI report)
+- [x] Create tRPC procedures for saving and querying test results
+- [x] Auto-save test results to database after submission
+- [x] Create admin history page to view all student test records
+- [x] Support re-downloading PDF from history records (view detailed results with AI report)

@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
+import { saveTestResult, getAllTestResults, getTestResultById, updateTestResultAI, deleteTestResult } from "./db";
 
 export const appRouter = router({
   system: systemRouter,
@@ -409,7 +410,90 @@ Respond in JSON format.`;
           timeAnalysis_en: '', timeAnalysis_cn: '',
         };
       }),
+   }),
+
+  // Test results CRUD
+  results: router({
+    save: publicProcedure
+      .input(z.object({
+        studentName: z.string(),
+        studentGrade: z.string().optional(),
+        paperId: z.string(),
+        paperTitle: z.string(),
+        totalCorrect: z.number(),
+        totalQuestions: z.number(),
+        totalTimeSeconds: z.number().optional(),
+        answersJson: z.string(),
+        scoreBySectionJson: z.string().optional(),
+        sectionTimingsJson: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await saveTestResult({
+          studentName: input.studentName,
+          studentGrade: input.studentGrade || null,
+          paperId: input.paperId,
+          paperTitle: input.paperTitle,
+          totalCorrect: input.totalCorrect,
+          totalQuestions: input.totalQuestions,
+          totalTimeSeconds: input.totalTimeSeconds || null,
+          answersJson: input.answersJson,
+          scoreBySectionJson: input.scoreBySectionJson || null,
+          sectionTimingsJson: input.sectionTimingsJson || null,
+        });
+        return { id };
+      }),
+
+    updateAI: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        readingResultsJson: z.string().optional(),
+        writingResultJson: z.string().optional(),
+        explanationsJson: z.string().optional(),
+        reportJson: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        const cleanUpdates: Record<string, string> = {};
+        if (updates.readingResultsJson) cleanUpdates.readingResultsJson = updates.readingResultsJson;
+        if (updates.writingResultJson) cleanUpdates.writingResultJson = updates.writingResultJson;
+        if (updates.explanationsJson) cleanUpdates.explanationsJson = updates.explanationsJson;
+        if (updates.reportJson) cleanUpdates.reportJson = updates.reportJson;
+        await updateTestResultAI(id, cleanUpdates);
+        return { success: true };
+      }),
+
+    list: publicProcedure.query(async () => {
+      const results = await getAllTestResults();
+      return results.map(r => ({
+        id: r.id,
+        studentName: r.studentName,
+        studentGrade: r.studentGrade,
+        paperId: r.paperId,
+        paperTitle: r.paperTitle,
+        totalCorrect: r.totalCorrect,
+        totalQuestions: r.totalQuestions,
+        totalTimeSeconds: r.totalTimeSeconds,
+        createdAt: r.createdAt,
+        hasReport: !!r.reportJson,
+        hasReadingResults: !!r.readingResultsJson,
+        hasWritingResult: !!r.writingResultJson,
+      }));
+    }),
+
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const result = await getTestResultById(input.id);
+        if (!result) return null;
+        return result;
+      }),
+
+    delete: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteTestResult(input.id);
+        return { success: true };
+      }),
   }),
 });
-
 export type AppRouter = typeof appRouter;

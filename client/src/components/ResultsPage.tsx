@@ -157,6 +157,12 @@ export default function ResultsPage() {
   const explainMutation = trpc.grading.explainWrongAnswers.useMutation();
   const reportMutation = trpc.grading.generateReport.useMutation();
 
+  // Auto-save to database
+  const saveResultMutation = trpc.results.save.useMutation();
+  const updateAIMutation = trpc.results.updateAI.useMutation();
+  const savedResultId = useRef<number | null>(null);
+  const hasSavedInitial = useRef(false);
+
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
     const readingSection = sections.find(s => s.id === 'reading');
@@ -282,6 +288,43 @@ export default function ResultsPage() {
   }, [getAnswer, sections]);
 
   // Send reading sub-items to AI for grading + writing evaluation
+  // Auto-save initial results to database
+  useEffect(() => {
+    if (hasSavedInitial.current) return;
+    hasSavedInitial.current = true;
+    saveResultMutation.mutate({
+      studentName: studentInfo?.name || 'Unknown',
+      studentGrade: studentInfo?.grade || undefined,
+      paperId: selectedPaper?.id || 'unknown',
+      paperTitle: selectedPaper?.title || 'Assessment',
+      totalCorrect: correct,
+      totalQuestions: total,
+      totalTimeSeconds: totalTime || undefined,
+      answersJson: JSON.stringify(state.answers),
+      scoreBySectionJson: JSON.stringify(bySection),
+      sectionTimingsJson: JSON.stringify(sectionTimings),
+    }, {
+      onSuccess: (data) => {
+        savedResultId.current = data.id ?? null;
+        console.log('[Results] Saved to database with id:', data.id);
+      },
+      onError: (err) => console.error('[Results] Failed to save:', err),
+    });
+  }, []);
+
+  // Update AI results in database when they become available
+  useEffect(() => {
+    if (!savedResultId.current) return;
+    const updates: Record<string, string> = {};
+    if (readingResults) updates.readingResultsJson = JSON.stringify(readingResults);
+    if (writingResult) updates.writingResultJson = JSON.stringify(writingResult);
+    if (explanations) updates.explanationsJson = JSON.stringify(explanations);
+    if (report) updates.reportJson = JSON.stringify(report);
+    if (Object.keys(updates).length > 0) {
+      updateAIMutation.mutate({ id: savedResultId.current, ...updates });
+    }
+  }, [readingResults, writingResult, explanations, report]);
+
   useEffect(() => {
     if (hasStartedGrading.current) return;
     hasStartedGrading.current = true;

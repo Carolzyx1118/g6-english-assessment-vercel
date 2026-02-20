@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, testResults, type InsertTestResult, type TestResult } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,44 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ── Test Results ──
+
+export async function saveTestResult(data: InsertTestResult): Promise<number | null> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save test result: database not available");
+    return null;
+  }
+  const [result] = await db.insert(testResults).values(data).$returningId();
+  return result?.id ?? null;
+}
+
+export async function getAllTestResults(): Promise<TestResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(testResults).orderBy(testResults.createdAt);
+}
+
+export async function getTestResultById(id: number): Promise<TestResult | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(testResults).where(eq(testResults.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function updateTestResultAI(id: number, updates: {
+  readingResultsJson?: string;
+  writingResultJson?: string;
+  explanationsJson?: string;
+  reportJson?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(testResults).set(updates).where(eq(testResults.id, id));
+}
+
+export async function deleteTestResult(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(testResults).where(eq(testResults.id, id));
+}

@@ -2,9 +2,10 @@ import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import type { Paper, Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList } from 'lucide-react';
 import { useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
+import { Link } from 'wouter';
 
 const HERO_IMAGE = 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-1_1771255551000_na1fn_aGVyby1iYW5uZXI.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTFfMTc3MTI1NTU1MTAwMF9uYTFmbl9hR1Z5YnkxaVlXNXVaWEkucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=I5fojTC3dYU1azrXcxeOhHGaexKXmznPAcGFS~lV8L7Mg4foEr2gVTG8bWCRAFcNxWpHkpz6nN2LYnhtbkVgpR6LJgFhSgixOlBrFTrn10YhLyMDjFH395DUPFebb3vmNWW4AtScobvWAmQKFCbyRkSCwV2lqQjc6UtGXWp0UNZVGZU93MZ-Lc6Tnjz7Y-~D1BRvpGWq8tZLrE1EeyFCN-2QxJNOaJrlvv0Zqp443MkcRgAiOKhqYi8Jux0MB8ue0LLEMJZ7GIRQOzu1lbf6FHGk5jHn3ctuue-nzVHvjc~hX60cyBA3odGGtWFaxd56S8rofjTUDitaGRwWStBX7A__';
 
@@ -58,6 +59,14 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-xl">
                 Choose an assessment paper to begin. Each paper tests different aspects of English proficiency with unique question formats and difficulty levels.
               </p>
+              <div className="mt-6">
+                <Link href="/history">
+                  <Button variant="outline" className="gap-2 text-slate-600 hover:text-blue-700 hover:border-blue-300">
+                    <ClipboardList className="w-4 h-4" />
+                    View Test History
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
 
             <motion.div

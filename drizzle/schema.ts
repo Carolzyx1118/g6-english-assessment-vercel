@@ -25,4 +25,43 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Test results table - stores all student assessment submissions.
+ * Answers, scores, AI grading results, and reports are stored as JSON.
+ */
+export const testResults = mysqlTable("testResults", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Student name entered before the test */
+  studentName: varchar("studentName", { length: 255 }).notNull(),
+  /** Student grade (optional) */
+  studentGrade: varchar("studentGrade", { length: 64 }),
+  /** Paper ID (e.g., 'wida-g2-3', 'huazhong-g6') */
+  paperId: varchar("paperId", { length: 128 }).notNull(),
+  /** Paper title for display */
+  paperTitle: varchar("paperTitle", { length: 255 }).notNull(),
+  /** Total correct answers */
+  totalCorrect: int("totalCorrect").notNull(),
+  /** Total questions */
+  totalQuestions: int("totalQuestions").notNull(),
+  /** Total time in seconds */
+  totalTimeSeconds: int("totalTimeSeconds"),
+  /** All answers as JSON: Record<string, string | number> */
+  answersJson: text("answersJson").notNull(),
+  /** Score breakdown by section as JSON */
+  scoreBySectionJson: text("scoreBySectionJson"),
+  /** Section timings as JSON */
+  sectionTimingsJson: text("sectionTimingsJson"),
+  /** AI reading grading results as JSON */
+  readingResultsJson: text("readingResultsJson"),
+  /** AI writing evaluation results as JSON */
+  writingResultJson: text("writingResultJson"),
+  /** AI explanations as JSON */
+  explanationsJson: text("explanationsJson"),
+  /** AI proficiency report as JSON */
+  reportJson: text("reportJson"),
+  /** Submission timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TestResult = typeof testResults.$inferSelect;
+export type InsertTestResult = typeof testResults.$inferInsert;
