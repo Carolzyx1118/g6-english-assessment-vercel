@@ -84,17 +84,40 @@ The paper has SECTIONS, each section contains QUESTIONS. Here are the supported 
 10. **writing**: Writing prompt.
     { "id": 1, "type": "writing", "topic": "My Best Friend", "instructions": "Write about your best friend.", "wordCount": "80-120 words", "prompts": ["Who is your best friend?", "What do you do together?"] }
 
-11. **table**: Table completion question.
-    { "id": 1, "type": "table", "question": "Complete the table", "rows": [{"situation": "At the park", "thought": "I want to play", "action": "", "blankField": "action", "answer": "Go to the swings"}] }
+11. **table**: Table completion question. Each row MUST be an object with situation, thought, action, blankField, and answer.
+    MUST use this EXACT format:
+    { "id": 1, "type": "table", "question": "Complete the table", "rows": [
+      {"situation": "The old man offered his umbrella.", "thought": "Mother had doubts.", "action": "", "blankField": "action", "answer": "She gave him five dollars."},
+      {"situation": "Mother spotted the old man.", "thought": "", "action": "Mother followed him.", "blankField": "thought", "answer": "Mother suspected he was lying."}
+    ]}
+    CRITICAL: rows MUST be an array of objects with {situation, thought, action, blankField, answer}.
+    - blankField is "thought" or "action" - it indicates which cell the student fills in.
+    - The blank cell should have an empty string "" as its value.
+    - The answer field contains the correct answer for the blank cell.
+    - NEVER use rows as column headers like ["situation", "thought", "action"].
+    - NEVER use separate tableData/tableData2 arrays.
 
-12. **reference**: Word reference question.
-    { "id": 1, "type": "reference", "question": "What do these words refer to?", "items": [{"word": "it", "lineRef": "line 3", "answer": "the book"}] }
+12. **reference**: Word reference question. Each item MUST be an object with word, lineRef, and answer.
+    MUST use this EXACT format:
+    { "id": 1, "type": "reference", "question": "What do these words refer to?", "items": [
+      {"word": "it", "lineRef": "line 3", "answer": "the book"},
+      {"word": "them", "lineRef": "paragraph 2", "answer": "the children"}
+    ]}
+    CRITICAL: items MUST be an array of objects with {word, lineRef, answer}.
+    - NEVER use items as a string array like ["it (line 3)", "them (line 8)"].
+    - NEVER use a separate answers array.
 
 13. **order**: Event ordering question.
     { "id": 1, "type": "order", "question": "Put the events in order", "events": ["Tom went home", "Tom ate dinner", "Tom slept"], "correctOrder": [1, 2, 3] }
 
-14. **phrase**: Phrase/vocabulary matching.
-    { "id": 1, "type": "phrase", "question": "Find phrases that mean:", "items": [{"clue": "very happy", "answer": "overjoyed"}] }
+14. **phrase**: Phrase/vocabulary matching. Each item MUST be an object with clue and answer.
+    MUST use this EXACT format:
+    { "id": 1, "type": "phrase", "question": "Find phrases that mean:", "items": [
+      {"clue": "Which three-word phrase tells you he was surprised?", "answer": "to his amazement"},
+      {"clue": "Which word means very happy?", "answer": "overjoyed"}
+    ]}
+    CRITICAL: items MUST be an array of objects with {clue, answer}.
+    - NEVER use items as a string array with a separate answers array.
 
 Each SECTION has this structure:
 {

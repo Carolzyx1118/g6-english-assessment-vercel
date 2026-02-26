@@ -124,6 +124,135 @@ function normalizeWordBank(wordBank: any[] | undefined): { letter: string; word:
   });
 }
 
+function normalizeTable(q: any): any {
+  if (
+    q.rows?.length > 0 &&
+    typeof q.rows[0] === 'object' &&
+    !Array.isArray(q.rows[0]) &&
+    'blankField' in q.rows[0]
+  ) {
+    return q;
+  }
+  if (q.rows?.length > 0 && typeof q.rows[0] === 'string') {
+    const headers: string[] = q.rows;
+    const rowDataArrays: string[][] = [];
+    for (let i = 1; i <= 20; i++) {
+      const key = i === 1 ? 'tableData' : `tableData${i}`;
+      if (q[key] && Array.isArray(q[key])) {
+        rowDataArrays.push(q[key]);
+      }
+    }
+    if (q.data && Array.isArray(q.data)) {
+      for (const row of q.data) {
+        if (Array.isArray(row)) rowDataArrays.push(row);
+      }
+    }
+    const normalizedRows: any[] = [];
+    for (const rowData of rowDataArrays) {
+      const rowObj: Record<string, string> = {};
+      for (let col = 0; col < headers.length; col++) {
+        const header = headers[col].toLowerCase().trim();
+        rowObj[header] = rowData[col] || '';
+      }
+      const situation = rowObj['situation'] || rowObj['event'] || '';
+      const thought = rowObj['thought'] || rowObj['feeling'] || rowObj['reason'] || '';
+      const action = rowObj['action'] || rowObj['response'] || '';
+      let blankField: 'thought' | 'action' = 'action';
+      if (!action && thought) {
+        blankField = 'action';
+      } else if (!thought && action) {
+        blankField = 'thought';
+      } else {
+        blankField = 'action';
+      }
+      normalizedRows.push({ situation, thought, action, blankField, answer: '' });
+    }
+    if (q.answers && Array.isArray(q.answers)) {
+      for (let i = 0; i < Math.min(q.answers.length, normalizedRows.length); i++) {
+        normalizedRows[i].answer = q.answers[i];
+      }
+    }
+    if (q.blankFields && Array.isArray(q.blankFields)) {
+      for (let i = 0; i < Math.min(q.blankFields.length, normalizedRows.length); i++) {
+        const bf = q.blankFields[i]?.toLowerCase();
+        if (bf === 'thought' || bf === 'action') {
+          normalizedRows[i].blankField = bf;
+        }
+      }
+    }
+    return {
+      id: q.id,
+      type: 'table',
+      question: q.question || 'Complete the table:',
+      rows: normalizedRows,
+    };
+  }
+  if (q.rows?.length > 0 && typeof q.rows[0] === 'object' && !('blankField' in q.rows[0])) {
+    const normalizedRows = q.rows.map((row: any) => {
+      const situation = row.situation || row.event || '';
+      const thought = row.thought || row.feeling || '';
+      const action = row.action || row.response || '';
+      const answer = row.answer || '';
+      let blankField: 'thought' | 'action' = 'action';
+      if (!thought && action) blankField = 'thought';
+      else if (!action && thought) blankField = 'action';
+      return { situation, thought, action, blankField, answer };
+    });
+    return { id: q.id, type: 'table', question: q.question || 'Complete the table:', rows: normalizedRows };
+  }
+  return { id: q.id, type: 'table', question: q.question || 'Complete the table:', rows: [] };
+}
+
+function normalizeReference(q: any): any {
+  if (
+    q.items?.length > 0 &&
+    typeof q.items[0] === 'object' &&
+    'word' in q.items[0]
+  ) {
+    const items = q.items.map((item: any) => ({
+      word: item.word || '',
+      lineRef: item.lineRef || item.line || '',
+      answer: item.answer || '',
+    }));
+    return { id: q.id, type: 'reference', question: q.question || 'What do these words refer to?', items };
+  }
+  if (q.items?.length > 0 && typeof q.items[0] === 'string') {
+    const answers: string[] = q.answers || [];
+    const items = q.items.map((item: string, idx: number) => {
+      const match = item.match(/^["']?(\w+)["']?\s*\((.+?)\)$/);
+      if (match) {
+        return { word: match[1], lineRef: match[2].trim(), answer: answers[idx] || '' };
+      }
+      return { word: item.trim().replace(/['"]/g, ''), lineRef: '', answer: answers[idx] || '' };
+    });
+    return { id: q.id, type: 'reference', question: q.question || 'What do these words refer to?', items };
+  }
+  return { id: q.id, type: 'reference', question: q.question || 'What do these words refer to?', items: [] };
+}
+
+function normalizePhrase(q: any): any {
+  if (
+    q.items?.length > 0 &&
+    typeof q.items[0] === 'object' &&
+    'clue' in q.items[0]
+  ) {
+    const items = q.items.map((item: any) => ({
+      clue: item.clue || '',
+      answer: item.answer || '',
+    }));
+    return { id: q.id, type: 'phrase', question: q.question || 'Find the phrases:', items };
+  }
+  if (q.items?.length > 0 && typeof q.items[0] === 'string') {
+    const answers: string[] = q.answers || [];
+    const items = q.items.map((clue: string, idx: number) => ({
+      clue,
+      answer: answers[idx] || '',
+    }));
+    return { id: q.id, type: 'phrase', question: q.question || 'Find the phrases:', items };
+  }
+  return { id: q.id, type: 'phrase', question: q.question || 'Find the phrases:', items: [] };
+}
+
 // ---- Tests ----
 
 describe('normalizeGrammarPassage', () => {
@@ -218,10 +347,29 @@ describe('normalizeTrueFalse', () => {
     expect(result.statements[1].label).toBe('b');
   });
 
-  it('handles empty statements array', () => {
-    const q = { id: 1, type: 'true-false', statements: [] };
+  it('handles real AI output from database', () => {
+    const q = {
+      id: 33,
+      type: 'true-false',
+      statements: [
+        'a) The narrator and Mother went to the café in the morning.',
+        'b) It had been raining before the narrator and Mother left the house.',
+        'c) Mother believed that one had to be wary of men who were excessively nice.',
+      ],
+      trueFalseStatements: ['a) False', 'b) False', 'c) True'],
+      reasons: [
+        "They went there in the afternoon / 'Yesterday afternoon'.",
+        'It was a hot, sweltering day when they left the house.',
+        'Mother had a golden rule that the nicer a man seemed, the more suspicious one should be.',
+      ],
+    };
     const result = normalizeTrueFalse(q);
-    expect(result.statements).toHaveLength(0);
+    expect(result.statements).toHaveLength(3);
+    expect(result.statements[0].label).toBe('a');
+    expect(result.statements[0].isTrue).toBe(false);
+    expect(result.statements[0].reason).toContain('afternoon');
+    expect(result.statements[2].label).toBe('c');
+    expect(result.statements[2].isTrue).toBe(true);
   });
 });
 
@@ -308,17 +456,214 @@ describe('normalizeWordBank', () => {
   });
 });
 
+describe('normalizeTable', () => {
+  it('passes through already-correct table format', () => {
+    const q = {
+      id: 35,
+      type: 'table',
+      question: 'Complete the table',
+      rows: [
+        { situation: 'At the park', thought: 'I want to play', action: '', blankField: 'action', answer: 'Go to swings' },
+      ],
+    };
+    const result = normalizeTable(q);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].blankField).toBe('action');
+    expect(result.rows[0].answer).toBe('Go to swings');
+  });
+
+  it('converts AI format with string headers + tableData/tableData2', () => {
+    const q = {
+      id: 35,
+      type: 'table',
+      question: 'Complete the table.',
+      rows: ['situation', 'thought', 'action'],
+      tableData: [
+        'The old man offered his umbrella for five dollars.',
+        "Mother had doubts about the old man's intentions.",
+        'She gave the old man five dollars.',
+      ],
+      tableData2: [
+        'Mother spotted the old man enter the café.',
+        "Mother suspected that the old man might not be telling the truth.",
+        'Mother followed him to the café.',
+      ],
+    };
+    const result = normalizeTable(q);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].situation).toBe('The old man offered his umbrella for five dollars.');
+    expect(result.rows[0].thought).toBe("Mother had doubts about the old man's intentions.");
+    expect(result.rows[0].action).toBe('She gave the old man five dollars.');
+    expect(result.rows[1].situation).toBe('Mother spotted the old man enter the café.');
+    expect(result.rows[1].thought).toContain('Mother suspected');
+    expect(result.rows[1].action).toBe('Mother followed him to the café.');
+  });
+
+  it('handles empty rows gracefully', () => {
+    const q = { id: 35, type: 'table', question: 'Complete', rows: [] };
+    const result = normalizeTable(q);
+    expect(result.rows).toHaveLength(0);
+  });
+
+  it('handles rows without blankField by detecting empty cells', () => {
+    const q = {
+      id: 35,
+      type: 'table',
+      question: 'Complete',
+      rows: [
+        { situation: 'Event 1', thought: '', action: 'Did something', answer: 'Thought about it' },
+      ],
+    };
+    const result = normalizeTable(q);
+    expect(result.rows[0].blankField).toBe('thought');
+  });
+
+  it('converts the exact AI output found in the database', () => {
+    const q = {
+      id: 35,
+      type: 'table',
+      question: 'Based on the information, complete the following table.',
+      rows: ['situation', 'thought', 'action'],
+      tableData: [
+        'The old man offered his umbrella for five dollars.',
+        "Mother had doubts about the old man's intentions.",
+        'She gave the old man five dollars.',
+      ],
+      tableData2: [
+        'Mother spotted the old man enter the café.',
+        "Mother suspected that the old man might not be telling the truth / doubted his intentions.",
+        'Mother followed him to the café.',
+      ],
+    };
+    const result = normalizeTable(q);
+    expect(result.type).toBe('table');
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].situation).toBe('The old man offered his umbrella for five dollars.');
+    expect(result.rows[0].thought).toBe("Mother had doubts about the old man's intentions.");
+    expect(result.rows[0].action).toBe('She gave the old man five dollars.');
+    expect(result.rows[1].situation).toBe('Mother spotted the old man enter the café.');
+    expect(result.rows[1].thought).toContain('Mother suspected');
+    expect(result.rows[1].action).toBe('Mother followed him to the café.');
+  });
+
+  it('handles data array format', () => {
+    const q = {
+      id: 35,
+      type: 'table',
+      question: 'Complete',
+      rows: ['situation', 'thought', 'action'],
+      data: [
+        ['Event 1', 'Thought 1', 'Action 1'],
+        ['Event 2', 'Thought 2', 'Action 2'],
+      ],
+    };
+    const result = normalizeTable(q);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].situation).toBe('Event 1');
+    expect(result.rows[1].action).toBe('Action 2');
+  });
+});
+
+describe('normalizeReference', () => {
+  it('passes through already-correct reference format', () => {
+    const q = {
+      id: 37,
+      type: 'reference',
+      question: 'What do these words refer to?',
+      items: [{ word: 'it', lineRef: 'line 7', answer: 'the rain' }],
+    };
+    const result = normalizeReference(q);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].word).toBe('it');
+    expect(result.items[0].answer).toBe('the rain');
+  });
+
+  it('converts AI format with string items + separate answers', () => {
+    const q = {
+      id: 37,
+      type: 'reference',
+      question: 'What do these words refer to?',
+      items: ['it (line 7)', 'them (line 8)', 'she (line 33)'],
+      answers: ['the rain / the weather', 'the taxis', 'the woman the old man spoke to'],
+    };
+    const result = normalizeReference(q);
+    expect(result.items).toHaveLength(3);
+    expect(result.items[0]).toEqual({ word: 'it', lineRef: 'line 7', answer: 'the rain / the weather' });
+    expect(result.items[1]).toEqual({ word: 'them', lineRef: 'line 8', answer: 'the taxis' });
+    expect(result.items[2]).toEqual({ word: 'she', lineRef: 'line 33', answer: 'the woman the old man spoke to' });
+  });
+
+  it('handles empty items', () => {
+    const q = { id: 37, type: 'reference', question: 'What?', items: [] };
+    const result = normalizeReference(q);
+    expect(result.items).toHaveLength(0);
+  });
+
+  it('handles items without parenthetical line refs', () => {
+    const q = {
+      id: 37,
+      type: 'reference',
+      question: 'What do these words refer to?',
+      items: ['it', 'them'],
+      answers: ['the book', 'the children'],
+    };
+    const result = normalizeReference(q);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].word).toBe('it');
+    expect(result.items[0].lineRef).toBe('');
+    expect(result.items[0].answer).toBe('the book');
+  });
+});
+
+describe('normalizePhrase', () => {
+  it('passes through already-correct phrase format', () => {
+    const q = {
+      id: 39,
+      type: 'phrase',
+      question: 'Find phrases',
+      items: [{ clue: 'Which phrase means surprised?', answer: 'to our surprise' }],
+    };
+    const result = normalizePhrase(q);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].clue).toBe('Which phrase means surprised?');
+    expect(result.items[0].answer).toBe('to our surprise');
+  });
+
+  it('converts AI format with string items + separate answers', () => {
+    const q = {
+      id: 39,
+      type: 'phrase',
+      question: 'Find the phrases',
+      items: [
+        'Which three-word phrase tells you they were surprised?',
+        'Which phrase tells you Mother knew the truth?',
+      ],
+      answers: ['to our surprise', 'his little game'],
+    };
+    const result = normalizePhrase(q);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].clue).toBe('Which three-word phrase tells you they were surprised?');
+    expect(result.items[0].answer).toBe('to our surprise');
+    expect(result.items[1].clue).toBe('Which phrase tells you Mother knew the truth?');
+    expect(result.items[1].answer).toBe('his little game');
+  });
+
+  it('handles empty items', () => {
+    const q = { id: 39, type: 'phrase', question: 'Find', items: [] };
+    const result = normalizePhrase(q);
+    expect(result.items).toHaveLength(0);
+  });
+});
+
 describe('integration: passage-based fill-blank flow', () => {
   it('normalizes a complete grammar section from AI output', () => {
-    // Simulate AI output with non-standard blank format
     const aiPassage = 'The students were (21)___________ excited about the trip. They had (22)___________ waiting for weeks.';
     const normalized = normalizeGrammarPassage(aiPassage);
     
     expect(normalized).toContain('<b>(21) ___</b>');
     expect(normalized).toContain('<b>(22) ___</b>');
     
-    // Verify the passage can be split by the standard regex
     const parts = normalized.split(/(<b>\(\d+\) ___<\/b>)/g);
-    expect(parts.length).toBe(5); // text, blank, text, blank, text
+    expect(parts.length).toBe(5);
   });
 });

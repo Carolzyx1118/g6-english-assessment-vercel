@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, title, SUBSTRING(sectionsJson, 1, 300) as preview FROM customPapers LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user mWBJwMymT3uxJ8c.261d2007010d --database VUHjMbahokWnaDCesocaTj --execute SELECT id, title, SUBSTRING(sectionsJson, 1, 300) as preview FROM customPapers LIMIT 5;",
+  "rows": [
+    {
+      "id": "2",
+      "title": "HCI English Proficiency Test",
+      "preview": "[{\"id\":\"vocabulary\",\"title\":\"Part 1: Vocabulary\",\"subtitle\":\"Choose the correct meaning.\",\"icon\":\"📖\",\"color\":\"text-[oklch(0.55_0.16_160)]\",\"bgColor\":\"bg-[oklch(0.95_0.04_160)]\",\"description\":\"Choose the option that best defines the highlighted word in each sentence.\",\"questions\":[{\"id\":1,\"type\":\"mcq"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttitle\tpreview\n2\tHCI English Proficiency Test\t[{\"id\":\"vocabulary\",\"title\":\"Part 1: Vocabulary\",\"subtitle\":\"Choose the correct meaning.\",\"icon\":\"📖\",\"color\":\"text-[oklch(0.55_0.16_160)]\",\"bgColor\":\"bg-[oklch(0.95_0.04_160)]\",\"description\":\"Choose the option that best defines the highlighted word in each sentence.\",\"questions\":[{\"id\":1,\"type\":\"mcq\n",
+  "stderr": "",
+  "execution_time_ms": 1639
+}

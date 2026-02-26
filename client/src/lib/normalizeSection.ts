@@ -11,28 +11,21 @@
  * 2. fill-blank questions: ensure each has a `question` field with the sentence
  * 3. true-false questions: convert various AI formats to {label, statement, isTrue, reason}[]
  * 4. open-ended subQuestions: convert string[] to {label, question, answer}[]
- * 5. Ensure all question IDs are numbers (not strings)
- * 6. Normalize wordBank letter format (ensure uppercase single letters)
- * 7. Handle missing/empty section fields gracefully
+ * 5. table questions: convert AI's separate arrays to {situation, thought, action, blankField, answer}[]
+ * 6. reference questions: convert AI's separate arrays to {word, lineRef, answer}[]
+ * 7. phrase questions: convert AI's separate arrays to {clue, answer}[]
+ * 8. Ensure all question IDs are numbers (not strings)
+ * 9. Normalize wordBank letter format (ensure uppercase single letters)
+ * 10. Handle missing/empty section fields gracefully
  */
 
-import type { Section, Question, TrueFalseQuestion, OpenEndedQuestion, FillBlankQuestion } from '@/data/papers';
+import type { Section, Question, TrueFalseQuestion, OpenEndedQuestion, FillBlankQuestion, TableQuestion, ReferenceQuestion, PhraseQuestion } from '@/data/papers';
 
 /**
  * Normalize a grammarPassage to use the standard blank format: <b>(N) ___</b>
- * Handles various AI-generated formats:
- *   (21)___________
- *   (21) ___
- *   (21)________
- *   <b>(21)___</b>
- *   <b>(21) ___</b>  (already correct)
- *   ____(21)____
  */
 function normalizeGrammarPassage(passage: string): string {
   if (!passage) return passage;
-  
-  // Replace various blank formats with the standard format
-  // Pattern: optional <b>, then (number), then optional whitespace and underscores, then optional </b>
   return passage.replace(
     /(?:<b>)?\((\d+)\)\s*_+(?:<\/b>)?/g,
     '<b>($1) ___</b>'
@@ -40,38 +33,27 @@ function normalizeGrammarPassage(passage: string): string {
 }
 
 /**
- * Extract individual sentences from a grammarPassage for fill-blank questions
- * that don't have their own `question` field.
- * 
- * For passage-based fill-blanks, we extract the sentence containing each blank
- * so the question has context even when displayed individually (e.g., in results).
+ * Extract individual sentences from a grammarPassage for fill-blank questions.
  */
 function extractSentencesFromPassage(passage: string, questionIds: number[]): Map<number, string> {
   const result = new Map<number, string>();
   if (!passage) return result;
-  
-  // Strip HTML tags for plain text analysis
   const plainText = passage.replace(/<[^>]+>/g, '');
-  
   for (const qId of questionIds) {
-    // Find the sentence containing this question's blank marker
     const regex = new RegExp(`[^.!?]*\\(${qId}\\)[^.!?]*[.!?]`, 'g');
     const match = plainText.match(regex);
     if (match) {
-      // Replace the blank marker with ___
       const sentence = match[0].trim().replace(new RegExp(`\\(${qId}\\)\\s*_*`), '___');
       result.set(qId, sentence);
     }
   }
-  
   return result;
 }
 
 /**
  * Normalize a true-false question from AI format to component format.
  * 
- * Handles multiple AI output patterns:
- * 
+ * Handles:
  * Pattern 1 (correct): { statements: [{label, statement, isTrue, reason}] }
  * Pattern 2 (separate arrays): { statements: ["a) Stmt"], trueFalseStatements: ["a) False"], reasons: ["reason"] }
  * Pattern 3 (string array): { statements: ["a) Statement 1", "b) Statement 2"] }
@@ -86,7 +68,6 @@ function normalizeTrueFalse(q: any): TrueFalseQuestion {
     'statement' in q.statements[0] &&
     'isTrue' in q.statements[0]
   ) {
-    // Ensure reason field exists
     const statements = q.statements.map((s: any, idx: number) => ({
       label: s.label || String.fromCharCode(97 + idx),
       statement: s.statement,
@@ -114,51 +95,35 @@ function normalizeTrueFalse(q: any): TrueFalseQuestion {
   const rawReasons: string[] = q.reasons || [];
   
   for (let i = 0; i < rawStatements.length; i++) {
-    // Extract label and statement text from "a) Statement text" or "a. Statement text"
     const stmtMatch = rawStatements[i].match(/^([a-z])[.)]\s*(.+)$/i);
     const label = stmtMatch ? stmtMatch[1].toLowerCase() : String.fromCharCode(97 + i);
     const statement = stmtMatch ? stmtMatch[2] : rawStatements[i];
     
-    // Extract true/false from various formats
     let isTrue = false;
     if (rawTF[i]) {
-      const tfText = rawTF[i].toLowerCase();
-      // Handle "a) True", "True", "a) False", "False"
-      isTrue = /true/i.test(tfText);
+      isTrue = /true/i.test(rawTF[i]);
     }
     
     const reason = rawReasons[i] || '';
-    
     statements.push({ label, statement, isTrue, reason });
   }
   
-  return {
-    id: q.id,
-    type: 'true-false',
-    statements,
-  };
+  return { id: q.id, type: 'true-false', statements };
 }
 
 /**
  * Normalize an open-ended question's subQuestions.
- * 
- * Handles:
- * - Already correct: [{label, question, answer}]
- * - String array: ["a", "b"] or ["What is...?", "Why did...?"]
- * - Mixed: [{label: "a"}] (missing question/answer fields)
  */
 function normalizeOpenEnded(q: any): OpenEndedQuestion {
   if (!q.subQuestions || q.subQuestions.length === 0) {
     return q as OpenEndedQuestion;
   }
   
-  // Already in correct format
   if (
     typeof q.subQuestions[0] === 'object' &&
     'label' in q.subQuestions[0] &&
     'question' in q.subQuestions[0]
   ) {
-    // Ensure answer field exists
     const subs = q.subQuestions.map((s: any) => ({
       label: s.label,
       question: s.question || '',
@@ -167,18 +132,14 @@ function normalizeOpenEnded(q: any): OpenEndedQuestion {
     return { ...q, subQuestions: subs };
   }
   
-  // Convert string array to object array
   const normalizedSubs = q.subQuestions.map((sub: any, idx: number) => {
     if (typeof sub === 'string') {
-      // Check if the string is just a label like "a" or "b"
       const isJustLabel = /^[a-z]$/i.test(sub.trim());
       if (isJustLabel) {
         return { label: sub.trim().toLowerCase(), question: '', answer: '' };
       }
-      // Otherwise it might be a question text
       return { label: String.fromCharCode(97 + idx), question: sub, answer: '' };
     }
-    // Object but missing fields
     if (typeof sub === 'object') {
       return {
         label: sub.label || String.fromCharCode(97 + idx),
@@ -189,22 +150,276 @@ function normalizeOpenEnded(q: any): OpenEndedQuestion {
     return { label: String.fromCharCode(97 + idx), question: '', answer: '' };
   });
   
+  return { ...q, subQuestions: normalizedSubs };
+}
+
+/**
+ * Normalize a table question from AI format to component format.
+ * 
+ * AI format (common):
+ *   { rows: ["situation", "thought", "action"],
+ *     tableData: ["situation1", "thought1", "action1"],
+ *     tableData2: ["situation2", "thought2", "action2"] }
+ * 
+ * OR AI format variant:
+ *   { rows: ["situation", "thought", "action"],
+ *     data: [["situation1", "thought1", "action1"], ["situation2", "thought2", "action2"]] }
+ * 
+ * Expected format:
+ *   { rows: [
+ *       { situation: "situation1", thought: "thought1", action: "", blankField: "action", answer: "action1" },
+ *       { situation: "situation2", thought: "", action: "action2", blankField: "thought", answer: "thought2" }
+ *   ]}
+ * 
+ * The component also supports dynamic columns now (not just situation/thought/action).
+ */
+function normalizeTable(q: any): TableQuestion {
+  // Already in correct format - rows is array of objects with situation/thought/action/blankField/answer
+  if (
+    q.rows?.length > 0 &&
+    typeof q.rows[0] === 'object' &&
+    !Array.isArray(q.rows[0]) &&
+    'blankField' in q.rows[0]
+  ) {
+    return q as TableQuestion;
+  }
+  
+  // AI format: rows is column headers, tableData/tableData2/... are row data
+  if (q.rows?.length > 0 && typeof q.rows[0] === 'string') {
+    const headers: string[] = q.rows; // e.g., ["situation", "thought", "action"]
+    
+    // Collect all row data arrays (tableData, tableData2, tableData3, ...)
+    const rowDataArrays: string[][] = [];
+    
+    // Check for numbered tableData keys
+    for (let i = 1; i <= 20; i++) {
+      const key = i === 1 ? 'tableData' : `tableData${i}`;
+      if (q[key] && Array.isArray(q[key])) {
+        rowDataArrays.push(q[key]);
+      }
+    }
+    
+    // Also check for a 'data' array of arrays
+    if (q.data && Array.isArray(q.data)) {
+      for (const row of q.data) {
+        if (Array.isArray(row)) {
+          rowDataArrays.push(row);
+        }
+      }
+    }
+    
+    // Also check for 'tableRows' array
+    if (q.tableRows && Array.isArray(q.tableRows)) {
+      for (const row of q.tableRows) {
+        if (Array.isArray(row)) {
+          rowDataArrays.push(row);
+        }
+      }
+    }
+    
+    // Convert to the expected format
+    const normalizedRows: TableQuestion['rows'] = [];
+    
+    for (const rowData of rowDataArrays) {
+      // Map each column header to its value
+      const rowObj: Record<string, string> = {};
+      for (let col = 0; col < headers.length; col++) {
+        const header = headers[col].toLowerCase().trim();
+        rowObj[header] = rowData[col] || '';
+      }
+      
+      // Determine which field is the blank (the one the student needs to fill in)
+      // Heuristic: look for empty values, or if all filled, check for blankField hints
+      const situation = rowObj['situation'] || rowObj['event'] || rowObj['what happened'] || '';
+      const thought = rowObj['thought'] || rowObj['what mother thought'] || rowObj['feeling'] || rowObj['reason'] || '';
+      const action = rowObj['action'] || rowObj['what mother did'] || rowObj['response'] || rowObj['what happened next'] || '';
+      
+      // Try to detect which field should be blank
+      // If a field is empty, that's the blank
+      let blankField: 'thought' | 'action' = 'action';
+      let answer = '';
+      
+      if (!action && thought) {
+        blankField = 'action';
+        answer = action; // Will be empty - the answer should come from the original data
+      } else if (!thought && action) {
+        blankField = 'thought';
+        answer = thought;
+      } else {
+        // Both filled - need to use answer hints if available
+        // Default: action is the blank
+        blankField = 'action';
+        answer = action;
+      }
+      
+      normalizedRows.push({ situation, thought, action, blankField, answer });
+    }
+    
+    // If we couldn't determine blanks well, try using answers array if provided
+    if (q.answers && Array.isArray(q.answers)) {
+      for (let i = 0; i < Math.min(q.answers.length, normalizedRows.length); i++) {
+        normalizedRows[i].answer = q.answers[i];
+      }
+    }
+    
+    // If we have blankFields array
+    if (q.blankFields && Array.isArray(q.blankFields)) {
+      for (let i = 0; i < Math.min(q.blankFields.length, normalizedRows.length); i++) {
+        const bf = q.blankFields[i]?.toLowerCase();
+        if (bf === 'thought' || bf === 'action') {
+          normalizedRows[i].blankField = bf;
+        }
+      }
+    }
+    
+    return {
+      id: q.id,
+      type: 'table',
+      question: q.question || 'Complete the table:',
+      rows: normalizedRows,
+    };
+  }
+  
+  // AI format variant: rows is array of objects but without blankField
+  if (q.rows?.length > 0 && typeof q.rows[0] === 'object' && !('blankField' in q.rows[0])) {
+    const normalizedRows = q.rows.map((row: any) => {
+      const situation = row.situation || row.event || '';
+      const thought = row.thought || row.feeling || row.reason || '';
+      const action = row.action || row.response || '';
+      const answer = row.answer || '';
+      
+      // Detect blank field: if one is empty, that's the blank
+      let blankField: 'thought' | 'action' = 'action';
+      if (!thought && action) blankField = 'thought';
+      else if (!action && thought) blankField = 'action';
+      else if (row.blankField) blankField = row.blankField;
+      
+      return { situation, thought, action, blankField, answer };
+    });
+    
+    return {
+      id: q.id,
+      type: 'table',
+      question: q.question || 'Complete the table:',
+      rows: normalizedRows,
+    };
+  }
+  
+  // Fallback: return as-is with empty rows
   return {
-    ...q,
-    subQuestions: normalizedSubs,
+    id: q.id,
+    type: 'table',
+    question: q.question || 'Complete the table:',
+    rows: [],
+  };
+}
+
+/**
+ * Normalize a reference question from AI format to component format.
+ * 
+ * AI format (common):
+ *   { items: ["it (line 7)", "them (line 8)"], answers: ["the rain", "the taxis"] }
+ * 
+ * Expected format:
+ *   { items: [{word: "it", lineRef: "line 7", answer: "the rain"}] }
+ */
+function normalizeReference(q: any): ReferenceQuestion {
+  // Already in correct format
+  if (
+    q.items?.length > 0 &&
+    typeof q.items[0] === 'object' &&
+    'word' in q.items[0]
+  ) {
+    // Ensure answer field exists
+    const items = q.items.map((item: any) => ({
+      word: item.word || '',
+      lineRef: item.lineRef || item.line || '',
+      answer: item.answer || '',
+    }));
+    return { id: q.id, type: 'reference', question: q.question || 'What do these words refer to?', items };
+  }
+  
+  // AI format: items is string array like ["it (line 7)", "them (line 8)"]
+  if (q.items?.length > 0 && typeof q.items[0] === 'string') {
+    const answers: string[] = q.answers || [];
+    const items = q.items.map((item: string, idx: number) => {
+      // Parse "it (line 7)" or "it (paragraph 1)" or "them (line 8)"
+      const match = item.match(/^["']?(\w+)["']?\s*\((.+?)\)$/);
+      if (match) {
+        return {
+          word: match[1],
+          lineRef: match[2].trim(),
+          answer: answers[idx] || '',
+        };
+      }
+      // Try simpler format: just a word
+      return {
+        word: item.trim().replace(/['"]/g, ''),
+        lineRef: '',
+        answer: answers[idx] || '',
+      };
+    });
+    return { id: q.id, type: 'reference', question: q.question || 'What do these words refer to?', items };
+  }
+  
+  // Fallback
+  return {
+    id: q.id,
+    type: 'reference',
+    question: q.question || 'What do these words refer to?',
+    items: [],
+  };
+}
+
+/**
+ * Normalize a phrase question from AI format to component format.
+ * 
+ * AI format (common):
+ *   { items: ["Which phrase means...?", "Which phrase tells...?"], answers: ["phrase1", "phrase2"] }
+ * 
+ * Expected format:
+ *   { items: [{clue: "Which phrase means...?", answer: "phrase1"}] }
+ */
+function normalizePhrase(q: any): PhraseQuestion {
+  // Already in correct format
+  if (
+    q.items?.length > 0 &&
+    typeof q.items[0] === 'object' &&
+    'clue' in q.items[0]
+  ) {
+    const items = q.items.map((item: any) => ({
+      clue: item.clue || '',
+      answer: item.answer || '',
+    }));
+    return { id: q.id, type: 'phrase', question: q.question || 'Find the phrases:', items };
+  }
+  
+  // AI format: items is string array of clues, answers is separate array
+  if (q.items?.length > 0 && typeof q.items[0] === 'string') {
+    const answers: string[] = q.answers || [];
+    const items = q.items.map((clue: string, idx: number) => ({
+      clue: clue,
+      answer: answers[idx] || '',
+    }));
+    return { id: q.id, type: 'phrase', question: q.question || 'Find the phrases:', items };
+  }
+  
+  // Fallback
+  return {
+    id: q.id,
+    type: 'phrase',
+    question: q.question || 'Find the phrases:',
+    items: [],
   };
 }
 
 /**
  * Normalize fill-blank questions to ensure they have a `question` field.
- * If the section has a grammarPassage, extract sentences for each blank.
  */
 function normalizeFillBlanks(questions: any[], grammarPassage?: string): any[] {
   const fillBlanks = questions.filter(q => q.type === 'fill-blank');
-  
   if (fillBlanks.length === 0) return questions;
   
-  // If there's a grammar passage, extract sentences for questions without `question` field
   if (grammarPassage) {
     const sentenceMap = extractSentencesFromPassage(
       grammarPassage,
@@ -228,14 +443,12 @@ function normalizeFillBlanks(questions: any[], grammarPassage?: string): any[] {
 
 /**
  * Normalize wordBank entries.
- * Ensures letters are uppercase single characters and words are trimmed.
  */
 function normalizeWordBank(wordBank: any[] | undefined): { letter: string; word: string }[] | undefined {
   if (!wordBank || !Array.isArray(wordBank)) return wordBank;
   
   return wordBank.map((item, idx) => {
     if (typeof item === 'string') {
-      // Handle case where wordBank is just an array of words
       return { letter: String.fromCharCode(65 + idx), word: item.trim() };
     }
     return {
@@ -247,17 +460,13 @@ function normalizeWordBank(wordBank: any[] | undefined): { letter: string; word:
 
 /**
  * Normalize all questions in a section.
- * Ensures all question data matches the expected component interfaces.
  */
 function normalizeQuestions(questions: any[], grammarPassage?: string): Question[] {
   if (!questions || !Array.isArray(questions)) return [];
   
-  // First normalize fill-blanks (may need passage context)
   let normalized = normalizeFillBlanks(questions, grammarPassage);
   
-  // Then normalize individual question types
   return normalized.map(q => {
-    // Ensure ID is a number
     const id = typeof q.id === 'string' ? parseInt(q.id, 10) : q.id;
     
     switch (q.type) {
@@ -265,11 +474,15 @@ function normalizeQuestions(questions: any[], grammarPassage?: string): Question
         return { ...normalizeTrueFalse(q), id };
       case 'open-ended':
         return { ...normalizeOpenEnded(q), id };
+      case 'table':
+        return { ...normalizeTable(q), id };
+      case 'reference':
+        return { ...normalizeReference(q), id };
+      case 'phrase':
+        return { ...normalizePhrase(q), id };
       case 'mcq':
-        // Ensure correctAnswer is a number
         return { ...q, id, correctAnswer: typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer };
       case 'checkbox':
-        // Ensure correctAnswers are numbers
         return { ...q, id, correctAnswers: (q.correctAnswers || []).map((a: any) => typeof a === 'string' ? parseInt(a, 10) : a) };
       default:
         return { ...q, id };
@@ -279,21 +492,15 @@ function normalizeQuestions(questions: any[], grammarPassage?: string): Question
 
 /**
  * Normalize an entire section.
- * This is the main entry point - call this on each section from a custom paper.
  */
 export function normalizeSection(section: any): Section {
-  // Normalize grammar passage format
   const grammarPassage = section.grammarPassage 
     ? normalizeGrammarPassage(section.grammarPassage)
     : section.grammarPassage;
   
-  // Normalize word bank
   const wordBank = normalizeWordBank(section.wordBank);
-  
-  // Normalize all questions
   const questions = normalizeQuestions(section.questions, grammarPassage);
   
-  // Ensure required section fields have defaults
   return {
     id: section.id || 'section-' + Math.random().toString(36).slice(2, 8),
     title: section.title || 'Section',

@@ -119,3 +119,6 @@
 - [x] Refactor reading question architecture to work reliably with AI-parsed content
 - [x] Update AI parsing prompts to match new data structure requirements
 - [x] Test end-to-end with both static and custom papers
+- [x] Fix table-type question rendering - information mixed up or missing in custom papers
+- [x] Improve table question normalization in normalizeSection.ts
+- [x] Update AI prompt for table question format clarity
