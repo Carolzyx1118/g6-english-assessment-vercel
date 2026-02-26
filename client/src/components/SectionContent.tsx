@@ -312,18 +312,26 @@ function StoryFillInCard({ q, answer, onAnswer }: { q: StoryFillIn; answer?: str
 // ========== OPEN-ENDED (HuaZhong) ==========
 
 function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?: string; onAnswer: (v: string) => void }) {
-  if (q.subQuestions) {
+  if (q.subQuestions && q.subQuestions.length > 0) {
     const parsed = (() => {
       try { return typeof answer === 'string' ? JSON.parse(answer) : (answer || {}); } catch { return {}; }
     })();
+
+    // Normalize subQuestions: handle both string[] and {label, question, answer}[] formats
+    const normalizedSubs = q.subQuestions.map((sub, idx) => {
+      if (typeof sub === 'string') {
+        return { label: sub || String.fromCharCode(97 + idx), question: '', answer: '' };
+      }
+      return { label: sub.label || String.fromCharCode(97 + idx), question: sub.question || '', answer: sub.answer || '' };
+    });
 
     const subItems = [
       <div key={`q${q.id}-prompt`} className="text-base text-slate-700">
         <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
         {q.question}
       </div>,
-      ...q.subQuestions.map((sub) => (
-        <div key={`q${q.id}-${sub.label}`} className="ml-4 space-y-2">
+      ...normalizedSubs.map((sub, idx) => (
+        <div key={`q${q.id}-sub-${idx}`} className="ml-4 space-y-2">
             <label className="text-base font-medium text-slate-600">{sub.label}) {sub.question}</label>
             <textarea
               value={parsed[sub.label] || ''}
@@ -370,43 +378,43 @@ function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?:
     onAnswer(JSON.stringify(newVal));
   };
 
-  return (
-    <div className="space-y-4">
-      <p className="text-base text-slate-700 font-medium">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        State whether each statement is True or False, then give one reason.
-      </p>
-      {q.statements.map((s) => (
-        <div key={s.label} className="ml-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-          <p className="text-base text-slate-700"><span className="font-bold">{s.label})</span> {s.statement}</p>
-          <div className="flex gap-3">
-            {['True', 'False'].map((tf) => (
-              <button
-                key={tf}
-                onClick={() => update(s.label, 'tf', tf)}
-                className={`
-                  px-4 py-1.5 rounded-lg border-2 text-base font-medium transition-all
-                  ${parsed[s.label]?.tf === tf
-                    ? tf === 'True' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-red-400 bg-red-50 text-red-700'
-                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                  }
-                `}
-              >
-                {tf}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={parsed[s.label]?.reason || ''}
-            onChange={(e) => update(s.label, 'reason', e.target.value)}
-            className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base text-slate-700 resize-none"
-            rows={2}
-            placeholder="Give your reason..."
-          />
+  const items = [
+    <div key={`q${q.id}-prompt`} className="text-base text-slate-700 font-medium">
+      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      State whether each statement is True or False, then give one reason.
+    </div>,
+    ...q.statements.map((s, idx) => (
+      <div key={`q${q.id}-stmt-${idx}`} className="ml-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+        <p className="text-base text-slate-700"><span className="font-bold">{s.label})</span> {s.statement}</p>
+        <div className="flex gap-3">
+          {['True', 'False'].map((tf) => (
+            <button
+              key={tf}
+              onClick={() => update(s.label, 'tf', tf)}
+              className={`
+                px-4 py-1.5 rounded-lg border-2 text-base font-medium transition-all
+                ${parsed[s.label]?.tf === tf
+                  ? tf === 'True' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-red-400 bg-red-50 text-red-700'
+                  : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }
+              `}
+            >
+              {tf}
+            </button>
+          ))}
         </div>
-      ))}
-    </div>
-  );
+        <textarea
+          value={parsed[s.label]?.reason || ''}
+          onChange={(e) => update(s.label, 'reason', e.target.value)}
+          className="w-full p-2.5 rounded-lg border-2 border-slate-200 focus:border-blue-400 text-base text-slate-700 resize-none"
+          rows={2}
+          placeholder="Give your reason..."
+        />
+      </div>
+    )),
+  ];
+
+  return <div className="space-y-4">{items}</div>;
 }
 
 // ========== TABLE QUESTION (HuaZhong) ==========
@@ -418,11 +426,11 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
 
   return (
     <div className="space-y-4">
-      <p className="text-base text-slate-700 font-medium">
+      <div key={`q${q.id}-prompt`} className="text-base text-slate-700 font-medium">
         <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
         {q.question}
-      </p>
-      <div className="overflow-x-auto">
+      </div>
+      <div key={`q${q.id}-table`} className="overflow-x-auto">
         <table className="w-full text-base border-collapse">
           <thead>
             <tr className="bg-slate-100">
@@ -483,13 +491,12 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
 
-  return (
-    <div className="space-y-4">
-      <p className="text-base text-slate-700 font-medium">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        {q.question}
-      </p>
-      {q.items.map((item, i) => (
+  const items = [
+    <div key={`q${q.id}-prompt`} className="text-base text-slate-700 font-medium">
+      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      {q.question}
+    </div>,
+    ...q.items.map((item, i) => (
         <div key={i} className="ml-2 flex items-center gap-3">
           <span className="text-base font-medium text-slate-500 w-32 flex-shrink-0">
             <span className="font-bold">"{item.word}"</span> ({item.lineRef})
@@ -505,9 +512,9 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
             placeholder="refers to..."
           />
         </div>
-      ))}
-    </div>
-  );
+    )),
+  ];
+  return <div className="space-y-4">{items}</div>;
 }
 
 // ========== ORDER (HuaZhong) ==========
@@ -517,13 +524,12 @@ function OrderCard({ q, answer, onAnswer }: { q: OrderQuestion; answer?: string;
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
 
-  return (
-    <div className="space-y-4">
-      <p className="text-base text-slate-700 font-medium">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        {q.question}
-      </p>
-      {q.events.map((event, i) => (
+  const items = [
+    <div key={`q${q.id}-prompt`} className="text-base text-slate-700 font-medium">
+      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      {q.question}
+    </div>,
+    ...q.events.map((event, i) => (
         <div key={i} className="ml-2 flex items-center gap-3">
           <select
             value={parsed[i] || ''}
@@ -540,9 +546,9 @@ function OrderCard({ q, answer, onAnswer }: { q: OrderQuestion; answer?: string;
           </select>
           <span className="text-base text-slate-600">{event}</span>
         </div>
-      ))}
-    </div>
-  );
+    )),
+  ];
+  return <div className="space-y-4">{items}</div>;
 }
 
 // ========== PHRASE (HuaZhong) ==========
@@ -552,13 +558,12 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
 
-  return (
-    <div className="space-y-4">
-      <p className="text-base text-slate-700 font-medium">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        {q.question}
-      </p>
-      {q.items.map((item, i) => (
+  const items = [
+    <div key={`q${q.id}-prompt`} className="text-base text-slate-700 font-medium">
+      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      {q.question}
+    </div>,
+    ...q.items.map((item, i) => (
         <div key={i} className="ml-2 space-y-2">
           <p className="text-base text-slate-600">{String.fromCharCode(97 + i)}) {item.clue}</p>
           <input
@@ -572,9 +577,9 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
             placeholder="Type the phrase..."
           />
         </div>
-      ))}
-    </div>
-  );
+    )),
+  ];
+  return <div className="space-y-4">{items}</div>;
 }
 
 // ========== CHECKBOX (HuaZhong) ==========
@@ -592,11 +597,11 @@ function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: n
 
   return (
     <div className="space-y-4">
-      <p className="text-base text-slate-700">
+      <div key={`q${q.id}-prompt`} className="text-base text-slate-700">
         <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
         {q.question} <span className="text-xs text-slate-400">(Select two)</span>
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      </div>
+      <div key={`q${q.id}-options`} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {q.options.map((opt, i) => {
           const isSelected = selected.includes(i);
           return (
