@@ -59,11 +59,17 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-xl">
                 Choose an assessment paper to begin. Each paper tests different aspects of English proficiency with unique question formats and difficulty levels.
               </p>
-              <div className="mt-6">
+              <div className="mt-6 flex gap-3 flex-wrap">
                 <Link href="/history">
                   <Button variant="outline" className="gap-2 text-slate-600 hover:text-blue-700 hover:border-blue-300">
                     <ClipboardList className="w-4 h-4" />
                     View Test History
+                  </Button>
+                </Link>
+                <Link href="/paper-creator">
+                  <Button variant="outline" className="gap-2 text-slate-600 hover:text-purple-700 hover:border-purple-300">
+                    <PenTool className="w-4 h-4" />
+                    Create Paper
                   </Button>
                 </Link>
               </div>

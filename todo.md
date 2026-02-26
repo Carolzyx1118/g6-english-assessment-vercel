@@ -103,3 +103,9 @@
 - [x] Remove Download PDF button from student results page
 - [x] Add PDF download functionality to admin history page (English-only report)
 - [x] Improve PDF report to show ALL questions with full details (question text, student answer or "Not Answered", correct answer, explanation)
+- [x] Build teacher paper creation portal (upload files/audio, AI parses into paper format)
+- [x] Design database schema for dynamic papers and questions
+- [x] Build server-side file upload and AI parsing procedures
+- [x] Build teacher UI: upload wizard with preview and edit
+- [x] Integrate dynamic papers with existing quiz system
+- [x] Test end-to-end paper creation flow

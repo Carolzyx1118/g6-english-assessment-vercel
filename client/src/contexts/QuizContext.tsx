@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { papers, type Paper, type Section, type Question } from '@/data/papers';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { papers as staticPapers, type Paper, type Section, type Question } from '@/data/papers';
+import { trpc } from '@/lib/trpc';
 
 export interface StudentInfo {
   name: string;
@@ -44,6 +45,53 @@ function answerKey(sectionId: string, questionId: number): string {
   return `${sectionId}:${questionId}`;
 }
 
+/**
+ * Convert a custom paper from the database into the Paper format used by the quiz system.
+ */
+function convertCustomPaper(cp: {
+  paperId: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  totalQuestions: number;
+  hasListening: boolean;
+  hasWriting: boolean;
+  sectionsJson: string;
+  readingWordBankJson: string | null;
+}): Paper {
+  let sections: Section[] = [];
+  try {
+    sections = JSON.parse(cp.sectionsJson);
+  } catch (e) {
+    console.error('Failed to parse custom paper sections:', e);
+  }
+
+  let readingWordBank: { word: string; imageUrl: string }[] | undefined;
+  if (cp.readingWordBankJson) {
+    try {
+      readingWordBank = JSON.parse(cp.readingWordBankJson);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return {
+    id: cp.paperId,
+    title: cp.title,
+    subtitle: cp.subtitle || '',
+    description: cp.description || '',
+    icon: cp.icon || '📝',
+    color: cp.color || 'text-blue-600',
+    sections,
+    totalQuestions: cp.totalQuestions,
+    hasListening: cp.hasListening,
+    hasWriting: cp.hasWriting,
+    readingWordBank,
+  };
+}
+
 export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [state, setState] = useState<QuizState>({
@@ -59,6 +107,15 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
+
+  // Fetch published custom papers from the database
+  const customPapersQuery = trpc.papers.listPublished.useQuery();
+
+  // Merge static papers with custom papers
+  const allPapers = useMemo(() => {
+    const customPapers = (customPapersQuery.data || []).map(convertCustomPaper);
+    return [...staticPapers, ...customPapers];
+  }, [customPapersQuery.data]);
 
   const currentSections = selectedPaper?.sections || [];
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];
@@ -82,12 +139,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       setSelectedPaper(null);
       return;
     }
-    const paper = papers.find(p => p.id === paperId);
+    const paper = allPapers.find(p => p.id === paperId);
     if (paper) {
       setSelectedPaper(paper);
       currentSectionIdRef.current = paper.sections[0]?.id || '';
     }
-  }, []);
+  }, [allPapers]);
 
   const setStudentInfo = useCallback((info: StudentInfo) => {
     setStudentInfoState(info);
@@ -223,7 +280,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setStudentInfo,
     selectedPaper,
     selectPaper,
-    papers,
+    papers: allPapers,
     currentSection,
     sections: currentSections,
     setCurrentSection,
@@ -237,7 +294,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     getSectionProgress,
     getSectionTimings,
     getTotalTime,
-  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
+  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, allPapers, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>

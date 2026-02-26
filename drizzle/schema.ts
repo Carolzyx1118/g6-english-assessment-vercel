@@ -65,3 +65,44 @@ export const testResults = mysqlTable("testResults", {
 
 export type TestResult = typeof testResults.$inferSelect;
 export type InsertTestResult = typeof testResults.$inferInsert;
+
+/**
+ * Custom papers table - stores teacher-created assessment papers.
+ * The full paper structure (sections, questions, answers) is stored as JSON.
+ */
+export const customPapers = mysqlTable("customPapers", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Unique paper identifier (slug) */
+  paperId: varchar("paperId", { length: 128 }).notNull().unique(),
+  /** Paper title */
+  title: varchar("title", { length: 255 }).notNull(),
+  /** Paper subtitle (e.g., grade level) */
+  subtitle: varchar("subtitle", { length: 255 }),
+  /** Paper description */
+  description: text("description"),
+  /** Paper icon emoji */
+  icon: varchar("icon", { length: 16 }).default("📝"),
+  /** Paper color class */
+  color: varchar("color", { length: 128 }).default("text-blue-600"),
+  /** Total number of questions */
+  totalQuestions: int("totalQuestions").notNull().default(0),
+  /** Whether paper has listening section */
+  hasListening: int("hasListening").notNull().default(0),
+  /** Whether paper has writing section */
+  hasWriting: int("hasWriting").notNull().default(0),
+  /** Full sections JSON (Section[] from papers.ts) */
+  sectionsJson: text("sectionsJson").notNull(),
+  /** Optional reading word bank JSON */
+  readingWordBankJson: text("readingWordBankJson"),
+  /** Status: draft or published */
+  status: mysqlEnum("status", ["draft", "published"]).default("draft").notNull(),
+  /** Uploaded source files info as JSON (for reference) */
+  sourceFilesJson: text("sourceFilesJson"),
+  /** Creation timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** Last update timestamp */
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CustomPaper = typeof customPapers.$inferSelect;
+export type InsertCustomPaper = typeof customPapers.$inferInsert;

@@ -1,0 +1,20 @@
+CREATE TABLE `customPapers` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`paperId` varchar(128) NOT NULL,
+	`title` varchar(255) NOT NULL,
+	`subtitle` varchar(255),
+	`description` text,
+	`icon` varchar(16) DEFAULT '📝',
+	`color` varchar(128) DEFAULT 'text-blue-600',
+	`totalQuestions` int NOT NULL DEFAULT 0,
+	`hasListening` int NOT NULL DEFAULT 0,
+	`hasWriting` int NOT NULL DEFAULT 0,
+	`sectionsJson` text NOT NULL,
+	`readingWordBankJson` text,
+	`status` enum('draft','published') NOT NULL DEFAULT 'draft',
+	`sourceFilesJson` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `customPapers_id` PRIMARY KEY(`id`),
+	CONSTRAINT `customPapers_paperId_unique` UNIQUE(`paperId`)
+);

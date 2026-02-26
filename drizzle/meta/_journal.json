@@ -15,6 +15,13 @@
       "when": 1771574390555,
       "tag": "0001_mature_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1772087224049,
+      "tag": "0002_redundant_colleen_wing",
+      "breakpoints": true
     }
   ]
 }
