@@ -767,9 +767,8 @@ export default function ResultsPage() {
                 </div>
               ) : readingResults ? (
                 <div className="divide-y divide-slate-100">
-                  {readingSubItems.map((item) => {
-                    const result = getReadingResult(item.id);
-                    if (!result) return null;
+                  {readingSubItems.filter((item) => getReadingResult(item.id)).map((item) => {
+                    const result = getReadingResult(item.id)!;
                     return (
                       <div key={item.id} className="px-5 py-4">
                         <div className="flex items-start gap-3">

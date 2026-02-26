@@ -319,7 +319,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
 
     return (
       <div className="space-y-4">
-        <p className="text-base text-slate-700">
+        <p key="question" className="text-base text-slate-700">
           <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
           {q.question}
         </p>
@@ -1448,8 +1448,7 @@ export default function SectionContent() {
 
             {/* Regular questions (MCQ, PictureMCQ, ListeningMCQ, OpenEnded, TrueFalse, etc.) */}
             <div className="space-y-6">
-              {((isWIDAGrammar || isHuaZhongGrammar) ? regularQuestions : section.questions).map((q) => {
-                if (q.type === 'fill-blank') return null; // handled above
+              {((isWIDAGrammar || isHuaZhongGrammar) ? regularQuestions : section.questions).filter(q => q.type !== 'fill-blank').map((q) => {
                 const answer = getAnswer(section.id, q.id);
                 return (
                   <div key={q.id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
