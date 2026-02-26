@@ -40,9 +40,23 @@ The paper has SECTIONS, each section contains QUESTIONS. Here are the supported 
 2. **mcq**: Standard text multiple choice with optional image.
    { "id": 1, "type": "mcq", "question": "Choose the correct word: The cat ___ on the mat.", "highlightWord": "sat", "options": ["sit", "sat", "set", "seat"], "correctAnswer": 1, "imageUrl": "" }
 
-3. **fill-blank**: Fill in the blank (used with word bank).
-   { "id": 1, "type": "fill-blank", "question": "The rubber is ___ the pencil case.", "correctAnswer": "inside" }
-   Note: The "question" field MUST contain the full sentence with ___ marking where the blank is. Used with section-level wordBank. If you also provide grammarPassage (a longer passage with <b>(1) ___</b> markers), the passage-based layout will be used instead.
+3. **fill-blank**: Fill in the blank (used with word bank and grammarPassage).
+   IMPORTANT: There are TWO modes for fill-blank:
+   
+   MODE A - PASSAGE-BASED (when the section has a grammarPassage):
+   - The grammarPassage MUST use exactly this blank format: <b>(N) ___</b> where N is the question ID
+   - Example grammarPassage: "The cat sat <b>(21) ___</b> the mat. It was <b>(22) ___</b> happy."
+   - The correctAnswer MUST be the LETTER from the wordBank (e.g., "A", "B", "K")
+   - Each word bank item can only be used once
+   - Example: { "id": 21, "type": "fill-blank", "correctAnswer": "A" }
+   - wordBank example: [{"letter": "A", "word": "although"}, {"letter": "B", "word": "because"}]
+   
+   MODE B - SENTENCE-BASED (when there is NO grammarPassage):
+   - Each question MUST have a "question" field with the full sentence containing ___
+   - The correctAnswer is the WORD itself (e.g., "inside", "next to")
+   - Words can be reused across blanks
+   - Example: { "id": 1, "type": "fill-blank", "question": "The rubber is ___ the pencil case.", "correctAnswer": "inside" }
+   - wordBank example: [{"letter": "A", "word": "inside"}, {"letter": "B", "word": "next to"}]
 
 4. **listening-mcq**: Listening comprehension MCQ with picture options.
    { "id": 1, "type": "listening-mcq", "question": "What is the man's job?", "options": [{"label": "a", "imageUrl": "", "text": "Doctor"}, ...], "correctAnswer": 0 }
@@ -54,11 +68,15 @@ The paper has SECTIONS, each section contains QUESTIONS. Here are the supported 
    { "id": 1, "type": "story-fill", "question": "Fill in blank 1", "correctAnswer": "brave", "acceptableAnswers": ["courageous"] }
 
 7. **open-ended**: Open-ended question with optional sub-questions.
-   { "id": 1, "type": "open-ended", "question": "What did the author mean?", "answer": "The author meant..." }
-   With sub-questions: { "id": 1, "type": "open-ended", "question": "Answer the following:", "subQuestions": [{"label": "a", "question": "Who is the main character?", "answer": "Tom"}] }
+   WITHOUT sub-questions: { "id": 1, "type": "open-ended", "question": "What did the author mean?", "answer": "The author meant..." }
+   WITH sub-questions - MUST use this EXACT object format (NOT string arrays):
+   { "id": 1, "type": "open-ended", "question": "Answer the following:", "subQuestions": [{"label": "a", "question": "Who is the main character?", "answer": "Tom"}, {"label": "b", "question": "What happened next?", "answer": "He went home"}] }
+   CRITICAL: subQuestions MUST be an array of objects with {label, question, answer}. NEVER use string arrays like ["a", "b"].
 
 8. **true-false**: True/False statements.
-   { "id": 1, "type": "true-false", "statements": [{"label": "a", "statement": "The sky is blue.", "isTrue": true, "reason": "As stated in paragraph 1"}] }
+   MUST use this EXACT format - each statement is an object with label, statement, isTrue, and reason:
+   { "id": 1, "type": "true-false", "statements": [{"label": "a", "statement": "The sky is blue.", "isTrue": true, "reason": "As stated in paragraph 1"}, {"label": "b", "statement": "Fish can fly.", "isTrue": false, "reason": "Fish live in water"}] }
+   CRITICAL: statements MUST be an array of objects with {label, statement, isTrue, reason}. NEVER use separate arrays for statements/trueFalseStatements/reasons.
 
 9. **checkbox**: Multiple correct answers.
    { "id": 1, "type": "checkbox", "question": "Which are fruits?", "options": ["Apple", "Car", "Banana", "Table"], "correctAnswers": [0, 2] }
@@ -88,22 +106,25 @@ Each SECTION has this structure:
   "bgColor": "bg-[oklch(0.95_0.04_160)]",
   "description": "Look at the pictures and choose the correct answer.",
   "questions": [...],
-  "passage": "",  // optional: reading passage text
-  "wordBank": [],  // optional: [{letter: "A", word: "although"}]
-  "grammarPassage": "",  // optional: passage with blanks for fill-blank questions
+  "passage": "",  // optional: reading passage text (for reading comprehension sections)
+  "wordBank": [],  // optional: [{"letter": "A", "word": "although"}] - letters MUST be uppercase single letters
+  "grammarPassage": "",  // optional: passage with <b>(N) ___</b> blanks for fill-blank questions
   "audioUrl": "",  // optional: URL for listening audio
   "sceneImageUrl": "",  // optional: scene image URL
-  "storyParagraphs": []  // optional: [{text: "paragraph text", questionIds: [1,2]}]
+  "storyParagraphs": []  // optional: [{"text": "paragraph text", "questionIds": [1,2]}]
 }
 
 IMPORTANT RULES:
-- Question IDs must be sequential within each section, starting from 1
+- Question IDs must be GLOBALLY UNIQUE across all sections (e.g., section 1: IDs 1-10, section 2: IDs 11-20, etc.)
 - Section IDs must be unique lowercase strings (e.g., "vocabulary", "grammar", "listening", "reading", "writing")
 - Use appropriate colors for each section (green for vocabulary, amber for grammar, purple for listening, blue for reading, rose for writing)
 - The correctAnswer for MCQ types is a 0-based index
-- For fill-blank questions, the section needs a wordBank and grammarPassage
+- For fill-blank with grammarPassage: blanks MUST use <b>(N) ___</b> format, correctAnswer is the LETTER
+- For fill-blank without grammarPassage: each question MUST have a "question" field with ___, correctAnswer is the WORD
 - For listening sections, include audioUrl (will be provided separately)
+- For reading sections with a passage, put the passage text in the "passage" field
 - Ensure all text content is properly escaped for JSON
+- wordBank letters MUST be uppercase single letters: A, B, C, D, etc.
 
 Return a JSON object with this structure:
 {

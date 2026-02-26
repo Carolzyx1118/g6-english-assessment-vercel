@@ -114,3 +114,8 @@
 - [x] Fix persistent React key warning from OpenEndedCard (still occurring after previous fix)
 - [x] Fix TrueFalseCard missing key prop (same pattern as OpenEndedCard)
 - [x] Fix q32-undefined duplicate key in OpenEndedCard subQuestions
+- [x] Refactor word bank drag-drop fill-blank architecture for universal compatibility (all papers)
+- [x] Fix multiple drag-drop issues (words should be reusable, stable across interactions)
+- [x] Refactor reading question architecture to work reliably with AI-parsed content
+- [x] Update AI parsing prompts to match new data structure requirements
+- [x] Test end-to-end with both static and custom papers

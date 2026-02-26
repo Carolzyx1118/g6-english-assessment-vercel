@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { papers as staticPapers, type Paper, type Section, type Question } from '@/data/papers';
 import { trpc } from '@/lib/trpc';
+import { normalizeSections } from '@/lib/normalizeSection';
 
 export interface StudentInfo {
   name: string;
@@ -63,7 +64,9 @@ function convertCustomPaper(cp: {
 }): Paper {
   let sections: Section[] = [];
   try {
-    sections = JSON.parse(cp.sectionsJson);
+    const rawSections = JSON.parse(cp.sectionsJson);
+    // Normalize AI-generated data to match expected component structures
+    sections = normalizeSections(rawSections);
   } catch (e) {
     console.error('Failed to parse custom paper sections:', e);
   }

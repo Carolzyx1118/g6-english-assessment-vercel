@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, paperId, title, status, SUBSTRING(sectionsJson, 1, 500) as sectionPreview FROM customPapers LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user mWBJwMymT3uxJ8c.261d2007010d --database VUHjMbahokWnaDCesocaTj --execute SELECT id, paperId, title, status, SUBSTRING(sectionsJson, 1, 500) as sectionPreview FROM customPapers LIMIT 5;",
+  "rows": [
+    {
+      "id": "2",
+      "paperId": "custom-hci-english-proficiency-test-mm347n0v",
+      "title": "HCI English Proficiency Test",
+      "status": "published",
+      "sectionPreview": "[{\"id\":\"vocabulary\",\"title\":\"Part 1: Vocabulary\",\"subtitle\":\"Choose the correct meaning.\",\"icon\":\"📖\",\"color\":\"text-[oklch(0.55_0.16_160)]\",\"bgColor\":\"bg-[oklch(0.95_0.04_160)]\",\"description\":\"Choose the option that best defines the highlighted word in each sentence.\",\"questions\":[{\"id\":1,\"type\":\"mcq\",\"question\":\"She felt disappointed when she lost the game.\",\"highlightWord\":\"disappointed\",\"options\":[\"angry\",\"unhappy because of an unexpected result\",\"excited\",\"confused\"],\"correctAnswer\":1,\"imageU"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tpaperId\ttitle\tstatus\tsectionPreview\n2\tcustom-hci-english-proficiency-test-mm347n0v\tHCI English Proficiency Test\tpublished\t[{\"id\":\"vocabulary\",\"title\":\"Part 1: Vocabulary\",\"subtitle\":\"Choose the correct meaning.\",\"icon\":\"📖\",\"color\":\"text-[oklch(0.55_0.16_160)]\",\"bgColor\":\"bg-[oklch(0.95_0.04_160)]\",\"description\":\"Choose the option that best defines the highlighted word in each sentence.\",\"questions\":[{\"id\":1,\"type\":\"mcq\",\"question\":\"She felt disappointed when she lost the game.\",\"highlightWord\":\"disappointed\",\"options\":[\"angry\",\"unhappy because of an unexpected result\",\"excited\",\"confused\"],\"correctAnswer\":1,\"imageU\n",
+  "stderr": "",
+  "execution_time_ms": 1625
+}
