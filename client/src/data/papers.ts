@@ -26,6 +26,7 @@ export interface MCQQuestion {
 export interface FillBlankQuestion {
   id: number;
   type: 'fill-blank';
+  question?: string; // sentence with ___ for the blank (used by custom papers)
   correctAnswer: string;
 }
 

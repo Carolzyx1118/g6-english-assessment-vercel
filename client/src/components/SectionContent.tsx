@@ -716,14 +716,19 @@ function WIDADragDropGrammarSection({
     setAnswer(sectionId, questionId, '');
   };
 
-  // Build blanks from questions - each sentence on its own line with question id as the number
-  const blanks = [
-    { id: questions[0]?.id, text: 'The rubber is ___ the pencil case.' },
-    { id: questions[1]?.id, text: 'The crayons are ___ the pencil case.' },
-    { id: questions[2]?.id, text: 'The pencils are ___ the desk.' },
-    { id: questions[3]?.id, text: 'The pen is ___ the book.' },
-    { id: questions[4]?.id, text: 'The pencils are ___ the book.' },
+  // Build blanks from questions dynamically
+  // If questions have a 'question' field (custom papers), use it; otherwise fall back to hardcoded WIDA sentences
+  const hardcodedWIDA = [
+    'The rubber is ___ the pencil case.',
+    'The crayons are ___ the pencil case.',
+    'The pencils are ___ the desk.',
+    'The pen is ___ the book.',
+    'The pencils are ___ the book.',
   ];
+  const blanks = questions.map((q, idx) => ({
+    id: q.id,
+    text: q.question || hardcodedWIDA[idx] || `Question ${q.id}: ___`,
+  }));
 
   return (
     <div className="space-y-6 mb-8">

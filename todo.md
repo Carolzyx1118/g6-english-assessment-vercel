@@ -109,3 +109,4 @@
 - [x] Build teacher UI: upload wizard with preview and edit
 - [x] Integrate dynamic papers with existing quiz system
 - [x] Test end-to-end paper creation flow
+- [x] Fix word bank drag-and-drop not working for custom (AI-parsed) papers

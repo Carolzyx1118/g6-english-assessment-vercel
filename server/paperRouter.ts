@@ -41,8 +41,8 @@ The paper has SECTIONS, each section contains QUESTIONS. Here are the supported 
    { "id": 1, "type": "mcq", "question": "Choose the correct word: The cat ___ on the mat.", "highlightWord": "sat", "options": ["sit", "sat", "set", "seat"], "correctAnswer": 1, "imageUrl": "" }
 
 3. **fill-blank**: Fill in the blank (used with word bank).
-   { "id": 1, "type": "fill-blank", "correctAnswer": "although" }
-   Note: Used with section-level wordBank and grammarPassage.
+   { "id": 1, "type": "fill-blank", "question": "The rubber is ___ the pencil case.", "correctAnswer": "inside" }
+   Note: The "question" field MUST contain the full sentence with ___ marking where the blank is. Used with section-level wordBank. If you also provide grammarPassage (a longer passage with <b>(1) ___</b> markers), the passage-based layout will be used instead.
 
 4. **listening-mcq**: Listening comprehension MCQ with picture options.
    { "id": 1, "type": "listening-mcq", "question": "What is the man's job?", "options": [{"label": "a", "imageUrl": "", "text": "Doctor"}, ...], "correctAnswer": 0 }

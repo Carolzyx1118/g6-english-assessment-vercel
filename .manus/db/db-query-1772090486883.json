@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as cnt FROM customPapers;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user mWBJwMymT3uxJ8c.261d2007010d --database VUHjMbahokWnaDCesocaTj --execute SELECT COUNT(*) as cnt FROM customPapers;",
+  "rows": [
+    {
+      "cnt": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "cnt\n1\n",
+  "stderr": "",
+  "execution_time_ms": 1723
+}
