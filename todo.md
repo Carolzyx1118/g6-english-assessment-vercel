@@ -111,3 +111,4 @@
 - [x] Test end-to-end paper creation flow
 - [x] Fix word bank drag-and-drop not working for custom (AI-parsed) papers
 - [x] Fix missing unique key prop in OpenEndedCard list rendering
+- [x] Fix persistent React key warning from OpenEndedCard (still occurring after previous fix)

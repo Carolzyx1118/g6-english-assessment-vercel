@@ -317,14 +317,13 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
       try { return typeof answer === 'string' ? JSON.parse(answer) : (answer || {}); } catch { return {}; }
     })();
 
-    return (
-      <div className="space-y-4">
-        <p key="question" className="text-base text-slate-700">
-          <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-          {q.question}
-        </p>
-        {q.subQuestions.map((sub) => (
-          <div key={sub.label} className="ml-4 space-y-2">
+    const subItems = [
+      <div key={`q${q.id}-prompt`} className="text-base text-slate-700">
+        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        {q.question}
+      </div>,
+      ...q.subQuestions.map((sub) => (
+        <div key={`q${q.id}-${sub.label}`} className="ml-4 space-y-2">
             <label className="text-base font-medium text-slate-600">{sub.label}) {sub.question}</label>
             <textarea
               value={parsed[sub.label] || ''}
@@ -337,9 +336,9 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
               placeholder="Type your answer here..."
             />
           </div>
-        ))}
-      </div>
-    );
+      )),
+    ];
+    return <div className="space-y-4">{subItems}</div>;
   }
 
   return (
