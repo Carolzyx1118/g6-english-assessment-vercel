@@ -1088,6 +1088,17 @@ export default function SectionContent() {
           <p className="text-sm text-slate-500 leading-relaxed">{section.description}</p>
         </div>
 
+        {/* Scene/Reference Image */}
+        {section.sceneImageUrl && (
+          <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+            <img
+              src={section.sceneImageUrl}
+              alt={`${section.title} reference`}
+              className="w-full object-contain max-h-[500px] bg-white"
+            />
+          </div>
+        )}
+
         {/* Listening Audio Player */}
         {isListeningSection && section.audioUrl && (
           <AudioPlayer audioUrl={section.audioUrl} />

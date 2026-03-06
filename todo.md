@@ -164,3 +164,5 @@
 - [x] Insert paper into database with correct question types
 - [x] Fix opt.text null error in SectionEditor
 - [x] Test paper display and quiz flow end-to-end
+- [x] Remove Listening Part 4 from G1 English Proficiency Test
+- [x] Fix all images not displaying in G1 paper
