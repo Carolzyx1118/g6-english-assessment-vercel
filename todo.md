@@ -178,3 +178,9 @@
 - [x] Update Listening Part 1 options/answers based on correct matching
 - [x] Re-record Listening Part 3 questions with correct content from images
 - [x] Upload Part 3 reference images as storyImages
+- [x] Update Listening Part 2 answers (Ben, 12, 5, 18, Hall)
+- [x] Update Listening Part 3 answers (B, C, B, B, A)
+- [x] Update R&W Part 2 answers (no, yes, yes, no, yes)
+- [x] Update R&W Part 3 answers (pear, lemon, orange, banana, pineapple)
+- [x] Update R&W Part 4 answers (kitchen, dinner, book, tablet, rug)
+- [x] Update R&W Part 5 answers (boy/brother/child, 4/four, monkey, girl, pointing)
