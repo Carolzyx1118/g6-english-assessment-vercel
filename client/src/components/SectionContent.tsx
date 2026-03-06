@@ -41,12 +41,14 @@ function PictureMCQCard({ q, answer, onAnswer }: { q: PictureMCQ; answer?: numbe
               `}>
                 {opt.label}
               </span>
-              <img
-                src={opt.imageUrl}
-                alt={opt.text || `Option ${opt.label}`}
-                className="w-full h-24 sm:h-32 object-contain rounded-lg mb-2"
-                loading="lazy"
-              />
+              {opt.imageUrl ? (
+                <img
+                  src={opt.imageUrl}
+                  alt={opt.text || `Option ${opt.label}`}
+                  className="w-full h-24 sm:h-32 object-contain rounded-lg mb-2"
+                  loading="lazy"
+                />
+              ) : null}
               {opt.text && (
                 <span className={`text-xs sm:text-sm text-center ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-500'}`}>
                   {opt.text}
@@ -158,12 +160,14 @@ function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: n
               `}>
                 {opt.label}
               </span>
-              <img
-                src={opt.imageUrl}
-                alt={opt.text || `Option ${opt.label}`}
-                className="w-full h-24 sm:h-32 object-contain rounded-lg mb-2"
-                loading="lazy"
-              />
+              {opt.imageUrl ? (
+                <img
+                  src={opt.imageUrl}
+                  alt={opt.text || `Option ${opt.label}`}
+                  className="w-full h-24 sm:h-32 object-contain rounded-lg mb-2"
+                  loading="lazy"
+                />
+              ) : null}
               {opt.text && (
                 <span className={`text-xs sm:text-sm text-center ${isSelected ? 'text-purple-700 font-medium' : 'text-slate-500'}`}>
                   {opt.text}

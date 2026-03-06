@@ -166,3 +166,4 @@
 - [x] Test paper display and quiz flow end-to-end
 - [x] Remove Listening Part 4 from G1 English Proficiency Test
 - [x] Fix all images not displaying in G1 paper
+- [x] Fix empty string src attribute warnings on home page img elements

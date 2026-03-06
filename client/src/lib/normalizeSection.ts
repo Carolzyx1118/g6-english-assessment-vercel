@@ -109,6 +109,7 @@ function normalizeTrueFalse(q: any): TrueFalseQuestion {
   const rawReasons: string[] = q.reasons || [];
   
   for (let i = 0; i < rawStatements.length; i++) {
+    if (rawStatements[i] == null) continue;
     const stmtMatch = rawStatements[i].match(/^([a-z])[.)]\s*(.+)$/i);
     const label = stmtMatch ? stmtMatch[1].toLowerCase() : String.fromCharCode(97 + i);
     const statement = stmtMatch ? stmtMatch[2] : rawStatements[i];
