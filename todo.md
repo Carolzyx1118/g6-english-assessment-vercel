@@ -174,3 +174,4 @@
 - [x] Show playback controls after recording is complete
 - [x] Handle recording permissions and error states
 - [x] Add tick/cross question images to R&W Part 1 storyImages
+- [x] Add train image to the front of R&W Part 1 storyImages
