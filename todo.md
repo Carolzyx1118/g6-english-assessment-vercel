@@ -133,3 +133,6 @@
 - [x] Protect quiz routes - require login to access
 - [x] Write vitest tests for register and login procedures
 - [x] Fix login redirect - after login, not redirecting to quiz system landing page (switched to token-based auth)
+- [x] Redesign landing page with PureOne (璞源) brand elements
+- [x] Add PureOne logo and brand colors to the landing page
+- [x] Update login/register pages with PureOne branding
