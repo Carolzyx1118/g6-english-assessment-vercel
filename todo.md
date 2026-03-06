@@ -137,3 +137,7 @@
 - [x] Add PureOne logo and brand colors to the landing page
 - [x] Update login/register pages with PureOne branding
 - [x] Fix SVG divider overlap - "Choose Your Assessment" heading is clipped by navy hero section bottom edge
+- [x] Fix paper upload to capture images from exam papers
+- [x] Update AI parsing to include image references in question data (AVAILABLE_IMAGE_URLS)
+- [x] Add image preview and manual image URL editing in section editor
+- [x] Update frontend to display question images in quiz UI

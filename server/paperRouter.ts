@@ -149,6 +149,17 @@ IMPORTANT RULES:
 - Ensure all text content is properly escaped for JSON
 - wordBank letters MUST be uppercase single letters: A, B, C, D, etc.
 
+IMAGE HANDLING - CRITICAL:
+- You will be given a list of AVAILABLE_IMAGE_URLS that correspond to the uploaded images.
+- When you see images in the test materials that correspond to questions or options, you MUST use the actual URLs from AVAILABLE_IMAGE_URLS.
+- For picture-mcq: set each option's "imageUrl" to the matching image URL from AVAILABLE_IMAGE_URLS.
+- For mcq with images: set the question's "imageUrl" to the matching image URL.
+- For sections with a scene image: set "sceneImageUrl" to the matching image URL.
+- If the test paper has multiple images on one page, map each image to the correct question/option based on its position and context.
+- If you cannot determine which URL matches which image, assign them in order (first image URL to first question that needs an image, etc.).
+- NEVER leave imageUrl as empty string "" if there are available images that clearly belong to that question.
+- If a question references an image but no matching URL is available, set imageUrl to "" and add a note in the question text like "[Image needed]".
+
 Return a JSON object with this structure:
 {
   "title": "Paper Title",
@@ -210,6 +221,16 @@ export const paperRouter = router({
 
       if (input.instructions) {
         textPrompt += `Teacher's instructions: ${input.instructions}\n\n`;
+      }
+
+      // Pass all image URLs as available resources for the AI to reference
+      const allImageUrls = input.imageUrls || [];
+      if (allImageUrls.length > 0) {
+        textPrompt += `AVAILABLE_IMAGE_URLS (use these exact URLs in imageUrl fields when you identify matching images):\n`;
+        allImageUrls.forEach((url, i) => {
+          textPrompt += `  Image ${i + 1}: ${url}\n`;
+        });
+        textPrompt += `\nIMPORTANT: Map each image above to the correct question or option based on what you see in the image content. Use the EXACT URL strings above in the imageUrl fields of your output JSON.\n\n`;
       }
 
       if (input.audioUrls && input.audioUrls.length > 0) {

@@ -321,6 +321,22 @@ function SectionEditor({
             )}
           </div>
 
+          {/* Section-level images */}
+          <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50 rounded-lg text-sm">
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500 font-medium">Scene Image URL</label>
+              <Input
+                value={section.sceneImageUrl || ''}
+                onChange={(e) => onUpdate({ ...section, sceneImageUrl: e.target.value })}
+                placeholder="https://... (scene image for this section)"
+                className="h-8 text-sm"
+              />
+              {section.sceneImageUrl && (
+                <img src={section.sceneImageUrl} alt="Scene" className="mt-1 max-h-24 object-contain rounded border" />
+              )}
+            </div>
+          </div>
+
           {/* Questions */}
           <div className="space-y-2">
             {section.questions?.map((q: any, qi: number) => (
@@ -332,24 +348,63 @@ function SectionEditor({
                     <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
                       {getQuestionTypeLabel(q.type)}
                     </span>
+                    {q.imageUrl && (
+                      <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">📷 Has Image</span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-800 mb-1">
                     {q.question || q.topic || q.statements?.[0]?.statement || '(no question text)'}
                   </p>
+                  {/* Question image preview */}
+                  {q.imageUrl && (
+                    <div className="my-1">
+                      <img src={q.imageUrl} alt={`Q${q.id} image`} className="max-h-20 object-contain rounded border" />
+                    </div>
+                  )}
+                  {/* Image URL editor for MCQ types */}
+                  {(q.type === 'mcq') && (
+                    <div className="mt-1">
+                      <Input
+                        value={q.imageUrl || ''}
+                        onChange={(e) => updateQuestion(qi, 'imageUrl', e.target.value)}
+                        placeholder="Image URL for this question (optional)"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  )}
                   {/* Options for MCQ types */}
                   {(q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') && q.options && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="space-y-1 mt-1">
                       {q.options.map((opt: any, oi: number) => (
-                        <span
-                          key={oi}
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            oi === q.correctAnswer
-                              ? 'bg-green-100 text-green-700 font-medium'
-                              : 'bg-gray-50 text-gray-600'
-                          }`}
-                        >
-                          {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : opt.text || opt.label}
-                        </span>
+                        <div key={oi} className="flex items-center gap-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
+                              oi === q.correctAnswer
+                                ? 'bg-green-100 text-green-700 font-medium'
+                                : 'bg-gray-50 text-gray-600'
+                            }`}
+                          >
+                            {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : opt.text || opt.label}
+                          </span>
+                          {/* Show option image for picture-mcq and listening-mcq */}
+                          {(q.type === 'picture-mcq' || q.type === 'listening-mcq') && typeof opt === 'object' && (
+                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                              <Input
+                                value={opt.imageUrl || ''}
+                                onChange={(e) => {
+                                  const newOptions = [...q.options];
+                                  newOptions[oi] = { ...newOptions[oi], imageUrl: e.target.value };
+                                  updateQuestion(qi, 'options', newOptions);
+                                }}
+                                placeholder="Option image URL"
+                                className="h-6 text-xs flex-1"
+                              />
+                              {opt.imageUrl && (
+                                <img src={opt.imageUrl} alt={`Opt ${opt.label}`} className="h-8 w-8 object-contain rounded border flex-shrink-0" />
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
