@@ -499,7 +499,7 @@ function SectionEditor({
       const idx = q.correctAnswer;
       if (idx >= 0 && idx < opts.length) {
         const opt = opts[idx];
-        return `${String.fromCharCode(97 + idx)}) ${opt.text || opt.label || opt}`;
+        return `${String.fromCharCode(97 + idx)}) ${opt?.text || opt?.label || opt || ''}`;
       }
       return `Index: ${idx}`;
     }
@@ -685,7 +685,7 @@ function SectionEditor({
                                 : 'bg-gray-100 text-gray-600'
                             }`}
                           >
-                            {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : opt.text || opt.label}
+                            {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : (opt?.text || opt?.label || '')}
                           </span>
                           {/* Option image upload for picture-mcq */}
                           {(q.type === 'picture-mcq' || q.type === 'listening-mcq') && (

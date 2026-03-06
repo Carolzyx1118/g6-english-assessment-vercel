@@ -157,3 +157,10 @@
 - [x] Drag-and-drop support — drop images directly onto question/option/scene areas
 - [x] Update ImageUploadButton to support drag-and-drop
 - [x] Write tests for new upload features
+- [x] Create G1 English Proficiency Test paper from PDF
+- [x] Upload audio files (Part 1-4) and scene image to S3
+- [x] Extract and upload individual question images from PDF pages
+- [x] Structure all listening sections as Part 1
+- [x] Insert paper into database with correct question types
+- [x] Fix opt.text null error in SectionEditor
+- [x] Test paper display and quiz flow end-to-end
