@@ -60,31 +60,45 @@ function extractSentencesFromPassage(passage: string, questionIds: number[]): Ma
  * Pattern 4 (mixed): { statements: [{statement: "...", isTrue: true}] } (missing label/reason)
  */
 function normalizeTrueFalse(q: any): TrueFalseQuestion {
-  // Check if already in correct format
+  // Guard: if statements is missing or empty, return empty
+  if (!q.statements || !Array.isArray(q.statements) || q.statements.length === 0) {
+    return { id: q.id, type: 'true-false', statements: [] };
+  }
+
+  const first = q.statements[0];
+
+  // Check if already in correct format (first element is a non-null object with expected keys)
   if (
-    q.statements?.length > 0 &&
-    typeof q.statements[0] === 'object' &&
-    'label' in q.statements[0] &&
-    'statement' in q.statements[0] &&
-    'isTrue' in q.statements[0]
+    first !== null &&
+    first !== undefined &&
+    typeof first === 'object' &&
+    'label' in first &&
+    'statement' in first &&
+    'isTrue' in first
   ) {
     const statements = q.statements.map((s: any, idx: number) => ({
-      label: s.label || String.fromCharCode(97 + idx),
-      statement: s.statement,
-      isTrue: !!s.isTrue,
-      reason: s.reason || '',
+      label: s?.label || String.fromCharCode(97 + idx),
+      statement: s?.statement || '',
+      isTrue: !!s?.isTrue,
+      reason: s?.reason || '',
     }));
     return { id: q.id, type: 'true-false', statements };
   }
   
-  // Pattern 4: objects but missing some fields
-  if (q.statements?.length > 0 && typeof q.statements[0] === 'object') {
-    const statements = q.statements.map((s: any, idx: number) => ({
-      label: s.label || String.fromCharCode(97 + idx),
-      statement: s.statement || s.text || '',
-      isTrue: s.isTrue !== undefined ? !!s.isTrue : false,
-      reason: s.reason || s.explanation || '',
-    }));
+  // Pattern 4: objects but missing some fields (ensure non-null)
+  if (
+    first !== null &&
+    first !== undefined &&
+    typeof first === 'object'
+  ) {
+    const statements = q.statements
+      .filter((s: any) => s !== null && s !== undefined)
+      .map((s: any, idx: number) => ({
+        label: s.label || String.fromCharCode(97 + idx),
+        statement: s.statement || s.text || '',
+        isTrue: s.isTrue !== undefined ? !!s.isTrue : false,
+        reason: s.reason || s.explanation || '',
+      }));
     return { id: q.id, type: 'true-false', statements };
   }
   
@@ -115,14 +129,17 @@ function normalizeTrueFalse(q: any): TrueFalseQuestion {
  * Normalize an open-ended question's subQuestions.
  */
 function normalizeOpenEnded(q: any): OpenEndedQuestion {
-  if (!q.subQuestions || q.subQuestions.length === 0) {
+  if (!q.subQuestions || !Array.isArray(q.subQuestions) || q.subQuestions.length === 0) {
     return q as OpenEndedQuestion;
   }
   
+  const first = q.subQuestions[0];
   if (
-    typeof q.subQuestions[0] === 'object' &&
-    'label' in q.subQuestions[0] &&
-    'question' in q.subQuestions[0]
+    first !== null &&
+    first !== undefined &&
+    typeof first === 'object' &&
+    'label' in first &&
+    'question' in first
   ) {
     const subs = q.subQuestions.map((s: any) => ({
       label: s.label,
@@ -175,11 +192,14 @@ function normalizeOpenEnded(q: any): OpenEndedQuestion {
  */
 function normalizeTable(q: any): TableQuestion {
   // Already in correct format - rows is array of objects with situation/thought/action/blankField/answer
+  const tableFirst = q.rows?.[0];
   if (
     q.rows?.length > 0 &&
-    typeof q.rows[0] === 'object' &&
-    !Array.isArray(q.rows[0]) &&
-    'blankField' in q.rows[0]
+    tableFirst !== null &&
+    tableFirst !== undefined &&
+    typeof tableFirst === 'object' &&
+    !Array.isArray(tableFirst) &&
+    'blankField' in tableFirst
   ) {
     return q as TableQuestion;
   }
@@ -281,7 +301,8 @@ function normalizeTable(q: any): TableQuestion {
   }
   
   // AI format variant: rows is array of objects but without blankField
-  if (q.rows?.length > 0 && typeof q.rows[0] === 'object' && !('blankField' in q.rows[0])) {
+  const tableFirst2 = q.rows?.[0];
+  if (q.rows?.length > 0 && tableFirst2 !== null && tableFirst2 !== undefined && typeof tableFirst2 === 'object' && !('blankField' in tableFirst2)) {
     const normalizedRows = q.rows.map((row: any) => {
       const situation = row.situation || row.event || '';
       const thought = row.thought || row.feeling || row.reason || '';
@@ -325,10 +346,13 @@ function normalizeTable(q: any): TableQuestion {
  */
 function normalizeReference(q: any): ReferenceQuestion {
   // Already in correct format
+  const refFirst = q.items?.[0];
   if (
     q.items?.length > 0 &&
-    typeof q.items[0] === 'object' &&
-    'word' in q.items[0]
+    refFirst !== null &&
+    refFirst !== undefined &&
+    typeof refFirst === 'object' &&
+    'word' in refFirst
   ) {
     // Ensure answer field exists
     const items = q.items.map((item: any) => ({
@@ -382,10 +406,13 @@ function normalizeReference(q: any): ReferenceQuestion {
  */
 function normalizePhrase(q: any): PhraseQuestion {
   // Already in correct format
+  const phraseFirst = q.items?.[0];
   if (
     q.items?.length > 0 &&
-    typeof q.items[0] === 'object' &&
-    'clue' in q.items[0]
+    phraseFirst !== null &&
+    phraseFirst !== undefined &&
+    typeof phraseFirst === 'object' &&
+    'clue' in phraseFirst
   ) {
     const items = q.items.map((item: any) => ({
       clue: item.clue || '',
@@ -464,28 +491,40 @@ function normalizeWordBank(wordBank: any[] | undefined): { letter: string; word:
 function normalizeQuestions(questions: any[], grammarPassage?: string): Question[] {
   if (!questions || !Array.isArray(questions)) return [];
   
-  let normalized = normalizeFillBlanks(questions, grammarPassage);
+  let normalized: any[];
+  try {
+    normalized = normalizeFillBlanks(questions, grammarPassage);
+  } catch (e) {
+    console.warn('normalizeFillBlanks failed, using raw questions:', e);
+    normalized = questions;
+  }
   
   return normalized.map(q => {
-    const id = typeof q.id === 'string' ? parseInt(q.id, 10) : q.id;
-    
-    switch (q.type) {
-      case 'true-false':
-        return { ...normalizeTrueFalse(q), id };
-      case 'open-ended':
-        return { ...normalizeOpenEnded(q), id };
-      case 'table':
-        return { ...normalizeTable(q), id };
-      case 'reference':
-        return { ...normalizeReference(q), id };
-      case 'phrase':
-        return { ...normalizePhrase(q), id };
-      case 'mcq':
-        return { ...q, id, correctAnswer: typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer };
-      case 'checkbox':
-        return { ...q, id, correctAnswers: (q.correctAnswers || []).map((a: any) => typeof a === 'string' ? parseInt(a, 10) : a) };
-      default:
-        return { ...q, id };
+    try {
+      const id = typeof q.id === 'string' ? parseInt(q.id, 10) : (q.id || 0);
+      
+      switch (q.type) {
+        case 'true-false':
+          return { ...normalizeTrueFalse(q), id };
+        case 'open-ended':
+          return { ...normalizeOpenEnded(q), id };
+        case 'table':
+          return { ...normalizeTable(q), id };
+        case 'reference':
+          return { ...normalizeReference(q), id };
+        case 'phrase':
+          return { ...normalizePhrase(q), id };
+        case 'mcq':
+          return { ...q, id, correctAnswer: typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer };
+        case 'checkbox':
+          return { ...q, id, correctAnswers: (q.correctAnswers || []).map((a: any) => typeof a === 'string' ? parseInt(a, 10) : a) };
+        default:
+          return { ...q, id };
+      }
+    } catch (e) {
+      console.warn(`Failed to normalize question ${q.id}:`, e);
+      // Return the question as-is with a safe id
+      return { ...q, id: typeof q.id === 'string' ? parseInt(q.id, 10) : (q.id || 0) };
     }
   });
 }
@@ -527,5 +566,25 @@ export function normalizeSection(section: any): Section {
  */
 export function normalizeSections(sections: any[]): Section[] {
   if (!sections || !Array.isArray(sections)) return [];
-  return sections.map(normalizeSection);
+  return sections.map((section, idx) => {
+    try {
+      return normalizeSection(section);
+    } catch (e) {
+      console.warn(`Failed to normalize section ${idx} (${section?.title || 'unknown'}):`, e);
+      // Return a minimal valid section so the rest of the paper still works
+      return {
+        id: section?.id || `section-error-${idx}`,
+        title: section?.title || `Section ${idx + 1}`,
+        subtitle: section?.subtitle || '',
+        icon: section?.icon || '⚠️',
+        color: section?.color || 'text-red-600',
+        bgColor: section?.bgColor || 'bg-red-50',
+        description: 'This section could not be loaded properly. Please re-upload the paper.',
+        questions: Array.isArray(section?.questions) ? section.questions.map((q: any, qIdx: number) => ({
+          ...q,
+          id: typeof q.id === 'string' ? parseInt(q.id, 10) : (q.id || qIdx),
+        })) : [],
+      };
+    }
+  });
 }

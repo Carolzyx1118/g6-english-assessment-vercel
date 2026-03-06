@@ -141,3 +141,4 @@
 - [x] Update AI parsing to include image references in question data (AVAILABLE_IMAGE_URLS)
 - [x] Add image preview and manual image URL editing in section editor
 - [x] Update frontend to display question images in quiz UI
+- [x] Fix SectionContent.tsx crash at line 1930 when rendering custom AI-parsed papers (null-safe normalization + per-section try-catch)

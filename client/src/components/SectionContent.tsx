@@ -719,8 +719,9 @@ function WIDAReadingSection({
   setAnswer: (sectionId: string, id: number, v: string) => void;
   readingWordBank: { word: string; imageUrl: string }[];
 }) {
-  const wordBankQuestions = section.questions.filter((q: Question) => q.type === 'wordbank-fill') as WordBankFillIn[];
-  const storyQuestions = section.questions.filter((q: Question) => q.type === 'story-fill') as StoryFillIn[];
+  const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
+  const wordBankQuestions = sectionQuestions.filter((q: Question) => q.type === 'wordbank-fill') as WordBankFillIn[];
+  const storyQuestions = sectionQuestions.filter((q: Question) => q.type === 'story-fill') as StoryFillIn[];
 
   // Track which words have been used (assigned to a question)
   const usedWords = new Set<string>();
@@ -1032,18 +1033,21 @@ export default function SectionContent() {
   const section = currentSection;
   const isLastSection = state.currentSectionIndex === sections.length - 1;
 
+  // Guard: ensure section.questions is always a valid array
+  const questions = Array.isArray(section?.questions) ? section.questions : [];
+
   // Determine section characteristics
-  const hasFillBlank = section.questions.some(q => q.type === 'fill-blank');
+  const hasFillBlank = questions.some(q => q.type === 'fill-blank');
   const hasGrammarPassage = !!section.grammarPassage;
   const hasWordBank = !!section.wordBank;
   const isWIDAGrammar = hasFillBlank && hasWordBank && !hasGrammarPassage;
   const isHuaZhongGrammar = hasFillBlank && hasWordBank && hasGrammarPassage;
-  const isWIDAReading = section.questions.some(q => q.type === 'wordbank-fill' || q.type === 'story-fill');
+  const isWIDAReading = questions.some(q => q.type === 'wordbank-fill' || q.type === 'story-fill');
   const isHuaZhongReading = !!section.passage;
   const isListeningSection = !!section.audioUrl;
 
   // Questions that are NOT fill-blank (those are handled by DragDrop sections)
-  const regularQuestions = section.questions.filter(q => q.type !== 'fill-blank');
+  const regularQuestions = questions.filter(q => q.type !== 'fill-blank');
 
   return (
     <AnimatePresence mode="wait">
@@ -1115,7 +1119,7 @@ export default function SectionContent() {
             {/* Unified drag & drop fill-in-blank (handles both sentence and passage modes) */}
             {(isWIDAGrammar || isHuaZhongGrammar) && (
               <DragDropFillBlank
-                questions={section.questions.filter(q => q.type === 'fill-blank') as FillBlankQuestion[]}
+                questions={questions.filter(q => q.type === 'fill-blank') as FillBlankQuestion[]}
                 wordBank={section.wordBank!}
                 grammarPassage={section.grammarPassage}
                 sceneImageUrl={section.sceneImageUrl}
@@ -1127,7 +1131,7 @@ export default function SectionContent() {
 
             {/* Regular questions (MCQ, PictureMCQ, ListeningMCQ, OpenEnded, TrueFalse, etc.) */}
             <div className="space-y-6">
-              {((isWIDAGrammar || isHuaZhongGrammar) ? regularQuestions : section.questions).filter(q => q.type !== 'fill-blank').map((q) => {
+              {((isWIDAGrammar || isHuaZhongGrammar) ? regularQuestions : questions).filter(q => q.type !== 'fill-blank').map((q) => {
                 const answer = getAnswer(section.id, q.id);
                 return (
                   <div key={q.id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
