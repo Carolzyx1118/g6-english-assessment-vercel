@@ -1092,8 +1092,20 @@ export default function SectionContent() {
           <p className="text-sm text-slate-500 leading-relaxed">{section.description}</p>
         </div>
 
-        {/* Scene/Reference Image */}
-        {section.sceneImageUrl && (
+        {/* Scene/Reference Image(s) */}
+        {section.storyImages && section.storyImages.length > 0 ? (
+          <div className="mb-6 space-y-4">
+            {section.storyImages.map((imgUrl: string, idx: number) => (
+              <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                <img
+                  src={imgUrl}
+                  alt={`${section.title} reference ${idx + 1}`}
+                  className="w-full object-contain max-h-[500px] bg-white"
+                />
+              </div>
+            ))}
+          </div>
+        ) : section.sceneImageUrl ? (
           <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
             <img
               src={section.sceneImageUrl}
@@ -1101,7 +1113,7 @@ export default function SectionContent() {
               className="w-full object-contain max-h-[500px] bg-white"
             />
           </div>
-        )}
+        ) : null}
 
         {/* Listening Audio Player */}
         {isListeningSection && section.audioUrl && (
