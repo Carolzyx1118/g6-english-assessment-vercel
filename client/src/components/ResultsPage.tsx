@@ -11,13 +11,29 @@ import {
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
 
-const sectionMeta: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
+const sectionMetaMap: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
   grammar: { icon: <PenTool className="w-5 h-5" />, gradient: 'from-amber-500 to-amber-600', bg: 'bg-amber-50' },
   listening: { icon: <Headphones className="w-5 h-5" />, gradient: 'from-purple-500 to-purple-600', bg: 'bg-purple-50' },
   reading: { icon: <FileText className="w-5 h-5" />, gradient: 'from-indigo-500 to-indigo-600', bg: 'bg-indigo-50' },
   writing: { icon: <PenTool className="w-5 h-5" />, gradient: 'from-rose-500 to-rose-600', bg: 'bg-rose-50' },
+  rw: { icon: <FileText className="w-5 h-5" />, gradient: 'from-teal-500 to-teal-600', bg: 'bg-teal-50' },
+  speaking: { icon: <Globe className="w-5 h-5" />, gradient: 'from-sky-500 to-sky-600', bg: 'bg-sky-50' },
 };
+
+// Helper to resolve section meta by prefix matching (e.g., 'listening-part1' → 'listening')
+function getSectionMeta(sectionId: string) {
+  if (sectionMetaMap[sectionId]) return sectionMetaMap[sectionId];
+  for (const key of Object.keys(sectionMetaMap)) {
+    if (sectionId.startsWith(key)) return sectionMetaMap[key];
+  }
+  return { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-slate-500 to-slate-600', bg: 'bg-slate-50' };
+}
+
+// Backward-compatible proxy for sectionMeta[id] usage
+const sectionMeta = new Proxy({} as Record<string, { icon: React.ReactNode; gradient: string; bg: string }>, {
+  get: (_target, prop: string) => getSectionMeta(prop),
+});
 
 type Lang = 'en' | 'cn';
 type ReadingGradingResult = { questionId: string; isCorrect: boolean; score: number; feedback_en: string; feedback_cn: string; explanation_en: string; explanation_cn: string };
@@ -256,11 +272,20 @@ export default function ResultsPage() {
             context: `The correct answer is option ${q.options[q.correctAnswer]?.label}: ${correctText}.` });
         } else if (q.type === 'mcq') {
           const userAns = getAnswer(section.id, q.id);
-          const userIdx = userAns !== undefined ? Number(userAns) : -1;
-          sectionResults.push({ id: q.id, question: q.question.replace('___', q.highlightWord || '___'),
-            userAnswer: userIdx >= 0 ? q.options[userIdx] : 'Not answered',
-            correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
-            context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
+          if (typeof q.correctAnswer === 'number') {
+            // Standard MCQ with numeric index answer
+            const userIdx = userAns !== undefined ? Number(userAns) : -1;
+            sectionResults.push({ id: q.id, question: q.question.replace('___', q.highlightWord || '___'),
+              userAnswer: userIdx >= 0 ? q.options[userIdx] : 'Not answered',
+              correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
+              context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
+          } else {
+            // MCQ with string answer (e.g., yes/no)
+            const userText = userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered';
+            const isCorrect = userText !== 'Not answered' && userText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+            sectionResults.push({ id: q.id, question: q.question,
+              userAnswer: userText, correctAnswer: String(q.correctAnswer), isCorrect });
+          }
         } else if (q.type === 'fill-blank') {
           const userAns = getAnswer(section.id, q.id);
           const wordBank = section.wordBank;
@@ -271,6 +296,39 @@ export default function ResultsPage() {
             correctAnswer: correctWord ? `${correctWord.letter} ${correctWord.word}` : q.correctAnswer,
             isCorrect: String(userAns).toUpperCase() === q.correctAnswer.toUpperCase(),
             context: `Grammar fill-in-the-blank. The correct word is "${correctWord?.word}".` });
+        } else if (q.type === 'open-ended') {
+          const userAns = getAnswer(section.id, q.id);
+          const userText = userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered';
+          // Speaking questions (no correctAnswer) - show as submitted
+          if (!q.correctAnswer) {
+            const isAudioUrl = typeof userAns === 'string' && (userAns.startsWith('http') || userAns.startsWith('blob'));
+            sectionResults.push({ id: q.id, question: q.question,
+              userAnswer: isAudioUrl ? 'Audio recorded' : userText,
+              correctAnswer: 'Manual grading required', isCorrect: false,
+              context: 'Speaking/open-ended question - requires manual review.' });
+          } else {
+            // Open-ended with correctAnswer (supports / for multiple acceptable answers)
+            const acceptables = String(q.correctAnswer).split('/').map(a => a.trim().toLowerCase());
+            const isCorrect = userText !== 'Not answered' && acceptables.includes(userText.trim().toLowerCase());
+            sectionResults.push({ id: q.id, question: q.question,
+              userAnswer: userText,
+              correctAnswer: q.correctAnswer,
+              isCorrect,
+              context: acceptables.length > 1 ? `Acceptable answers: ${acceptables.join(', ')}` : undefined });
+          }
+        } else if (q.type === 'true-false') {
+          const userAns = getAnswer(section.id, q.id);
+          if (q.statements) {
+            const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : (userAns || {}); } catch { return {}; } })();
+            for (const stmt of q.statements) {
+              const userVal = parsed[stmt.label];
+              const userDisplay = userVal === true ? 'True (\u2713)' : userVal === false ? 'False (\u2717)' : 'Not answered';
+              const correctDisplay = stmt.isTrue ? 'True (\u2713)' : 'False (\u2717)';
+              sectionResults.push({ id: q.id, question: stmt.statement,
+                userAnswer: userDisplay, correctAnswer: correctDisplay,
+                isCorrect: userVal === stmt.isTrue });
+            }
+          }
         } else if (q.type === 'checkbox') {
           const userAns = getAnswer(section.id, q.id) as number[] | undefined;
           const userLabels = userAns ? userAns.map((i: number) => q.options[i]).join(', ') : 'Not answered';
@@ -656,6 +714,21 @@ export default function ResultsPage() {
                     <div className="flex-1">
                       <div className="font-semibold text-base text-slate-700">{section.title}</div>
                       <div className="text-sm text-red-400">{writingError || (lang === 'en' ? 'No essay submitted' : '未提交作文')}</div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Speaking section - show as manual grading required
+              if (section.id === 'speaking' || section.id.startsWith('speaking')) {
+                return (
+                  <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
+                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-base text-slate-700">{section.title}</span>
+                        <span className="text-sm text-sky-600 font-medium">{lang === 'en' ? 'Manual grading' : '需人工评分'}</span>
+                      </div>
                     </div>
                   </div>
                 );

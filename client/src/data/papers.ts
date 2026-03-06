@@ -63,6 +63,8 @@ export interface OpenEndedQuestion {
   question: string;
   subQuestions?: { label: string; question: string; answer: string }[];
   answer?: string;
+  correctAnswer?: string;
+  imageUrl?: string;
 }
 
 /** True/False question */

@@ -184,3 +184,10 @@
 - [x] Update R&W Part 3 answers (pear, lemon, orange, banana, pineapple)
 - [x] Update R&W Part 4 answers (kitchen, dinner, book, tablet, rug)
 - [x] Update R&W Part 5 answers (boy/brother/child, 4/four, monkey, girl, pointing)
+- [x] Fix R&W Part 3, R&W Part 5, and Listening Part 2 not showing on Assessment Complete page
+- [x] Add open-ended question scoring in QuizContext (supports / for multiple acceptable answers)
+- [x] Add true-false question scoring in QuizContext
+- [x] Fix MCQ scoring for string correctAnswer (yes/no questions)
+- [x] Add open-ended and true-false display in detailedResults on ResultsPage
+- [x] Add section meta styling for G1 paper section IDs (listening-part*, rw-part*, speaking)
+- [x] Add speaking section display as 'Manual grading' in section scores

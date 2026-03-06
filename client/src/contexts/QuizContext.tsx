@@ -220,7 +220,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         let isCorrect = false;
 
         if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') {
-          isCorrect = Number(answer) === q.correctAnswer;
+          // Handle both numeric index and string correctAnswer (e.g. yes/no MCQ)
+          if (typeof q.correctAnswer === 'number') {
+            isCorrect = Number(answer) === q.correctAnswer;
+          } else {
+            isCorrect = String(answer).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+          }
         } else if (q.type === 'fill-blank') {
           isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
         } else if (q.type === 'wordbank-fill') {
@@ -231,6 +236,26 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           if (!isCorrect && q.acceptableAnswers) {
             isCorrect = q.acceptableAnswers.some((a: string) => userAnswer === a.trim().toLowerCase());
           }
+        } else if (q.type === 'open-ended') {
+          // open-ended with a correctAnswer: compare text (supports / for multiple acceptable answers)
+          if (q.correctAnswer) {
+            const userAnswer = String(answer).trim().toLowerCase();
+            const acceptables = String(q.correctAnswer).split('/').map((a: string) => a.trim().toLowerCase());
+            isCorrect = acceptables.includes(userAnswer);
+          }
+          // Speaking (no correctAnswer) is excluded from auto-scoring
+        } else if (q.type === 'true-false') {
+          // true-false scoring: compare JSON answers
+          try {
+            const userAnswers = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            if (q.statements) {
+              let allCorrect = true;
+              for (const stmt of q.statements) {
+                if (userAnswers[stmt.label] !== stmt.isTrue) allCorrect = false;
+              }
+              isCorrect = allCorrect;
+            }
+          } catch { /* skip */ }
         } else if (q.type === 'checkbox') {
           // Checkbox scoring handled separately
         }
