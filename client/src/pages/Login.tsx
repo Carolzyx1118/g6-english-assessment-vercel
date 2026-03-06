@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { saveAuthToken } from "@/hooks/useLocalAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,10 +14,21 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const utils = trpc.useUtils();
 
   const loginMutation = trpc.localAuth.login.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      // Save the token to localStorage
+      saveAuthToken(data.token);
+      // Update the localAuth.me cache with the logged-in user data
+      utils.localAuth.me.setData(undefined, {
+        id: data.user.id,
+        username: data.user.username,
+        displayName: data.user.displayName,
+        role: "user",
+      });
       toast.success("登录成功！");
+      // Navigate to home page
       navigate("/");
     },
     onError: (err) => {

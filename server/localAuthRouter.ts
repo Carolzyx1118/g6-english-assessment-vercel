@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { ENV } from "./_core/env";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { publicProcedure, router } from "./_core/trpc";
 import {
   getLocalUserByUsername,
@@ -12,7 +11,6 @@ import {
   updateLocalUserLastLogin,
 } from "./db";
 
-const LOCAL_AUTH_COOKIE = "local_session";
 const SALT_ROUNDS = 10;
 
 // The invite code is read from env. Fallback to a default for development.
@@ -42,13 +40,13 @@ async function createLocalSessionToken(userId: number, username: string): Promis
 }
 
 async function verifyLocalSession(
-  cookieValue: string | undefined | null
+  token: string | undefined | null
 ): Promise<{ userId: number; username: string } | null> {
-  if (!cookieValue) return null;
+  if (!token) return null;
 
   try {
     const secret = getJwtSecret();
-    const { payload } = await jwtVerify(cookieValue, secret, {
+    const { payload } = await jwtVerify(token, secret, {
       algorithms: ["HS256"],
     });
 
@@ -64,15 +62,32 @@ async function verifyLocalSession(
   }
 }
 
-function getLocalCookie(req: any): string | undefined {
+/**
+ * Extract the local auth token from the request.
+ * Checks Authorization header first (Bearer token), then falls back to cookie.
+ */
+function getLocalToken(req: any): string | undefined {
+  // Check Authorization header first: "Bearer <token>"
+  const authHeader = req.headers?.authorization;
+  if (authHeader && typeof authHeader === "string") {
+    const parts = authHeader.split(" ");
+    if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+      return parts[1];
+    }
+  }
+
+  // Fallback: check for cookie (for backwards compatibility)
   const cookieHeader = req.headers?.cookie;
-  if (!cookieHeader) return undefined;
-  const cookies = cookieHeader.split(";").reduce((acc: Record<string, string>, c: string) => {
-    const [key, ...rest] = c.split("=");
-    acc[key.trim()] = rest.join("=").trim();
-    return acc;
-  }, {} as Record<string, string>);
-  return cookies[LOCAL_AUTH_COOKIE];
+  if (cookieHeader) {
+    const cookies = cookieHeader.split(";").reduce((acc: Record<string, string>, c: string) => {
+      const [key, ...rest] = c.split("=");
+      acc[key.trim()] = rest.join("=").trim();
+      return acc;
+    }, {} as Record<string, string>);
+    return cookies["local_session"];
+  }
+
+  return undefined;
 }
 
 export const localAuthRouter = router({
@@ -92,7 +107,7 @@ export const localAuthRouter = router({
         inviteCode: z.string().min(1, "请输入邀请码"),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       // Validate invite code
       const validCodes = getValidInviteCodes();
       if (!validCodes.includes(input.inviteCode.trim().toUpperCase())) {
@@ -129,16 +144,12 @@ export const localAuthRouter = router({
         });
       }
 
-      // Create session token and set cookie
+      // Create session token and return it in the response body
       const token = await createLocalSessionToken(userId, input.username);
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(LOCAL_AUTH_COOKIE, token, {
-        ...cookieOptions,
-        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
-      });
 
       return {
         success: true,
+        token,
         user: {
           id: userId,
           username: input.username,
@@ -155,7 +166,7 @@ export const localAuthRouter = router({
         password: z.string().min(1, "请输入密码"),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const user = await getLocalUserByUsername(input.username);
       if (!user) {
         throw new TRPCError({
@@ -175,16 +186,12 @@ export const localAuthRouter = router({
       // Update last login time
       await updateLocalUserLastLogin(user.id);
 
-      // Create session token and set cookie
+      // Create session token and return it in the response body
       const token = await createLocalSessionToken(user.id, user.username);
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(LOCAL_AUTH_COOKIE, token, {
-        ...cookieOptions,
-        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
-      });
 
       return {
         success: true,
+        token,
         user: {
           id: user.id,
           username: user.username,
@@ -193,10 +200,10 @@ export const localAuthRouter = router({
       };
     }),
 
-  /** Get current local user session */
+  /** Get current local user session - reads token from Authorization header */
   me: publicProcedure.query(async ({ ctx }) => {
-    const cookieValue = getLocalCookie(ctx.req);
-    const session = await verifyLocalSession(cookieValue);
+    const token = getLocalToken(ctx.req);
+    const session = await verifyLocalSession(token);
 
     if (!session) {
       return null;
@@ -215,10 +222,9 @@ export const localAuthRouter = router({
     };
   }),
 
-  /** Logout local user */
-  logout: publicProcedure.mutation(({ ctx }) => {
-    const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.clearCookie(LOCAL_AUTH_COOKIE, { ...cookieOptions, maxAge: -1 });
+  /** Logout local user - client should clear localStorage token */
+  logout: publicProcedure.mutation(() => {
+    // Token-based auth: client clears localStorage, nothing to do server-side
     return { success: true };
   }),
 });

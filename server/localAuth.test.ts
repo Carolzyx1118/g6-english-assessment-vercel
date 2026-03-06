@@ -19,37 +19,22 @@ vi.mock("./db", async (importOriginal) => {
 
 import * as db from "./db";
 
-type CookieCall = {
-  name: string;
-  value?: string;
-  options: Record<string, unknown>;
-};
-
-function createPublicContext(): {
+function createPublicContext(authHeader?: string): {
   ctx: TrpcContext;
-  setCookies: CookieCall[];
-  clearedCookies: CookieCall[];
 } {
-  const setCookies: CookieCall[] = [];
-  const clearedCookies: CookieCall[] = [];
-
   const ctx: TrpcContext = {
     user: null,
     req: {
       protocol: "https",
-      headers: {},
+      headers: authHeader ? { authorization: authHeader } : {},
     } as TrpcContext["req"],
     res: {
-      cookie: (name: string, value: string, options: Record<string, unknown>) => {
-        setCookies.push({ name, value, options });
-      },
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
+      cookie: vi.fn(),
+      clearCookie: vi.fn(),
     } as unknown as TrpcContext["res"],
   };
 
-  return { ctx, setCookies, clearedCookies };
+  return { ctx };
 }
 
 describe("localAuth.register", () => {
@@ -97,8 +82,8 @@ describe("localAuth.register", () => {
     ).rejects.toThrow("该用户名已被注册");
   });
 
-  it("successfully registers a new user with valid invite code", async () => {
-    const { ctx, setCookies } = createPublicContext();
+  it("successfully registers a new user with valid invite code and returns token", async () => {
+    const { ctx } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     // Mock: username does not exist
@@ -115,11 +100,10 @@ describe("localAuth.register", () => {
     expect(result.success).toBe(true);
     expect(result.user.id).toBe(42);
     expect(result.user.username).toBe("newuser");
-
-    // Should set a session cookie
-    expect(setCookies).toHaveLength(1);
-    expect(setCookies[0]?.name).toBe("local_session");
-    expect(setCookies[0]?.value).toBeTruthy();
+    // Token should be returned in the response body
+    expect(result.token).toBeTruthy();
+    expect(typeof result.token).toBe("string");
+    expect(result.token.split(".")).toHaveLength(3); // JWT has 3 parts
 
     // Should have called createLocalUser with hashed password
     expect(db.createLocalUser).toHaveBeenCalledOnce();
@@ -131,7 +115,7 @@ describe("localAuth.register", () => {
   });
 
   it("invite code is case-insensitive", async () => {
-    const { ctx, setCookies } = createPublicContext();
+    const { ctx } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce(undefined);
@@ -144,6 +128,7 @@ describe("localAuth.register", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.token).toBeTruthy();
   });
 
   it("rejects username shorter than 3 characters", async () => {
@@ -219,8 +204,8 @@ describe("localAuth.login", () => {
     ).rejects.toThrow("用户名或密码错误");
   });
 
-  it("successfully logs in with correct credentials", async () => {
-    const { ctx, setCookies } = createPublicContext();
+  it("successfully logs in with correct credentials and returns token", async () => {
+    const { ctx } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const bcrypt = await import("bcryptjs");
@@ -246,10 +231,10 @@ describe("localAuth.login", () => {
     expect(result.user.id).toBe(5);
     expect(result.user.username).toBe("testuser");
     expect(result.user.displayName).toBe("Test User");
-
-    // Should set a session cookie
-    expect(setCookies).toHaveLength(1);
-    expect(setCookies[0]?.name).toBe("local_session");
+    // Token should be returned in the response body
+    expect(result.token).toBeTruthy();
+    expect(typeof result.token).toBe("string");
+    expect(result.token.split(".")).toHaveLength(3); // JWT has 3 parts
 
     // Should update last login
     expect(db.updateLocalUserLastLogin).toHaveBeenCalledWith(5);
@@ -261,31 +246,75 @@ describe("localAuth.me", () => {
     vi.clearAllMocks();
   });
 
-  it("returns null when no session cookie", async () => {
+  it("returns null when no authorization header", async () => {
     const { ctx } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.localAuth.me();
     expect(result).toBeNull();
   });
+
+  it("returns null with invalid token", async () => {
+    const { ctx } = createPublicContext("Bearer invalid-token");
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.localAuth.me();
+    expect(result).toBeNull();
+  });
+
+  it("returns user data with valid token from login", async () => {
+    // First, login to get a valid token
+    const { ctx: loginCtx } = createPublicContext();
+    const loginCaller = appRouter.createCaller(loginCtx);
+
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.hash("mypassword", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 10,
+      username: "tokenuser",
+      passwordHash: hash,
+      inviteCode: "TESTCODE123",
+      displayName: "Token User",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const loginResult = await loginCaller.localAuth.login({
+      username: "tokenuser",
+      password: "mypassword",
+    });
+
+    // Now use the token to call me
+    const { ctx: meCtx } = createPublicContext(`Bearer ${loginResult.token}`);
+    const meCaller = appRouter.createCaller(meCtx);
+
+    vi.mocked(db.getLocalUserById).mockResolvedValueOnce({
+      id: 10,
+      username: "tokenuser",
+      passwordHash: hash,
+      inviteCode: "TESTCODE123",
+      displayName: "Token User",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const meResult = await meCaller.localAuth.me();
+    expect(meResult).not.toBeNull();
+    expect(meResult?.id).toBe(10);
+    expect(meResult?.username).toBe("tokenuser");
+    expect(meResult?.displayName).toBe("Token User");
+  });
 });
 
 describe("localAuth.logout", () => {
-  it("clears the local session cookie", async () => {
-    const { ctx, clearedCookies } = createPublicContext();
+  it("returns success (client clears localStorage)", async () => {
+    const { ctx } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.localAuth.logout();
-
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe("local_session");
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
   });
 });

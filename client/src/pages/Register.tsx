@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { saveAuthToken } from "@/hooks/useLocalAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,9 +17,19 @@ export default function Register() {
   const [inviteCode, setInviteCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const utils = trpc.useUtils();
 
   const registerMutation = trpc.localAuth.register.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      // Save the token to localStorage
+      saveAuthToken(data.token);
+      // Update the localAuth.me cache with the registered user data
+      utils.localAuth.me.setData(undefined, {
+        id: data.user.id,
+        username: data.user.username,
+        displayName: data.user.displayName,
+        role: "user",
+      });
       toast.success("注册成功！正在进入系统...");
       navigate("/");
     },

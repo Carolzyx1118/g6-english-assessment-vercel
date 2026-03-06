@@ -132,3 +132,4 @@
 - [x] Integrate auth flow - redirect to quiz system after login
 - [x] Protect quiz routes - require login to access
 - [x] Write vitest tests for register and login procedures
+- [x] Fix login redirect - after login, not redirecting to quiz system landing page (switched to token-based auth)

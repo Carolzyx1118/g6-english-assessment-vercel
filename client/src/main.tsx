@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
+import { getAuthToken } from "./hooks/useLocalAuth";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,15 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      headers() {
+        const token = getAuthToken();
+        if (token) {
+          return {
+            Authorization: `Bearer ${token}`,
+          };
+        }
+        return {};
+      },
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),
