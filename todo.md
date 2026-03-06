@@ -136,3 +136,4 @@
 - [x] Redesign landing page with PureOne (璞源) brand elements
 - [x] Add PureOne logo and brand colors to the landing page
 - [x] Update login/register pages with PureOne branding
+- [x] Fix SVG divider overlap - "Choose Your Assessment" heading is clipped by navy hero section bottom edge
