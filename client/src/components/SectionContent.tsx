@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Send, AlertTriangle, GripVertical, Play, Pause, Volume2 } from 'lucide-react';
 import DragDropFillBlank from '@/components/DragDropFillBlank';
+import AudioRecorder from '@/components/AudioRecorder';
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 // ========== PICTURE MCQ (WIDA Vocabulary & Grammar) ==========
@@ -366,6 +367,61 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
         className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-base text-slate-700 resize-none transition-all"
         rows={3}
         placeholder="Type your answer here..."
+      />
+    </div>
+  );
+}
+
+// ========== SPEAKING (Audio Recording) ==========
+
+function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion; sectionId: string; answer?: string; onAnswer: (v: string) => void }) {
+  if (q.subQuestions && q.subQuestions.length > 0) {
+    const parsed = (() => {
+      try { return typeof answer === 'string' ? JSON.parse(answer) : (answer || {}); } catch { return {}; }
+    })();
+
+    const normalizedSubs = q.subQuestions.map((sub, idx) => {
+      if (typeof sub === 'string') {
+        return { label: sub || String.fromCharCode(97 + idx), question: '', answer: '' };
+      }
+      return { label: sub.label || String.fromCharCode(97 + idx), question: sub.question || '', answer: sub.answer || '' };
+    });
+
+    return (
+      <div className="space-y-4">
+        <div className="text-base text-slate-700">
+          <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+          {q.question}
+        </div>
+        {normalizedSubs.map((sub, idx) => (
+          <div key={`q${q.id}-sub-${idx}`} className="ml-4 space-y-2">
+            <label className="text-base font-medium text-slate-600">{sub.label}) {sub.question}</label>
+            <AudioRecorder
+              questionId={q.id * 100 + idx}
+              sectionId={sectionId}
+              savedUrl={parsed[sub.label] || undefined}
+              onRecorded={(url) => {
+                const newVal = { ...parsed, [sub.label]: url };
+                onAnswer(JSON.stringify(newVal));
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-base text-slate-700">
+        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        {q.question}
+      </p>
+      <AudioRecorder
+        questionId={q.id}
+        sectionId={sectionId}
+        savedUrl={typeof answer === 'string' && answer.startsWith('http') ? answer : undefined}
+        onRecorded={onAnswer}
       />
     </div>
   );
@@ -952,6 +1008,9 @@ function QuestionRenderer({ question, sectionId, answer, onAnswer }: {
     case 'listening-mcq':
       return <ListeningMCQCard q={question} answer={typeof answer === 'number' ? answer : undefined} onAnswer={onAnswer} />;
     case 'open-ended':
+      if (sectionId.toLowerCase().includes('speaking')) {
+        return <SpeakingCard q={question} sectionId={sectionId} answer={answer} onAnswer={onAnswer} />;
+      }
       return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} />;
     case 'true-false':
       return <TrueFalseCard q={question} answer={answer} onAnswer={onAnswer} />;

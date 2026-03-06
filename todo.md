@@ -168,3 +168,8 @@
 - [x] Fix all images not displaying in G1 paper
 - [x] Fix empty string src attribute warnings on home page img elements
 - [x] Replace R&W Part 5 sceneImageUrl with two new zoo/animal images
+- [x] Replace Speaking section text input with audio recording buttons
+- [x] Create AudioRecorder component with record/stop/playback controls
+- [x] Upload recorded audio to S3 and store URL as answer
+- [x] Show playback controls after recording is complete
+- [x] Handle recording permissions and error states
