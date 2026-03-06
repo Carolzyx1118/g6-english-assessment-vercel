@@ -142,3 +142,6 @@
 - [x] Add image preview and manual image URL editing in section editor
 - [x] Update frontend to display question images in quiz UI
 - [x] Fix SectionContent.tsx crash at line 1930 when rendering custom AI-parsed papers (null-safe normalization + per-section try-catch)
+- [x] Fix image splitting - implemented AI vision + sharp cropping to extract individual images from exam pages
+- [x] Implement server-side image region extraction using AI vision + sharp
+- [x] Pass cropped image URLs to AI for mapping to specific questions

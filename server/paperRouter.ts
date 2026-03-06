@@ -2,6 +2,7 @@ import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
+import { processAllExamImages, type CroppedImage } from "./imageCropper";
 import {
   saveCustomPaper,
   getAllCustomPapers,
@@ -223,9 +224,36 @@ export const paperRouter = router({
         textPrompt += `Teacher's instructions: ${input.instructions}\n\n`;
       }
 
-      // Pass all image URLs as available resources for the AI to reference
+      // Phase 1: Crop individual images from uploaded exam pages
       const allImageUrls = input.imageUrls || [];
+      let croppedImages: CroppedImage[] = [];
       if (allImageUrls.length > 0) {
+        console.log(`[Paper Parser] Processing ${allImageUrls.length} images for cropping...`);
+        try {
+          croppedImages = await processAllExamImages(allImageUrls);
+          console.log(`[Paper Parser] Cropped ${croppedImages.length} individual images`);
+        } catch (err) {
+          console.error("[Paper Parser] Image cropping failed, using original URLs:", err);
+        }
+      }
+
+      // Pass both original and cropped image URLs as available resources
+      if (allImageUrls.length > 0) {
+        textPrompt += `ORIGINAL_PAGE_IMAGES (full page scans - use for scene images or if no cropped version available):\n`;
+        allImageUrls.forEach((url, i) => {
+          textPrompt += `  Page ${i + 1}: ${url}\n`;
+        });
+        textPrompt += `\n`;
+      }
+      if (croppedImages.length > 0) {
+        textPrompt += `CROPPED_INDIVIDUAL_IMAGES (already cropped from the pages above - PREFER these over full page images):\n`;
+        croppedImages.forEach((img, i) => {
+          textPrompt += `  Crop ${i + 1}: ${img.url} — ${img.description} [suggested target: ${img.target}]\n`;
+        });
+        textPrompt += `\nIMPORTANT: Use the CROPPED image URLs above in imageUrl fields. Match each cropped image to the correct question/option based on the description and suggested target. Use the EXACT URL strings in your output JSON.\n`;
+        textPrompt += `For picture-mcq options, set each option's "imageUrl" to the matching cropped image URL.\n`;
+        textPrompt += `For scene images, use either a cropped image or the full page image URL.\n\n`;
+      } else if (allImageUrls.length > 0) {
         textPrompt += `AVAILABLE_IMAGE_URLS (use these exact URLs in imageUrl fields when you identify matching images):\n`;
         allImageUrls.forEach((url, i) => {
           textPrompt += `  Image ${i + 1}: ${url}\n`;
