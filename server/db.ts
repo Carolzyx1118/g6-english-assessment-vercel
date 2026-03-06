@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, testResults, customPapers, type InsertTestResult, type TestResult, type CustomPaper, type InsertCustomPaper } from "../drizzle/schema";
+import { InsertUser, users, testResults, customPapers, localUsers, type InsertTestResult, type TestResult, type CustomPaper, type InsertCustomPaper, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -176,4 +176,33 @@ export async function deleteCustomPaper(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(customPapers).where(eq(customPapers.id, id));
+}
+
+// ── Local Auth Users ──
+
+export async function getLocalUserByUsername(username: string): Promise<LocalUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
+  return rows[0];
+}
+
+export async function getLocalUserById(id: number): Promise<LocalUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function createLocalUser(data: InsertLocalUser): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [result] = await db.insert(localUsers).values(data).$returningId();
+  return result?.id ?? null;
+}
+
+export async function updateLocalUserLastLogin(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
 }

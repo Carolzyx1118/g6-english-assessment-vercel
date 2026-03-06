@@ -5,18 +5,43 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { QuizProvider } from "./contexts/QuizContext";
+import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import PaperCreator from "./pages/PaperCreator";
 import PaperManager from "./pages/PaperManager";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/history"} component={History} />
-      <Route path={"/paper-creator"} component={PaperCreator} />
-      <Route path={"/paper-manager"} component={PaperManager} />
+      {/* Public auth routes */}
+      <Route path={"/login"} component={Login} />
+      <Route path={"/register"} component={Register} />
+
+      {/* Protected routes - require local auth */}
+      <Route path={"/"}>
+        <AuthGuard>
+          <Home />
+        </AuthGuard>
+      </Route>
+      <Route path={"/history"}>
+        <AuthGuard>
+          <History />
+        </AuthGuard>
+      </Route>
+      <Route path={"/paper-creator"}>
+        <AuthGuard>
+          <PaperCreator />
+        </AuthGuard>
+      </Route>
+      <Route path={"/paper-manager"}>
+        <AuthGuard>
+          <PaperManager />
+        </AuthGuard>
+      </Route>
+
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

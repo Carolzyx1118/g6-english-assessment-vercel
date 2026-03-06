@@ -106,3 +106,29 @@ export const customPapers = mysqlTable("customPapers", {
 
 export type CustomPaper = typeof customPapers.$inferSelect;
 export type InsertCustomPaper = typeof customPapers.$inferInsert;
+
+/**
+ * Local authentication users table.
+ * Stores users who register with username/password + invite code.
+ * Separate from the Manus OAuth users table.
+ */
+export const localUsers = mysqlTable("localUsers", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Unique username chosen during registration */
+  username: varchar("username", { length: 128 }).notNull().unique(),
+  /** bcrypt-hashed password */
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  /** Invite code used during registration */
+  inviteCode: varchar("inviteCode", { length: 128 }).notNull(),
+  /** Display name (defaults to username) */
+  displayName: varchar("displayName", { length: 255 }),
+  /** User role */
+  role: mysqlEnum("localRole", ["user", "admin"]).default("user").notNull(),
+  /** Creation timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** Last login timestamp */
+  lastLoginAt: timestamp("lastLoginAt").defaultNow().notNull(),
+});
+
+export type LocalUser = typeof localUsers.$inferSelect;
+export type InsertLocalUser = typeof localUsers.$inferInsert;

@@ -122,3 +122,13 @@
 - [x] Fix table-type question rendering - information mixed up or missing in custom papers
 - [x] Improve table question normalization in normalizeSection.ts
 - [x] Update AI prompt for table question format clarity
+- [x] Add local_users table to database schema (username, password hash, invite_code)
+- [x] Create invite_codes table or config for valid invite codes (env-based)
+- [x] Build server-side register procedure with invite code validation
+- [x] Build server-side login procedure with password verification
+- [x] Build server-side session management (JWT cookie)
+- [x] Create Registration page UI (username, password, confirm password, invite code)
+- [x] Create Login page UI (username, password)
+- [x] Integrate auth flow - redirect to quiz system after login
+- [x] Protect quiz routes - require login to access
+- [x] Write vitest tests for register and login procedures

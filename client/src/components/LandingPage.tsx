@@ -2,10 +2,11 @@ import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import type { Paper, Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
 import { Link } from 'wouter';
+import { useLocalAuth } from '@/hooks/useLocalAuth';
 
 const HERO_IMAGE = 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-1_1771255551000_na1fn_aGVyby1iYW5uZXI.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTFfMTc3MTI1NTU1MTAwMF9uYTFmbl9hR1Z5YnkxaVlXNXVaWEkucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=I5fojTC3dYU1azrXcxeOhHGaexKXmznPAcGFS~lV8L7Mg4foEr2gVTG8bWCRAFcNxWpHkpz6nN2LYnhtbkVgpR6LJgFhSgixOlBrFTrn10YhLyMDjFH395DUPFebb3vmNWW4AtScobvWAmQKFCbyRkSCwV2lqQjc6UtGXWp0UNZVGZU93MZ-Lc6Tnjz7Y-~D1BRvpGWq8tZLrE1EeyFCN-2QxJNOaJrlvv0Zqp443MkcRgAiOKhqYi8Jux0MB8ue0LLEMJZ7GIRQOzu1lbf6FHGk5jHn3ctuue-nzVHvjc~hX60cyBA3odGGtWFaxd56S8rofjTUDitaGRwWStBX7A__';
 
@@ -33,6 +34,36 @@ const iconBgColors: Record<string, string> = {
   writing: 'bg-orange-100 text-orange-600',
 };
 
+// ========== USER BAR ==========
+
+function UserBar() {
+  const { user, isAuthenticated, logout } = useLocalAuth();
+
+  if (!isAuthenticated || !user) return null;
+
+  return (
+    <div className="bg-white/70 backdrop-blur-sm border-b border-slate-200/60">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+            <User className="w-4 h-4 text-primary" />
+          </div>
+          <span>欢迎，<span className="font-semibold text-slate-800">{user.displayName || user.username}</span></span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={logout}
+          className="text-slate-500 hover:text-red-600 gap-1.5 text-xs"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          退出登录
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ========== PAPER SELECTION PAGE ==========
 
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
@@ -40,10 +71,13 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
+      {/* User Info Bar */}
+      <UserBar />
+
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-50/80 to-transparent z-0" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div
               initial={{ opacity: 0, x: -30 }}

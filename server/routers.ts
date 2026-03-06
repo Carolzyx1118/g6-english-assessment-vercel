@@ -6,10 +6,12 @@ import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
 import { saveTestResult, getAllTestResults, getTestResultById, updateTestResultAI, deleteTestResult } from "./db";
 import { paperRouter } from "./paperRouter";
+import { localAuthRouter } from "./localAuthRouter";
 
 export const appRouter = router({
   system: systemRouter,
   papers: paperRouter,
+  localAuth: localAuthRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

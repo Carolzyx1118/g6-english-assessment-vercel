@@ -18,7 +18,8 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  // Don't redirect to Manus OAuth - local auth handles its own redirects
+  // window.location.href = getLoginUrl();
 };
 
 queryClient.getQueryCache().subscribe(event => {
