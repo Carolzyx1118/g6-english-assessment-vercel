@@ -318,17 +318,6 @@ function SentenceModeFillBlank({
 
   return (
     <div className="space-y-6 mb-8">
-      {sceneImageUrl && (
-        <div className="flex justify-center">
-          <img
-            src={sceneImageUrl}
-            alt="Scene for fill-in-the-blank"
-            className="max-h-56 object-contain rounded-xl border border-slate-200 shadow-sm"
-            loading="lazy"
-          />
-        </div>
-      )}
-
       {/* Word Bank */}
       <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200">
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
