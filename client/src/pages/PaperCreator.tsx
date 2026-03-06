@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   Upload, FileText, Image, Music, Loader2, Sparkles, Eye, Save,
   Trash2, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, AlertCircle,
-  Send, Pencil, Plus, GripVertical
+  Send, Pencil, Plus, GripVertical, ImagePlus, X
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -156,6 +156,119 @@ function FileUploadArea({
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Inline image upload button component
+function ImageUploadButton({
+  label,
+  currentUrl,
+  onUploaded,
+  onRemove,
+  previewSize = 'md',
+}: {
+  label: string;
+  currentUrl?: string;
+  onUploaded: (url: string) => void;
+  onRemove: () => void;
+  previewSize?: 'sm' | 'md' | 'lg';
+}) {
+  const [isUploading, setIsUploading] = useState(false);
+  const uploadFile = trpc.papers.uploadFile.useMutation();
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, GIF, WebP)');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image file size must be under 10MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const result = await uploadFile.mutateAsync({
+        fileName: file.name,
+        fileBase64: base64,
+        contentType: file.type,
+      });
+
+      onUploaded(result.url);
+      toast.success(`Image uploaded: ${file.name}`);
+    } catch (err) {
+      console.error('Image upload error:', err);
+      toast.error('Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
+
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  };
+
+  const previewClass = previewSize === 'sm' ? 'max-h-12' : previewSize === 'lg' ? 'max-h-32' : 'max-h-20';
+
+  return (
+    <div className="space-y-1">
+      {currentUrl ? (
+        <div className="flex items-start gap-2">
+          <img
+            src={currentUrl}
+            alt={label}
+            className={`${previewClass} object-contain rounded border bg-gray-50`}
+          />
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              className="h-6 px-2 text-red-400 hover:text-red-600 text-xs"
+            >
+              <X className="w-3 h-3 mr-1" /> Remove
+            </Button>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={isUploading}
+              />
+              <span className="inline-flex items-center h-6 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded">
+                <ImagePlus className="w-3 h-3 mr-1" /> Replace
+              </span>
+            </label>
+          </div>
+        </div>
+      ) : (
+        <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 border-dashed transition-colors">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isUploading}
+          />
+          {isUploading ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...</>
+          ) : (
+            <><ImagePlus className="w-3.5 h-3.5" /> {label}</>
+          )}
+        </label>
       )}
     </div>
   );
@@ -321,19 +434,27 @@ function SectionEditor({
             )}
           </div>
 
-          {/* Section-level images */}
-          <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50 rounded-lg text-sm">
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500 font-medium">Scene Image URL</label>
-              <Input
-                value={section.sceneImageUrl || ''}
-                onChange={(e) => onUpdate({ ...section, sceneImageUrl: e.target.value })}
-                placeholder="https://... (scene image for this section)"
-                className="h-8 text-sm"
+          {/* Section-level scene image */}
+          <div className="p-3 bg-blue-50 rounded-lg text-sm space-y-2">
+            <label className="text-xs text-gray-600 font-medium flex items-center gap-1">
+              <Image className="w-3.5 h-3.5" /> Scene Image
+            </label>
+            <div className="flex items-start gap-3">
+              <ImageUploadButton
+                label="Upload Scene Image"
+                currentUrl={section.sceneImageUrl}
+                onUploaded={(url) => onUpdate({ ...section, sceneImageUrl: url })}
+                onRemove={() => onUpdate({ ...section, sceneImageUrl: '' })}
+                previewSize="lg"
               />
-              {section.sceneImageUrl && (
-                <img src={section.sceneImageUrl} alt="Scene" className="mt-1 max-h-24 object-contain rounded border" />
-              )}
+              <div className="flex-1">
+                <Input
+                  value={section.sceneImageUrl || ''}
+                  onChange={(e) => onUpdate({ ...section, sceneImageUrl: e.target.value })}
+                  placeholder="Or paste image URL here..."
+                  className="h-7 text-xs"
+                />
+              </div>
             </div>
           </div>
 
@@ -349,58 +470,87 @@ function SectionEditor({
                       {getQuestionTypeLabel(q.type)}
                     </span>
                     {q.imageUrl && (
-                      <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">📷 Has Image</span>
+                      <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">Has Image</span>
                     )}
                   </div>
                   <p className="text-sm text-gray-800 mb-1">
                     {q.question || q.topic || q.statements?.[0]?.statement || '(no question text)'}
                   </p>
-                  {/* Question image preview */}
-                  {q.imageUrl && (
-                    <div className="my-1">
-                      <img src={q.imageUrl} alt={`Q${q.id} image`} className="max-h-20 object-contain rounded border" />
+
+                  {/* Question image: upload + URL editor + preview */}
+                  <div className="my-2 p-2 bg-gray-50 rounded-md border border-dashed border-gray-200 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <ImageUploadButton
+                        label="Upload Question Image"
+                        currentUrl={q.imageUrl}
+                        onUploaded={(url) => updateQuestion(qi, 'imageUrl', url)}
+                        onRemove={() => updateQuestion(qi, 'imageUrl', '')}
+                        previewSize="md"
+                      />
                     </div>
-                  )}
-                  {/* Image URL editor for MCQ types */}
-                  {(q.type === 'mcq') && (
-                    <div className="mt-1">
+                    {!q.imageUrl && (
                       <Input
                         value={q.imageUrl || ''}
                         onChange={(e) => updateQuestion(qi, 'imageUrl', e.target.value)}
-                        placeholder="Image URL for this question (optional)"
+                        placeholder="Or paste image URL here..."
                         className="h-7 text-xs"
                       />
-                    </div>
-                  )}
+                    )}
+                  </div>
+
                   {/* Options for MCQ types */}
                   {(q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') && q.options && (
-                    <div className="space-y-1 mt-1">
+                    <div className="space-y-1.5 mt-1">
                       {q.options.map((opt: any, oi: number) => (
-                        <div key={oi} className="flex items-center gap-2">
+                        <div key={oi} className="flex items-start gap-2 p-1.5 rounded hover:bg-gray-50">
                           <span
-                            className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
+                            className={`text-xs px-2 py-0.5 rounded flex-shrink-0 mt-0.5 ${
                               oi === q.correctAnswer
                                 ? 'bg-green-100 text-green-700 font-medium'
-                                : 'bg-gray-50 text-gray-600'
+                                : 'bg-gray-100 text-gray-600'
                             }`}
                           >
                             {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : opt.text || opt.label}
                           </span>
-                          {/* Show option image for picture-mcq and listening-mcq */}
-                          {(q.type === 'picture-mcq' || q.type === 'listening-mcq') && typeof opt === 'object' && (
-                            <div className="flex items-center gap-1 flex-1 min-w-0">
-                              <Input
-                                value={opt.imageUrl || ''}
-                                onChange={(e) => {
+                          {/* Option image upload for picture-mcq */}
+                          {(q.type === 'picture-mcq' || q.type === 'listening-mcq') && (
+                            <div className="flex-1 min-w-0">
+                              <ImageUploadButton
+                                label={`Upload Option ${String.fromCharCode(65 + oi)} Image`}
+                                currentUrl={typeof opt === 'object' ? opt.imageUrl : undefined}
+                                onUploaded={(url) => {
                                   const newOptions = [...q.options];
-                                  newOptions[oi] = { ...newOptions[oi], imageUrl: e.target.value };
+                                  if (typeof newOptions[oi] === 'string') {
+                                    newOptions[oi] = { text: newOptions[oi], label: String.fromCharCode(65 + oi), imageUrl: url };
+                                  } else {
+                                    newOptions[oi] = { ...newOptions[oi], imageUrl: url };
+                                  }
                                   updateQuestion(qi, 'options', newOptions);
                                 }}
-                                placeholder="Option image URL"
-                                className="h-6 text-xs flex-1"
+                                onRemove={() => {
+                                  const newOptions = [...q.options];
+                                  if (typeof newOptions[oi] === 'object') {
+                                    newOptions[oi] = { ...newOptions[oi], imageUrl: '' };
+                                  }
+                                  updateQuestion(qi, 'options', newOptions);
+                                }}
+                                previewSize="sm"
                               />
-                              {opt.imageUrl && (
-                                <img src={opt.imageUrl} alt={`Opt ${opt.label}`} className="h-8 w-8 object-contain rounded border flex-shrink-0" />
+                              {!((typeof opt === 'object' && opt.imageUrl)) && (
+                                <Input
+                                  value={typeof opt === 'object' ? (opt.imageUrl || '') : ''}
+                                  onChange={(e) => {
+                                    const newOptions = [...q.options];
+                                    if (typeof newOptions[oi] === 'string') {
+                                      newOptions[oi] = { text: newOptions[oi], label: String.fromCharCode(65 + oi), imageUrl: e.target.value };
+                                    } else {
+                                      newOptions[oi] = { ...newOptions[oi], imageUrl: e.target.value };
+                                    }
+                                    updateQuestion(qi, 'options', newOptions);
+                                  }}
+                                  placeholder="Or paste option image URL"
+                                  className="h-6 text-xs mt-1"
+                                />
                               )}
                             </div>
                           )}

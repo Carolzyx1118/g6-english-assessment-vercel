@@ -145,3 +145,9 @@
 - [x] Fix image splitting - implemented AI vision + sharp cropping to extract individual images from exam pages
 - [x] Implement server-side image region extraction using AI vision + sharp
 - [x] Pass cropped image URLs to AI for mapping to specific questions
+- [x] Add per-question image upload button in SectionEditor
+- [x] Support uploading images for MCQ options (picture-MCQ)
+- [x] Support uploading section-level scene images
+- [x] Upload images to S3 and auto-fill URL into question data
+- [x] Add loading state and preview for uploaded images
+- [x] Write tests for image upload functionality
