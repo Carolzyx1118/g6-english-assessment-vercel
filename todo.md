@@ -173,3 +173,4 @@
 - [x] Upload recorded audio to S3 and store URL as answer
 - [x] Show playback controls after recording is complete
 - [x] Handle recording permissions and error states
+- [x] Add tick/cross question images to R&W Part 1 storyImages
