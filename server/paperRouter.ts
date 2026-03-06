@@ -2,7 +2,6 @@ import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
-import { processAllExamImages, type CroppedImage } from "./imageCropper";
 import {
   saveCustomPaper,
   getAllCustomPapers,
@@ -150,16 +149,13 @@ IMPORTANT RULES:
 - Ensure all text content is properly escaped for JSON
 - wordBank letters MUST be uppercase single letters: A, B, C, D, etc.
 
-IMAGE HANDLING - CRITICAL:
-- You will be given a list of AVAILABLE_IMAGE_URLS that correspond to the uploaded images.
-- When you see images in the test materials that correspond to questions or options, you MUST use the actual URLs from AVAILABLE_IMAGE_URLS.
-- For picture-mcq: set each option's "imageUrl" to the matching image URL from AVAILABLE_IMAGE_URLS.
-- For mcq with images: set the question's "imageUrl" to the matching image URL.
-- For sections with a scene image: set "sceneImageUrl" to the matching image URL.
-- If the test paper has multiple images on one page, map each image to the correct question/option based on its position and context.
-- If you cannot determine which URL matches which image, assign them in order (first image URL to first question that needs an image, etc.).
-- NEVER leave imageUrl as empty string "" if there are available images that clearly belong to that question.
-- If a question references an image but no matching URL is available, set imageUrl to "" and add a note in the question text like "[Image needed]".
+IMAGE HANDLING:
+- Do NOT assign any image URLs to questions or options during parsing.
+- Leave all imageUrl fields as empty string "".
+- Leave all sceneImageUrl fields as empty string "".
+- For picture-mcq options, set imageUrl to "" for every option.
+- Images will be manually uploaded and assigned by the teacher in the Review & Edit step.
+- If a question clearly references an image (e.g., "Look at the picture"), add "[Image needed]" in the question text as a reminder.
 
 Return a JSON object with this structure:
 {
@@ -224,42 +220,10 @@ export const paperRouter = router({
         textPrompt += `Teacher's instructions: ${input.instructions}\n\n`;
       }
 
-      // Phase 1: Crop individual images from uploaded exam pages
-      const allImageUrls = input.imageUrls || [];
-      let croppedImages: CroppedImage[] = [];
-      if (allImageUrls.length > 0) {
-        console.log(`[Paper Parser] Processing ${allImageUrls.length} images for cropping...`);
-        try {
-          croppedImages = await processAllExamImages(allImageUrls);
-          console.log(`[Paper Parser] Cropped ${croppedImages.length} individual images`);
-        } catch (err) {
-          console.error("[Paper Parser] Image cropping failed, using original URLs:", err);
-        }
-      }
-
-      // Pass both original and cropped image URLs as available resources
-      if (allImageUrls.length > 0) {
-        textPrompt += `ORIGINAL_PAGE_IMAGES (full page scans - use for scene images or if no cropped version available):\n`;
-        allImageUrls.forEach((url, i) => {
-          textPrompt += `  Page ${i + 1}: ${url}\n`;
-        });
-        textPrompt += `\n`;
-      }
-      if (croppedImages.length > 0) {
-        textPrompt += `CROPPED_INDIVIDUAL_IMAGES (already cropped from the pages above - PREFER these over full page images):\n`;
-        croppedImages.forEach((img, i) => {
-          textPrompt += `  Crop ${i + 1}: ${img.url} — ${img.description} [suggested target: ${img.target}]\n`;
-        });
-        textPrompt += `\nIMPORTANT: Use the CROPPED image URLs above in imageUrl fields. Match each cropped image to the correct question/option based on the description and suggested target. Use the EXACT URL strings in your output JSON.\n`;
-        textPrompt += `For picture-mcq options, set each option's "imageUrl" to the matching cropped image URL.\n`;
-        textPrompt += `For scene images, use either a cropped image or the full page image URL.\n\n`;
-      } else if (allImageUrls.length > 0) {
-        textPrompt += `AVAILABLE_IMAGE_URLS (use these exact URLs in imageUrl fields when you identify matching images):\n`;
-        allImageUrls.forEach((url, i) => {
-          textPrompt += `  Image ${i + 1}: ${url}\n`;
-        });
-        textPrompt += `\nIMPORTANT: Map each image above to the correct question or option based on what you see in the image content. Use the EXACT URL strings above in the imageUrl fields of your output JSON.\n\n`;
-      }
+      // Note: Images are no longer auto-assigned during AI parsing.
+      // Teachers will manually upload and assign images in the Review & Edit step.
+      // We still pass images to AI for visual context (reading the exam content) but
+      // instruct it to leave all imageUrl fields empty.
 
       if (input.audioUrls && input.audioUrls.length > 0) {
         textPrompt += `Audio files for listening section: ${input.audioUrls.join(", ")}\n\n`;

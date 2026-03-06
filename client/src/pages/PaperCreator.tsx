@@ -8,9 +8,10 @@ import { toast } from 'sonner';
 import {
   Upload, FileText, Image, Music, Loader2, Sparkles, Eye, Save,
   Trash2, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, AlertCircle,
-  Send, Pencil, Plus, GripVertical, ImagePlus, X
+  Send, Pencil, Plus, GripVertical, ImagePlus, X, Images
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { compressImage, fileToBase64, validateImageFile, formatFileSize, type ImageSize } from '@/lib/imageUtils';
 
 // Password gate (reuse the same password as History page)
 const ADMIN_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || '';
@@ -161,53 +162,56 @@ function FileUploadArea({
   );
 }
 
-// Inline image upload button component
+/**
+ * Shared upload helper: compress + upload a single image file to S3.
+ * Returns the uploaded URL.
+ */
+async function uploadSingleImage(
+  file: File,
+  uploadMutation: ReturnType<typeof trpc.papers.uploadFile.useMutation>,
+  imageSize: ImageSize = 'full'
+): Promise<string> {
+  const compressed = await compressImage(file, imageSize);
+  const base64 = await fileToBase64(compressed);
+  const result = await uploadMutation.mutateAsync({
+    fileName: compressed.name,
+    fileBase64: base64,
+    contentType: compressed.type,
+  });
+  return result.url;
+}
+
+// Inline image upload button component with drag-and-drop support
 function ImageUploadButton({
   label,
   currentUrl,
   onUploaded,
   onRemove,
   previewSize = 'md',
+  imageSize = 'full',
 }: {
   label: string;
   currentUrl?: string;
   onUploaded: (url: string) => void;
   onRemove: () => void;
   previewSize?: 'sm' | 'md' | 'lg';
+  imageSize?: ImageSize;
 }) {
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const uploadFile = trpc.papers.uploadFile.useMutation();
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file (PNG, JPG, GIF, WebP)');
-      return;
-    }
-
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image file size must be under 10MB');
+  const processFile = async (file: File) => {
+    const error = validateImageFile(file);
+    if (error) {
+      toast.error(error);
       return;
     }
 
     setIsUploading(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-
-      const result = await uploadFile.mutateAsync({
-        fileName: file.name,
-        fileBase64: base64,
-        contentType: file.type,
-      });
-
-      onUploaded(result.url);
+      const url = await uploadSingleImage(file, uploadFile, imageSize);
+      onUploaded(url);
       toast.success(`Image uploaded: ${file.name}`);
     } catch (err) {
       console.error('Image upload error:', err);
@@ -215,15 +219,44 @@ function ImageUploadButton({
     } finally {
       setIsUploading(false);
     }
+  };
 
-    // Reset input so the same file can be re-selected
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
     e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) await processFile(file);
   };
 
   const previewClass = previewSize === 'sm' ? 'max-h-12' : previewSize === 'lg' ? 'max-h-32' : 'max-h-20';
 
   return (
-    <div className="space-y-1">
+    <div
+      className="space-y-1"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {currentUrl ? (
         <div className="flex items-start gap-2">
           <img
@@ -255,7 +288,13 @@ function ImageUploadButton({
           </div>
         </div>
       ) : (
-        <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 border-dashed transition-colors">
+        <label
+          className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-dashed transition-colors ${
+            isDragOver
+              ? 'text-blue-700 bg-blue-100 border-blue-400 ring-2 ring-blue-300'
+              : 'text-blue-600 bg-blue-50 hover:bg-blue-100 border-blue-200'
+          }`}
+        >
           <input
             type="file"
             accept="image/*"
@@ -265,9 +304,142 @@ function ImageUploadButton({
           />
           {isUploading ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...</>
+          ) : isDragOver ? (
+            <><ImagePlus className="w-3.5 h-3.5" /> Drop here</>
           ) : (
             <><ImagePlus className="w-3.5 h-3.5" /> {label}</>
           )}
+        </label>
+      )}
+    </div>
+  );
+}
+
+// Batch image upload component for a section
+function BatchImageUpload({
+  section,
+  onUpdate,
+}: {
+  section: any;
+  onUpdate: (updated: any) => void;
+}) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const uploadFile = trpc.papers.uploadFile.useMutation();
+
+  const handleBatchUpload = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((f) => {
+      const error = validateImageFile(f);
+      if (error) {
+        toast.error(`${f.name}: ${error}`);
+        return false;
+      }
+      return true;
+    });
+
+    if (files.length === 0) return;
+
+    const questions = section.questions || [];
+    // Find questions without images
+    const emptySlots = questions
+      .map((q: any, i: number) => ({ q, i }))
+      .filter(({ q }: any) => !q.imageUrl);
+
+    if (emptySlots.length === 0) {
+      toast.error('All questions already have images. Remove some first to batch upload.');
+      return;
+    }
+
+    const assignCount = Math.min(files.length, emptySlots.length);
+    if (files.length > emptySlots.length) {
+      toast.info(`Only ${emptySlots.length} questions need images. ${files.length - emptySlots.length} extra image(s) will be skipped.`);
+    }
+
+    setIsUploading(true);
+    setProgress({ current: 0, total: assignCount });
+
+    try {
+      const updated = { ...section, questions: [...section.questions] };
+
+      for (let i = 0; i < assignCount; i++) {
+        setProgress({ current: i + 1, total: assignCount });
+        const url = await uploadSingleImage(files[i], uploadFile, 'full');
+        const qIndex = emptySlots[i].i;
+        updated.questions[qIndex] = { ...updated.questions[qIndex], imageUrl: url };
+      }
+
+      onUpdate(updated);
+      toast.success(`${assignCount} image(s) uploaded and assigned to questions`);
+    } catch (err) {
+      console.error('Batch upload error:', err);
+      toast.error('Batch upload failed partway through. Some images may have been assigned.');
+    } finally {
+      setIsUploading(false);
+      setProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleBatchUpload(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files.length > 0) {
+      handleBatchUpload(e.dataTransfer.files);
+    }
+  };
+
+  const questionsWithoutImages = (section.questions || []).filter((q: any) => !q.imageUrl).length;
+
+  return (
+    <div
+      className="p-3 bg-amber-50 rounded-lg text-sm space-y-2 border border-dashed border-amber-300"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <label className="text-xs text-amber-700 font-medium flex items-center gap-1">
+        <Images className="w-3.5 h-3.5" /> Batch Upload Images
+      </label>
+      <p className="text-xs text-amber-600">
+        Select multiple images at once. They will be assigned in order to questions without images.
+        {questionsWithoutImages > 0 && (
+          <span className="font-medium"> ({questionsWithoutImages} questions need images)</span>
+        )}
+      </p>
+      {isUploading ? (
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+          <span className="text-xs text-amber-700 font-medium">
+            Uploading {progress.current}/{progress.total}...
+          </span>
+          <div className="flex-1 h-1.5 bg-amber-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-500 rounded-full transition-all duration-300"
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md border border-amber-300 transition-colors">
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <Images className="w-4 h-4" />
+          Select Multiple Images (or drag & drop here)
         </label>
       )}
     </div>
@@ -458,6 +630,9 @@ function SectionEditor({
             </div>
           </div>
 
+          {/* Batch image upload */}
+          <BatchImageUpload section={section} onUpdate={onUpdate} />
+
           {/* Questions */}
           <div className="space-y-2">
             {section.questions?.map((q: any, qi: number) => (
@@ -535,6 +710,7 @@ function SectionEditor({
                                   updateQuestion(qi, 'options', newOptions);
                                 }}
                                 previewSize="sm"
+                                imageSize="option"
                               />
                               {!((typeof opt === 'object' && opt.imageUrl)) && (
                                 <Input

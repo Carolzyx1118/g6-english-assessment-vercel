@@ -151,3 +151,9 @@
 - [x] Upload images to S3 and auto-fill URL into question data
 - [x] Add loading state and preview for uploaded images
 - [x] Write tests for image upload functionality
+- [x] Remove image recording from AI parsing phase (no images during AI parse, only in review/edit)
+- [x] Add client-side image compression before upload (resize to exam-appropriate dimensions)
+- [x] Batch image upload — select multiple images, auto-assign to consecutive questions
+- [x] Drag-and-drop support — drop images directly onto question/option/scene areas
+- [x] Update ImageUploadButton to support drag-and-drop
+- [x] Write tests for new upload features
