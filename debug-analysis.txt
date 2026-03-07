@@ -1,0 +1,20 @@
+Bug analysis for R&W Part 2 MCQ yes/no scoring:
+
+1. QuizContext getScore (line 222-232):
+   - Enters the branch: q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq'
+   - Then checks: typeof q.correctAnswer === 'number'
+   - For MCQQuestion with correctAnswer: number | string, this should work at runtime
+   - The answer stored is an index (0 or 1), and options are ["yes", "no"]
+   - So answer=1 (for "no"), ansIdx=1, q.options[1]="no", q.correctAnswer="no" -> should match
+
+2. ResultsPage detailedResults (line 273-290):
+   - Same logic as above
+   - But the issue is: correctAnswer is shown as empty in the UI
+   - And all answers are marked wrong
+
+3. Key question: Is the data actually loaded correctly?
+   - The paper data comes from the database via tRPC
+   - Need to check if correctAnswer is actually a string "no"/"yes" or something else
+   - Maybe the normalization process converts it?
+
+4. Check normalizeSections - this could be transforming the data

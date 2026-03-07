@@ -195,3 +195,5 @@
 - [x] Update R&W Part 2 answers to no, yes, yes, no, yes in G1 paper database
 - [x] Fix R&W Part 2 MCQ string answer: correct answer not displayed, correct answers marked wrong
 - [x] Fix wrongAnswers.correctAnswer undefined error when saving test results
+- [x] Rewrite R&W Part 2 MCQ yes/no scoring and display - correct answer still empty, all marked wrong
+  - Root cause: normalizeSection.ts was converting string correctAnswer ("yes"/"no") to NaN via parseInt

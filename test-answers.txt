@@ -1,0 +1,7 @@
+R&W Part 2 test answers:
+Q26: selected "no" (index 1) - correct answer is "no" - should be CORRECT
+Q27: selected "yes" (index 0) - correct answer is "yes" - should be CORRECT
+Q28: selected "yes" (index 0) - correct answer is "yes" - should be CORRECT
+Q29: selected "no" (index 1) - correct answer is "no" - should be CORRECT
+Q30: selected "yes" (index 0) - correct answer is "yes" - should be CORRECT
+All 5 should be correct = 5/5

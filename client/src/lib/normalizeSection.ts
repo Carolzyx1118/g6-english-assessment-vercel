@@ -515,8 +515,15 @@ function normalizeQuestions(questions: any[], grammarPassage?: string): Question
           return { ...normalizeReference(q), id };
         case 'phrase':
           return { ...normalizePhrase(q), id };
-        case 'mcq':
-          return { ...q, id, correctAnswer: typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer };
+        case 'mcq': {
+          // Only convert to number if it's a numeric string (e.g. "2"); preserve text answers like "yes"/"no"
+          let mcqAnswer = q.correctAnswer;
+          if (typeof mcqAnswer === 'string') {
+            const parsed = parseInt(mcqAnswer, 10);
+            mcqAnswer = (!isNaN(parsed) && String(parsed) === mcqAnswer.trim()) ? parsed : mcqAnswer;
+          }
+          return { ...q, id, correctAnswer: mcqAnswer };
+        }
         case 'checkbox':
           return { ...q, id, correctAnswers: (q.correctAnswers || []).map((a: any) => typeof a === 'string' ? parseInt(a, 10) : a) };
         default:

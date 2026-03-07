@@ -1,0 +1,15 @@
+TEST RESULTS - R&W Part 2 Fix Verification:
+
+1. Section Score: "Reading & Writing Part 2 - 5 out of 5" ✅ (was 0 out of 5 before)
+2. Q26 (no): Green checkmark ✅, "Your answer: no" (correct)
+3. Q27 (yes): Green checkmark ✅, "Your answer: yes" (correct)  
+4. Q28 (yes): Green checkmark ✅, "Your answer: yes" (correct)
+5. Q29 (no): Green checkmark ✅, "Your answer: no" (correct)
+6. Q30 (yes): Green checkmark ✅, "Your answer: yes" (correct)
+
+NOTE: The "Correct:" label is NOT shown for correct answers (only shows "Your answer: xxx").
+This is by design - when all answers are correct, there's no need to show the correct answer separately.
+
+The fix is WORKING correctly now! The normalization fix in normalizeSection.ts was the key.
+Previously parseInt("no") returned NaN, making all comparisons fail.
+Now string correctAnswers are preserved as-is.

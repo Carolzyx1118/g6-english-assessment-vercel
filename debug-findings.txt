@@ -1,0 +1,9 @@
+KEY FINDINGS:
+1. The normalization fix IS working - correctAnswer is now "no"/"yes" (string), not NaN
+2. Answers stored as: rw-part2:26=1 (number), rw-part2:27=0 (number), etc.
+3. Options are: ["yes", "no"] so index 0="yes", index 1="no"
+4. Q26: answer=1 -> options[1]="no" -> correctAnswer="no" -> SHOULD MATCH
+5. Q27: answer=0 -> options[0]="yes" -> correctAnswer="yes" -> SHOULD MATCH
+
+The scoring logic in getScore should work now. Need to verify the ResultsPage detailedResults.
+Let me now submit the quiz and check the results page.
