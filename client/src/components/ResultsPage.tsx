@@ -280,8 +280,10 @@ export default function ResultsPage() {
               correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
               context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
           } else {
-            // MCQ with string answer (e.g., yes/no)
-            const userText = userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered';
+            // MCQ with string answer (e.g., yes/no) - answer stored as index, convert to option text
+            const userIdx = userAns !== undefined ? Number(userAns) : -1;
+            const rawOpt: any = (userIdx >= 0 && q.options && q.options[userIdx]) ? q.options[userIdx] : null;
+            const userText = rawOpt ? (typeof rawOpt === 'string' ? rawOpt : (rawOpt.text || rawOpt.label || '')) : (userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered');
             const isCorrect = userText !== 'Not answered' && userText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
             sectionResults.push({ id: q.id, question: q.question,
               userAnswer: userText, correctAnswer: String(q.correctAnswer), isCorrect });

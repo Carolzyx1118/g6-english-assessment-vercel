@@ -224,7 +224,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           if (typeof q.correctAnswer === 'number') {
             isCorrect = Number(answer) === q.correctAnswer;
           } else {
-            isCorrect = String(answer).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+            // Answer is stored as index (number), convert to option text for comparison
+            const ansIdx = Number(answer);
+            const rawOpt = (!isNaN(ansIdx) && q.options && q.options[ansIdx]) ? q.options[ansIdx] : null;
+            const userOptionText = rawOpt ? (typeof rawOpt === 'string' ? rawOpt : (rawOpt.text || rawOpt.label || '')) : String(answer);
+            isCorrect = userOptionText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
           }
         } else if (q.type === 'fill-blank') {
           isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();

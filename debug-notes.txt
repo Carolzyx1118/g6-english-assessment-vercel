@@ -1,0 +1,24 @@
+ROOT CAUSE ANALYSIS:
+
+1. MCQQuestionCard stores answer as INDEX (number): onAnswer(i) where i=0 for "yes", i=1 for "no"
+2. setAnswer stores it as number in state.answers
+3. In getScore (QuizContext), for MCQ with string correctAnswer:
+   - answer = 0 or 1 (number)
+   - q.correctAnswer = "no" or "yes" (string)
+   - String(0) = "0" !== "no" → ALWAYS WRONG
+
+4. In detailedResults (ResultsPage), for MCQ with string correctAnswer:
+   - userAns = 0 or 1 (number)  
+   - userText = String(userAns) = "0" or "1"
+   - But screenshot shows "yes"/"no" as user answer text...
+   
+   Wait - the screenshot shows "Your answer: yes" for Q26. If stored answer is 0 (index for "yes"),
+   then String(0) = "0", not "yes". Unless something else is happening...
+   
+   Actually, maybe the answer is stored differently. Let me check if there's a custom MCQ card
+   for yes/no that stores the string instead of index.
+
+SOLUTION:
+For MCQ with string correctAnswer, need to convert stored index to option text before comparing:
+- In getScore: compare q.options[Number(answer)] with q.correctAnswer
+- In detailedResults: display q.options[Number(userAns)] as user answer, q.correctAnswer as correct answer
