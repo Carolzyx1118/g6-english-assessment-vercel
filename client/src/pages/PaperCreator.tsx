@@ -1,20 +1,51 @@
-import { useState, useCallback } from 'react';
-import { trpc } from '@/lib/trpc';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { useCallback, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { toast } from "sonner";
 import {
-  Upload, FileText, Image, Music, Loader2, Sparkles, Eye, Save,
-  Trash2, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, AlertCircle,
-  Send, Pencil, Plus, GripVertical, ImagePlus, X, Images
-} from 'lucide-react';
-import { Link } from 'wouter';
-import { compressImage, fileToBase64, validateImageFile, formatFileSize, type ImageSize } from '@/lib/imageUtils';
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Image as ImageIcon,
+  ImagePlus,
+  Layers3,
+  Loader2,
+  Music,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 
-// Password gate (reuse the same password as History page)
-const ADMIN_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || '';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/lib/trpc";
+import {
+  compressImage,
+  fileToBase64,
+  formatFileSize,
+  validateImageFile,
+  type ImageSize,
+} from "@/lib/imageUtils";
+import {
+  createEditablePaperFromBlueprint,
+  createEmptyQuestionByType,
+  paperBlueprints,
+  QUESTION_TYPE_META,
+  stripEditablePaper,
+  suggestBlueprint,
+  type EditablePaper,
+  type EditableSection,
+  type QuestionType,
+} from "@/lib/paperBlueprints";
+import type { Question } from "@/data/papers";
+
+const ADMIN_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || "";
 
 type UploadedFile = {
   name: string;
@@ -23,46 +54,42 @@ type UploadedFile = {
   size: number;
 };
 
-type ParsedPaper = {
-  title: string;
-  subtitle: string;
-  description: string;
-  sections: any[];
-  totalQuestions: number;
-  hasListening: boolean;
-  hasWriting: boolean;
-};
-
-// Step indicator
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
-    { num: 1, label: 'Upload Materials' },
-    { num: 2, label: 'AI Parse' },
-    { num: 3, label: 'Review & Edit' },
-    { num: 4, label: 'Save & Publish' },
+    { num: 1, label: "Upload Materials" },
+    { num: 2, label: "Choose Blueprint" },
+    { num: 3, label: "Manual Entry" },
+    { num: 4, label: "Save & Publish" },
   ];
+
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
-      {steps.map((s, i) => (
-        <div key={s.num} className="flex items-center gap-2">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-            currentStep === s.num
-              ? 'bg-blue-600 text-white shadow-md'
-              : currentStep > s.num
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-400'
-          }`}>
-            {currentStep > s.num ? (
-              <CheckCircle2 className="w-4 h-4" />
+    <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+      {steps.map((step, index) => (
+        <div key={step.num} className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+              currentStep === step.num
+                ? "bg-blue-600 text-white shadow-md"
+                : currentStep > step.num
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-400"
+            }`}
+          >
+            {currentStep > step.num ? (
+              <CheckCircle2 className="h-4 w-4" />
             ) : (
-              <span className="w-5 h-5 flex items-center justify-center rounded-full text-xs border border-current">
-                {s.num}
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs">
+                {step.num}
               </span>
             )}
-            <span className="hidden sm:inline">{s.label}</span>
+            <span className="hidden sm:inline">{step.label}</span>
           </div>
-          {i < steps.length - 1 && (
-            <div className={`w-8 h-0.5 ${currentStep > s.num ? 'bg-green-300' : 'bg-gray-200'}`} />
+          {index < steps.length - 1 && (
+            <div
+              className={`h-0.5 w-8 ${
+                currentStep > step.num ? "bg-green-300" : "bg-gray-200"
+              }`}
+            />
           )}
         </div>
       ))}
@@ -70,7 +97,119 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
   );
 }
 
-// File upload area
+function FieldLabel({
+  children,
+  hint,
+}: {
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <label className="mb-1 block text-xs font-medium text-gray-600">
+      <span>{children}</span>
+      {hint ? <span className="ml-1 font-normal text-gray-400">{hint}</span> : null}
+    </label>
+  );
+}
+
+function questionPreview(question: Question): string {
+  switch (question.type) {
+    case "writing":
+      return question.topic || "Writing topic";
+    case "true-false":
+      return question.statements[0]?.statement || "True / False";
+    case "table":
+      return question.question || "Table completion";
+    case "reference":
+      return question.question || "Reference question";
+    case "order":
+      return question.question || "Order question";
+    case "phrase":
+      return question.question || "Phrase question";
+    case "checkbox":
+      return question.question || "Checkbox question";
+    case "open-ended":
+      return question.question || "Open-ended question";
+    default:
+      return (question as any).question || "Question";
+  }
+}
+
+function getQuestionBaseId(section: EditableSection): number {
+  if (!section.questions.length) {
+    return 1;
+  }
+  return Math.min(...section.questions.map((question) => question.id));
+}
+
+function formatQuestionIdList(ids: number[] | undefined): string {
+  return (ids || []).join(", ");
+}
+
+function parseQuestionIdList(value: string): number[] {
+  return value
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item));
+}
+
+function linesToText(lines: string[] | undefined): string {
+  return (lines || []).join("\n");
+}
+
+function textToLines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function getOptionLabel(type: QuestionType, index: number): string {
+  if (type === "listening-mcq") {
+    return String.fromCharCode(65 + index);
+  }
+  return String.fromCharCode(97 + index);
+}
+
+function renumberSection(section: EditableSection): EditableSection {
+  const baseId = getQuestionBaseId(section);
+  const idMap = new Map<number, number>();
+  const nextQuestions = section.questions.map((question, index) => {
+    const nextId = baseId + index;
+    idMap.set(question.id, nextId);
+    return { ...question, id: nextId };
+  }) as Question[];
+
+  return {
+    ...section,
+    questions: nextQuestions,
+    storyParagraphs: section.storyParagraphs?.map((paragraph) => ({
+      ...paragraph,
+      questionIds: paragraph.questionIds
+        .map((questionId) => idMap.get(questionId))
+        .filter((questionId): questionId is number => typeof questionId === "number"),
+    })),
+  };
+}
+
+function refreshPaper(paper: EditablePaper): EditablePaper {
+  return {
+    ...paper,
+    totalQuestions: paper.sections.reduce(
+      (sum, section) => sum + section.questions.length,
+      0
+    ),
+    hasListening: paper.sections.some(
+      (section) =>
+        !!section.audioUrl ||
+        section.questions.some((question) => question.type === "listening-mcq")
+    ),
+    hasWriting: paper.sections.some((section) =>
+      section.questions.some((question) => question.type === "writing")
+    ),
+  };
+}
+
 function FileUploadArea({
   files,
   onFilesAdded,
@@ -82,94 +221,94 @@ function FileUploadArea({
   onRemoveFile: (index: number) => void;
   isUploading: boolean;
 }) {
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    onFilesAdded(droppedFiles);
-  }, [onFilesAdded]);
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      onFilesAdded(Array.from(event.dataTransfer.files));
+    },
+    [onFilesAdded]
+  );
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      onFilesAdded(Array.from(e.target.files));
-    }
-  }, [onFilesAdded]);
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files) {
+        onFilesAdded(Array.from(event.target.files));
+      }
+    },
+    [onFilesAdded]
+  );
 
   const getFileIcon = (type: string) => {
-    if (type.startsWith('image/')) return <Image className="w-5 h-5 text-green-500" />;
-    if (type.startsWith('audio/')) return <Music className="w-5 h-5 text-purple-500" />;
-    return <FileText className="w-5 h-5 text-blue-500" />;
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (type.startsWith("image/")) return <ImageIcon className="h-5 w-5 text-green-500" />;
+    if (type.startsWith("audio/")) return <Music className="h-5 w-5 text-purple-500" />;
+    return <FileText className="h-5 w-5 text-blue-500" />;
   };
 
   return (
     <div className="space-y-4">
       <div
         onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        className="border-2 border-dashed border-blue-300 rounded-xl p-8 text-center hover:border-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer relative"
+        onDragOver={(event) => event.preventDefault()}
+        className="relative rounded-xl border-2 border-dashed border-blue-300 p-8 text-center transition-all hover:border-blue-500 hover:bg-blue-50/50"
       >
         <input
           type="file"
           multiple
           accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.ogg,.doc,.docx,.txt"
           onChange={handleChange}
-          className="absolute inset-0 opacity-0 cursor-pointer"
+          className="absolute inset-0 cursor-pointer opacity-0"
           disabled={isUploading}
         />
-        <Upload className="w-12 h-12 mx-auto text-blue-400 mb-3" />
+        <Upload className="mx-auto mb-3 h-12 w-12 text-blue-400" />
         <p className="text-lg font-medium text-gray-700">
-          Drop files here or click to upload
+          Drop source files here or click to upload
         </p>
-        <p className="text-sm text-gray-500 mt-1">
-          Supports: PDF, Images (PNG/JPG), Audio (MP3/WAV), Word documents
+        <p className="mt-1 text-sm text-gray-500">
+          PDF / 图片 / 音频都可以，作为录题参考素材使用
         </p>
-        {isUploading && (
+        {isUploading ? (
           <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
             <span>Uploading...</span>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {files.length > 0 && (
+      {files.length > 0 ? (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-600">Uploaded Files ({files.length})</h4>
-          {files.map((f, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              {getFileIcon(f.type)}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{f.name}</p>
-                <p className="text-xs text-gray-500">{formatSize(f.size)}</p>
+          <h4 className="text-sm font-medium text-gray-600">
+            Uploaded Files ({files.length})
+          </h4>
+          {files.map((file, index) => (
+            <div
+              key={`${file.url}-${index}`}
+              className="flex items-center gap-3 rounded-lg bg-gray-50 p-3"
+            >
+              {getFileIcon(file.type)}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{file.name}</p>
+                <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onRemoveFile(i)}
+                onClick={() => onRemoveFile(index)}
                 className="text-red-400 hover:text-red-600"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-/**
- * Shared upload helper: compress + upload a single image file to S3.
- * Returns the uploaded URL.
- */
 async function uploadSingleImage(
   file: File,
   uploadMutation: ReturnType<typeof trpc.papers.uploadFile.useMutation>,
-  imageSize: ImageSize = 'full'
+  imageSize: ImageSize = "full"
 ): Promise<string> {
   const compressed = await compressImage(file, imageSize);
   const base64 = await fileToBase64(compressed);
@@ -181,20 +320,19 @@ async function uploadSingleImage(
   return result.url;
 }
 
-// Inline image upload button component with drag-and-drop support
 function ImageUploadButton({
   label,
   currentUrl,
   onUploaded,
   onRemove,
-  previewSize = 'md',
-  imageSize = 'full',
+  previewSize = "md",
+  imageSize = "full",
 }: {
   label: string;
   currentUrl?: string;
   onUploaded: (url: string) => void;
   onRemove: () => void;
-  previewSize?: 'sm' | 'md' | 'lg';
+  previewSize?: "sm" | "md" | "lg";
   imageSize?: ImageSize;
 }) {
   const [isUploading, setIsUploading] = useState(false);
@@ -213,48 +351,47 @@ function ImageUploadButton({
       const url = await uploadSingleImage(file, uploadFile, imageSize);
       onUploaded(url);
       toast.success(`Image uploaded: ${file.name}`);
-    } catch (err) {
-      console.error('Image upload error:', err);
-      toast.error('Failed to upload image');
+    } catch (error) {
+      console.error("Image upload error:", error);
+      toast.error("Failed to upload image");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
     await processFile(file);
-    e.target.value = '';
+    event.target.value = "";
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
     setIsDragOver(false);
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      await processFile(file);
+    }
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) await processFile(file);
-  };
-
-  const previewClass = previewSize === 'sm' ? 'max-h-12' : previewSize === 'lg' ? 'max-h-32' : 'max-h-20';
+  const previewClass =
+    previewSize === "sm" ? "max-h-12" : previewSize === "lg" ? "max-h-32" : "max-h-20";
 
   return (
     <div
       className="space-y-1"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsDragOver(false);
+      }}
       onDrop={handleDrop}
     >
       {currentUrl ? (
@@ -262,52 +399,62 @@ function ImageUploadButton({
           <img
             src={currentUrl}
             alt={label}
-            className={`${previewClass} object-contain rounded border bg-gray-50`}
+            className={`${previewClass} rounded border bg-gray-50 object-contain`}
           />
           <div className="flex flex-col gap-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={onRemove}
-              className="h-6 px-2 text-red-400 hover:text-red-600 text-xs"
+              className="h-6 px-2 text-xs text-red-500 hover:text-red-700"
             >
-              <X className="w-3 h-3 mr-1" /> Remove
+              <X className="mr-1 h-3 w-3" />
+              Remove
             </Button>
             <label className="cursor-pointer">
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleFileSelect}
                 className="hidden"
-                disabled={isUploading}
+                onChange={handleSelect}
               />
-              <span className="inline-flex items-center h-6 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded">
-                <ImagePlus className="w-3 h-3 mr-1" /> Replace
+              <span className="inline-flex h-6 items-center rounded px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-800">
+                <ImagePlus className="mr-1 h-3 w-3" />
+                Replace
               </span>
             </label>
           </div>
         </div>
       ) : (
         <label
-          className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-dashed transition-colors ${
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium transition-colors ${
             isDragOver
-              ? 'text-blue-700 bg-blue-100 border-blue-400 ring-2 ring-blue-300'
-              : 'text-blue-600 bg-blue-50 hover:bg-blue-100 border-blue-200'
+              ? "border-blue-400 bg-blue-100 text-blue-700 ring-2 ring-blue-300"
+              : "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
           }`}
         >
           <input
             type="file"
             accept="image/*"
-            onChange={handleFileSelect}
             className="hidden"
+            onChange={handleSelect}
             disabled={isUploading}
           />
           {isUploading ? (
-            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...</>
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Uploading...
+            </>
           ) : isDragOver ? (
-            <><ImagePlus className="w-3.5 h-3.5" /> Drop here</>
+            <>
+              <ImagePlus className="h-3.5 w-3.5" />
+              Drop here
+            </>
           ) : (
-            <><ImagePlus className="w-3.5 h-3.5" /> {label}</>
+            <>
+              <ImagePlus className="h-3.5 w-3.5" />
+              {label}
+            </>
           )}
         </label>
       )}
@@ -315,477 +462,1833 @@ function ImageUploadButton({
   );
 }
 
-// Batch image upload component for a section
-function BatchImageUpload({
-  section,
-  onUpdate,
+function ImageField({
+  label,
+  url,
+  onChange,
+  imageSize = "full",
+  previewSize = "md",
 }: {
-  section: any;
-  onUpdate: (updated: any) => void;
+  label: string;
+  url?: string;
+  onChange: (value: string) => void;
+  imageSize?: ImageSize;
+  previewSize?: "sm" | "md" | "lg";
 }) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const uploadFile = trpc.papers.uploadFile.useMutation();
-
-  const handleBatchUpload = async (fileList: FileList | File[]) => {
-    const files = Array.from(fileList).filter((f) => {
-      const error = validateImageFile(f);
-      if (error) {
-        toast.error(`${f.name}: ${error}`);
-        return false;
-      }
-      return true;
-    });
-
-    if (files.length === 0) return;
-
-    const questions = section.questions || [];
-    // Find questions without images
-    const emptySlots = questions
-      .map((q: any, i: number) => ({ q, i }))
-      .filter(({ q }: any) => !q.imageUrl);
-
-    if (emptySlots.length === 0) {
-      toast.error('All questions already have images. Remove some first to batch upload.');
-      return;
-    }
-
-    const assignCount = Math.min(files.length, emptySlots.length);
-    if (files.length > emptySlots.length) {
-      toast.info(`Only ${emptySlots.length} questions need images. ${files.length - emptySlots.length} extra image(s) will be skipped.`);
-    }
-
-    setIsUploading(true);
-    setProgress({ current: 0, total: assignCount });
-
-    try {
-      const updated = { ...section, questions: [...section.questions] };
-
-      for (let i = 0; i < assignCount; i++) {
-        setProgress({ current: i + 1, total: assignCount });
-        const url = await uploadSingleImage(files[i], uploadFile, 'full');
-        const qIndex = emptySlots[i].i;
-        updated.questions[qIndex] = { ...updated.questions[qIndex], imageUrl: url };
-      }
-
-      onUpdate(updated);
-      toast.success(`${assignCount} image(s) uploaded and assigned to questions`);
-    } catch (err) {
-      console.error('Batch upload error:', err);
-      toast.error('Batch upload failed partway through. Some images may have been assigned.');
-    } finally {
-      setIsUploading(false);
-      setProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleBatchUpload(e.target.files);
-      e.target.value = '';
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.files.length > 0) {
-      handleBatchUpload(e.dataTransfer.files);
-    }
-  };
-
-  const questionsWithoutImages = (section.questions || []).filter((q: any) => !q.imageUrl).length;
-
   return (
-    <div
-      className="p-3 bg-amber-50 rounded-lg text-sm space-y-2 border border-dashed border-amber-300"
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      <label className="text-xs text-amber-700 font-medium flex items-center gap-1">
-        <Images className="w-3.5 h-3.5" /> Batch Upload Images
-      </label>
-      <p className="text-xs text-amber-600">
-        Select multiple images at once. They will be assigned in order to questions without images.
-        {questionsWithoutImages > 0 && (
-          <span className="font-medium"> ({questionsWithoutImages} questions need images)</span>
-        )}
-      </p>
-      {isUploading ? (
-        <div className="flex items-center gap-2 py-2">
-          <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-          <span className="text-xs text-amber-700 font-medium">
-            Uploading {progress.current}/{progress.total}...
-          </span>
-          <div className="flex-1 h-1.5 bg-amber-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-amber-500 rounded-full transition-all duration-300"
-              style={{ width: `${(progress.current / progress.total) * 100}%` }}
-            />
-          </div>
-        </div>
-      ) : (
-        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md border border-amber-300 transition-colors">
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
+    <div className="space-y-2 rounded-lg border border-dashed border-blue-200 bg-blue-50 p-3">
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex flex-wrap items-start gap-3">
+        <ImageUploadButton
+          label={`Upload ${label}`}
+          currentUrl={url}
+          onUploaded={onChange}
+          onRemove={() => onChange("")}
+          imageSize={imageSize}
+          previewSize={previewSize}
+        />
+        <div className="min-w-[240px] flex-1">
+          <Input
+            value={url || ""}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Or paste image URL here..."
+            className="h-8 text-xs"
           />
-          <Images className="w-4 h-4" />
-          Select Multiple Images (or drag & drop here)
-        </label>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// Section preview/editor
+function ReadingWordBankEditor({
+  items,
+  onChange,
+}: {
+  items: { word: string; imageUrl: string }[];
+  onChange: (items: { word: string; imageUrl: string }[]) => void;
+}) {
+  const updateItem = (index: number, patch: Partial<{ word: string; imageUrl: string }>) => {
+    const next = [...items];
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Reading Word Bank</CardTitle>
+        <p className="text-sm text-gray-500">
+          G2-3 阅读 Part 1 用这个图片区词库，词和图都可以手动录。
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.map((item, index) => (
+          <div key={index} className="rounded-lg border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Item {index + 1}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_1.4fr]">
+              <div>
+                <FieldLabel>Word</FieldLabel>
+                <Input
+                  value={item.word}
+                  onChange={(event) => updateItem(index, { word: event.target.value })}
+                  placeholder="e.g. a dentist"
+                />
+              </div>
+              <ImageField
+                label="Word Bank Image"
+                url={item.imageUrl}
+                onChange={(value) => updateItem(index, { imageUrl: value })}
+                previewSize="sm"
+                imageSize="option"
+              />
+            </div>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          onClick={() => onChange([...items, { word: "", imageUrl: "" }])}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Word Bank Item
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QuestionEditor({
+  question,
+  allowedTypes,
+  sectionHasGrammarPassage,
+  onChange,
+  onRemove,
+}: {
+  question: Question;
+  allowedTypes: QuestionType[];
+  sectionHasGrammarPassage: boolean;
+  onChange: (question: Question) => void;
+  onRemove: () => void;
+}) {
+  const updateField = (field: string, value: unknown) => {
+    onChange({ ...(question as any), [field]: value } as Question);
+  };
+  const replaceQuestion = (patch: Record<string, unknown>) => {
+    onChange({ ...(question as any), ...patch } as Question);
+  };
+
+  const renderQuestionImage = () => {
+    if (question.type !== "mcq" && question.type !== "open-ended") {
+      return null;
+    }
+
+    return (
+      <ImageField
+        label="Question Image"
+        url={question.imageUrl}
+        onChange={(value) => updateField("imageUrl", value)}
+        previewSize="sm"
+      />
+    );
+  };
+
+  const renderMCQOptions = (
+    currentQuestion: Extract<
+      Question,
+      { type: "mcq" | "picture-mcq" | "listening-mcq" }
+    >,
+    type: "mcq" | "picture-mcq" | "listening-mcq"
+  ) => {
+    const options = [...currentQuestion.options];
+    const isImageOptionType = type === "picture-mcq" || type === "listening-mcq";
+
+    const updateOption = (index: number, value: any) => {
+      const next = [...options];
+      next[index] = value;
+      updateField("options", next);
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <FieldLabel>Options</FieldLabel>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const nextIndex = options.length;
+              if (isImageOptionType) {
+                updateField("options", [
+                  ...options,
+                  {
+                    label: getOptionLabel(type, nextIndex),
+                    imageUrl: "",
+                    text: "",
+                  },
+                ]);
+              } else {
+                updateField("options", [...options, ""]);
+              }
+            }}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add Option
+          </Button>
+        </div>
+
+        {options.map((option, index) => (
+          <div key={index} className="rounded-lg border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">
+                Option {getOptionLabel(type, index).toUpperCase()}
+              </span>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-green-700">
+                  <input
+                    type="radio"
+                    checked={currentQuestion.correctAnswer === index}
+                    onChange={() => updateField("correctAnswer", index)}
+                  />
+                  Correct
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const nextOptions = options.filter((_, optionIndex) => optionIndex !== index);
+                    if (typeof currentQuestion.correctAnswer === "number") {
+                      if (currentQuestion.correctAnswer === index) {
+                        replaceQuestion({
+                          options: nextOptions,
+                          correctAnswer: 0,
+                        });
+                      } else if (currentQuestion.correctAnswer > index) {
+                        replaceQuestion({
+                          options: nextOptions,
+                          correctAnswer: currentQuestion.correctAnswer - 1,
+                        });
+                      } else {
+                        replaceQuestion({ options: nextOptions });
+                      }
+                    } else {
+                      replaceQuestion({ options: nextOptions });
+                    }
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {typeof option === "string" ? (
+              <Input
+                value={option}
+                onChange={(event) => updateOption(index, event.target.value)}
+                placeholder="Option text"
+              />
+            ) : (
+              <div className="space-y-3">
+                <Input
+                  value={option.text || ""}
+                  onChange={(event) =>
+                    updateOption(index, { ...option, text: event.target.value })
+                  }
+                  placeholder="Option text (optional)"
+                />
+                {isImageOptionType ? (
+                  <ImageField
+                    label="Option Image"
+                    url={option.imageUrl}
+                    onChange={(value) =>
+                      updateOption(index, { ...option, imageUrl: value })
+                    }
+                    previewSize="sm"
+                    imageSize="option"
+                  />
+                ) : null}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderBody = () => {
+    switch (question.type) {
+      case "mcq":
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <FieldLabel>Question</FieldLabel>
+                <Textarea
+                  value={question.question}
+                  onChange={(event) => updateField("question", event.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div>
+                <FieldLabel>Highlight Word</FieldLabel>
+                <Input
+                  value={question.highlightWord || ""}
+                  onChange={(event) => updateField("highlightWord", event.target.value)}
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <FieldLabel>Correct Option</FieldLabel>
+                <select
+                  value={String(question.correctAnswer)}
+                  onChange={(event) =>
+                    updateField("correctAnswer", Number(event.target.value))
+                  }
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                >
+                  {question.options.map((_, index) => (
+                    <option key={index} value={index}>
+                      {getOptionLabel(question.type, index).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {renderQuestionImage()}
+            {renderMCQOptions(question, "mcq")}
+          </div>
+        );
+
+      case "picture-mcq":
+      case "listening-mcq":
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <FieldLabel>Question</FieldLabel>
+                <Textarea
+                  value={question.question}
+                  onChange={(event) => updateField("question", event.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div>
+                <FieldLabel>Correct Option</FieldLabel>
+                <select
+                  value={String(question.correctAnswer)}
+                  onChange={(event) =>
+                    updateField("correctAnswer", Number(event.target.value))
+                  }
+                  className="h-10 w-full rounded-md border px-3 text-sm"
+                >
+                  {question.options.map((option, index) => (
+                    <option key={index} value={index}>
+                      {option.label || getOptionLabel(question.type, index)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {renderMCQOptions(question, question.type)}
+          </div>
+        );
+
+      case "fill-blank":
+        return (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <FieldLabel
+                hint={
+                  sectionHasGrammarPassage
+                    ? "这类题通常只填答案字母；如是句子填空，也可填写题干"
+                    : undefined
+                }
+              >
+                Question
+              </FieldLabel>
+              <Textarea
+                value={question.question || ""}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+                placeholder={
+                  sectionHasGrammarPassage
+                    ? "Optional for passage-based blanks"
+                    : "Sentence with ___"
+                }
+              />
+            </div>
+            <div>
+              <FieldLabel>Correct Answer</FieldLabel>
+              <Input
+                value={question.correctAnswer}
+                onChange={(event) => updateField("correctAnswer", event.target.value)}
+                placeholder={sectionHasGrammarPassage ? "e.g. A / B / C" : "Correct word"}
+              />
+            </div>
+          </div>
+        );
+
+      case "wordbank-fill":
+        return (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Correct Answer</FieldLabel>
+              <Input
+                value={question.correctAnswer}
+                onChange={(event) => updateField("correctAnswer", event.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case "story-fill":
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <FieldLabel>Question</FieldLabel>
+                <Textarea
+                  value={question.question}
+                  onChange={(event) => updateField("question", event.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div>
+                <FieldLabel>Correct Answer</FieldLabel>
+                <Input
+                  value={question.correctAnswer}
+                  onChange={(event) => updateField("correctAnswer", event.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <FieldLabel hint="一行一个，可留空">Acceptable Answers</FieldLabel>
+              <Textarea
+                value={linesToText(question.acceptableAnswers)}
+                onChange={(event) =>
+                  updateField("acceptableAnswers", textToLines(event.target.value))
+                }
+                rows={3}
+                placeholder="Alternative answers"
+              />
+            </div>
+          </div>
+        );
+
+      case "open-ended":
+        return (
+          <div className="space-y-3">
+            <div className="md:col-span-2">
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            {renderQuestionImage()}
+
+            {question.subQuestions?.length ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <FieldLabel>Sub Questions</FieldLabel>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        updateField("subQuestions", [
+                          ...question.subQuestions!,
+                          {
+                            label: String.fromCharCode(97 + question.subQuestions!.length),
+                            question: "",
+                            answer: "",
+                          },
+                        ])
+                      }
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Add Sub-question
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        replaceQuestion({
+                          subQuestions: undefined,
+                          answer: "",
+                        });
+                      }}
+                    >
+                      Convert to Single Answer
+                    </Button>
+                  </div>
+                </div>
+                {question.subQuestions.map((subQuestion, index) => (
+                  <div key={index} className="rounded-lg border p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">
+                        {subQuestion.label})
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          updateField(
+                            "subQuestions",
+                            question.subQuestions!
+                              .filter((_, subIndex) => subIndex !== index)
+                              .map((item, subIndex) => ({
+                                ...item,
+                                label: String.fromCharCode(97 + subIndex),
+                              }))
+                          )
+                        }
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <FieldLabel>Prompt</FieldLabel>
+                        <Textarea
+                          value={subQuestion.question}
+                          onChange={(event) =>
+                            updateField(
+                              "subQuestions",
+                              question.subQuestions!.map((item, subIndex) =>
+                                subIndex === index
+                                  ? { ...item, question: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Answer</FieldLabel>
+                        <Textarea
+                          value={subQuestion.answer}
+                          onChange={(event) =>
+                            updateField(
+                              "subQuestions",
+                              question.subQuestions!.map((item, subIndex) =>
+                                subIndex === index
+                                  ? { ...item, answer: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <FieldLabel>Model Answer</FieldLabel>
+                  <Textarea
+                    value={question.answer || ""}
+                    onChange={(event) => updateField("answer", event.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    updateField("subQuestions", [
+                      { label: "a", question: "", answer: "" },
+                    ])
+                  }
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Use Sub-questions
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+
+      case "true-false":
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <FieldLabel>Statements</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  updateField("statements", [
+                    ...question.statements,
+                    {
+                      label: String.fromCharCode(97 + question.statements.length),
+                      statement: "",
+                      isTrue: true,
+                      reason: "",
+                    },
+                  ])
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Statement
+              </Button>
+            </div>
+            {question.statements.map((statement, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">
+                    {statement.label})
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      updateField(
+                        "statements",
+                        question.statements
+                          .filter((_, statementIndex) => statementIndex !== index)
+                          .map((item, statementIndex) => ({
+                            ...item,
+                            label: String.fromCharCode(97 + statementIndex),
+                          }))
+                      )
+                    }
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <FieldLabel>Statement</FieldLabel>
+                    <Textarea
+                      value={statement.statement}
+                      onChange={(event) =>
+                        updateField(
+                          "statements",
+                          question.statements.map((item, statementIndex) =>
+                            statementIndex === index
+                              ? { ...item, statement: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Correct</FieldLabel>
+                    <select
+                      value={statement.isTrue ? "true" : "false"}
+                      onChange={(event) =>
+                        updateField(
+                          "statements",
+                          question.statements.map((item, statementIndex) =>
+                            statementIndex === index
+                              ? { ...item, isTrue: event.target.value === "true" }
+                              : item
+                          )
+                        )
+                      }
+                      className="h-10 w-full rounded-md border px-3 text-sm"
+                    >
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-3">
+                    <FieldLabel>Reason</FieldLabel>
+                    <Textarea
+                      value={statement.reason}
+                      onChange={(event) =>
+                        updateField(
+                          "statements",
+                          question.statements.map((item, statementIndex) =>
+                            statementIndex === index
+                              ? { ...item, reason: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "table":
+        return (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <FieldLabel>Rows</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  updateField("rows", [
+                    ...question.rows,
+                    {
+                      situation: "",
+                      thought: "",
+                      action: "",
+                      blankField: "thought",
+                      answer: "",
+                    },
+                  ])
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Row
+              </Button>
+            </div>
+            {question.rows.map((row, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Row {index + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      updateField(
+                        "rows",
+                        question.rows.filter((_, rowIndex) => rowIndex !== index)
+                      )
+                    }
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Situation</FieldLabel>
+                    <Textarea
+                      value={row.situation}
+                      onChange={(event) =>
+                        updateField(
+                          "rows",
+                          question.rows.map((item, rowIndex) =>
+                            rowIndex === index
+                              ? { ...item, situation: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Blank Field</FieldLabel>
+                    <select
+                      value={row.blankField}
+                      onChange={(event) =>
+                        updateField(
+                          "rows",
+                          question.rows.map((item, rowIndex) =>
+                            rowIndex === index
+                              ? {
+                                  ...item,
+                                  blankField: event.target.value as "thought" | "action",
+                                }
+                              : item
+                          )
+                        )
+                      }
+                      className="h-10 w-full rounded-md border px-3 text-sm"
+                    >
+                      <option value="thought">thought</option>
+                      <option value="action">action</option>
+                    </select>
+                  </div>
+                  <div>
+                    <FieldLabel>Thought</FieldLabel>
+                    <Textarea
+                      value={row.thought}
+                      onChange={(event) =>
+                        updateField(
+                          "rows",
+                          question.rows.map((item, rowIndex) =>
+                            rowIndex === index
+                              ? { ...item, thought: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Action</FieldLabel>
+                    <Textarea
+                      value={row.action}
+                      onChange={(event) =>
+                        updateField(
+                          "rows",
+                          question.rows.map((item, rowIndex) =>
+                            rowIndex === index
+                              ? { ...item, action: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <FieldLabel>Correct Answer</FieldLabel>
+                    <Textarea
+                      value={row.answer}
+                      onChange={(event) =>
+                        updateField(
+                          "rows",
+                          question.rows.map((item, rowIndex) =>
+                            rowIndex === index
+                              ? { ...item, answer: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "reference":
+        return (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <FieldLabel>Reference Items</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  updateField("items", [
+                    ...question.items,
+                    { word: "", lineRef: "", answer: "" },
+                  ])
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Item
+              </Button>
+            </div>
+            {question.items.map((item, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Item {index + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      updateField(
+                        "items",
+                        question.items.filter((_, itemIndex) => itemIndex !== index)
+                      )
+                    }
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <FieldLabel>Word</FieldLabel>
+                    <Input
+                      value={item.word}
+                      onChange={(event) =>
+                        updateField(
+                          "items",
+                          question.items.map((row, itemIndex) =>
+                            itemIndex === index
+                              ? { ...row, word: event.target.value }
+                              : row
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Line Ref</FieldLabel>
+                    <Input
+                      value={item.lineRef}
+                      onChange={(event) =>
+                        updateField(
+                          "items",
+                          question.items.map((row, itemIndex) =>
+                            itemIndex === index
+                              ? { ...row, lineRef: event.target.value }
+                              : row
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Answer</FieldLabel>
+                    <Input
+                      value={item.answer}
+                      onChange={(event) =>
+                        updateField(
+                          "items",
+                          question.items.map((row, itemIndex) =>
+                            itemIndex === index
+                              ? { ...row, answer: event.target.value }
+                              : row
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "order":
+        return (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <FieldLabel>Events</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  replaceQuestion({
+                    events: [...question.events, ""],
+                    correctOrder: [
+                      ...question.correctOrder,
+                      question.correctOrder.length + 1,
+                    ],
+                  });
+                }}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Event
+              </Button>
+            </div>
+            {question.events.map((eventText, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Event {index + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      replaceQuestion({
+                        events: question.events.filter(
+                          (_, eventIndex) => eventIndex !== index
+                        ),
+                        correctOrder: question.correctOrder
+                          .filter((_, orderIndex) => orderIndex !== index)
+                          .map((value, orderIndex) => value || orderIndex + 1),
+                      });
+                    }}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-[1fr_140px]">
+                  <div>
+                    <FieldLabel>Event</FieldLabel>
+                    <Textarea
+                      value={eventText}
+                      onChange={(event) =>
+                        updateField(
+                          "events",
+                          question.events.map((item, eventIndex) =>
+                            eventIndex === index ? event.target.value : item
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Correct Order</FieldLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={question.events.length}
+                      value={String(question.correctOrder[index] || index + 1)}
+                      onChange={(event) =>
+                        updateField(
+                          "correctOrder",
+                          question.correctOrder.map((item, eventIndex) =>
+                            eventIndex === index ? Number(event.target.value) : item
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "phrase":
+        return (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <FieldLabel>Items</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  updateField("items", [...question.items, { clue: "", answer: "" }])
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Item
+              </Button>
+            </div>
+            {question.items.map((item, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Item {index + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      updateField(
+                        "items",
+                        question.items.filter((_, itemIndex) => itemIndex !== index)
+                      )
+                    }
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Clue</FieldLabel>
+                    <Textarea
+                      value={item.clue}
+                      onChange={(event) =>
+                        updateField(
+                          "items",
+                          question.items.map((row, itemIndex) =>
+                            itemIndex === index
+                              ? { ...row, clue: event.target.value }
+                              : row
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Answer</FieldLabel>
+                    <Textarea
+                      value={item.answer}
+                      onChange={(event) =>
+                        updateField(
+                          "items",
+                          question.items.map((row, itemIndex) =>
+                            itemIndex === index
+                              ? { ...row, answer: event.target.value }
+                              : row
+                          )
+                        )
+                      }
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "checkbox":
+        return (
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Question</FieldLabel>
+              <Textarea
+                value={question.question}
+                onChange={(event) => updateField("question", event.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <FieldLabel>Options</FieldLabel>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateField("options", [...question.options, ""])}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Option
+              </Button>
+            </div>
+            {question.options.map((option, index) => (
+              <div key={index} className="flex items-center gap-3 rounded-lg border p-3">
+                <input
+                  type="checkbox"
+                  checked={question.correctAnswers.includes(index)}
+                  onChange={(event) => {
+                    const next = event.target.checked
+                      ? [...question.correctAnswers, index]
+                      : question.correctAnswers.filter((value) => value !== index);
+                    updateField(
+                      "correctAnswers",
+                      next.sort((left, right) => left - right)
+                    );
+                  }}
+                />
+                <div className="flex-1">
+                  <FieldLabel>Option</FieldLabel>
+                  <Input
+                    value={option}
+                    onChange={(event) =>
+                      updateField(
+                        "options",
+                        question.options.map((item, optionIndex) =>
+                          optionIndex === index ? event.target.value : item
+                        )
+                      )
+                    }
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    replaceQuestion({
+                      options: question.options.filter(
+                        (_, optionIndex) => optionIndex !== index
+                      ),
+                      correctAnswers: question.correctAnswers
+                        .filter((value) => value !== index)
+                        .map((value) => (value > index ? value - 1 : value)),
+                    });
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "writing":
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <FieldLabel>Topic</FieldLabel>
+                <Input
+                  value={question.topic}
+                  onChange={(event) => updateField("topic", event.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Word Count</FieldLabel>
+                <Input
+                  value={question.wordCount}
+                  onChange={(event) => updateField("wordCount", event.target.value)}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel>Instructions</FieldLabel>
+                <Textarea
+                  value={question.instructions}
+                  onChange={(event) => updateField("instructions", event.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Prompts</FieldLabel>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateField("prompts", [...question.prompts, ""])}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Prompt
+                </Button>
+              </div>
+              {question.prompts.map((prompt, index) => (
+                <div key={index} className="flex items-center gap-3 rounded-lg border p-3">
+                  <div className="flex-1">
+                    <FieldLabel>Prompt {index + 1}</FieldLabel>
+                    <Input
+                      value={prompt}
+                      onChange={(event) =>
+                        updateField(
+                          "prompts",
+                          question.prompts.map((item, promptIndex) =>
+                            promptIndex === index ? event.target.value : item
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      updateField(
+                        "prompts",
+                        question.prompts.filter((_, promptIndex) => promptIndex !== index)
+                      )
+                    }
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono">
+              Q{question.id}
+            </span>
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+              {QUESTION_TYPE_META[question.type].description}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-gray-700">{questionPreview(question)}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={question.type}
+            onChange={(event) =>
+              onChange(createEmptyQuestionByType(event.target.value as QuestionType, question.id))
+            }
+            className="h-9 rounded-md border px-3 text-sm"
+          >
+            {allowedTypes.map((type) => (
+              <option key={type} value={type}>
+                {QUESTION_TYPE_META[type].label}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRemove}
+            className="text-red-500 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {renderBody()}
+    </div>
+  );
+}
+
 function SectionEditor({
   section,
-  sectionIndex,
-  onUpdate,
+  uploadedFiles,
+  onChange,
+  onRemove,
 }: {
-  section: any;
-  sectionIndex: number;
-  onUpdate: (updated: any) => void;
+  section: EditableSection;
+  uploadedFiles: UploadedFile[];
+  onChange: (section: EditableSection) => void;
+  onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [newQuestionType, setNewQuestionType] = useState<QuestionType>(
+    section.supportedQuestionTypes[0]
+  );
 
-  const updateQuestion = (qIndex: number, field: string, value: any) => {
-    const updated = { ...section };
-    updated.questions = [...updated.questions];
-    updated.questions[qIndex] = { ...updated.questions[qIndex], [field]: value };
-    onUpdate(updated);
+  const audioFiles = uploadedFiles.filter((file) => file.type.startsWith("audio/"));
+
+  const updateQuestionAt = (index: number, nextQuestion: Question) => {
+    const nextQuestions = [...section.questions];
+    nextQuestions[index] = nextQuestion;
+    onChange({ ...section, questions: nextQuestions });
   };
 
-  const removeQuestion = (qIndex: number) => {
-    const updated = { ...section };
-    updated.questions = updated.questions.filter((_: any, i: number) => i !== qIndex);
-    // Re-number question IDs
-    updated.questions = updated.questions.map((q: any, i: number) => ({ ...q, id: i + 1 }));
-    onUpdate(updated);
+  const removeQuestion = (index: number) => {
+    onChange(
+      renumberSection({
+        ...section,
+        questions: section.questions.filter((_, questionIndex) => questionIndex !== index),
+      })
+    );
   };
 
-  const getQuestionTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      'picture-mcq': '🖼️ Picture MCQ',
-      'mcq': '📝 Multiple Choice',
-      'fill-blank': '✏️ Fill in Blank',
-      'listening-mcq': '🎧 Listening MCQ',
-      'wordbank-fill': '📚 Word Bank Fill',
-      'story-fill': '📖 Story Fill',
-      'open-ended': '💬 Open Ended',
-      'true-false': '✅ True/False',
-      'checkbox': '☑️ Checkbox',
-      'writing': '✍️ Writing',
-      'table': '📊 Table',
-      'reference': '🔗 Reference',
-      'order': '🔢 Order',
-      'phrase': '💡 Phrase',
-    };
-    return labels[type] || type;
+  const addQuestion = () => {
+    const nextId = getQuestionBaseId(section) + section.questions.length;
+    onChange({
+      ...section,
+      questions: [...section.questions, createEmptyQuestionByType(newQuestionType, nextId)],
+    });
   };
 
-  const getCorrectAnswerDisplay = (q: any) => {
-    if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') {
-      const opts = q.options || [];
-      const idx = q.correctAnswer;
-      if (idx >= 0 && idx < opts.length) {
-        const opt = opts[idx];
-        return `${String.fromCharCode(97 + idx)}) ${opt?.text || opt?.label || opt || ''}`;
-      }
-      return `Index: ${idx}`;
-    }
-    if (q.type === 'fill-blank' || q.type === 'wordbank-fill' || q.type === 'story-fill') {
-      return q.correctAnswer;
-    }
-    if (q.type === 'true-false') {
-      return `${q.statements?.length || 0} statements`;
-    }
-    if (q.type === 'checkbox') {
-      return q.correctAnswers?.map((i: number) => String.fromCharCode(97 + i)).join(', ');
-    }
-    if (q.type === 'writing') {
-      return `Topic: ${q.topic}`;
-    }
-    if (q.type === 'open-ended') {
-      return q.answer || `${q.subQuestions?.length || 0} sub-questions`;
-    }
-    return '—';
+  const updateWordBank = (index: number, word: string) => {
+    const next = [...(section.wordBank || [])];
+    next[index] = { ...next[index], word };
+    onChange({ ...section, wordBank: next });
   };
 
   return (
     <Card className="border border-gray-200">
       <CardHeader
-        className="cursor-pointer hover:bg-gray-50 transition-colors py-3"
-        onClick={() => setExpanded(!expanded)}
+        className="cursor-pointer py-3 transition-colors hover:bg-gray-50"
+        onClick={() => setExpanded((value) => !value)}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{section.icon}</span>
-            <div>
-              <CardTitle className="text-base">{section.title}</CardTitle>
-              <p className="text-xs text-gray-500">{section.questions?.length || 0} questions</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{section.icon}</span>
+              <div>
+                <CardTitle className="text-base">{section.title}</CardTitle>
+                <p className="text-xs text-gray-500">{section.blueprintSummary}</p>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {section.supportedQuestionTypes.map((type) => (
+                <span
+                  key={type}
+                  className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
+                >
+                  {QUESTION_TYPE_META[type].shortLabel}
+                </span>
+              ))}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-1 bg-gray-100 rounded-full">
-              {section.id}
-            </span>
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove();
+              }}
+              className="text-red-500 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </div>
         </div>
       </CardHeader>
 
-      {expanded && (
-        <CardContent className="pt-0 space-y-3">
-          {/* Section metadata */}
-          <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-lg text-sm">
+      {expanded ? (
+        <CardContent className="space-y-4 pt-0">
+          <div className="grid gap-3 rounded-lg bg-gray-50 p-3 md:grid-cols-2">
             <div>
-              <label className="text-xs text-gray-500">Section ID</label>
+              <FieldLabel>Section ID</FieldLabel>
               <Input
                 value={section.id}
-                onChange={(e) => onUpdate({ ...section, id: e.target.value })}
-                className="h-8 text-sm"
+                onChange={(event) => onChange({ ...section, id: event.target.value })}
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500">Title</label>
+              <FieldLabel>Title</FieldLabel>
               <Input
                 value={section.title}
-                onChange={(e) => onUpdate({ ...section, title: e.target.value })}
-                className="h-8 text-sm"
+                onChange={(event) => onChange({ ...section, title: event.target.value })}
               />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500">Description</label>
+            <div>
+              <FieldLabel>Subtitle</FieldLabel>
               <Input
+                value={section.subtitle}
+                onChange={(event) => onChange({ ...section, subtitle: event.target.value })}
+              />
+            </div>
+            <div>
+              <FieldLabel>Icon</FieldLabel>
+              <Input
+                value={section.icon}
+                onChange={(event) => onChange({ ...section, icon: event.target.value })}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <FieldLabel>Description</FieldLabel>
+              <Textarea
                 value={section.description}
-                onChange={(e) => onUpdate({ ...section, description: e.target.value })}
-                className="h-8 text-sm"
+                onChange={(event) =>
+                  onChange({ ...section, description: event.target.value })
+                }
+                rows={2}
               />
-            </div>
-            {section.passage && (
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Passage</label>
-                <Textarea
-                  value={section.passage}
-                  onChange={(e) => onUpdate({ ...section, passage: e.target.value })}
-                  className="text-sm"
-                  rows={4}
-                />
-              </div>
-            )}
-            {section.grammarPassage && (
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Grammar Passage (with blanks)</label>
-                <Textarea
-                  value={section.grammarPassage}
-                  onChange={(e) => onUpdate({ ...section, grammarPassage: e.target.value })}
-                  className="text-sm"
-                  rows={4}
-                />
-              </div>
-            )}
-            {section.audioUrl && (
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Audio URL</label>
-                <Input
-                  value={section.audioUrl}
-                  onChange={(e) => onUpdate({ ...section, audioUrl: e.target.value })}
-                  className="h-8 text-sm"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Section-level scene image */}
-          <div className="p-3 bg-blue-50 rounded-lg text-sm space-y-2">
-            <label className="text-xs text-gray-600 font-medium flex items-center gap-1">
-              <Image className="w-3.5 h-3.5" /> Scene Image
-            </label>
-            <div className="flex items-start gap-3">
-              <ImageUploadButton
-                label="Upload Scene Image"
-                currentUrl={section.sceneImageUrl}
-                onUploaded={(url) => onUpdate({ ...section, sceneImageUrl: url })}
-                onRemove={() => onUpdate({ ...section, sceneImageUrl: '' })}
-                previewSize="lg"
-              />
-              <div className="flex-1">
-                <Input
-                  value={section.sceneImageUrl || ''}
-                  onChange={(e) => onUpdate({ ...section, sceneImageUrl: e.target.value })}
-                  placeholder="Or paste image URL here..."
-                  className="h-7 text-xs"
-                />
-              </div>
             </div>
           </div>
 
-          {/* Batch image upload */}
-          <BatchImageUpload section={section} onUpdate={onUpdate} />
+          {section.passage !== undefined ? (
+            <div>
+              <FieldLabel>Reading Passage</FieldLabel>
+              <Textarea
+                value={section.passage}
+                onChange={(event) => onChange({ ...section, passage: event.target.value })}
+                rows={8}
+              />
+            </div>
+          ) : null}
 
-          {/* Questions */}
-          <div className="space-y-2">
-            {section.questions?.map((q: any, qi: number) => (
-              <div key={qi} className="flex items-start gap-2 p-3 bg-white border rounded-lg">
-                <GripVertical className="w-4 h-4 text-gray-300 mt-1 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">Q{q.id}</span>
-                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
-                      {getQuestionTypeLabel(q.type)}
-                    </span>
-                    {q.imageUrl && (
-                      <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">Has Image</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-800 mb-1">
-                    {q.question || q.topic || q.statements?.[0]?.statement || '(no question text)'}
-                  </p>
+          {section.grammarPassage !== undefined ? (
+            <div>
+              <FieldLabel hint="使用 <b>(N) ___</b> 这种 blank 标记">
+                Grammar Passage
+              </FieldLabel>
+              <Textarea
+                value={section.grammarPassage}
+                onChange={(event) =>
+                  onChange({ ...section, grammarPassage: event.target.value })
+                }
+                rows={8}
+              />
+            </div>
+          ) : null}
 
-                  {/* Question image: upload + URL editor + preview */}
-                  <div className="my-2 p-2 bg-gray-50 rounded-md border border-dashed border-gray-200 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <ImageUploadButton
-                        label="Upload Question Image"
-                        currentUrl={q.imageUrl}
-                        onUploaded={(url) => updateQuestion(qi, 'imageUrl', url)}
-                        onRemove={() => updateQuestion(qi, 'imageUrl', '')}
-                        previewSize="md"
-                      />
-                    </div>
-                    {!q.imageUrl && (
-                      <Input
-                        value={q.imageUrl || ''}
-                        onChange={(e) => updateQuestion(qi, 'imageUrl', e.target.value)}
-                        placeholder="Or paste image URL here..."
-                        className="h-7 text-xs"
-                      />
-                    )}
-                  </div>
-
-                  {/* Options for MCQ types */}
-                  {(q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') && q.options && (
-                    <div className="space-y-1.5 mt-1">
-                      {q.options.map((opt: any, oi: number) => (
-                        <div key={oi} className="flex items-start gap-2 p-1.5 rounded hover:bg-gray-50">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded flex-shrink-0 mt-0.5 ${
-                              oi === q.correctAnswer
-                                ? 'bg-green-100 text-green-700 font-medium'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {String.fromCharCode(97 + oi)}) {typeof opt === 'string' ? opt : (opt?.text || opt?.label || '')}
-                          </span>
-                          {/* Option image upload for picture-mcq */}
-                          {(q.type === 'picture-mcq' || q.type === 'listening-mcq') && (
-                            <div className="flex-1 min-w-0">
-                              <ImageUploadButton
-                                label={`Upload Option ${String.fromCharCode(65 + oi)} Image`}
-                                currentUrl={typeof opt === 'object' ? opt.imageUrl : undefined}
-                                onUploaded={(url) => {
-                                  const newOptions = [...q.options];
-                                  if (typeof newOptions[oi] === 'string') {
-                                    newOptions[oi] = { text: newOptions[oi], label: String.fromCharCode(65 + oi), imageUrl: url };
-                                  } else {
-                                    newOptions[oi] = { ...newOptions[oi], imageUrl: url };
-                                  }
-                                  updateQuestion(qi, 'options', newOptions);
-                                }}
-                                onRemove={() => {
-                                  const newOptions = [...q.options];
-                                  if (typeof newOptions[oi] === 'object') {
-                                    newOptions[oi] = { ...newOptions[oi], imageUrl: '' };
-                                  }
-                                  updateQuestion(qi, 'options', newOptions);
-                                }}
-                                previewSize="sm"
-                                imageSize="option"
-                              />
-                              {!((typeof opt === 'object' && opt.imageUrl)) && (
-                                <Input
-                                  value={typeof opt === 'object' ? (opt.imageUrl || '') : ''}
-                                  onChange={(e) => {
-                                    const newOptions = [...q.options];
-                                    if (typeof newOptions[oi] === 'string') {
-                                      newOptions[oi] = { text: newOptions[oi], label: String.fromCharCode(65 + oi), imageUrl: e.target.value };
-                                    } else {
-                                      newOptions[oi] = { ...newOptions[oi], imageUrl: e.target.value };
-                                    }
-                                    updateQuestion(qi, 'options', newOptions);
-                                  }}
-                                  placeholder="Or paste option image URL"
-                                  className="h-6 text-xs mt-1"
-                                />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Answer: <span className="font-medium text-green-600">{getCorrectAnswerDisplay(q)}</span>
-                  </p>
-                </div>
+          {section.wordBank ? (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Word Bank</FieldLabel>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={() => removeQuestion(qi)}
-                  className="text-red-400 hover:text-red-600 flex-shrink-0"
+                  onClick={() =>
+                    onChange({
+                      ...section,
+                      wordBank: [
+                        ...section.wordBank!,
+                        {
+                          letter: String.fromCharCode(65 + section.wordBank!.length),
+                          word: "",
+                        },
+                      ],
+                    })
+                  }
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Word
                 </Button>
               </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {section.wordBank.map((item, index) => (
+                  <div key={index} className="flex items-center gap-2 rounded border p-2">
+                    <span className="w-8 text-sm font-semibold text-gray-600">
+                      {item.letter}
+                    </span>
+                    <Input
+                      value={item.word}
+                      onChange={(event) => updateWordBank(index, event.target.value)}
+                      placeholder="Word bank item"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        onChange({
+                          ...section,
+                          wordBank: section.wordBank!
+                            .filter((_, itemIndex) => itemIndex !== index)
+                            .map((word, itemIndex) => ({
+                              ...word,
+                              letter: String.fromCharCode(65 + itemIndex),
+                            })),
+                        })
+                      }
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {section.audioUrl !== undefined ? (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div>
+                <FieldLabel>Audio URL</FieldLabel>
+                <Input
+                  value={section.audioUrl || ""}
+                  onChange={(event) => onChange({ ...section, audioUrl: event.target.value })}
+                  placeholder="Paste uploaded audio URL here..."
+                />
+              </div>
+              {audioFiles.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {audioFiles.map((file) => (
+                    <Button
+                      key={file.url}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onChange({ ...section, audioUrl: file.url })}
+                    >
+                      <Music className="mr-1 h-3.5 w-3.5" />
+                      Use {file.name}
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  还没有上传音频的话，可以回到第一步上传。
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {section.sceneImageUrl !== undefined ? (
+            <ImageField
+              label="Scene Image"
+              url={section.sceneImageUrl}
+              onChange={(value) => onChange({ ...section, sceneImageUrl: value })}
+              previewSize="lg"
+            />
+          ) : null}
+
+          {section.wordBankImageUrl !== undefined ? (
+            <ImageField
+              label="Word Bank Image"
+              url={section.wordBankImageUrl}
+              onChange={(value) => onChange({ ...section, wordBankImageUrl: value })}
+              previewSize="md"
+            />
+          ) : null}
+
+          {section.storyParagraphs?.length ? (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Story Paragraphs</FieldLabel>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    onChange({
+                      ...section,
+                      storyParagraphs: [
+                        ...section.storyParagraphs!,
+                        { text: "", questionIds: [] },
+                      ],
+                    })
+                  }
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Paragraph
+                </Button>
+              </div>
+              {section.storyParagraphs.map((paragraph, index) => (
+                <div key={index} className="rounded-lg border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      Paragraph {index + 1}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        onChange({
+                          ...section,
+                          storyParagraphs: section.storyParagraphs!.filter(
+                            (_, paragraphIndex) => paragraphIndex !== index
+                          ),
+                        })
+                      }
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                    <div>
+                      <FieldLabel>Paragraph Text</FieldLabel>
+                      <Textarea
+                        value={paragraph.text}
+                        onChange={(event) =>
+                          onChange({
+                            ...section,
+                            storyParagraphs: section.storyParagraphs!.map(
+                              (item, paragraphIndex) =>
+                                paragraphIndex === index
+                                  ? { ...item, text: event.target.value }
+                                  : item
+                            ),
+                          })
+                        }
+                        rows={4}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel hint="Comma separated">Question IDs</FieldLabel>
+                      <Input
+                        value={formatQuestionIdList(paragraph.questionIds)}
+                        onChange={(event) =>
+                          onChange({
+                            ...section,
+                            storyParagraphs: section.storyParagraphs!.map(
+                              (item, paragraphIndex) =>
+                                paragraphIndex === index
+                                  ? {
+                                      ...item,
+                                      questionIds: parseQuestionIdList(event.target.value),
+                                    }
+                                  : item
+                            ),
+                          })
+                        }
+                        placeholder="6, 7, 8"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-800">Questions</h4>
+                <p className="text-xs text-gray-500">
+                  这里可以改题型、题干、答案、子题和图片。
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={newQuestionType}
+                  onChange={(event) =>
+                    setNewQuestionType(event.target.value as QuestionType)
+                  }
+                  className="h-9 rounded-md border px-3 text-sm"
+                >
+                  {section.supportedQuestionTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {QUESTION_TYPE_META[type].label}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="outline" onClick={addQuestion}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Question
+                </Button>
+              </div>
+            </div>
+
+            {section.questions.map((question, index) => (
+              <QuestionEditor
+                key={`${question.id}-${index}`}
+                question={question}
+                allowedTypes={section.supportedQuestionTypes}
+                sectionHasGrammarPassage={!!section.grammarPassage}
+                onChange={(nextQuestion) => updateQuestionAt(index, nextQuestion)}
+                onRemove={() => removeQuestion(index)}
+              />
             ))}
           </div>
         </CardContent>
-      )}
+      ) : null}
     </Card>
   );
 }
 
-// Main component
 export default function PaperCreator() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [step, setStep] = useState(1);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [instructions, setInstructions] = useState('');
-  const [isParsing, setIsParsing] = useState(false);
-  const [parsedPaper, setParsedPaper] = useState<ParsedPaper | null>(null);
-  const [paperTitle, setPaperTitle] = useState('');
-  const [paperSubtitle, setPaperSubtitle] = useState('');
-  const [paperDescription, setPaperDescription] = useState('');
+  const [instructions, setInstructions] = useState("");
+  const [draftPaper, setDraftPaper] = useState<EditablePaper | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedPaperId, setSavedPaperId] = useState<string | null>(null);
 
   const uploadFile = trpc.papers.uploadFile.useMutation();
-  const parseMaterials = trpc.papers.parseMaterials.useMutation();
   const createPaper = trpc.papers.create.useMutation();
 
-  // Password check
+  const suggestion = useMemo(
+    () => suggestBlueprint(files, instructions),
+    [files, instructions]
+  );
+
   const handleUnlock = () => {
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
     } else {
-      toast.error('Incorrect password');
+      toast.error("Incorrect password");
     }
+  };
+
+  const handleFilesAdded = async (newFiles: File[]) => {
+    setIsUploading(true);
+    try {
+      for (const file of newFiles) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        bytes.forEach((byte) => {
+          binary += String.fromCharCode(byte);
+        });
+
+        const result = await uploadFile.mutateAsync({
+          fileName: file.name,
+          fileBase64: btoa(binary),
+          contentType: file.type || "application/octet-stream",
+        });
+
+        setFiles((previous) => [
+          ...previous,
+          { name: file.name, type: file.type, url: result.url, size: file.size },
+        ]);
+      }
+      toast.success(`${newFiles.length} file(s) uploaded`);
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload one or more files");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setFiles((previous) => previous.filter((_, fileIndex) => fileIndex !== index));
+  };
+
+  const handleChooseBlueprint = (blueprintId: string) => {
+    const nextPaper = createEditablePaperFromBlueprint(blueprintId);
+    const firstAudio = files.find((file) => file.type.startsWith("audio/"));
+    if (firstAudio) {
+      nextPaper.sections = nextPaper.sections.map((section) =>
+        section.audioUrl !== undefined && !section.audioUrl
+          ? { ...section, audioUrl: firstAudio.url }
+          : section
+      );
+    }
+    setDraftPaper(refreshPaper(nextPaper));
+    setStep(3);
+  };
+
+  const updateDraftPaper = (updater: (paper: EditablePaper) => EditablePaper) => {
+    setDraftPaper((current) => (current ? refreshPaper(updater(current)) : current));
+  };
+
+  const handleSave = async (status: "draft" | "published") => {
+    if (!draftPaper) return;
+
+    const cleanPaper = stripEditablePaper(draftPaper);
+
+    setIsSaving(true);
+    try {
+      const result = await createPaper.mutateAsync({
+        title: cleanPaper.title,
+        subtitle: cleanPaper.subtitle || undefined,
+        description: cleanPaper.description || undefined,
+        icon: cleanPaper.icon,
+        color: cleanPaper.color,
+        totalQuestions: cleanPaper.totalQuestions,
+        hasListening: cleanPaper.hasListening,
+        hasWriting: cleanPaper.hasWriting,
+        sectionsJson: JSON.stringify(cleanPaper.sections),
+        readingWordBankJson: cleanPaper.readingWordBank
+          ? JSON.stringify(cleanPaper.readingWordBank)
+          : undefined,
+        sourceFilesJson: files.length ? JSON.stringify(files) : undefined,
+        status,
+      });
+
+      setSavedPaperId(result.paperId);
+      setStep(4);
+      toast.success(
+        status === "published" ? "Paper published successfully" : "Draft saved successfully"
+      );
+    } catch (error) {
+      console.error("Save error:", error);
+      toast.error("Failed to save paper");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    setStep(1);
+    setFiles([]);
+    setInstructions("");
+    setDraftPaper(null);
+    setSavedPaperId(null);
   };
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">🔐 Paper Creator</CardTitle>
@@ -796,175 +2299,34 @@ export default function PaperCreator() {
               type="password"
               placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && handleUnlock()}
             />
-            <Button onClick={handleUnlock} className="w-full">Unlock</Button>
+            <Button onClick={handleUnlock} className="w-full">
+              Unlock
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Handle file upload to S3
-  const handleFilesAdded = async (newFiles: File[]) => {
-    setIsUploading(true);
-    try {
-      for (const file of newFiles) {
-        // Read file as base64
-        const buffer = await file.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-
-        const result = await uploadFile.mutateAsync({
-          fileName: file.name,
-          fileBase64: base64,
-          contentType: file.type,
-        });
-
-        setFiles((prev) => [
-          ...prev,
-          { name: file.name, type: file.type, url: result.url, size: file.size },
-        ]);
-      }
-      toast.success(`${newFiles.length} file(s) uploaded successfully`);
-    } catch (err) {
-      console.error('Upload error:', err);
-      toast.error('Failed to upload file(s)');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleRemoveFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // AI parse materials
-  const handleParse = async () => {
-    if (files.length === 0) {
-      toast.error('Please upload at least one file');
-      return;
-    }
-
-    setIsParsing(true);
-    try {
-      const imageUrls = files
-        .filter((f) => f.type.startsWith('image/'))
-        .map((f) => f.url);
-      const pdfUrls = files
-        .filter((f) => f.type === 'application/pdf')
-        .map((f) => f.url);
-      const audioUrls = files
-        .filter((f) => f.type.startsWith('audio/'))
-        .map((f) => f.url);
-
-      const result = await parseMaterials.mutateAsync({
-        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        pdfUrls: pdfUrls.length > 0 ? pdfUrls : undefined,
-        audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
-        instructions: instructions || undefined,
-      });
-
-      setParsedPaper(result as ParsedPaper);
-      setPaperTitle(result.title);
-      setPaperSubtitle(result.subtitle);
-      setPaperDescription(result.description);
-      setStep(3);
-      toast.success('Materials parsed successfully!');
-    } catch (err) {
-      console.error('Parse error:', err);
-      toast.error('Failed to parse materials. Please try again.');
-    } finally {
-      setIsParsing(false);
-    }
-  };
-
-  // Update a section in the parsed paper
-  const handleUpdateSection = (sectionIndex: number, updated: any) => {
-    if (!parsedPaper) return;
-    const newSections = [...parsedPaper.sections];
-    newSections[sectionIndex] = updated;
-    setParsedPaper({ ...parsedPaper, sections: newSections });
-  };
-
-  // Remove a section
-  const handleRemoveSection = (sectionIndex: number) => {
-    if (!parsedPaper) return;
-    const newSections = parsedPaper.sections.filter((_, i) => i !== sectionIndex);
-    const totalQ = newSections.reduce((sum: number, s: any) => sum + (s.questions?.length || 0), 0);
-    setParsedPaper({ ...parsedPaper, sections: newSections, totalQuestions: totalQ });
-  };
-
-  // Save paper
-  const handleSave = async (status: 'draft' | 'published') => {
-    if (!parsedPaper) return;
-
-    // Inject audio URLs into listening sections
-    const audioFiles = files.filter((f) => f.type.startsWith('audio/'));
-    const sections = parsedPaper.sections.map((s: any) => {
-      if (s.id.includes('listening') && audioFiles.length > 0 && !s.audioUrl) {
-        return { ...s, audioUrl: audioFiles[0].url };
-      }
-      return s;
-    });
-
-    const totalQ = sections.reduce((sum: number, s: any) => sum + (s.questions?.length || 0), 0);
-
-    setIsSaving(true);
-    try {
-      const result = await createPaper.mutateAsync({
-        title: paperTitle,
-        subtitle: paperSubtitle || undefined,
-        description: paperDescription || undefined,
-        totalQuestions: totalQ,
-        hasListening: sections.some((s: any) => s.id.includes('listening') || s.audioUrl),
-        hasWriting: sections.some((s: any) => s.questions?.some((q: any) => q.type === 'writing')),
-        sectionsJson: JSON.stringify(sections),
-        sourceFilesJson: JSON.stringify(files),
-        status,
-      });
-
-      toast.success(
-        status === 'published'
-          ? 'Paper published! Students can now see it.'
-          : 'Paper saved as draft.'
-      );
-      setStep(4);
-    } catch (err) {
-      console.error('Save error:', err);
-      toast.error('Failed to save paper');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Reset to create another
-  const handleReset = () => {
-    setStep(1);
-    setFiles([]);
-    setInstructions('');
-    setParsedPaper(null);
-    setPaperTitle('');
-    setPaperSubtitle('');
-    setPaperDescription('');
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
-      {/* Header */}
-      <div className="bg-white border-b shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div className="border-b bg-white shadow-sm">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back
               </Button>
             </Link>
             <div>
               <h1 className="text-xl font-bold text-gray-900">📝 Paper Creator</h1>
-              <p className="text-xs text-gray-500">Upload materials, AI parses into assessment format</p>
+              <p className="text-xs text-gray-500">
+                上传原卷后先选大题蓝图，再按题型逐题人工录入
+              </p>
             </div>
           </div>
           <Link href="/paper-manager">
@@ -975,21 +2337,19 @@ export default function PaperCreator() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         <StepIndicator currentStep={step} />
 
-        {/* Step 1: Upload Materials */}
-        {step === 1 && (
+        {step === 1 ? (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-blue-500" />
-                  Upload Test Materials
+                  <Upload className="h-5 w-5 text-blue-500" />
+                  Upload Source Materials
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  Upload PDF files, images of test papers, or audio files for listening sections.
-                  The AI will analyze these materials and create a structured assessment paper.
+                  这一步只负责上传参考素材。真正的录题会在下一步按 G2-3 / G6 题目架构进行。
                 </p>
               </CardHeader>
               <CardContent>
@@ -1004,251 +2364,335 @@ export default function PaperCreator() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Pencil className="w-4 h-4 text-gray-500" />
-                  Additional Instructions (Optional)
-                </CardTitle>
+                <CardTitle className="text-base">识别提示（可选）</CardTitle>
+                <p className="text-sm text-gray-500">
+                  可输入卷名、年级或备注，系统会优先推荐对应蓝图。
+                </p>
               </CardHeader>
               <CardContent>
                 <Textarea
-                  placeholder="E.g., 'This is a Grade 4 vocabulary test. The listening audio has 8 questions. Please make sure all answer options are included...'"
                   value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
+                  onChange={(event) => setInstructions(event.target.value)}
                   rows={3}
+                  placeholder="例如：G6 期末卷 / 有作文 / 没有听力"
                 />
               </CardContent>
             </Card>
 
             <div className="flex justify-end">
-              <Button
-                onClick={() => {
-                  if (files.length === 0) {
-                    toast.error('Please upload at least one file');
-                    return;
-                  }
-                  setStep(2);
-                }}
-                size="lg"
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Next: AI Parse <Sparkles className="w-4 h-4 ml-2" />
+              <Button onClick={() => setStep(2)} size="lg">
+                Next: Filter Blueprint
+                <Layers3 className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Step 2: AI Parse */}
-        {step === 2 && (
+        {step === 2 ? (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-purple-500" />
-                  AI Analysis
+                  <Layers3 className="h-5 w-5 text-blue-500" />
+                  Big-Part Blueprint Filter
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  The AI will analyze your uploaded materials and convert them into a structured assessment paper.
-                  This may take 30-60 seconds depending on the complexity.
+                  我先按现有两套卷型做了解读和分类。这里不再直接 AI 拆完整题目，而是先锁定大题架构，再进入人工录题。
+                </p>
+              </CardHeader>
+              <CardContent className="rounded-lg bg-blue-50 text-sm text-blue-900">
+                <p className="font-medium">当前推荐：</p>
+                <p>
+                  {suggestion.blueprintId
+                    ? `${suggestion.blueprintId.toUpperCase()}，${suggestion.reason}`
+                    : suggestion.reason}
+                </p>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {paperBlueprints.map((blueprint) => {
+                const isRecommended = suggestion.blueprintId === blueprint.id;
+                return (
+                  <Card
+                    key={blueprint.id}
+                    className={`border-2 ${
+                      isRecommended ? "border-blue-500 shadow-md" : "border-gray-200"
+                    }`}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-lg">{blueprint.label}</CardTitle>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Reference: {blueprint.referenceTitle}
+                          </p>
+                        </div>
+                        {isRecommended ? (
+                          <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                            Recommended
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-gray-700">{blueprint.interpretation}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        {blueprint.classification.map((item) => (
+                          <span
+                            key={item}
+                            className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        {blueprint.sections.map((section) => (
+                          <div key={section.id} className="rounded-lg border bg-gray-50 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800">
+                                  {section.title}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {section.totalQuestions} slots
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap justify-end gap-1">
+                                {section.supportedQuestionTypes.map((type) => (
+                                  <span
+                                    key={type}
+                                    className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700"
+                                  >
+                                    {QUESTION_TYPE_META[type].shortLabel}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="mt-2 text-xs text-gray-600">{section.summary}</p>
+                            {section.features.length ? (
+                              <p className="mt-1 text-[11px] text-gray-400">
+                                Features: {section.features.join(" / ")}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                        {blueprint.recommendedFor}
+                      </div>
+
+                      <Button onClick={() => handleChooseBlueprint(blueprint.id)} className="w-full">
+                        Use This Blueprint
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(1)}>
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 3 && draftPaper ? (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Paper Meta</CardTitle>
+                <p className="text-sm text-gray-500">
+                  当前基于 {draftPaper.blueprintLabel}。现在可以改 part 信息、题型、题干、子题、答案和图片。
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="text-sm font-medium mb-2">Files to analyze:</h4>
-                  <ul className="space-y-1">
-                    {files.map((f, i) => (
-                      <li key={i} className="text-sm text-gray-600 flex items-center gap-2">
-                        {f.type.startsWith('image/') ? <Image className="w-4 h-4 text-green-500" /> :
-                         f.type.startsWith('audio/') ? <Music className="w-4 h-4 text-purple-500" /> :
-                         <FileText className="w-4 h-4 text-blue-500" />}
-                        {f.name}
-                      </li>
-                    ))}
-                  </ul>
-                  {instructions && (
-                    <div className="mt-3 pt-3 border-t">
-                      <h4 className="text-sm font-medium mb-1">Instructions:</h4>
-                      <p className="text-sm text-gray-600">{instructions}</p>
-                    </div>
-                  )}
-                </div>
-
-                {isParsing ? (
-                  <div className="flex flex-col items-center py-8 gap-3">
-                    <Loader2 className="w-10 h-10 animate-spin text-purple-500" />
-                    <p className="text-gray-600 font-medium">AI is analyzing your materials...</p>
-                    <p className="text-sm text-gray-400">This may take 30-60 seconds</p>
-                  </div>
-                ) : (
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      <ArrowLeft className="w-4 h-4 mr-1" /> Back
-                    </Button>
-                    <Button
-                      onClick={handleParse}
-                      className="bg-purple-600 hover:bg-purple-700 flex-1"
-                      size="lg"
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Start AI Analysis
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Step 3: Review & Edit */}
-        {step === 3 && parsedPaper && (
-          <div className="space-y-6">
-            {/* Paper metadata */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-green-500" />
-                  Review & Edit Paper
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Paper Title</label>
+                    <FieldLabel>Paper Title</FieldLabel>
                     <Input
-                      value={paperTitle}
-                      onChange={(e) => setPaperTitle(e.target.value)}
-                      placeholder="e.g., G4 English Proficiency Assessment"
+                      value={draftPaper.title}
+                      onChange={(event) =>
+                        updateDraftPaper((paper) => ({ ...paper, title: event.target.value }))
+                      }
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Subtitle</label>
+                    <FieldLabel>Subtitle</FieldLabel>
                     <Input
-                      value={paperSubtitle}
-                      onChange={(e) => setPaperSubtitle(e.target.value)}
-                      placeholder="e.g., Grade 4-5 Level"
+                      value={draftPaper.subtitle}
+                      onChange={(event) =>
+                        updateDraftPaper((paper) => ({
+                          ...paper,
+                          subtitle: event.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">Description</label>
+                    <FieldLabel>Description</FieldLabel>
                     <Textarea
-                      value={paperDescription}
-                      onChange={(e) => setPaperDescription(e.target.value)}
-                      placeholder="Brief description of the paper"
-                      rows={2}
+                      value={draftPaper.description}
+                      onChange={(event) =>
+                        updateDraftPaper((paper) => ({
+                          ...paper,
+                          description: event.target.value,
+                        }))
+                      }
+                      rows={3}
                     />
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="flex gap-4 p-3 bg-blue-50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {parsedPaper.sections.reduce((sum: number, s: any) => sum + (s.questions?.length || 0), 0)}
-                    </p>
+                <div className="grid gap-3 rounded-lg bg-blue-50 p-4 text-center md:grid-cols-4">
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">{draftPaper.totalQuestions}</p>
                     <p className="text-xs text-gray-500">Questions</p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">{parsedPaper.sections.length}</p>
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">{draftPaper.sections.length}</p>
                     <p className="text-xs text-gray-500">Sections</p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {parsedPaper.hasListening ? '✓' : '✗'}
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {draftPaper.hasListening ? "Yes" : "No"}
                     </p>
                     <p className="text-xs text-gray-500">Listening</p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {parsedPaper.hasWriting ? '✓' : '✗'}
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {draftPaper.hasWriting ? "Yes" : "No"}
                     </p>
                     <p className="text-xs text-gray-500">Writing</p>
                   </div>
                 </div>
+
+                <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                  {draftPaper.interpretation}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Sections */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Sections</h3>
-                <p className="text-sm text-gray-500">Click a section to expand and edit</p>
-              </div>
-              {parsedPaper.sections.map((section: any, i: number) => (
-                <div key={i} className="relative">
-                  <SectionEditor
-                    section={section}
-                    sectionIndex={i}
-                    onUpdate={(updated) => handleUpdateSection(i, updated)}
-                  />
-                  {parsedPaper.sections.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute top-3 right-12 text-red-400 hover:text-red-600"
-                      onClick={() => handleRemoveSection(i)}
+            {files.length ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Uploaded Reference Assets</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  {files.map((file) => (
+                    <span
+                      key={file.url}
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
+                      {file.type.startsWith("image/") ? (
+                        <ImageIcon className="h-3.5 w-3.5 text-green-600" />
+                      ) : file.type.startsWith("audio/") ? (
+                        <Music className="h-3.5 w-3.5 text-purple-600" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5 text-blue-600" />
+                      )}
+                      {file.name}
+                    </span>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {draftPaper.readingWordBank?.length ? (
+              <ReadingWordBankEditor
+                items={draftPaper.readingWordBank}
+                onChange={(items) =>
+                  updateDraftPaper((paper) => ({ ...paper, readingWordBank: items }))
+                }
+              />
+            ) : null}
+
+            <div className="space-y-4">
+              {draftPaper.sections.map((section, index) => (
+                <SectionEditor
+                  key={`${section.id}-${index}`}
+                  section={section}
+                  uploadedFiles={files}
+                  onChange={(nextSection) =>
+                    updateDraftPaper((paper) => {
+                      const nextSections = [...paper.sections];
+                      nextSections[index] = nextSection;
+                      return { ...paper, sections: nextSections };
+                    })
+                  }
+                  onRemove={() =>
+                    updateDraftPaper((paper) => ({
+                      ...paper,
+                      sections: paper.sections.filter((_, sectionIndex) => sectionIndex !== index),
+                    }))
+                  }
+                />
               ))}
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-3 justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>
-                <ArrowLeft className="w-4 h-4 mr-1" /> Re-parse
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => handleSave('draft')}
-                  disabled={isSaving}
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                <Button variant="outline" onClick={() => setStep(2)}>
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Back to Blueprint
+                </Button>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => handleSave("draft")} disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
                   Save Draft
                 </Button>
-                <Button
-                  onClick={() => handleSave('published')}
-                  disabled={isSaving}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
+                <Button onClick={() => handleSave("published")} disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
                   Publish Paper
                 </Button>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Step 4: Success */}
-        {step === 4 && (
-          <div className="flex flex-col items-center py-12 gap-6">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Paper Saved Successfully!</h2>
-              <p className="text-gray-600">
-                Your assessment paper has been created. Students can now see it on the homepage.
+        {step === 4 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="h-5 w-5" />
+                Paper Saved
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-700">
+                录题已经完成并写入数据库。你现在可以去 Paper Manager 管理状态，或者继续创建下一份试卷。
               </p>
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handleReset}>
-                <Plus className="w-4 h-4 mr-1" /> Create Another
-              </Button>
-              <Link href="/paper-manager">
-                <Button>
-                  Manage Papers
+              {savedPaperId ? (
+                <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                  Paper ID: <span className="font-mono">{savedPaperId}</span>
+                </div>
+              ) : null}
+              <div className="flex gap-3">
+                <Link href="/paper-manager">
+                  <Button>Open Paper Manager</Button>
+                </Link>
+                <Button variant="outline" onClick={handleReset}>
+                  Create Another Paper
                 </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="outline">
-                  Go to Homepage
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </div>
   );
