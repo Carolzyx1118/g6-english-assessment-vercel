@@ -197,3 +197,6 @@
 - [x] Fix wrongAnswers.correctAnswer undefined error when saving test results
 - [x] Rewrite R&W Part 2 MCQ yes/no scoring and display - correct answer still empty, all marked wrong
   - Root cause: normalizeSection.ts was converting string correctAnswer ("yes"/"no") to NaN via parseInt
+- [x] Save Speaking audio recordings to S3 and store URLs in database (already saved via answersJson)
+- [x] Update test results saving to include speaking audio URLs (already included in answersJson)
+- [x] Add audio playback controls in test history detail view

@@ -1,7 +1,7 @@
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, Trash2, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, Lock, ShieldCheck, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, Lock, ShieldCheck, Download, Loader2, Mic, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
@@ -336,6 +336,55 @@ function HistoryContent() {
                                         </ul>
                                       </div>
                                     )}
+                                  </div>
+                                </div>
+                              );
+                            } catch { return null; }
+                          })()}
+
+                          {/* Speaking Recordings */}
+                          {detail.answersJson && (() => {
+                            try {
+                              const answers = JSON.parse(detail.answersJson) as Record<string, string>;
+                              // Find speaking answers - they are S3 URLs or JSON objects with S3 URLs
+                              const speakingEntries: { label: string; url: string }[] = [];
+                              for (const [key, val] of Object.entries(answers)) {
+                                if (typeof val !== 'string') continue;
+                                // Check if it's a direct audio URL
+                                if (val.startsWith('http') && (val.includes('speaking') || val.includes('.webm') || val.includes('.mp4') || val.includes('.mp3'))) {
+                                  speakingEntries.push({ label: `Q${key.replace(/\D/g, '') || key}`, url: val });
+                                }
+                                // Check if it's a JSON object with audio URLs (sub-questions)
+                                else if (val.startsWith('{')) {
+                                  try {
+                                    const subAnswers = JSON.parse(val) as Record<string, string>;
+                                    for (const [subKey, subVal] of Object.entries(subAnswers)) {
+                                      if (typeof subVal === 'string' && subVal.startsWith('http') && (subVal.includes('speaking') || subVal.includes('.webm') || subVal.includes('.mp4') || subVal.includes('.mp3'))) {
+                                        speakingEntries.push({ label: `Q${key.replace(/\D/g, '') || key} (${subKey})`, url: subVal });
+                                      }
+                                    }
+                                  } catch { /* not JSON */ }
+                                }
+                              }
+                              if (speakingEntries.length === 0) return null;
+                              return (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                    <Mic className="w-4 h-4 text-rose-500" />
+                                    {lang === 'en' ? 'Speaking Recordings' : '口语录音'}
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {speakingEntries.map((entry, idx) => (
+                                      <div key={idx} className="bg-rose-50/50 rounded-lg p-3 border border-rose-100">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm font-medium text-rose-700 min-w-[60px]">{entry.label}</span>
+                                          <audio controls preload="none" className="flex-1 h-10" style={{ maxWidth: '100%' }}>
+                                            <source src={entry.url} type={entry.url.includes('.mp4') ? 'audio/mp4' : 'audio/webm'} />
+                                            Your browser does not support audio playback.
+                                          </audio>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               );

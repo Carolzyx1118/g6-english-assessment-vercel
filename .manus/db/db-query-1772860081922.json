@@ -1,0 +1,31 @@
+{
+  "query": "SELECT id, paperId, paperTitle, studentName, LEFT(answersJson, 300) as answers_preview FROM testResults ORDER BY id DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user mWBJwMymT3uxJ8c.261d2007010d --database VUHjMbahokWnaDCesocaTj --execute SELECT id, paperId, paperTitle, studentName, LEFT(answersJson, 300) as answers_preview FROM testResults ORDER BY id DESC LIMIT 3;",
+  "rows": [
+    {
+      "id": "180028",
+      "paperId": "custom-g1-english-proficiency-test-mmf49s6r",
+      "paperTitle": "G1 English Proficiency Test",
+      "studentName": "jing",
+      "answers_preview": "{\"rw-part2:30\":0,\"rw-part2:29\":1,\"rw-part2:28\":1,\"rw-part2:27\":0,\"rw-part2:26\":0}"
+    },
+    {
+      "id": "180027",
+      "paperId": "custom-g1-english-proficiency-test-mmf49s6r",
+      "paperTitle": "G1 English Proficiency Test",
+      "studentName": "TestUser",
+      "answers_preview": "{\"rw-part2:26\":1,\"rw-part2:27\":0,\"rw-part2:28\":0,\"rw-part2:29\":1,\"rw-part2:30\":0}"
+    },
+    {
+      "id": "180025",
+      "paperId": "custom-g1-english-proficiency-test-mmf49s6r",
+      "paperTitle": "G1 English Proficiency Test",
+      "studentName": "jig",
+      "answers_preview": "{\"rw-part2:27\":1,\"rw-part2:26\":0,\"rw-part2:30\":0,\"rw-part2:29\":1,\"rw-part2:28\":0}"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tpaperId\tpaperTitle\tstudentName\tanswers_preview\n180028\tcustom-g1-english-proficiency-test-mmf49s6r\tG1 English Proficiency Test\tjing\t{\"rw-part2:30\":0,\"rw-part2:29\":1,\"rw-part2:28\":1,\"rw-part2:27\":0,\"rw-part2:26\":0}\n180027\tcustom-g1-english-proficiency-test-mmf49s6r\tG1 English Proficiency Test\tTestUser\t{\"rw-part2:26\":1,\"rw-part2:27\":0,\"rw-part2:28\":0,\"rw-part2:29\":1,\"rw-part2:30\":0}\n180025\tcustom-g1-english-proficiency-test-mmf49s6r\tG1 English Proficiency Test\tjig\t{\"rw-part2:27\":1,\"rw-part2:26\":0,\"rw-part2:30\":0,\"rw-part2:29\":1,\"rw-part2:28\":0}\n",
+  "stderr": "",
+  "execution_time_ms": 1511
+}
