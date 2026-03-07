@@ -753,6 +753,7 @@ export function parseMaterialsLocally(input: ParseMaterialsInput) {
         (question) => question.type === "writing"
       )
     ),
+    extractedImageAssets: [],
     blueprintLabel: "Local Parsed Draft",
     interpretation:
       "当前服务器未配置云端 AI，这份草稿由本地解析器根据 PDF 文本自动拆出。题型和答案请重点人工校对。",

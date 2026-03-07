@@ -346,7 +346,10 @@ export const paperRouter = router({
 
         const content = response.choices[0]?.message?.content;
         if (typeof content === "string") {
-          return JSON.parse(content);
+          return {
+            ...JSON.parse(content),
+            extractedImageAssets: extractedImages,
+          };
         }
         throw new Error("No content in AI response");
       } catch (err) {

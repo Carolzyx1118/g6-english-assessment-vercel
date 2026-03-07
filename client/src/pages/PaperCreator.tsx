@@ -66,6 +66,19 @@ type PdfAsset = {
   pageImageUrls: string[];
 };
 
+type ExtractedImageAsset = {
+  url: string;
+  description: string;
+  target: string;
+  sourceUrl: string;
+};
+
+type ReferenceAsset = {
+  url: string;
+  label: string;
+  meta?: string;
+};
+
 type RuntimeStatus = {
   aiConfigured: boolean;
   storageConfigured: boolean;
@@ -88,6 +101,67 @@ function getErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function pushReferenceAsset(
+  items: ReferenceAsset[],
+  seenUrls: Set<string>,
+  asset: ReferenceAsset
+) {
+  if (!asset.url || seenUrls.has(asset.url)) {
+    return;
+  }
+
+  seenUrls.add(asset.url);
+  items.push(asset);
+}
+
+function buildReferenceAssets({
+  files,
+  pdfAssets,
+  extractedImageAssets,
+}: {
+  files: UploadedFile[];
+  pdfAssets: PdfAsset[];
+  extractedImageAssets: ExtractedImageAsset[];
+}): ReferenceAsset[] {
+  const items: ReferenceAsset[] = [];
+  const seenUrls = new Set<string>();
+
+  extractedImageAssets.forEach((asset, index) => {
+    pushReferenceAsset(items, seenUrls, {
+      url: asset.url,
+      label: asset.target || `AI crop ${index + 1}`,
+      meta: asset.description || "AI-cropped image",
+    });
+  });
+
+  files
+    .filter((file) => file.type.startsWith("image/"))
+    .forEach((file) => {
+      pushReferenceAsset(items, seenUrls, {
+        url: file.url,
+        label: file.name,
+        meta: "Uploaded image",
+      });
+    });
+
+  pdfAssets.forEach((asset) => {
+    asset.pageImageUrls.forEach((url, index) => {
+      pushReferenceAsset(items, seenUrls, {
+        url,
+        label: `${asset.sourceName} - Page ${index + 1}`,
+        meta: "PDF page image",
+      });
+    });
+  });
+
+  return items;
+}
+
+function formatReferenceAssetOption(asset: ReferenceAsset): string {
+  const text = asset.meta ? `${asset.label} - ${asset.meta}` : asset.label;
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
@@ -514,13 +588,17 @@ function ImageField({
   onChange,
   imageSize = "full",
   previewSize = "md",
+  referenceAssets = [],
 }: {
   label: string;
   url?: string;
   onChange: (value: string) => void;
   imageSize?: ImageSize;
   previewSize?: "sm" | "md" | "lg";
+  referenceAssets?: ReferenceAsset[];
 }) {
+  const matchingReference = referenceAssets.find((asset) => asset.url === url);
+
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-blue-200 bg-blue-50 p-3">
       <FieldLabel>{label}</FieldLabel>
@@ -533,25 +611,160 @@ function ImageField({
           imageSize={imageSize}
           previewSize={previewSize}
         />
-        <div className="min-w-[240px] flex-1">
+        <div className="min-w-[240px] flex-1 space-y-2">
           <Input
             value={url || ""}
             onChange={(event) => onChange(event.target.value)}
             placeholder="Or paste image URL here..."
             className="h-8 text-xs"
           />
+          {referenceAssets.length ? (
+            <div className="rounded-md border border-white bg-white/80 p-2">
+              <FieldLabel hint="选择后会直接填入当前图片字段">
+                Reference Assets
+              </FieldLabel>
+              <select
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) {
+                    onChange(event.target.value);
+                  }
+                }}
+                className="h-8 w-full rounded-md border px-2 text-xs"
+              >
+                <option value="">Use an uploaded image, PDF page, or AI crop...</option>
+                {referenceAssets.map((asset, index) => (
+                  <option key={`${asset.url}-${index}`} value={asset.url}>
+                    {formatReferenceAssetOption(asset)}
+                  </option>
+                ))}
+              </select>
+              {matchingReference ? (
+                <div className="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-500">
+                  <p className="font-medium text-gray-700">{matchingReference.label}</p>
+                  {matchingReference.meta ? <p>{matchingReference.meta}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
+function ImageListEditor({
+  label,
+  items,
+  onChange,
+  referenceAssets = [],
+}: {
+  label: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+  referenceAssets?: ReferenceAsset[];
+}) {
+  const updateItem = (index: number, value: string) => {
+    const next = [...items];
+    next[index] = value;
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="flex items-center justify-between">
+        <FieldLabel>{label}</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...(items || []), ""])}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Add Image
+        </Button>
+      </div>
+
+      {(items || []).length ? (
+        <div className="space-y-3">
+          {items.map((url, index) => (
+            <div key={`${label}-${index}`} className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">
+                  {label} {index + 1}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <ImageField
+                label={`${label} ${index + 1}`}
+                url={url}
+                onChange={(value) => updateItem(index, value)}
+                previewSize="md"
+                referenceAssets={referenceAssets}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500">No images assigned yet.</p>
+      )}
+    </div>
+  );
+}
+
+function ReferenceAssetGallery({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description?: string;
+  items: ReferenceAsset[];
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        {description ? <p className="text-sm text-gray-500">{description}</p> : null}
+      </CardHeader>
+      <CardContent>
+        {items.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((item, index) => (
+              <div key={`${item.url}-${index}`} className="rounded-lg border bg-gray-50 p-3">
+                <img
+                  src={item.url}
+                  alt={item.label}
+                  className="mb-3 h-40 w-full rounded border bg-white object-contain"
+                />
+                <p className="text-sm font-medium text-gray-800">{item.label}</p>
+                {item.meta ? <p className="mt-1 text-xs text-gray-500">{item.meta}</p> : null}
+                <p className="mt-2 break-all text-[11px] text-gray-400">{item.url}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No images are available in this gallery yet.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ReadingWordBankEditor({
   items,
   onChange,
+  referenceAssets = [],
 }: {
   items: { word: string; imageUrl: string }[];
   onChange: (items: { word: string; imageUrl: string }[]) => void;
+  referenceAssets?: ReferenceAsset[];
 }) {
   const updateItem = (index: number, patch: Partial<{ word: string; imageUrl: string }>) => {
     const next = [...items];
@@ -596,6 +809,7 @@ function ReadingWordBankEditor({
                 onChange={(value) => updateItem(index, { imageUrl: value })}
                 previewSize="sm"
                 imageSize="option"
+                referenceAssets={referenceAssets}
               />
             </div>
           </div>
@@ -616,12 +830,14 @@ function QuestionEditor({
   question,
   allowedTypes,
   sectionHasGrammarPassage,
+  referenceAssets = [],
   onChange,
   onRemove,
 }: {
   question: Question;
   allowedTypes: QuestionType[];
   sectionHasGrammarPassage: boolean;
+  referenceAssets?: ReferenceAsset[];
   onChange: (question: Question) => void;
   onRemove: () => void;
 }) {
@@ -643,6 +859,7 @@ function QuestionEditor({
         url={question.imageUrl}
         onChange={(value) => updateField("imageUrl", value)}
         previewSize="sm"
+        referenceAssets={referenceAssets}
       />
     );
   };
@@ -760,6 +977,7 @@ function QuestionEditor({
                     }
                     previewSize="sm"
                     imageSize="option"
+                    referenceAssets={referenceAssets}
                   />
                 ) : null}
               </div>
@@ -1807,11 +2025,13 @@ function QuestionEditor({
 function SectionEditor({
   section,
   uploadedFiles,
+  referenceAssets = [],
   onChange,
   onRemove,
 }: {
   section: EditableSection;
   uploadedFiles: UploadedFile[];
+  referenceAssets?: ReferenceAsset[];
   onChange: (section: EditableSection) => void;
   onRemove: () => void;
 }) {
@@ -2060,6 +2280,7 @@ function SectionEditor({
               url={section.sceneImageUrl}
               onChange={(value) => onChange({ ...section, sceneImageUrl: value })}
               previewSize="lg"
+              referenceAssets={referenceAssets}
             />
           ) : null}
 
@@ -2069,6 +2290,16 @@ function SectionEditor({
               url={section.wordBankImageUrl}
               onChange={(value) => onChange({ ...section, wordBankImageUrl: value })}
               previewSize="md"
+              referenceAssets={referenceAssets}
+            />
+          ) : null}
+
+          {section.storyImages !== undefined ? (
+            <ImageListEditor
+              label="Story Image"
+              items={section.storyImages || []}
+              onChange={(value) => onChange({ ...section, storyImages: value })}
+              referenceAssets={referenceAssets}
             />
           ) : null}
 
@@ -2196,6 +2427,7 @@ function SectionEditor({
                 question={question}
                 allowedTypes={ALL_QUESTION_TYPES}
                 sectionHasGrammarPassage={!!section.grammarPassage}
+                referenceAssets={referenceAssets}
                 onChange={(nextQuestion) => updateQuestionAt(index, nextQuestion)}
                 onRemove={() => removeQuestion(index)}
               />
@@ -2217,6 +2449,7 @@ export default function PaperCreator() {
   const [isParsing, setIsParsing] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [draftPaper, setDraftPaper] = useState<EditablePaper | null>(null);
+  const [extractedImageAssets, setExtractedImageAssets] = useState<ExtractedImageAsset[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedPaperId, setSavedPaperId] = useState<string | null>(null);
 
@@ -2230,6 +2463,10 @@ export default function PaperCreator() {
   const suggestion = useMemo(
     () => suggestBlueprint(files, instructions),
     [files, instructions]
+  );
+  const referenceAssets = useMemo(
+    () => buildReferenceAssets({ files, pdfAssets, extractedImageAssets }),
+    [files, pdfAssets, extractedImageAssets]
   );
   const runtime = runtimeStatus.data as RuntimeStatus | undefined;
   const missingVariablesText = runtime?.missingVariables.join(", ");
@@ -2334,6 +2571,11 @@ export default function PaperCreator() {
         audioUrls: audioUrls.length ? audioUrls : undefined,
         instructions: instructions || undefined,
       });
+      setExtractedImageAssets(
+        Array.isArray((result as any).extractedImageAssets)
+          ? ((result as any).extractedImageAssets as ExtractedImageAsset[])
+          : []
+      );
 
       const firstAudio = audioUrls[0];
       const nextPaper = createEditablePaperFromParsed(result as any);
@@ -2429,6 +2671,7 @@ export default function PaperCreator() {
     setStep(1);
     setFiles([]);
     setPdfAssets([]);
+    setExtractedImageAssets([]);
     setInstructions("");
     setDraftPaper(null);
     setSavedPaperId(null);
@@ -2803,12 +3046,41 @@ export default function PaperCreator() {
               </Card>
             ) : null}
 
+            <ReferenceAssetGallery
+              title="PDF Page Images"
+              description="These are the full-page screenshots extracted from uploaded PDFs."
+              items={pdfAssets.flatMap((asset) =>
+                asset.pageImageUrls.map((url, index) => ({
+                  url,
+                  label: `${asset.sourceName} - Page ${index + 1}`,
+                  meta: "Full page image",
+                }))
+              )}
+            />
+
+            <ReferenceAssetGallery
+              title="Auto-extracted Image Assets"
+              description={
+                extractedImageAssets.length
+                  ? "These are the cropped images returned by the AI cropper."
+                  : runtime?.usingLocalFallback
+                    ? "Local fallback mode does not auto-crop question images yet, so only the full-page PDF images are available above."
+                    : "No cropped image assets were returned for this parse."
+              }
+              items={extractedImageAssets.map((asset, index) => ({
+                url: asset.url,
+                label: asset.target || `Extracted asset ${index + 1}`,
+                meta: asset.description || asset.sourceUrl,
+              }))}
+            />
+
             {draftPaper.readingWordBank?.length ? (
               <ReadingWordBankEditor
                 items={draftPaper.readingWordBank}
                 onChange={(items) =>
                   updateDraftPaper((paper) => ({ ...paper, readingWordBank: items }))
                 }
+                referenceAssets={referenceAssets}
               />
             ) : null}
 
@@ -2818,6 +3090,7 @@ export default function PaperCreator() {
                   key={`${section.id}-${index}`}
                   section={section}
                   uploadedFiles={files}
+                  referenceAssets={referenceAssets}
                   onChange={(nextSection) =>
                     updateDraftPaper((paper) => {
                       const nextSections = [...paper.sections];
