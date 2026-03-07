@@ -127,19 +127,35 @@ function buildAutoGradableDetails(
       });
     } else if (q.type === 'mcq') {
       const userIdx = isAnswered ? Number(userAns) : -1;
-      const userText = userIdx >= 0 ? q.options[userIdx] : 'Not Answered';
-      const isCorrect = userIdx === q.correctAnswer;
       const expl = explanationsMap.get(q.id);
-      details.push({
-        questionNum: `Q${q.id}`,
-        questionText: q.question.replace('___', q.highlightWord || '___'),
-        userAnswer: userText,
-        correctAnswer: q.options[q.correctAnswer],
-        isCorrect: isAnswered && isCorrect,
-        isAnswered,
-        explanation: expl?.explanation_en,
-        tip: expl?.tip_en,
-      });
+      if (typeof q.correctAnswer === 'number') {
+        const userText = userIdx >= 0 ? q.options[userIdx] : 'Not Answered';
+        const isCorrect = userIdx === q.correctAnswer;
+        details.push({
+          questionNum: `Q${q.id}`,
+          questionText: q.question.replace('___', q.highlightWord || '___'),
+          userAnswer: userText,
+          correctAnswer: q.options[q.correctAnswer],
+          isCorrect: isAnswered && isCorrect,
+          isAnswered,
+          explanation: expl?.explanation_en,
+          tip: expl?.tip_en,
+        });
+      } else {
+        // MCQ with string correctAnswer (e.g., yes/no)
+        const userOptionText = (userIdx >= 0 && q.options[userIdx]) ? q.options[userIdx] : (isAnswered ? String(userAns) : 'Not Answered');
+        const isCorrect = userOptionText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+        details.push({
+          questionNum: `Q${q.id}`,
+          questionText: q.question,
+          userAnswer: userOptionText,
+          correctAnswer: String(q.correctAnswer),
+          isCorrect: isAnswered && isCorrect,
+          isAnswered,
+          explanation: expl?.explanation_en,
+          tip: expl?.tip_en,
+        });
+      }
     } else if (q.type === 'fill-blank') {
       const wordBank = section.wordBank;
       const correctWord = wordBank?.find((w: any) => w.letter === q.correctAnswer);

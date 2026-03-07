@@ -18,7 +18,7 @@ export interface MCQQuestion {
   question: string;
   highlightWord?: string;
   options: string[];
-  correctAnswer: number;
+  correctAnswer: number | string;
   imageUrl?: string;
 }
 

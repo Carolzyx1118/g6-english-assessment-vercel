@@ -194,3 +194,4 @@
 - [x] Remove all [Image: xxx] text markers from R&W Part 3 questions in G1 paper
 - [x] Update R&W Part 2 answers to no, yes, yes, no, yes in G1 paper database
 - [x] Fix R&W Part 2 MCQ string answer: correct answer not displayed, correct answers marked wrong
+- [x] Fix wrongAnswers.correctAnswer undefined error when saving test results
