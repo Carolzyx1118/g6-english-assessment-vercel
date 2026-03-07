@@ -1,7 +1,7 @@
 import type { Paper, Question, Section } from "@/data/papers";
 import { huazhongPaper } from "@/data/huazhong-paper";
 import { widaPaper } from "@/data/wida-paper";
-import { normalizeSections } from "@/lib/normalizeSection";
+import { normalizeReadingWordBank, normalizeSections } from "@/lib/normalizeSection";
 
 export type QuestionType = Question["type"];
 
@@ -573,6 +573,7 @@ export function createEditablePaperFromParsed(parsedPaper: {
   hasWriting?: boolean;
 }): EditablePaper {
   const normalizedSections = normalizeSections(parsedPaper.sections || []);
+  const normalizedReadingWordBank = normalizeReadingWordBank(parsedPaper.readingWordBank);
 
   return {
     id: parsedPaper.id || "ai-parsed",
@@ -586,7 +587,7 @@ export function createEditablePaperFromParsed(parsedPaper: {
       supportedQuestionTypes: orderedUniqueQuestionTypes(section.questions),
       blueprintSummary: buildSectionSummary(section),
     })),
-    readingWordBank: parsedPaper.readingWordBank,
+    readingWordBank: normalizedReadingWordBank,
     totalQuestions:
       parsedPaper.totalQuestions ||
       normalizedSections.reduce((sum, section) => sum + section.questions.length, 0),

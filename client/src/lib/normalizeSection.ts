@@ -19,7 +19,167 @@
  * 10. Handle missing/empty section fields gracefully
  */
 
-import type { Section, Question, TrueFalseQuestion, OpenEndedQuestion, FillBlankQuestion, TableQuestion, ReferenceQuestion, PhraseQuestion } from '@/data/papers';
+import type {
+  Section,
+  Question,
+  TrueFalseQuestion,
+  OpenEndedQuestion,
+  TableQuestion,
+  ReferenceQuestion,
+  PhraseQuestion,
+} from '@/data/papers';
+
+function normalizeUrlish(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+
+  if (value && typeof value === 'object') {
+    const candidate = (value as { url?: unknown; imageUrl?: unknown }).url
+      ?? (value as { imageUrl?: unknown }).imageUrl;
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      return trimmed || undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  const singleUrl = normalizeUrlish(value);
+  if (singleUrl) {
+    return [singleUrl];
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .map((item) => normalizeUrlish(item) ?? (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+
+  return normalized.length ? normalized : undefined;
+}
+
+function normalizeQuestionIdArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === 'number' && Number.isFinite(item)) {
+        return item;
+      }
+      if (typeof item === 'string') {
+        const parsed = Number.parseInt(item, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    })
+    .filter((item): item is number => item !== null);
+}
+
+function normalizeStoryParagraphs(
+  value: unknown
+): { text: string; questionIds: number[] }[] | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [{ text: trimmed, questionIds: [] }] : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .flatMap((item) => {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        return trimmed ? [{ text: trimmed, questionIds: [] }] : [];
+      }
+
+      if (!item || typeof item !== 'object') {
+        return [];
+      }
+
+      const candidate = item as {
+        text?: unknown;
+        paragraph?: unknown;
+        content?: unknown;
+        questionIds?: unknown;
+        questions?: unknown;
+        ids?: unknown;
+      };
+
+      const textSource =
+        typeof candidate.text === 'string'
+          ? candidate.text
+          : typeof candidate.paragraph === 'string'
+            ? candidate.paragraph
+            : typeof candidate.content === 'string'
+              ? candidate.content
+              : '';
+      const text = textSource.trim();
+      const questionIds = normalizeQuestionIdArray(
+        candidate.questionIds ?? candidate.questions ?? candidate.ids
+      );
+
+      return text || questionIds.length ? [{ text, questionIds }] : [];
+    });
+
+  return normalized.length ? normalized : undefined;
+}
+
+export function normalizeReadingWordBank(
+  value: unknown
+): { word: string; imageUrl: string }[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .flatMap((item) => {
+      if (typeof item === 'string') {
+        const word = item.trim();
+        return word ? [{ word, imageUrl: '' }] : [];
+      }
+
+      if (!item || typeof item !== 'object') {
+        return [];
+      }
+
+      const candidate = item as {
+        word?: unknown;
+        label?: unknown;
+        text?: unknown;
+        imageUrl?: unknown;
+        url?: unknown;
+      };
+      const wordSource =
+        typeof candidate.word === 'string'
+          ? candidate.word
+          : typeof candidate.label === 'string'
+            ? candidate.label
+            : typeof candidate.text === 'string'
+              ? candidate.text
+              : '';
+      const word = wordSource.trim();
+      const imageUrl = normalizeUrlish(candidate.imageUrl ?? candidate.url) || '';
+
+      return word || imageUrl ? [{ word, imageUrl }] : [];
+    });
+
+  return normalized.length ? normalized : undefined;
+}
 
 /**
  * Normalize a grammarPassage to use the standard blank format: <b>(N) ___</b>
@@ -547,6 +707,8 @@ export function normalizeSection(section: any): Section {
   
   const wordBank = normalizeWordBank(section.wordBank);
   const questions = normalizeQuestions(section.questions, grammarPassage);
+  const storyImages = normalizeStringArray(section.storyImages);
+  const storyParagraphs = normalizeStoryParagraphs(section.storyParagraphs);
   
   return {
     id: section.id || 'section-' + Math.random().toString(36).slice(2, 8),
@@ -560,12 +722,12 @@ export function normalizeSection(section: any): Section {
     passage: section.passage || undefined,
     wordBank: wordBank || undefined,
     grammarPassage: grammarPassage || undefined,
-    imageUrl: section.imageUrl || undefined,
-    audioUrl: section.audioUrl || undefined,
-    sceneImageUrl: section.sceneImageUrl || undefined,
-    wordBankImageUrl: section.wordBankImageUrl || undefined,
-    storyImages: section.storyImages || undefined,
-    storyParagraphs: section.storyParagraphs || undefined,
+    imageUrl: normalizeUrlish(section.imageUrl),
+    audioUrl: normalizeUrlish(section.audioUrl),
+    sceneImageUrl: normalizeUrlish(section.sceneImageUrl),
+    wordBankImageUrl: normalizeUrlish(section.wordBankImageUrl),
+    storyImages,
+    storyParagraphs,
   };
 }
 

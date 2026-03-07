@@ -85,6 +85,49 @@ describe("paperBlueprints", () => {
     expect(editable.readingWordBank).toHaveLength(1);
   });
 
+  it("normalizes malformed parsed image fields so the editor can still render", () => {
+    const editable = createEditablePaperFromParsed({
+      title: "Messy Parsed Paper",
+      sections: [
+        {
+          id: "reading",
+          title: "Reading",
+          subtitle: "",
+          icon: "📚",
+          color: "text-blue-600",
+          bgColor: "bg-blue-50",
+          description: "Read and answer",
+          sceneImageUrl: { url: "https://example.com/scene.png" },
+          wordBankImageUrl: { imageUrl: "https://example.com/bank.png" },
+          storyImages: { url: "https://example.com/story-1.png" },
+          storyParagraphs: [
+            "Paragraph one",
+            { paragraph: "Paragraph two", questions: ["3", 4] },
+          ],
+          questions: [
+            { id: 1, type: "mcq", question: "Q1", options: ["A", "B"], correctAnswer: 0 },
+          ],
+        },
+      ],
+      readingWordBank: [
+        "coffee",
+        { label: "a dentist", url: "https://example.com/dentist.png" },
+      ] as any,
+    });
+
+    expect(editable.sections[0].sceneImageUrl).toBe("https://example.com/scene.png");
+    expect(editable.sections[0].wordBankImageUrl).toBe("https://example.com/bank.png");
+    expect(editable.sections[0].storyImages).toEqual(["https://example.com/story-1.png"]);
+    expect(editable.sections[0].storyParagraphs).toEqual([
+      { text: "Paragraph one", questionIds: [] },
+      { text: "Paragraph two", questionIds: [3, 4] },
+    ]);
+    expect(editable.readingWordBank).toEqual([
+      { word: "coffee", imageUrl: "" },
+      { word: "a dentist", imageUrl: "https://example.com/dentist.png" },
+    ]);
+  });
+
   it("suggests G2-3 when audio assets are uploaded", () => {
     const result = suggestBlueprint([
       { name: "listening-part.mp3", type: "audio/mpeg" },
