@@ -1,9 +1,19 @@
 // Preconfigured storage helpers for Manus WebDev templates
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
+import fs from "fs/promises";
+import path from "path";
 import { ENV } from './_core/env';
+import { getForgeConfigStatus } from "./_core/env";
 
 type StorageConfig = { baseUrl: string; apiKey: string };
+
+export const LOCAL_STORAGE_ROUTE = "/local-paper-assets";
+export const LOCAL_STORAGE_DIR = path.resolve(
+  import.meta.dirname,
+  "..",
+  "local-paper-assets"
+);
 
 function getStorageConfig(): StorageConfig {
   const baseUrl = ENV.forgeApiUrl;
@@ -67,11 +77,38 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
+async function storagePutLocal(
+  relKey: string,
+  data: Buffer | Uint8Array | string
+): Promise<{ key: string; url: string }> {
+  const key = normalizeKey(relKey);
+  const fullPath = path.join(LOCAL_STORAGE_DIR, key);
+  await fs.mkdir(path.dirname(fullPath), { recursive: true });
+
+  const buffer =
+    typeof data === "string"
+      ? Buffer.from(data)
+      : Buffer.isBuffer(data)
+        ? data
+        : Buffer.from(data);
+
+  await fs.writeFile(fullPath, buffer);
+  return {
+    key,
+    url: `${LOCAL_STORAGE_ROUTE}/${key}`,
+  };
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  const forge = getForgeConfigStatus();
+  if (!forge.isConfigured) {
+    return storagePutLocal(relKey, data);
+  }
+
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
@@ -93,6 +130,15 @@ export async function storagePut(
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
+  const forge = getForgeConfigStatus();
+  if (!forge.isConfigured) {
+    const key = normalizeKey(relKey);
+    return {
+      key,
+      url: `${LOCAL_STORAGE_ROUTE}/${key}`,
+    };
+  }
+
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   return {

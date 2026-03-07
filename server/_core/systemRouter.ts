@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getForgeConfigStatus } from "./env";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 
@@ -12,6 +13,18 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
     })),
+
+  runtimeStatus: publicProcedure.query(() => {
+    const forge = getForgeConfigStatus();
+    return {
+      aiConfigured: true,
+      storageConfigured: true,
+      aiProvider: forge.isConfigured ? "forge" : "local",
+      storageProvider: forge.isConfigured ? "forge" : "local",
+      usingLocalFallback: !forge.isConfigured,
+      missingVariables: forge.missingVariables,
+    };
+  }),
 
   notifyOwner: adminProcedure
     .input(

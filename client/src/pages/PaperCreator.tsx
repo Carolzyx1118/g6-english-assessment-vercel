@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
@@ -33,7 +34,9 @@ import {
   type ImageSize,
 } from "@/lib/imageUtils";
 import {
+  ALL_QUESTION_TYPES,
   createEditablePaperFromBlueprint,
+  createEditablePaperFromParsed,
   createEmptyQuestionByType,
   paperBlueprints,
   QUESTION_TYPE_META,
@@ -43,6 +46,7 @@ import {
   type EditableSection,
   type QuestionType,
 } from "@/lib/paperBlueprints";
+import { extractPdfAssets } from "@/lib/pdfUtils";
 import type { Question } from "@/data/papers";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || "";
@@ -54,11 +58,43 @@ type UploadedFile = {
   size: number;
 };
 
+type PdfAsset = {
+  sourceUrl: string;
+  sourceName: string;
+  pageCount: number;
+  extractedText: string;
+  pageImageUrls: string[];
+};
+
+type RuntimeStatus = {
+  aiConfigured: boolean;
+  storageConfigured: boolean;
+  aiProvider: "forge" | "local";
+  storageProvider: "forge" | "local";
+  usingLocalFallback: boolean;
+  missingVariables: string[];
+};
+
+function isPdfFile(file: Pick<UploadedFile, "name" | "type"> | File): boolean {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === "object" && error !== null) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
     { num: 1, label: "Upload Materials" },
-    { num: 2, label: "Choose Blueprint" },
-    { num: 3, label: "Manual Entry" },
+    { num: 2, label: "AI Parse" },
+    { num: 3, label: "Review & Edit" },
     { num: 4, label: "Save & Publish" },
   ];
 
@@ -215,27 +251,31 @@ function FileUploadArea({
   onFilesAdded,
   onRemoveFile,
   isUploading,
+  disabled = false,
 }: {
   files: UploadedFile[];
   onFilesAdded: (files: File[]) => void;
   onRemoveFile: (index: number) => void;
   isUploading: boolean;
+  disabled?: boolean;
 }) {
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
+      if (disabled) return;
       onFilesAdded(Array.from(event.dataTransfer.files));
     },
-    [onFilesAdded]
+    [disabled, onFilesAdded]
   );
 
   const handleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (disabled) return;
       if (event.target.files) {
         onFilesAdded(Array.from(event.target.files));
       }
     },
-    [onFilesAdded]
+    [disabled, onFilesAdded]
   );
 
   const getFileIcon = (type: string) => {
@@ -249,21 +289,25 @@ function FileUploadArea({
       <div
         onDrop={handleDrop}
         onDragOver={(event) => event.preventDefault()}
-        className="relative rounded-xl border-2 border-dashed border-blue-300 p-8 text-center transition-all hover:border-blue-500 hover:bg-blue-50/50"
+        className={`relative rounded-xl border-2 border-dashed p-8 text-center transition-all ${
+          disabled
+            ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400"
+            : "border-blue-300 hover:border-blue-500 hover:bg-blue-50/50"
+        }`}
       >
         <input
           type="file"
           multiple
           accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.ogg,.doc,.docx,.txt"
           onChange={handleChange}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          disabled={isUploading}
+          className={`absolute inset-0 opacity-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+          disabled={isUploading || disabled}
         />
-        <Upload className="mx-auto mb-3 h-12 w-12 text-blue-400" />
-        <p className="text-lg font-medium text-gray-700">
+        <Upload className={`mx-auto mb-3 h-12 w-12 ${disabled ? "text-gray-300" : "text-blue-400"}`} />
+        <p className={`text-lg font-medium ${disabled ? "text-gray-500" : "text-gray-700"}`}>
           Drop source files here or click to upload
         </p>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className={`mt-1 text-sm ${disabled ? "text-gray-400" : "text-gray-500"}`}>
           PDF / 图片 / 音频都可以，作为录题参考素材使用
         </p>
         {isUploading ? (
@@ -271,6 +315,8 @@ function FileUploadArea({
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Uploading...</span>
           </div>
+        ) : disabled ? (
+          <div className="mt-3 text-sm text-gray-500">Upload is disabled until server storage is configured.</div>
         ) : null}
       </div>
 
@@ -353,7 +399,7 @@ function ImageUploadButton({
       toast.success(`Image uploaded: ${file.name}`);
     } catch (error) {
       console.error("Image upload error:", error);
-      toast.error("Failed to upload image");
+      toast.error(getErrorMessage(error, "Failed to upload image"));
     } finally {
       setIsUploading(false);
     }
@@ -1736,7 +1782,7 @@ function QuestionEditor({
             }
             className="h-9 rounded-md border px-3 text-sm"
           >
-            {allowedTypes.map((type) => (
+            {ALL_QUESTION_TYPES.map((type) => (
               <option key={type} value={type}>
                 {QUESTION_TYPE_META[type].label}
               </option>
@@ -1771,7 +1817,7 @@ function SectionEditor({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [newQuestionType, setNewQuestionType] = useState<QuestionType>(
-    section.supportedQuestionTypes[0]
+    section.supportedQuestionTypes[0] || "mcq"
   );
 
   const audioFiles = uploadedFiles.filter((file) => file.type.startsWith("audio/"));
@@ -2131,7 +2177,7 @@ function SectionEditor({
                   }
                   className="h-9 rounded-md border px-3 text-sm"
                 >
-                  {section.supportedQuestionTypes.map((type) => (
+                  {ALL_QUESTION_TYPES.map((type) => (
                     <option key={type} value={type}>
                       {QUESTION_TYPE_META[type].label}
                     </option>
@@ -2148,7 +2194,7 @@ function SectionEditor({
               <QuestionEditor
                 key={`${question.id}-${index}`}
                 question={question}
-                allowedTypes={section.supportedQuestionTypes}
+                allowedTypes={ALL_QUESTION_TYPES}
                 sectionHasGrammarPassage={!!section.grammarPassage}
                 onChange={(nextQuestion) => updateQuestionAt(index, nextQuestion)}
                 onRemove={() => removeQuestion(index)}
@@ -2166,19 +2212,27 @@ export default function PaperCreator() {
   const [password, setPassword] = useState("");
   const [step, setStep] = useState(1);
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [pdfAssets, setPdfAssets] = useState<PdfAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [draftPaper, setDraftPaper] = useState<EditablePaper | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedPaperId, setSavedPaperId] = useState<string | null>(null);
 
   const uploadFile = trpc.papers.uploadFile.useMutation();
+  const parseMaterials = trpc.papers.parseMaterials.useMutation();
   const createPaper = trpc.papers.create.useMutation();
+  const runtimeStatus = trpc.system.runtimeStatus.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const suggestion = useMemo(
     () => suggestBlueprint(files, instructions),
     [files, instructions]
   );
+  const runtime = runtimeStatus.data as RuntimeStatus | undefined;
+  const missingVariablesText = runtime?.missingVariables.join(", ");
 
   const handleUnlock = () => {
     if (password === ADMIN_PASSWORD) {
@@ -2209,18 +2263,101 @@ export default function PaperCreator() {
           ...previous,
           { name: file.name, type: file.type, url: result.url, size: file.size },
         ]);
+
+        if (isPdfFile(file)) {
+          toast.message(`Extracting pages from ${file.name}...`);
+          const extractedPdf = await extractPdfAssets(file);
+          const pageImageUrls: string[] = [];
+
+          for (const page of extractedPdf.pages) {
+            const pageUrl = await uploadSingleImage(page.imageFile, uploadFile, "full");
+            pageImageUrls.push(pageUrl);
+          }
+
+          setPdfAssets((previous) => [
+            ...previous,
+            {
+              sourceUrl: result.url,
+              sourceName: file.name,
+              pageCount: extractedPdf.pageCount,
+              extractedText: extractedPdf.combinedText,
+              pageImageUrls,
+            },
+          ]);
+        }
       }
       toast.success(`${newFiles.length} file(s) uploaded`);
     } catch (error) {
       console.error("Upload error:", error);
-      toast.error("Failed to upload one or more files");
+      toast.error(getErrorMessage(error, "Failed to upload one or more files"));
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleRemoveFile = (index: number) => {
-    setFiles((previous) => previous.filter((_, fileIndex) => fileIndex !== index));
+    setFiles((previous) => {
+      const removed = previous[index];
+      if (removed && isPdfFile(removed)) {
+        setPdfAssets((current) =>
+          current.filter((asset) => asset.sourceUrl !== removed.url)
+        );
+      }
+      return previous.filter((_, fileIndex) => fileIndex !== index);
+    });
+  };
+
+  const handleParse = async () => {
+    if (files.length === 0) {
+      toast.error("Please upload at least one file");
+      return;
+    }
+
+    setIsParsing(true);
+    try {
+      const pageImageUrls = pdfAssets.flatMap((asset) => asset.pageImageUrls);
+      const imageUrls = [
+        ...files.filter((file) => file.type.startsWith("image/")).map((file) => file.url),
+        ...pageImageUrls,
+      ];
+      const pdfUrls = files.filter((file) => isPdfFile(file)).map((file) => file.url);
+      const audioUrls = files
+        .filter((file) => file.type.startsWith("audio/"))
+        .map((file) => file.url);
+      const textContent = pdfAssets.map((asset) => asset.extractedText).join("\n\n");
+
+      const result = await parseMaterials.mutateAsync({
+        textContent: textContent || undefined,
+        imageUrls: imageUrls.length ? imageUrls : undefined,
+        pageImageUrls: pageImageUrls.length ? pageImageUrls : undefined,
+        pdfUrls: pdfUrls.length ? pdfUrls : undefined,
+        audioUrls: audioUrls.length ? audioUrls : undefined,
+        instructions: instructions || undefined,
+      });
+
+      const firstAudio = audioUrls[0];
+      const nextPaper = createEditablePaperFromParsed(result as any);
+      if (firstAudio) {
+        nextPaper.sections = nextPaper.sections.map((section) =>
+          section.audioUrl !== undefined && !section.audioUrl
+            ? { ...section, audioUrl: firstAudio }
+            : section
+        );
+      }
+      setDraftPaper(refreshPaper(nextPaper));
+      setStep(3);
+      toast.success("AI parsed the paper. Review and edit it below.");
+    } catch (error) {
+      console.error("Parse error:", error);
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to parse materials. You can retry or use a manual blueprint."
+        )
+      );
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleChooseBlueprint = (blueprintId: string) => {
@@ -2261,7 +2398,17 @@ export default function PaperCreator() {
         readingWordBankJson: cleanPaper.readingWordBank
           ? JSON.stringify(cleanPaper.readingWordBank)
           : undefined,
-        sourceFilesJson: files.length ? JSON.stringify(files) : undefined,
+        sourceFilesJson:
+          files.length || pdfAssets.length
+            ? JSON.stringify({
+                uploadedFiles: files,
+                pdfAssets: pdfAssets.map((asset) => ({
+                  sourceName: asset.sourceName,
+                  pageCount: asset.pageCount,
+                  pageImageUrls: asset.pageImageUrls,
+                })),
+              })
+            : undefined,
         status,
       });
 
@@ -2281,6 +2428,7 @@ export default function PaperCreator() {
   const handleReset = () => {
     setStep(1);
     setFiles([]);
+    setPdfAssets([]);
     setInstructions("");
     setDraftPaper(null);
     setSavedPaperId(null);
@@ -2325,7 +2473,7 @@ export default function PaperCreator() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">📝 Paper Creator</h1>
               <p className="text-xs text-gray-500">
-                上传原卷后先选大题蓝图，再按题型逐题人工录入
+                上传 PDF 后先交给 AI 拆题，再进入人工校对和修改
               </p>
             </div>
           </div>
@@ -2349,24 +2497,63 @@ export default function PaperCreator() {
                   Upload Source Materials
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  这一步只负责上传参考素材。真正的录题会在下一步按 G2-3 / G6 题目架构进行。
+                  上传 PDF 后，系统会自动拆页截图、提取文字，再把整份卷子交给 AI 初步结构化。
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {runtime?.usingLocalFallback ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Running in local fallback mode</p>
+                        <p>
+                          Cloud storage is not configured, so uploaded files will be stored locally
+                          and parsing will use the local draft builder. Missing variables:
+                          {" "}
+                          {missingVariablesText}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 <FileUploadArea
                   files={files}
                   onFilesAdded={handleFilesAdded}
                   onRemoveFile={handleRemoveFile}
                   isUploading={isUploading}
                 />
+
+                {pdfAssets.length ? (
+                  <div className="rounded-lg border bg-gray-50 p-4">
+                    <h4 className="mb-2 text-sm font-medium text-gray-700">
+                      Auto-extracted from PDFs
+                    </h4>
+                    <div className="space-y-2">
+                      {pdfAssets.map((asset) => (
+                        <div
+                          key={asset.sourceName}
+                          className="rounded-md border bg-white p-3 text-sm text-gray-600"
+                        >
+                          <p className="font-medium text-gray-800">{asset.sourceName}</p>
+                          <p>
+                            {asset.pageCount} pages split, {asset.pageImageUrls.length} page images
+                            uploaded, {asset.extractedText.length} chars extracted
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">识别提示（可选）</CardTitle>
+                <CardTitle className="text-base">AI Parse Hint (Optional)</CardTitle>
                 <p className="text-sm text-gray-500">
-                  可输入卷名、年级或备注，系统会优先推荐对应蓝图。
+                  可以写卷名、年级、是否有作文/听力，帮助 AI 更快对齐结构。
                 </p>
               </CardHeader>
               <CardContent>
@@ -2374,14 +2561,14 @@ export default function PaperCreator() {
                   value={instructions}
                   onChange={(event) => setInstructions(event.target.value)}
                   rows={3}
-                  placeholder="例如：G6 期末卷 / 有作文 / 没有听力"
+                  placeholder="例如：G6 期末卷 / 阅读题型很多 / 最后一题是作文"
                 />
               </CardContent>
             </Card>
 
             <div className="flex justify-end">
               <Button onClick={() => setStep(2)} size="lg">
-                Next: Filter Blueprint
+                Next: AI Parse
                 <Layers3 className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -2394,112 +2581,124 @@ export default function PaperCreator() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Layers3 className="h-5 w-5 text-blue-500" />
-                  Big-Part Blueprint Filter
+                  AI Parse and Image Decomposition
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  我先按现有两套卷型做了解读和分类。这里不再直接 AI 拆完整题目，而是先锁定大题架构，再进入人工录题。
+                  这一步会把原 PDF、拆出来的页图、提取出的文字一起交给 AI；页图还会先自动裁切题图，最后生成一份可人工校对的草稿。
                 </p>
               </CardHeader>
-              <CardContent className="rounded-lg bg-blue-50 text-sm text-blue-900">
-                <p className="font-medium">当前推荐：</p>
-                <p>
-                  {suggestion.blueprintId
-                    ? `${suggestion.blueprintId.toUpperCase()}，${suggestion.reason}`
-                    : suggestion.reason}
-                </p>
+              <CardContent className="space-y-4">
+                {runtime?.usingLocalFallback ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Using local parser instead of cloud AI</p>
+                        <p>
+                          The server is missing {missingVariablesText}. This run will still split the
+                          PDF and generate a draft, but the result is text-only and needs more manual
+                          checking than the cloud AI path.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+                  <p className="font-medium">当前推荐蓝图：</p>
+                  <p>
+                    {suggestion.blueprintId
+                      ? `${suggestion.blueprintId.toUpperCase()}，${suggestion.reason}`
+                      : suggestion.reason}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border bg-gray-50 p-4">
+                  <h4 className="mb-2 text-sm font-medium text-gray-700">Materials Summary</h4>
+                  <ul className="space-y-1 text-sm text-gray-600">
+                    <li>Original files: {files.length}</li>
+                    <li>PDF page images: {pdfAssets.reduce((sum, asset) => sum + asset.pageImageUrls.length, 0)}</li>
+                    <li>Extracted text length: {pdfAssets.reduce((sum, asset) => sum + asset.extractedText.length, 0)}</li>
+                    <li>Audio files: {files.filter((file) => file.type.startsWith("audio/")).length}</li>
+                  </ul>
+                </div>
+
+                {isParsing ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
+                    <p className="font-medium text-gray-700">
+                      AI is parsing the paper and auto-cropping question images...
+                    </p>
+                    <p className="text-sm text-gray-400">This may take 30-90 seconds</p>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <Button variant="outline" onClick={() => setStep(1)}>
+                      <ArrowLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button
+                      onClick={handleParse}
+                      className="flex-1"
+                    >
+                      {runtime?.usingLocalFallback ? "Start Local Parse" : "Start AI Parse"}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {paperBlueprints.map((blueprint) => {
-                const isRecommended = suggestion.blueprintId === blueprint.id;
-                return (
-                  <Card
-                    key={blueprint.id}
-                    className={`border-2 ${
-                      isRecommended ? "border-blue-500 shadow-md" : "border-gray-200"
-                    }`}
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-lg">{blueprint.label}</CardTitle>
-                          <p className="mt-1 text-sm text-gray-500">
-                            Reference: {blueprint.referenceTitle}
-                          </p>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Manual Fallback</CardTitle>
+                <p className="text-sm text-gray-500">
+                  如果 AI 这次拆得不好，下面仍然可以直接选 G2-3 / G6 蓝图手动录。
+                </p>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-2">
+                {paperBlueprints.map((blueprint) => {
+                  const isRecommended = suggestion.blueprintId === blueprint.id;
+                  return (
+                    <Card
+                      key={blueprint.id}
+                      className={`border ${isRecommended ? "border-blue-500" : "border-gray-200"}`}
+                    >
+                      <CardHeader>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <CardTitle className="text-base">{blueprint.label}</CardTitle>
+                            <p className="mt-1 text-sm text-gray-500">
+                              {blueprint.referenceTitle}
+                            </p>
+                          </div>
+                          {isRecommended ? (
+                            <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                              Recommended
+                            </span>
+                          ) : null}
                         </div>
-                        {isRecommended ? (
-                          <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white">
-                            Recommended
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="text-sm text-gray-700">{blueprint.interpretation}</p>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex flex-wrap gap-2">
-                        {blueprint.classification.map((item) => (
-                          <span
-                            key={item}
-                            className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-                          >
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="space-y-3">
+                        <p className="text-sm text-gray-700">{blueprint.interpretation}</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
                         {blueprint.sections.map((section) => (
-                          <div key={section.id} className="rounded-lg border bg-gray-50 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-gray-800">
-                                  {section.title}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {section.totalQuestions} slots
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap justify-end gap-1">
-                                {section.supportedQuestionTypes.map((type) => (
-                                  <span
-                                    key={type}
-                                    className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700"
-                                  >
-                                    {QUESTION_TYPE_META[type].shortLabel}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <p className="mt-2 text-xs text-gray-600">{section.summary}</p>
-                            {section.features.length ? (
-                              <p className="mt-1 text-[11px] text-gray-400">
-                                Features: {section.features.join(" / ")}
-                              </p>
-                            ) : null}
+                          <div key={section.id} className="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+                            <p className="font-medium text-gray-800">{section.title}</p>
+                            <p>{section.summary}</p>
                           </div>
                         ))}
-                      </div>
-
-                      <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                        {blueprint.recommendedFor}
-                      </div>
-
-                      <Button onClick={() => handleChooseBlueprint(blueprint.id)} className="w-full">
-                        Use This Blueprint
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(1)}>
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Back
-              </Button>
-            </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleChooseBlueprint(blueprint.id)}
+                          className="w-full"
+                        >
+                          Use Manual Blueprint
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </CardContent>
+            </Card>
           </div>
         ) : null}
 
@@ -2509,7 +2708,7 @@ export default function PaperCreator() {
               <CardHeader>
                 <CardTitle className="text-lg">Paper Meta</CardTitle>
                 <p className="text-sm text-gray-500">
-                  当前基于 {draftPaper.blueprintLabel}。现在可以改 part 信息、题型、题干、子题、答案和图片。
+                  当前草稿来源：{draftPaper.blueprintLabel}。现在可以逐 part 校对 AI 结果，并修改题型、题干、子题、答案和图片。
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">

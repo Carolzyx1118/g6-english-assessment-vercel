@@ -1,7 +1,11 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { getForgeConfigErrorMessage, getForgeConfigStatus } from "./_core/env";
 import { storagePut } from "./storage";
+import { processAllExamImages } from "./imageCropper";
+import { parseMaterialsLocally } from "./localPaperParser";
 import {
   saveCustomPaper,
   getAllCustomPapers,
@@ -119,6 +123,9 @@ The paper has SECTIONS, each section contains QUESTIONS. Here are the supported 
     CRITICAL: items MUST be an array of objects with {clue, answer}.
     - NEVER use items as a string array with a separate answers array.
 
+15. **readingWordBank**: Optional top-level image word bank used by some early-grade reading sections.
+    [{ "word": "a dentist", "imageUrl": "https://..." }, { "word": "coffee", "imageUrl": "https://..." }]
+
 Each SECTION has this structure:
 {
   "id": "vocabulary",  // unique section id (lowercase, no spaces)
@@ -134,6 +141,8 @@ Each SECTION has this structure:
   "grammarPassage": "",  // optional: passage with <b>(N) ___</b> blanks for fill-blank questions
   "audioUrl": "",  // optional: URL for listening audio
   "sceneImageUrl": "",  // optional: scene image URL
+  "wordBankImageUrl": "",  // optional: URL for a reading word-bank image panel
+  "storyImages": [],  // optional: extra story or reference images
   "storyParagraphs": []  // optional: [{"text": "paragraph text", "questionIds": [1,2]}]
 }
 
@@ -150,12 +159,11 @@ IMPORTANT RULES:
 - wordBank letters MUST be uppercase single letters: A, B, C, D, etc.
 
 IMAGE HANDLING:
-- Do NOT assign any image URLs to questions or options during parsing.
-- Leave all imageUrl fields as empty string "".
-- Leave all sceneImageUrl fields as empty string "".
-- For picture-mcq options, set imageUrl to "" for every option.
-- Images will be manually uploaded and assigned by the teacher in the Review & Edit step.
-- If a question clearly references an image (e.g., "Look at the picture"), add "[Image needed]" in the question text as a reminder.
+- The system may provide EXTRACTED_IMAGE_ASSETS automatically cropped from uploaded PDF pages.
+- If an extracted image clearly matches a question image, scene image, story image, word-bank item, or MCQ option image, assign that URL directly.
+- For picture-mcq and listening-mcq, fill option.imageUrl when the mapping is clear.
+- For section-level visuals, use sceneImageUrl, wordBankImageUrl, or storyImages when appropriate.
+- If confidence is low, leave the URL empty so the teacher can fix it in Review & Edit.
 
 Return a JSON object with this structure:
 {
@@ -163,6 +171,7 @@ Return a JSON object with this structure:
   "subtitle": "Grade Level or Description",
   "description": "Brief description of the paper",
   "sections": [...],
+  "readingWordBank": [],
   "totalQuestions": <number>,
   "hasListening": <boolean>,
   "hasWriting": <boolean>
@@ -183,8 +192,16 @@ export const paperRouter = router({
       const ext = input.fileName.split(".").pop() || "bin";
       const key = `paper-assets/${suffix}-${input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const buffer = Buffer.from(input.fileBase64, "base64");
-      const { url } = await storagePut(key, buffer, input.contentType);
-      return { url, key };
+      try {
+        const { url } = await storagePut(key, buffer, input.contentType);
+        return { url, key };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            err instanceof Error ? err.message : "File upload failed unexpectedly.",
+        });
+      }
     }),
 
   // AI-parse uploaded materials into paper format
@@ -195,6 +212,8 @@ export const paperRouter = router({
         textContent: z.string().optional(),
         // URLs of uploaded images for AI to analyze
         imageUrls: z.array(z.string()).optional(),
+        // Full-page PDF screenshots generated in the browser; used for image auto-cropping
+        pageImageUrls: z.array(z.string()).optional(),
         // URLs of uploaded PDFs for AI to analyze
         pdfUrls: z.array(z.string()).optional(),
         // Audio URLs (for listening sections)
@@ -204,6 +223,20 @@ export const paperRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      const forge = getForgeConfigStatus();
+      if (!forge.isConfigured) {
+        return parseMaterialsLocally(input);
+      }
+
+      let extractedImages: Awaited<ReturnType<typeof processAllExamImages>> = [];
+      if (input.pageImageUrls && input.pageImageUrls.length > 0) {
+        try {
+          extractedImages = await processAllExamImages(input.pageImageUrls);
+        } catch (err) {
+          console.error("[Paper Parser] Failed to auto-crop PDF page images:", err);
+        }
+      }
+
       const messages: any[] = [
         {
           role: "system",
@@ -220,17 +253,21 @@ export const paperRouter = router({
         textPrompt += `Teacher's instructions: ${input.instructions}\n\n`;
       }
 
-      // Note: Images are no longer auto-assigned during AI parsing.
-      // Teachers will manually upload and assign images in the Review & Edit step.
-      // We still pass images to AI for visual context (reading the exam content) but
-      // instruct it to leave all imageUrl fields empty.
-
       if (input.audioUrls && input.audioUrls.length > 0) {
         textPrompt += `Audio files for listening section: ${input.audioUrls.join(", ")}\n\n`;
       }
 
       if (input.textContent) {
         textPrompt += `Extracted text content:\n${input.textContent}\n\n`;
+      }
+
+      if (extractedImages.length > 0) {
+        textPrompt += `EXTRACTED_IMAGE_ASSETS:\n${extractedImages
+          .map(
+            (image, index) =>
+              `${index + 1}. target=${image.target || "unknown"} | description=${image.description || ""} | url=${image.url}`
+          )
+          .join("\n")}\n\n`;
       }
 
       contentParts.push({ type: "text", text: textPrompt });
@@ -271,6 +308,7 @@ export const paperRouter = router({
                   title: { type: "string" },
                   subtitle: { type: "string" },
                   description: { type: "string" },
+                  readingWordBank: { type: "array" },
                   sections: {
                     type: "array",
                     items: {
@@ -289,6 +327,8 @@ export const paperRouter = router({
                         grammarPassage: { type: "string" },
                         audioUrl: { type: "string" },
                         sceneImageUrl: { type: "string" },
+                        wordBankImageUrl: { type: "string" },
+                        storyImages: { type: "array" },
                         storyParagraphs: { type: "array" },
                       },
                       required: ["id", "title", "subtitle", "icon", "color", "bgColor", "description", "questions"],
@@ -311,7 +351,19 @@ export const paperRouter = router({
         throw new Error("No content in AI response");
       } catch (err) {
         console.error("[Paper Parser] AI parsing error:", err);
-        throw new Error("Failed to parse materials. Please try again or provide clearer materials.");
+        if (err instanceof TRPCError) {
+          throw err;
+        }
+
+        const message =
+          err instanceof Error ? err.message : "Unexpected AI parsing error";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            message === "No content in AI response"
+              ? "AI parsing returned an empty response. Please retry or provide clearer materials."
+              : `AI parsing failed: ${message}`,
+        });
       }
     }),
 

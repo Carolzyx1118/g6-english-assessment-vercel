@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createEditablePaperFromBlueprint,
+  createEditablePaperFromParsed,
   getBlueprintById,
   stripEditablePaper,
   suggestBlueprint,
@@ -52,6 +53,36 @@ describe("paperBlueprints", () => {
     expect(cleanPaper.totalQuestions).toBe(editable.totalQuestions);
     expect(firstSection.supportedQuestionTypes).toBeUndefined();
     expect(firstSection.blueprintSummary).toBeUndefined();
+  });
+
+  it("converts an AI parsed payload into an editable draft", () => {
+    const editable = createEditablePaperFromParsed({
+      title: "Parsed Paper",
+      sections: [
+        {
+          id: "reading",
+          title: "Reading",
+          subtitle: "",
+          icon: "📚",
+          color: "text-blue-600",
+          bgColor: "bg-blue-50",
+          description: "Read and answer",
+          questions: [
+            { id: 1, type: "mcq", question: "Q1", options: ["A", "B"], correctAnswer: 0 },
+            {
+              id: 2,
+              type: "true-false",
+              statements: [{ label: "a", statement: "Test", isTrue: true, reason: "Because" }],
+            },
+          ],
+        },
+      ],
+      readingWordBank: [{ word: "coffee", imageUrl: "https://example.com/coffee.png" }],
+    });
+
+    expect(editable.blueprintId).toBe("ai-parsed");
+    expect(editable.sections[0].supportedQuestionTypes).toEqual(["mcq", "true-false"]);
+    expect(editable.readingWordBank).toHaveLength(1);
   });
 
   it("suggests G2-3 when audio assets are uploaded", () => {

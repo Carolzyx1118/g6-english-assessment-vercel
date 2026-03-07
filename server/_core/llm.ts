@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { getForgeConfigErrorMessage } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -216,7 +217,10 @@ const resolveApiUrl = () =>
 
 const assertApiKey = () => {
   if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+    throw new Error(
+      getForgeConfigErrorMessage("AI requests") ||
+        "AI requests are unavailable because BUILT_IN_FORGE_API_KEY is not configured."
+    );
   }
 };
 

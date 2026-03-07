@@ -1,6 +1,7 @@
 import type { Paper, Question, Section } from "@/data/papers";
 import { huazhongPaper } from "@/data/huazhong-paper";
 import { widaPaper } from "@/data/wida-paper";
+import { normalizeSections } from "@/lib/normalizeSection";
 
 export type QuestionType = Question["type"];
 
@@ -119,6 +120,8 @@ export const QUESTION_TYPE_META: Record<
     description: "短语定位题",
   },
 };
+
+export const ALL_QUESTION_TYPES = Object.keys(QUESTION_TYPE_META) as QuestionType[];
 
 function orderedUniqueQuestionTypes(questions: Question[]): QuestionType[] {
   const seen = new Set<QuestionType>();
@@ -551,6 +554,59 @@ export function createEditablePaperFromBlueprint(blueprintId: string): EditableP
     blueprintId: blueprint.id,
     blueprintLabel: blueprint.label,
     interpretation: blueprint.interpretation,
+  };
+}
+
+export function createEditablePaperFromParsed(parsedPaper: {
+  id?: string;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  blueprintLabel?: string;
+  interpretation?: string;
+  sections?: any[];
+  readingWordBank?: { word: string; imageUrl: string }[];
+  totalQuestions?: number;
+  hasListening?: boolean;
+  hasWriting?: boolean;
+}): EditablePaper {
+  const normalizedSections = normalizeSections(parsedPaper.sections || []);
+
+  return {
+    id: parsedPaper.id || "ai-parsed",
+    title: parsedPaper.title || "Untitled Paper",
+    subtitle: parsedPaper.subtitle || "",
+    description: parsedPaper.description || "",
+    icon: parsedPaper.icon || "📝",
+    color: parsedPaper.color || "text-blue-600",
+    sections: normalizedSections.map((section) => ({
+      ...section,
+      supportedQuestionTypes: orderedUniqueQuestionTypes(section.questions),
+      blueprintSummary: buildSectionSummary(section),
+    })),
+    readingWordBank: parsedPaper.readingWordBank,
+    totalQuestions:
+      parsedPaper.totalQuestions ||
+      normalizedSections.reduce((sum, section) => sum + section.questions.length, 0),
+    hasListening:
+      parsedPaper.hasListening ??
+      normalizedSections.some(
+        (section) =>
+          !!section.audioUrl ||
+          section.questions.some((question) => question.type === "listening-mcq")
+      ),
+    hasWriting:
+      parsedPaper.hasWriting ??
+      normalizedSections.some((section) =>
+        section.questions.some((question) => question.type === "writing")
+      ),
+    blueprintId: "ai-parsed",
+    blueprintLabel: parsedPaper.blueprintLabel || "AI Parsed Draft",
+    interpretation:
+      parsedPaper.interpretation ||
+      "AI 已根据上传的 PDF/图片先拆题，下面只需要人工校对和修改。",
   };
 }
 

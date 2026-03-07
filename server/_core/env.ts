@@ -8,3 +8,30 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 };
+
+export function getForgeConfigStatus() {
+  const missingVariables: string[] = [];
+
+  if (!ENV.forgeApiUrl) {
+    missingVariables.push("BUILT_IN_FORGE_API_URL");
+  }
+
+  if (!ENV.forgeApiKey) {
+    missingVariables.push("BUILT_IN_FORGE_API_KEY");
+  }
+
+  return {
+    isConfigured: missingVariables.length === 0,
+    missingVariables,
+  };
+}
+
+export function getForgeConfigErrorMessage(feature: string): string {
+  const { missingVariables } = getForgeConfigStatus();
+  if (!missingVariables.length) {
+    return "";
+  }
+
+  const verb = missingVariables.length === 1 ? "is" : "are";
+  return `${feature} is unavailable because ${missingVariables.join(", ")} ${verb} not configured on the server.`;
+}

@@ -1,4 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./_core/env", () => ({
+  ENV: {
+    appId: "",
+    cookieSecret: "",
+    databaseUrl: "",
+    oAuthServerUrl: "",
+    ownerOpenId: "",
+    isProduction: false,
+    forgeApiUrl: "https://forge.example.com/",
+    forgeApiKey: "test-key",
+  },
+  getForgeConfigStatus: () => ({
+    isConfigured: true,
+    missingVariables: [],
+  }),
+  getForgeConfigErrorMessage: () => "",
+}));
+
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
