@@ -191,3 +191,4 @@
 - [x] Add open-ended and true-false display in detailedResults on ResultsPage
 - [x] Add section meta styling for G1 paper section IDs (listening-part*, rw-part*, speaking)
 - [x] Add speaking section display as 'Manual grading' in section scores
+- [x] Remove all [Image: xxx] text markers from R&W Part 3 questions in G1 paper
