@@ -4,6 +4,11 @@ const LOCAL_ASSET_BASE = '/local-paper-assets/paper-assets';
 const LISTENING_AUDIO_URL = `${LOCAL_ASSET_BASE}/pet-final-listening.mp3`;
 const LISTENING_PAGE_1 = `${LOCAL_ASSET_BASE}/pet-final-listening-questions-1-5.png`;
 const LISTENING_PAGE_2 = `${LOCAL_ASSET_BASE}/pet-final-listening-questions-6-7.png`;
+const WRITING_PART_2_PAGE = `${LOCAL_ASSET_BASE}/pet-writing-part-2-page.png`;
+
+function listeningOptionImage(questionNumber: number, label: 'a' | 'b' | 'c'): string {
+  return `${LOCAL_ASSET_BASE}/pet-listening-q${questionNumber}-${label}.png`;
+}
 
 const restaurantOptions = [
   'Marina',
@@ -24,7 +29,7 @@ const sections: Section[] = [
     icon: '📚',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'Complete each sentence with the correct adjective from the word bank.',
+    description: 'Original instruction: Complete the sentences with one adjective from A and one noun from B. Digital step 1: fill in the adjective blanks.',
     wordBank: [
       { letter: 'A', word: 'cosy' },
       { letter: 'B', word: 'crowded' },
@@ -93,7 +98,7 @@ const sections: Section[] = [
     icon: '📚',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'Complete each sentence with the correct noun from the word bank.',
+    description: 'Original instruction: Complete the sentences with one adjective from A and one noun from B. Digital step 2: fill in the noun blanks.',
     wordBank: [
       { letter: 'A', word: 'pass' },
       { letter: 'B', word: 'grades' },
@@ -162,7 +167,7 @@ const sections: Section[] = [
     icon: '📚',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'Use the words in the word bank to complete each sentence.',
+    description: 'Complete the sentences with these words.',
     wordBank: [
       { letter: 'A', word: 'achieve' },
       { letter: 'B', word: 'beat' },
@@ -231,7 +236,7 @@ const sections: Section[] = [
     icon: '📚',
     color: 'text-[oklch(0.55_0.16_160)]',
     bgColor: 'bg-[oklch(0.95_0.04_160)]',
-    description: 'Choose the correct phrasal verb or preposition for each sentence.',
+    description: 'Choose the correct options to complete the sentences.',
     questions: [
       {
         id: 25,
@@ -298,7 +303,7 @@ const sections: Section[] = [
     icon: '🧩',
     color: 'text-[oklch(0.58_0.15_80)]',
     bgColor: 'bg-[oklch(0.96_0.03_85)]',
-    description: 'Type the missing verb form only. Contractions are accepted.',
+    description: 'Complete the text with the correct form of the verbs in brackets. Type the missing verb form only. Contractions are accepted.',
     questions: [
       {
         id: 33,
@@ -357,7 +362,7 @@ const sections: Section[] = [
     icon: '🧩',
     color: 'text-[oklch(0.58_0.15_80)]',
     bgColor: 'bg-[oklch(0.96_0.03_85)]',
-    description: 'Choose the best pair of words to complete each sentence.',
+    description: 'Complete the sentences with the correct pair of words.',
     questions: [
       {
         id: 41,
@@ -417,7 +422,7 @@ const sections: Section[] = [
     icon: '🧩',
     color: 'text-[oklch(0.58_0.15_80)]',
     bgColor: 'bg-[oklch(0.96_0.03_85)]',
-    description: 'Type only the missing word or words.',
+    description: 'Complete the second sentence so that it means the same as the first using the word given in bold. Write one word in each space. Use contractions where possible. Type only the missing words.',
     questions: [
       {
         id: 48,
@@ -470,7 +475,7 @@ const sections: Section[] = [
     icon: '📝',
     color: 'text-[oklch(0.57_0.17_285)]',
     bgColor: 'bg-[oklch(0.95_0.04_285)]',
-    description: 'Choose the best option for each numbered gap.',
+    description: 'Read the text below and choose the correct word for each space. Click a blank in the passage to choose its answer.',
     passage: `The last day of school was finally here. Paolo felt so (1) ___ - for nearly three months there would be no classes to (2) ___, no boring (3) ___ food, no exams to be worried (4) ___ . He was (5) ___ forward to his holiday in South Africa. He (6) ___ any (7) ___ than Egypt before, but that was not a problem. He already imagined himself on a safari jeep (8) ___ pictures of lions and other African (9) ___ .
 
 Laura, his older sister, was a bit (10) ___ about flying so far and meeting dangerous animals. 'Why don't we choose something more relaxing?' she (11) ___ when they (12) ___ their summer holiday, 'We (13) ___ visit a city with lots of museums and (14) ___ buildings, or even better, go to the beach, like we (15) ___ when Paolo and I were younger.'
@@ -508,31 +513,39 @@ Laura, his older sister, was a bit (10) ___ about flying so far and meeting dang
     icon: '📖',
     color: 'text-[oklch(0.54_0.15_235)]',
     bgColor: 'bg-[oklch(0.95_0.04_235)]',
-    description: 'Read the restaurant descriptions and choose the best place for each teenager.',
+    description: 'The teenagers below all want to eat out. On the opposite page there are descriptions of eight places to eat. Decide which place would be the most suitable for the following teenagers. For each question, choose the correct answer.',
     passage: `Restaurants & Takeaways
 
 A Marina
+
 There's no better fish restaurant in town than Marina, where you can have your meal in front of the restaurant, next to the sea. At night, a band performs for the restaurant's customers. A bit expensive, but the great food and the wonderful atmosphere are really worth it. Open lunchtimes and evenings, Monday-Saturday.
 
 B Salt and pepper
+
 Salt and pepper is a new and different type of restaurant. If you like your dish, you can ask for the recipe and attend a cookery course to learn how to make it. The menu includes fish, meat and vegetarian dishes. It's located in an area convenient for public transport. Open Mondays to Fridays, until 5 p.m.
 
 C Michael's
+
 This lovely French restaurant is in a lovely countryside spot, but anybody can get here on foot. There's also a train station very close by. Michael's has always been a favourite with groups, who can ask for the discounted menu, which includes meat and fish options. Open lunchtimes and evenings.
 
 D Reds and Company
+
 Reds and Company is in a peaceful location near green fields, so it's perfect after a walk or a bicycle ride. There's a large back garden with tables and lots of space for the bikes. They serve Italian, Spanish and French dishes at a low cost. Open from Friday to Saturday.
 
 E Clowns
+
 Run by a nice French family, this is the best place for a cheap break on a long bike ride. Located in a country park five miles from the city centre, Clowns offers sandwiches or snacks to take away. There is a small garden with a few tables at the back. Open lunchtimes only.
 
 F The Cinnamon
+
 This vegetarian restaurant is very popular with young people who want entertainment while they eat. Every Monday night, there are live music sessions in the main hall. At lunchtime, The Cinnamon offers a special deal to families and large groups. It can be reached by bus. Open every day.
 
 G O'Neill's
+
 This British restaurant uses traditional ingredients in new, original recipes. There are many vegetarian and fish dishes. There's a large room upstairs which can be booked by groups. O'Neill's is in the city centre and very close to several bus stops. Open every evening and lunchtimes only on Saturdays and Sundays. Quite expensive.
 
 H The Blue Boat
+
 This restaurant specialises in fish and seafood, but also offers a large vegetarian choice. It's quite popular with families as there's play equipment in the garden. The Blue Boat is located in a quiet area outside the city, so you need a car to get there. Open from midday to midnight every day.`,
     questions: [
       {
@@ -579,17 +592,18 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
     icon: '✍️',
     color: 'text-[oklch(0.6_0.16_15)]',
     bgColor: 'bg-[oklch(0.96_0.03_15)]',
-    description: 'Choose either the article or the story task and write about 100 words.',
+    description: 'Choose one of the questions (1 or 2) in this part. Write your answer in about 100 words.',
+    storyImages: [WRITING_PART_2_PAGE],
     questions: [
       {
         id: 80,
         type: 'writing',
         topic: 'Choose ONE writing question',
-        instructions: 'Write about 100 words. Answer either Question 1 or Question 2.',
+        instructions: 'Choose one of the questions (1 or 2) in this part. Write your answer in about 100 words.',
         wordCount: 'about 100 words',
         prompts: [
-          'Question 1 Article: Write about your local environment, the environmental problems it faces, and possible solutions.',
-          'Question 2 Story: Begin with "The view of the mountains and forests was amazing, but the freezing temperature was getting uncomfortable."',
+          'Question 1: You see this notice in an international English-language magazine. Write an article about your local environment, the environmental problems it faces, and possible solutions.',
+          'Question 2: Your English teacher has asked you to write a story. Begin with "The view of the mountains and forests was amazing, but the freezing temperature was getting uncomfortable."',
         ],
       },
     ],
@@ -601,7 +615,7 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
     icon: '🎧',
     color: 'text-[oklch(0.57_0.17_285)]',
     bgColor: 'bg-[oklch(0.95_0.04_285)]',
-    description: 'Use the two reference images above while listening to the audio, then choose A, B, or C.',
+    description: 'For each question, choose the correct answer. Listen and choose A, B, or C.',
     audioUrl: LISTENING_AUDIO_URL,
     storyImages: [LISTENING_PAGE_1, LISTENING_PAGE_2],
     questions: [
@@ -610,9 +624,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'Which type of film are these friends going to watch?',
         options: [
-          { label: 'A', imageUrl: '', text: 'A musical / dance film' },
-          { label: 'B', imageUrl: '', text: 'A detective film' },
-          { label: 'C', imageUrl: '', text: 'A science-fiction film' },
+          { label: 'A', imageUrl: listeningOptionImage(1, 'a'), text: 'A musical / dance film' },
+          { label: 'B', imageUrl: listeningOptionImage(1, 'b'), text: 'A detective film' },
+          { label: 'C', imageUrl: listeningOptionImage(1, 'c'), text: 'A science-fiction film' },
         ],
         correctAnswer: 1,
       },
@@ -621,9 +635,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'What is in the pie that the boy chooses?',
         options: [
-          { label: 'A', imageUrl: '', text: 'Beef' },
-          { label: 'B', imageUrl: '', text: 'Mushroom' },
-          { label: 'C', imageUrl: '', text: 'Fish' },
+          { label: 'A', imageUrl: listeningOptionImage(2, 'a'), text: 'Beef' },
+          { label: 'B', imageUrl: listeningOptionImage(2, 'b'), text: 'Mushroom' },
+          { label: 'C', imageUrl: listeningOptionImage(2, 'c'), text: 'Fish' },
         ],
         correctAnswer: 0,
       },
@@ -632,9 +646,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'Where are the family staying this summer?',
         options: [
-          { label: 'A', imageUrl: '', text: 'In a tent' },
-          { label: 'B', imageUrl: '', text: 'In a rented house' },
-          { label: 'C', imageUrl: '', text: 'In a hotel' },
+          { label: 'A', imageUrl: listeningOptionImage(3, 'a'), text: 'In a tent' },
+          { label: 'B', imageUrl: listeningOptionImage(3, 'b'), text: 'In a rented house' },
+          { label: 'C', imageUrl: listeningOptionImage(3, 'c'), text: 'In a hotel' },
         ],
         correctAnswer: 1,
       },
@@ -643,9 +657,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'What did the boy do most of the time on holiday?',
         options: [
-          { label: 'A', imageUrl: '', text: 'Cycling' },
-          { label: 'B', imageUrl: '', text: 'Sightseeing in cities' },
-          { label: 'C', imageUrl: '', text: 'Wind-surfing' },
+          { label: 'A', imageUrl: listeningOptionImage(4, 'a'), text: 'Cycling' },
+          { label: 'B', imageUrl: listeningOptionImage(4, 'b'), text: 'Sightseeing in cities' },
+          { label: 'C', imageUrl: listeningOptionImage(4, 'c'), text: 'Wind-surfing' },
         ],
         correctAnswer: 0,
       },
@@ -654,9 +668,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: "What time is the boy's martial arts class?",
         options: [
-          { label: 'A', imageUrl: '', text: '4:50' },
-          { label: 'B', imageUrl: '', text: '5:30' },
-          { label: 'C', imageUrl: '', text: '5:45' },
+          { label: 'A', imageUrl: listeningOptionImage(5, 'a'), text: '4:50' },
+          { label: 'B', imageUrl: listeningOptionImage(5, 'b'), text: '5:30' },
+          { label: 'C', imageUrl: listeningOptionImage(5, 'c'), text: '5:45' },
         ],
         correctAnswer: 2,
       },
@@ -665,9 +679,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'On which date will the girl have her piano lesson?',
         options: [
-          { label: 'A', imageUrl: '', text: 'Monday the 6th' },
-          { label: 'B', imageUrl: '', text: 'Tuesday the 7th' },
-          { label: 'C', imageUrl: '', text: 'Monday the 13th' },
+          { label: 'A', imageUrl: listeningOptionImage(6, 'a'), text: 'Monday the 6th' },
+          { label: 'B', imageUrl: listeningOptionImage(6, 'b'), text: 'Tuesday the 7th' },
+          { label: 'C', imageUrl: listeningOptionImage(6, 'c'), text: 'Monday the 13th' },
         ],
         correctAnswer: 1,
       },
@@ -676,9 +690,9 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
         type: 'listening-mcq',
         question: 'How did the boy get to the station?',
         options: [
-          { label: 'A', imageUrl: '', text: 'By car' },
-          { label: 'B', imageUrl: '', text: 'By bus' },
-          { label: 'C', imageUrl: '', text: 'By bike' },
+          { label: 'A', imageUrl: listeningOptionImage(7, 'a'), text: 'By car' },
+          { label: 'B', imageUrl: listeningOptionImage(7, 'b'), text: 'By bus' },
+          { label: 'C', imageUrl: listeningOptionImage(7, 'c'), text: 'By bike' },
         ],
         correctAnswer: 0,
       },
@@ -691,7 +705,7 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
     icon: '🗣️',
     color: 'text-[oklch(0.56_0.14_25)]',
     bgColor: 'bg-[oklch(0.96_0.03_20)]',
-    description: 'Choose the correct phrase for each gap.',
+    description: 'Complete the dialogue with these phrases.',
     wordBank: [
       { letter: 'A', word: 'how about you' },
       { letter: 'B', word: "isn't it" },
@@ -731,7 +745,7 @@ Adam: <b>(95) ___</b>? I mean we can ask her, but it shouldn't be too hard for u
     icon: '🗣️',
     color: 'text-[oklch(0.56_0.14_25)]',
     bgColor: 'bg-[oklch(0.96_0.03_20)]',
-    description: 'Choose the correct expression for each gap.',
+    description: 'Complete the mini dialogues with these words.',
     wordBank: [
       { letter: 'A', word: 'believe' },
       { letter: 'B', word: 'better' },
@@ -769,12 +783,12 @@ A: <b>(103) ___</b>. It's a good way to relax and laugh about things that have h
     icon: '🗣️',
     color: 'text-[oklch(0.56_0.14_25)]',
     bgColor: 'bg-[oklch(0.96_0.03_20)]',
-    description: 'Record a response to the discussion task below.',
+    description: "Exam task, Part 4 (3 minutes): In Term Test 2, you discussed the kind of food you would have at a special meal to celebrate the end of the school year. Now, I'd like you to talk together about the special meal in more detail.",
     questions: [
       {
         id: 104,
         type: 'open-ended',
-        question: "Talk together about a special meal to celebrate the end of the school year. You can mention where you would have the meal, what kind of food would be suitable, how you would pay for it, and whether you have organised something similar before.",
+        question: "Talk together about the special meal in more detail. Back-up prompts: 1) Where would you have the meal? Would you prefer to eat in a restaurant or at someone's house? 2) What kind of food do you think is suitable for a special meal? 3) How will you pay for this meal? 4) Have you organised something like this before? Was it a success?",
         answer: '',
       },
     ],

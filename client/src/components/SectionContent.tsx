@@ -757,6 +757,161 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
   );
 }
 
+function ReadingPassageBlock({ passage }: { passage: string }) {
+  const paragraphs = passage.split('\n\n').filter(Boolean);
+
+  return (
+    <div className="mb-8 p-5 rounded-xl bg-blue-50/50 border border-blue-200">
+      <h3 className="font-bold text-sm text-blue-700 mb-3 uppercase tracking-wider">Reading Passage</h3>
+      <div className="space-y-3">
+        {paragraphs.map((paragraph, index) => {
+          const optionHeading = paragraph.match(/^([A-H])\s+(.+)$/);
+          if (optionHeading) {
+            return (
+              <div
+                key={index}
+                className="flex items-center gap-3 rounded-xl bg-white border border-blue-200 px-4 py-3 shadow-sm"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                  {optionHeading[1]}
+                </span>
+                <span className="text-base font-semibold text-slate-800">{optionHeading[2]}</span>
+              </div>
+            );
+          }
+
+          return (
+            <p key={index} className="text-base text-slate-700 leading-relaxed">
+              {paragraph}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InlineClozeMCQSection({
+  section,
+  sectionId,
+  questions,
+  getAnswer,
+  setAnswer,
+}: {
+  section: Section;
+  sectionId: string;
+  questions: MCQQuestion[];
+  getAnswer: (sectionId: string, id: number) => string | number | undefined;
+  setAnswer: (sectionId: string, id: number, value: number) => void;
+}) {
+  const gapEntries = questions
+    .map((question) => {
+      const match = question.question.match(/(\d+)/);
+      const gapNumber = match ? Number.parseInt(match[1], 10) : null;
+      return gapNumber ? { gapNumber, question } : null;
+    })
+    .filter((item): item is { gapNumber: number; question: MCQQuestion } => item !== null);
+
+  const gapMap = new Map(gapEntries.map((entry) => [entry.gapNumber, entry.question]));
+  const [selectedGap, setSelectedGap] = useState<number | null>(gapEntries[0]?.gapNumber ?? null);
+  const activeQuestion = selectedGap ? gapMap.get(selectedGap) : undefined;
+
+  const renderGap = (gapNumber: number) => {
+    const question = gapMap.get(gapNumber);
+    if (!question) {
+      return <span className="font-semibold text-slate-500">{`(${gapNumber}) ___`}</span>;
+    }
+
+    const rawAnswer = getAnswer(sectionId, question.id);
+    const answerIndex = typeof rawAnswer === 'number' ? rawAnswer : Number.parseInt(String(rawAnswer ?? ''), 10);
+    const selectedOption = Number.isFinite(answerIndex) && answerIndex >= 0 ? question.options[answerIndex] : '';
+    const isActive = selectedGap === gapNumber;
+
+    return (
+      <button
+        type="button"
+        onClick={() => setSelectedGap(gapNumber)}
+        className={`
+          inline-flex items-center min-w-[92px] justify-center rounded-lg border-2 border-dashed px-2 py-1 text-sm font-medium transition-all
+          ${selectedOption
+            ? 'border-blue-400 bg-blue-50 text-blue-700'
+            : isActive
+              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+              : 'border-slate-300 bg-white text-slate-500 hover:border-slate-400'
+          }
+        `}
+      >
+        {selectedOption || `(${gapNumber}) ___`}
+      </button>
+    );
+  };
+
+  const renderParagraph = (paragraph: string, index: number) => {
+    const parts = paragraph.split(/(\(\d+\) ___)/g);
+    return (
+      <p key={index} className="text-base text-slate-700 leading-[2.2]">
+        {parts.map((part, partIndex) => {
+          const match = part.match(/\((\d+)\) ___/);
+          if (!match) {
+            return <span key={`${index}-${partIndex}`}>{part}</span>;
+          }
+
+          const gapNumber = Number.parseInt(match[1], 10);
+          return <span key={`${index}-${partIndex}`}>{renderGap(gapNumber)}</span>;
+        })}
+      </p>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+        <h3 className="mb-2 font-bold text-indigo-700">Interactive Cloze</h3>
+        <p className="text-sm text-slate-600">Click any blank in the passage, then choose one of the three options below.</p>
+      </div>
+
+      {section.passage && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 font-bold text-sm uppercase tracking-wider text-indigo-700">Passage</div>
+          <div className="space-y-3">
+            {section.passage.split('\n\n').filter(Boolean).map(renderParagraph)}
+          </div>
+        </div>
+      )}
+
+      {activeQuestion && (
+        <div className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
+          <div className="mb-2 text-sm font-bold uppercase tracking-wider text-indigo-700">
+            Gap {selectedGap}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {activeQuestion.options.map((option, optionIndex) => {
+              const isSelected = getAnswer(sectionId, activeQuestion.id) === optionIndex;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setAnswer(sectionId, activeQuestion.id, optionIndex)}
+                  className={`
+                    rounded-xl border-2 p-3 text-left text-base transition-all
+                    ${isSelected
+                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700 shadow-sm'
+                      : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    }
+                  `}
+                >
+                  <span className="mr-2 font-bold text-slate-400">{String.fromCharCode(65 + optionIndex)}</span>
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // WIDADragDropGrammarSection and HuaZhongDragDropGrammarSection have been
 // replaced by the unified DragDropFillBlank component in DragDropFillBlank.tsx
 
@@ -1107,6 +1262,7 @@ export default function SectionContent() {
   const isHuaZhongGrammar = hasFillBlank && hasWordBank && hasGrammarPassage;
   const isWIDAReading = questions.some(q => q.type === 'wordbank-fill' || q.type === 'story-fill');
   const isHuaZhongReading = !!section.passage;
+  const isPETInlineCloze = section.id === 'vocabulary-and-grammar';
   const isListeningSection = !!section.audioUrl;
 
   // Questions that are NOT fill-blank (those are handled by DragDrop sections)
@@ -1188,18 +1344,19 @@ export default function SectionContent() {
             setAnswer={setAnswer}
             readingWordBank={selectedPaper?.readingWordBank || []}
           />
+        ) : isPETInlineCloze ? (
+          <InlineClozeMCQSection
+            section={section}
+            sectionId={section.id}
+            questions={questions.filter((q): q is MCQQuestion => q.type === 'mcq')}
+            getAnswer={getAnswer}
+            setAnswer={(sectionId, id, value) => setAnswer(sectionId, id, value)}
+          />
         ) : (
           <>
             {/* HuaZhong Reading Passage */}
             {isHuaZhongReading && (
-              <div className="mb-8 p-5 rounded-xl bg-blue-50/50 border border-blue-200">
-                <h3 className="font-bold text-sm text-blue-700 mb-3 uppercase tracking-wider">Reading Passage</h3>
-                <div className="text-base text-slate-700 leading-relaxed space-y-3">
-                  {section.passage!.split('\n\n').map((para, i) => (
-                    <p key={i}>{para}</p>
-                  ))}
-                </div>
-              </div>
+              <ReadingPassageBlock passage={section.passage!} />
             )}
 
             {/* Unified drag & drop fill-in-blank (handles both sentence and passage modes) */}

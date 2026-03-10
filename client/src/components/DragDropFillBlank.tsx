@@ -91,6 +91,7 @@ function PassageModeFillBlank({
 }) {
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
   const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
+  const isDialogueLayout = sectionId.startsWith('speaking-part-');
 
   // Track which letters are used (each word can only be used once in passage mode)
   const usedLetters = new Set<string>();
@@ -133,6 +134,63 @@ function PassageModeFillBlank({
 
   const handleRemoveWord = (questionId: number) => {
     setAnswer(sectionId, questionId, '');
+  };
+
+  const renderBlank = (questionId: number, key: string) => {
+    const answer = getAnswer(sectionId, questionId);
+    const answerWord = answer && typeof answer === 'string' ? wordBank.find((w) => w.letter === answer) : null;
+
+    return (
+      <span
+        key={key}
+        className={`
+          inline-flex items-center min-w-[90px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
+          transition-all duration-200 cursor-pointer align-baseline
+          ${answerWord
+            ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
+            : draggedWord || selectedWord
+              ? 'border-blue-400 bg-blue-50'
+              : 'border-slate-300 bg-slate-50 text-slate-400'
+          }
+        `}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, questionId)}
+        onClick={() => {
+          if (answerWord) {
+            handleRemoveWord(questionId);
+          } else {
+            handleBlankClick(questionId);
+          }
+        }}
+      >
+        <span className="text-xs font-bold text-slate-400 mr-1">({questionId})</span>
+        {answerWord ? (
+          <span className="flex items-center gap-1">
+            {answerWord.word}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRemoveWord(questionId); }}
+              className="ml-1 w-4 h-4 rounded-full bg-amber-200 text-amber-600 flex items-center justify-center text-xs hover:bg-amber-300"
+            >
+              x
+            </button>
+          </span>
+        ) : (
+          <span className="text-xs">___</span>
+        )}
+      </span>
+    );
+  };
+
+  const renderLineContent = (text: string, keyPrefix: string) => {
+    const parts = text.split(/(<b>\(\d+\) ___<\/b>)/g);
+    return parts.map((part, index) => {
+      const match = part.match(/<b>\((\d+)\) ___<\/b>/);
+      if (!match) {
+        return <span key={`${keyPrefix}-${index}`} dangerouslySetInnerHTML={{ __html: part }} />;
+      }
+      const questionId = parseInt(match[1], 10);
+      return renderBlank(questionId, `${keyPrefix}-${index}`);
+    });
   };
 
   return (
@@ -187,65 +245,45 @@ function PassageModeFillBlank({
 
       {/* Passage with inline blanks */}
       <div className="p-5 rounded-xl bg-white border border-slate-200" style={{ marginBottom: '30px' }}>
-        <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">Passage</h3>
-        <div className="text-base text-slate-700 leading-[2.2] space-y-3">
-          {grammarPassage.split('\n\n').map((paragraph, pIdx) => (
-            <p key={pIdx}>
-              {(() => {
-                const parts = paragraph.split(/(<b>\(\d+\) ___<\/b>)/g);
-                return parts.map((part, i) => {
-                  const match = part.match(/<b>\((\d+)\) ___<\/b>/);
-                  if (match) {
-                    const qId = parseInt(match[1]);
-                    const answer = getAnswer(sectionId, qId);
-                    const answerWord = answer && typeof answer === 'string' ? wordBank.find(w => w.letter === answer) : null;
+        <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
+          {isDialogueLayout ? 'Dialogue' : 'Passage'}
+        </h3>
+        {isDialogueLayout ? (
+          <div className="space-y-3">
+            {grammarPassage
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, lineIndex) => {
+                const match = line.match(/^([^:]+):\s*(.*)$/);
+                if (!match) {
+                  return (
+                    <div key={lineIndex} className="text-base text-slate-700 leading-[2.1]">
+                      {renderLineContent(line, `dialogue-${lineIndex}`)}
+                    </div>
+                  );
+                }
 
-                    return (
-                      <span
-                        key={`${pIdx}-${i}`}
-                        className={`
-                          inline-flex items-center min-w-[90px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
-                          transition-all duration-200 cursor-pointer align-baseline
-                          ${answerWord
-                            ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
-                            : draggedWord || selectedWord
-                              ? 'border-blue-400 bg-blue-50'
-                              : 'border-slate-300 bg-slate-50 text-slate-400'
-                          }
-                        `}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, qId)}
-                        onClick={() => {
-                          if (answerWord) {
-                            handleRemoveWord(qId);
-                          } else {
-                            handleBlankClick(qId);
-                          }
-                        }}
-                      >
-                        <span className="text-xs font-bold text-slate-400 mr-1">({qId})</span>
-                        {answerWord ? (
-                          <span className="flex items-center gap-1">
-                            {answerWord.word}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleRemoveWord(qId); }}
-                              className="ml-1 w-4 h-4 rounded-full bg-amber-200 text-amber-600 flex items-center justify-center text-xs hover:bg-amber-300"
-                            >
-                              x
-                            </button>
-                          </span>
-                        ) : (
-                          <span className="text-xs">___</span>
-                        )}
-                      </span>
-                    );
-                  }
-                  return <span key={`${pIdx}-${i}`} dangerouslySetInnerHTML={{ __html: part }} />;
-                });
-              })()}
-            </p>
-          ))}
-        </div>
+                const [, speaker, content] = match;
+                return (
+                  <div key={lineIndex} className="grid grid-cols-[88px_minmax(0,1fr)] gap-3 items-start">
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 text-center">
+                      {speaker}
+                    </div>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-base text-slate-700 leading-[2.1]">
+                      {renderLineContent(content, `dialogue-${lineIndex}`)}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="text-base text-slate-700 leading-[2.2] space-y-3">
+            {grammarPassage.split('\n\n').map((paragraph, pIdx) => (
+              <p key={pIdx}>{renderLineContent(paragraph, `paragraph-${pIdx}`)}</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
