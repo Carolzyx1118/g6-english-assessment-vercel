@@ -51,11 +51,15 @@ import type { Question } from "@/data/papers";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || "";
 
+type UploadedFileRole = "question" | "answer" | "audio" | "image";
+type ParseMode = "local" | "cloud";
+
 type UploadedFile = {
   name: string;
   type: string;
   url: string;
   size: number;
+  role: UploadedFileRole;
 };
 
 type PdfAsset = {
@@ -64,6 +68,7 @@ type PdfAsset = {
   pageCount: number;
   extractedText: string;
   pageImageUrls: string[];
+  role: Extract<UploadedFileRole, "question" | "answer">;
 };
 
 type ExtractedImageAsset = {
@@ -90,6 +95,35 @@ type RuntimeStatus = {
 
 function isPdfFile(file: Pick<UploadedFile, "name" | "type"> | File): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
+
+function inferUploadedFileRole(
+  file: Pick<UploadedFile, "name" | "type"> | File
+): UploadedFileRole {
+  if (file.type.startsWith("audio/")) {
+    return "audio";
+  }
+
+  if (file.type.startsWith("image/")) {
+    return "image";
+  }
+
+  return /(answer|answers|key|keys|solution|solutions|答案|解析)/i.test(file.name)
+    ? "answer"
+    : "question";
+}
+
+function getRoleLabel(role: UploadedFileRole): string {
+  switch (role) {
+    case "question":
+      return "Question PDF";
+    case "answer":
+      return "Answer PDF";
+    case "audio":
+      return "Audio";
+    case "image":
+      return "Image";
+  }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -146,7 +180,9 @@ function buildReferenceAssets({
       });
     });
 
-  pdfAssets.forEach((asset) => {
+  pdfAssets
+    .filter((asset) => asset.role === "question")
+    .forEach((asset) => {
     asset.pageImageUrls.forEach((url, index) => {
       pushReferenceAsset(items, seenUrls, {
         url,
@@ -154,7 +190,7 @@ function buildReferenceAssets({
         meta: "PDF page image",
       });
     });
-  });
+    });
 
   return items;
 }
@@ -167,7 +203,7 @@ function formatReferenceAssetOption(asset: ReferenceAsset): string {
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
     { num: 1, label: "Upload Materials" },
-    { num: 2, label: "AI Parse" },
+    { num: 2, label: "Parse Draft" },
     { num: 3, label: "Review & Edit" },
     { num: 4, label: "Save & Publish" },
   ];
@@ -323,12 +359,14 @@ function refreshPaper(paper: EditablePaper): EditablePaper {
 function FileUploadArea({
   files,
   onFilesAdded,
+  onRoleChange,
   onRemoveFile,
   isUploading,
   disabled = false,
 }: {
   files: UploadedFile[];
   onFilesAdded: (files: File[]) => void;
+  onRoleChange: (index: number, role: UploadedFileRole) => void;
   onRemoveFile: (index: number) => void;
   isUploading: boolean;
   disabled?: boolean;
@@ -382,7 +420,7 @@ function FileUploadArea({
           Drop source files here or click to upload
         </p>
         <p className={`mt-1 text-sm ${disabled ? "text-gray-400" : "text-gray-500"}`}>
-          PDF / 图片 / 音频都可以，作为录题参考素材使用
+          上传题目 PDF、答案 PDF、音频和图片。文档文件可在下方标记为 Question PDF 或 Answer PDF。
         </p>
         {isUploading ? (
           <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
@@ -407,7 +445,28 @@ function FileUploadArea({
               {getFileIcon(file.type)}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span>{formatFileSize(file.size)}</span>
+                  {file.role === "question" || file.role === "answer" ? (
+                    <label className="flex items-center gap-2">
+                      <span>Type</span>
+                      <select
+                        value={file.role}
+                        onChange={(event) =>
+                          onRoleChange(index, event.target.value as UploadedFileRole)
+                        }
+                        className="h-7 rounded border bg-white px-2 text-xs text-gray-700"
+                      >
+                        <option value="question">Question PDF</option>
+                        <option value="answer">Answer PDF</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                      {getRoleLabel(file.role)}
+                    </span>
+                  )}
+                </div>
               </div>
               <Button
                 variant="ghost"
@@ -2040,7 +2099,9 @@ function SectionEditor({
     section.supportedQuestionTypes[0] || "mcq"
   );
 
-  const audioFiles = uploadedFiles.filter((file) => file.type.startsWith("audio/"));
+  const audioFiles = uploadedFiles.filter(
+    (file) => file.role === "audio" && file.type.startsWith("audio/")
+  );
 
   const updateQuestionAt = (index: number, nextQuestion: Question) => {
     const nextQuestions = [...section.questions];
@@ -2443,6 +2504,7 @@ export default function PaperCreator() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [step, setStep] = useState(1);
+  const [parseMode, setParseMode] = useState<ParseMode>("local");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [pdfAssets, setPdfAssets] = useState<PdfAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -2483,6 +2545,9 @@ export default function PaperCreator() {
     setIsUploading(true);
     try {
       for (const file of newFiles) {
+        const role = inferUploadedFileRole(file);
+        const documentRole: Extract<UploadedFileRole, "question" | "answer"> =
+          role === "answer" ? "answer" : "question";
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = "";
@@ -2498,7 +2563,7 @@ export default function PaperCreator() {
 
         setFiles((previous) => [
           ...previous,
-          { name: file.name, type: file.type, url: result.url, size: file.size },
+          { name: file.name, type: file.type, url: result.url, size: file.size, role },
         ]);
 
         if (isPdfFile(file)) {
@@ -2519,6 +2584,7 @@ export default function PaperCreator() {
               pageCount: extractedPdf.pageCount,
               extractedText: extractedPdf.combinedText,
               pageImageUrls,
+              role: documentRole,
             },
           ]);
         }
@@ -2544,6 +2610,27 @@ export default function PaperCreator() {
     });
   };
 
+  const handleFileRoleChange = (index: number, role: UploadedFileRole) => {
+    setFiles((previous) =>
+      previous.map((file, fileIndex) =>
+        fileIndex === index ? { ...file, role } : file
+      )
+    );
+
+    setPdfAssets((previous) => {
+      const target = files[index];
+      if (!target) {
+        return previous;
+      }
+
+      return previous.map((asset) =>
+        asset.sourceUrl === target.url && (role === "question" || role === "answer")
+          ? { ...asset, role: role as Extract<UploadedFileRole, "question" | "answer"> }
+          : asset
+      );
+    });
+  };
+
   const handleParse = async () => {
     if (files.length === 0) {
       toast.error("Please upload at least one file");
@@ -2552,19 +2639,36 @@ export default function PaperCreator() {
 
     setIsParsing(true);
     try {
-      const pageImageUrls = pdfAssets.flatMap((asset) => asset.pageImageUrls);
+      const questionPdfAssets = pdfAssets.filter((asset) => asset.role === "question");
+      const answerPdfAssets = pdfAssets.filter((asset) => asset.role === "answer");
+      const pageImageUrls = questionPdfAssets.flatMap((asset) => asset.pageImageUrls);
       const imageUrls = [
-        ...files.filter((file) => file.type.startsWith("image/")).map((file) => file.url),
+        ...files
+          .filter((file) => file.role === "image" && file.type.startsWith("image/"))
+          .map((file) => file.url),
         ...pageImageUrls,
       ];
-      const pdfUrls = files.filter((file) => isPdfFile(file)).map((file) => file.url);
-      const audioUrls = files
-        .filter((file) => file.type.startsWith("audio/"))
+      const pdfUrls = files
+        .filter((file) => file.role === "question" && isPdfFile(file))
         .map((file) => file.url);
-      const textContent = pdfAssets.map((asset) => asset.extractedText).join("\n\n");
+      const audioUrls = files
+        .filter((file) => file.role === "audio" && file.type.startsWith("audio/"))
+        .map((file) => file.url);
+      const textContent = questionPdfAssets.map((asset) => asset.extractedText).join("\n\n");
+      const answerTextContent = answerPdfAssets
+        .map((asset) => asset.extractedText)
+        .join("\n\n");
+
+      if (!textContent && !imageUrls.length && !pdfUrls.length) {
+        toast.error("Please upload at least one question PDF or question image");
+        setIsParsing(false);
+        return;
+      }
 
       const result = await parseMaterials.mutateAsync({
+        mode: parseMode,
         textContent: textContent || undefined,
+        answerTextContent: answerTextContent || undefined,
         imageUrls: imageUrls.length ? imageUrls : undefined,
         pageImageUrls: pageImageUrls.length ? pageImageUrls : undefined,
         pdfUrls: pdfUrls.length ? pdfUrls : undefined,
@@ -2588,7 +2692,15 @@ export default function PaperCreator() {
       }
       setDraftPaper(refreshPaper(nextPaper));
       setStep(3);
-      toast.success("AI parsed the paper. Review and edit it below.");
+      const parseModeUsed =
+        typeof (result as { parseModeUsed?: unknown }).parseModeUsed === "string"
+          ? (result as { parseModeUsed?: string }).parseModeUsed
+          : parseMode;
+      toast.success(
+        parseModeUsed === "cloud"
+          ? "Cloud AI parsed the paper. Review and edit it below."
+          : "Free local parser generated a draft. Review and edit it below."
+      );
     } catch (error) {
       console.error("Parse error:", error);
       toast.error(
@@ -2604,7 +2716,9 @@ export default function PaperCreator() {
 
   const handleChooseBlueprint = (blueprintId: string) => {
     const nextPaper = createEditablePaperFromBlueprint(blueprintId);
-    const firstAudio = files.find((file) => file.type.startsWith("audio/"));
+    const firstAudio = files.find(
+      (file) => file.role === "audio" && file.type.startsWith("audio/")
+    );
     if (firstAudio) {
       nextPaper.sections = nextPaper.sections.map((section) =>
         section.audioUrl !== undefined && !section.audioUrl
@@ -2646,6 +2760,7 @@ export default function PaperCreator() {
                 uploadedFiles: files,
                 pdfAssets: pdfAssets.map((asset) => ({
                   sourceName: asset.sourceName,
+                  role: asset.role,
                   pageCount: asset.pageCount,
                   pageImageUrls: asset.pageImageUrls,
                 })),
@@ -2669,6 +2784,7 @@ export default function PaperCreator() {
 
   const handleReset = () => {
     setStep(1);
+    setParseMode("local");
     setFiles([]);
     setPdfAssets([]);
     setExtractedImageAssets([]);
@@ -2716,7 +2832,7 @@ export default function PaperCreator() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">📝 Paper Creator</h1>
               <p className="text-xs text-gray-500">
-                上传 PDF 后先交给 AI 拆题，再进入人工校对和修改
+                先上传题目 PDF、答案 PDF 和音频，再生成可人工校对的录题草稿
               </p>
             </div>
           </div>
@@ -2740,7 +2856,7 @@ export default function PaperCreator() {
                   Upload Source Materials
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  上传 PDF 后，系统会自动拆页截图、提取文字，再把整份卷子交给 AI 初步结构化。
+                  上传题目 PDF、答案 PDF、音频和补充图片。系统会先提取 PDF 文字，后面默认用免费本地解析生成草稿。
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2751,8 +2867,8 @@ export default function PaperCreator() {
                       <div>
                         <p className="font-medium">Running in local fallback mode</p>
                         <p>
-                          Cloud storage is not configured, so uploaded files will be stored locally
-                          and parsing will use the local draft builder. Missing variables:
+                          Cloud AI is not configured, so uploaded files will be stored locally
+                          and parsing will use the free local draft builder. Missing variables:
                           {" "}
                           {missingVariablesText}.
                         </p>
@@ -2764,6 +2880,7 @@ export default function PaperCreator() {
                 <FileUploadArea
                   files={files}
                   onFilesAdded={handleFilesAdded}
+                  onRoleChange={handleFileRoleChange}
                   onRemoveFile={handleRemoveFile}
                   isUploading={isUploading}
                 />
@@ -2781,8 +2898,8 @@ export default function PaperCreator() {
                         >
                           <p className="font-medium text-gray-800">{asset.sourceName}</p>
                           <p>
-                            {asset.pageCount} pages split, {asset.pageImageUrls.length} page images
-                            uploaded, {asset.extractedText.length} chars extracted
+                            {getRoleLabel(asset.role)} · {asset.pageCount} pages split, {asset.pageImageUrls.length} page
+                            images uploaded, {asset.extractedText.length} chars extracted
                           </p>
                         </div>
                       ))}
@@ -2794,9 +2911,9 @@ export default function PaperCreator() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">AI Parse Hint (Optional)</CardTitle>
+                <CardTitle className="text-base">Parse Hint (Optional)</CardTitle>
                 <p className="text-sm text-gray-500">
-                  可以写卷名、年级、是否有作文/听力，帮助 AI 更快对齐结构。
+                  可以写卷名、年级、是否有作文/听力，帮助解析器更快对齐结构。
                 </p>
               </CardHeader>
               <CardContent>
@@ -2811,7 +2928,7 @@ export default function PaperCreator() {
 
             <div className="flex justify-end">
               <Button onClick={() => setStep(2)} size="lg">
-                Next: AI Parse
+                Next: Parse Draft
                 <Layers3 className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -2824,28 +2941,77 @@ export default function PaperCreator() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Layers3 className="h-5 w-5 text-blue-500" />
-                  AI Parse and Image Decomposition
+                  Parse Draft
                 </CardTitle>
                 <p className="text-sm text-gray-500">
-                  这一步会把原 PDF、拆出来的页图、提取出的文字一起交给 AI；页图还会先自动裁切题图，最后生成一份可人工校对的草稿。
+                  默认走免费本地解析：读取题目 PDF 文本，并结合答案 PDF 尝试自动回填答案。若服务器配置了云端 AI，你也可以手动切到更强的云端解析。
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                {runtime?.usingLocalFallback ? (
+                {parseMode === "local" ? (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
-                        <p className="font-medium">Using local parser instead of cloud AI</p>
+                        <p className="font-medium">Free local parse mode</p>
                         <p>
-                          The server is missing {missingVariablesText}. This run will still split the
-                          PDF and generate a draft, but the result is text-only and needs more manual
-                          checking than the cloud AI path.
+                          This mode does not call a paid model. It uses extracted PDF text plus your
+                          answer PDF to build a draft, so it is free but needs more manual checking.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : runtime?.aiConfigured ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                    <div className="flex items-start gap-2">
+                      <Layers3 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Cloud AI parse mode</p>
+                        <p>
+                          This mode sends your PDFs and extracted assets to the configured cloud model.
+                          It usually parses structure and images better, but it consumes paid AI quota.
                         </p>
                       </div>
                     </div>
                   </div>
                 ) : null}
+
+                <div className="rounded-lg border bg-white p-4">
+                  <h4 className="mb-3 text-sm font-medium text-gray-800">Parse Mode</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setParseMode("local")}
+                      className={`rounded-xl border p-4 text-left transition-all ${
+                        parseMode === "local"
+                          ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                          : "border-gray-200 bg-gray-50 hover:border-emerald-300"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-gray-900">Free Local Parse</p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        免费。使用 PDF 提取文本和规则解析，并尝试从答案 PDF 自动回填答案。
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runtime?.aiConfigured && setParseMode("cloud")}
+                      disabled={!runtime?.aiConfigured}
+                      className={`rounded-xl border p-4 text-left transition-all ${
+                        parseMode === "cloud"
+                          ? "border-blue-500 bg-blue-50 shadow-sm"
+                          : "border-gray-200 bg-gray-50 hover:border-blue-300"
+                      } ${!runtime?.aiConfigured ? "cursor-not-allowed opacity-50 hover:border-gray-200" : ""}`}
+                    >
+                      <p className="text-sm font-semibold text-gray-900">Cloud AI Parse</p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        {runtime?.aiConfigured
+                          ? "质量通常更高，但会消耗云端 AI 额度。"
+                          : "当前服务器未配置云端 AI，暂时不可用。"}
+                      </p>
+                    </button>
+                  </div>
+                </div>
 
                 <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
                   <p className="font-medium">当前推荐蓝图：</p>
@@ -2860,9 +3026,12 @@ export default function PaperCreator() {
                   <h4 className="mb-2 text-sm font-medium text-gray-700">Materials Summary</h4>
                   <ul className="space-y-1 text-sm text-gray-600">
                     <li>Original files: {files.length}</li>
-                    <li>PDF page images: {pdfAssets.reduce((sum, asset) => sum + asset.pageImageUrls.length, 0)}</li>
-                    <li>Extracted text length: {pdfAssets.reduce((sum, asset) => sum + asset.extractedText.length, 0)}</li>
-                    <li>Audio files: {files.filter((file) => file.type.startsWith("audio/")).length}</li>
+                    <li>Question PDFs: {files.filter((file) => file.role === "question").length}</li>
+                    <li>Answer PDFs: {files.filter((file) => file.role === "answer").length}</li>
+                    <li>PDF page images: {pdfAssets.filter((asset) => asset.role === "question").reduce((sum, asset) => sum + asset.pageImageUrls.length, 0)}</li>
+                    <li>Question text length: {pdfAssets.filter((asset) => asset.role === "question").reduce((sum, asset) => sum + asset.extractedText.length, 0)}</li>
+                    <li>Answer text length: {pdfAssets.filter((asset) => asset.role === "answer").reduce((sum, asset) => sum + asset.extractedText.length, 0)}</li>
+                    <li>Audio files: {files.filter((file) => file.role === "audio").length}</li>
                   </ul>
                 </div>
 
@@ -2870,9 +3039,13 @@ export default function PaperCreator() {
                   <div className="flex flex-col items-center gap-3 py-8">
                     <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
                     <p className="font-medium text-gray-700">
-                      AI is parsing the paper and auto-cropping question images...
+                      {parseMode === "cloud"
+                        ? "Cloud AI is parsing the paper and auto-cropping question images..."
+                        : "Free local parser is building your draft from the uploaded PDFs..."}
                     </p>
-                    <p className="text-sm text-gray-400">This may take 30-90 seconds</p>
+                    <p className="text-sm text-gray-400">
+                      {parseMode === "cloud" ? "This may take 30-90 seconds" : "This usually finishes within a few seconds"}
+                    </p>
                   </div>
                 ) : (
                   <div className="flex gap-3">
@@ -2884,7 +3057,7 @@ export default function PaperCreator() {
                       onClick={handleParse}
                       className="flex-1"
                     >
-                      {runtime?.usingLocalFallback ? "Start Local Parse" : "Start AI Parse"}
+                      {parseMode === "cloud" ? "Start Cloud AI Parse" : "Start Free Local Parse"}
                     </Button>
                   </div>
                 )}
@@ -2895,7 +3068,7 @@ export default function PaperCreator() {
               <CardHeader>
                 <CardTitle className="text-base">Manual Fallback</CardTitle>
                 <p className="text-sm text-gray-500">
-                  如果 AI 这次拆得不好，下面仍然可以直接选 G2-3 / G6 蓝图手动录。
+                  如果这次自动解析拆得不好，下面仍然可以直接选 G2-3 / G6 蓝图手动录。
                 </p>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-2">
@@ -2951,7 +3124,7 @@ export default function PaperCreator() {
               <CardHeader>
                 <CardTitle className="text-lg">Paper Meta</CardTitle>
                 <p className="text-sm text-gray-500">
-                  当前草稿来源：{draftPaper.blueprintLabel}。现在可以逐 part 校对 AI 结果，并修改题型、题干、子题、答案和图片。
+                  当前草稿来源：{draftPaper.blueprintLabel}。现在可以逐 part 校对解析结果，并修改题型、题干、子题、答案和图片。
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -3039,7 +3212,7 @@ export default function PaperCreator() {
                       ) : (
                         <FileText className="h-3.5 w-3.5 text-blue-600" />
                       )}
-                      {file.name}
+                      {file.name} · {getRoleLabel(file.role)}
                     </span>
                   ))}
                 </CardContent>
@@ -3049,13 +3222,15 @@ export default function PaperCreator() {
             <ReferenceAssetGallery
               title="PDF Page Images"
               description="These are the full-page screenshots extracted from uploaded PDFs."
-              items={pdfAssets.flatMap((asset) =>
-                asset.pageImageUrls.map((url, index) => ({
-                  url,
-                  label: `${asset.sourceName} - Page ${index + 1}`,
-                  meta: "Full page image",
-                }))
-              )}
+              items={pdfAssets
+                .filter((asset) => asset.role === "question")
+                .flatMap((asset) =>
+                  asset.pageImageUrls.map((url, index) => ({
+                    url,
+                    label: `${asset.sourceName} - Page ${index + 1}`,
+                    meta: "Full page image",
+                  }))
+                )}
             />
 
             <ReferenceAssetGallery
@@ -3063,7 +3238,7 @@ export default function PaperCreator() {
               description={
                 extractedImageAssets.length
                   ? "These are the cropped images returned by the AI cropper."
-                  : runtime?.usingLocalFallback
+                  : parseMode === "local"
                     ? "Local fallback mode does not auto-crop question images yet, so only the full-page PDF images are available above."
                     : "No cropped image assets were returned for this parse."
               }

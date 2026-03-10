@@ -3,6 +3,7 @@ type ParsedSection = Record<string, unknown>;
 
 type ParseMaterialsInput = {
   textContent?: string;
+  answerTextContent?: string;
   imageUrls?: string[];
   pageImageUrls?: string[];
   pdfUrls?: string[];
@@ -225,6 +226,188 @@ function extractPromptQuestions(text: string): string[] {
   return Array.from(text.matchAll(/([^?]+\?)/g))
     .map((match) => normalizeText(match[1].replace(/^[.·…]+/, "")))
     .filter(Boolean);
+}
+
+function normalizeAnswerToken(value: string): string {
+  return value
+    .replace(/^[-:;,.()[\]]+|[-:;,.()[\]]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isPlausibleAnswerToken(value: string): boolean {
+  if (!value || value.length > 40) {
+    return false;
+  }
+
+  return !/^(page|pages|part|section|question|questions|answer|answers|key|keys|mark|marks|score|scores)$/i.test(
+    value
+  );
+}
+
+export function extractAnswerKeyMap(answerTextContent?: string): Map<number, string> {
+  const map = new Map<number, string>();
+  if (!answerTextContent) {
+    return map;
+  }
+
+  const cleaned = answerTextContent
+    .replace(/---\s+.+?\s+\/\s+Page\s+\d+\s+---/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const pattern =
+    /(?:^|\s)(\d{1,3})[.)、:：-]?\s*([A-H](?:\s*\/\s*[A-H])?|true|false|yes|no|[A-Za-z][A-Za-z'/-]*(?:\s+[A-Za-z][A-Za-z'/-]*){0,3})(?=(?:\s+\d{1,3}[.)、:：-]?\s)|$)/gi;
+
+  for (const match of Array.from(cleaned.matchAll(pattern))) {
+    const questionNumber = Number(match[1]);
+    const rawAnswer = normalizeAnswerToken(match[2] || "");
+
+    if (!Number.isFinite(questionNumber) || questionNumber < 1) {
+      continue;
+    }
+
+    if (!isPlausibleAnswerToken(rawAnswer)) {
+      continue;
+    }
+
+    map.set(questionNumber, rawAnswer);
+  }
+
+  return map;
+}
+
+function normalizeOptionText(option: unknown): string {
+  if (typeof option === "string") {
+    return normalizeAnswerToken(option).toLowerCase();
+  }
+
+  if (option && typeof option === "object") {
+    const record = option as Record<string, unknown>;
+    const text = typeof record.text === "string" ? record.text : "";
+    const label = typeof record.label === "string" ? record.label : "";
+    return normalizeAnswerToken(text || label).toLowerCase();
+  }
+
+  return "";
+}
+
+function resolveChoiceAnswer(
+  question: ParsedQuestion,
+  rawAnswer: string
+): number | undefined {
+  const normalized = normalizeAnswerToken(rawAnswer);
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (/^[A-H]$/i.test(normalized)) {
+    const index = normalized.toUpperCase().charCodeAt(0) - 65;
+    const options = Array.isArray(question.options) ? question.options : [];
+    return index >= 0 && index < options.length ? index : undefined;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    const index = Number(normalized) - 1;
+    const options = Array.isArray(question.options) ? question.options : [];
+    return index >= 0 && index < options.length ? index : undefined;
+  }
+
+  if (!Array.isArray(question.options)) {
+    return undefined;
+  }
+
+  const target = normalized.toLowerCase();
+  const optionIndex = question.options.findIndex(
+    (option) => normalizeOptionText(option) === target
+  );
+
+  return optionIndex >= 0 ? optionIndex : undefined;
+}
+
+function resolveFillBlankAnswer(
+  rawAnswer: string,
+  wordBank: Array<{ letter?: string; word?: string }>
+): string {
+  const normalized = normalizeAnswerToken(rawAnswer);
+  if (!normalized) {
+    return "";
+  }
+
+  if (!wordBank.length) {
+    return normalized;
+  }
+
+  if (/^[A-Z]$/i.test(normalized)) {
+    const matchedByLetter = wordBank.find(
+      (item) => item.letter?.toUpperCase() === normalized.toUpperCase()
+    );
+    if (matchedByLetter?.word) {
+      return matchedByLetter.word;
+    }
+  }
+
+  const matchedByWord = wordBank.find(
+    (item) => normalizeAnswerToken(item.word || "").toLowerCase() === normalized.toLowerCase()
+  );
+
+  return matchedByWord?.word || normalized;
+}
+
+export function applyAnswerKeyToSections(
+  sections: ParsedSection[],
+  answerMap: Map<number, string>
+): { sections: ParsedSection[]; appliedCount: number } {
+  let appliedCount = 0;
+
+  const nextSections = sections.map((section) => {
+    const wordBank = Array.isArray(section.wordBank)
+      ? (section.wordBank as Array<{ letter?: string; word?: string }>)
+      : [];
+
+    const questions = Array.isArray(section.questions)
+      ? (section.questions as ParsedQuestion[]).map((question) => {
+          const rawAnswer = answerMap.get(Number(question.id));
+          if (!rawAnswer || typeof question.type !== "string") {
+            return question;
+          }
+
+          switch (question.type) {
+            case "mcq":
+            case "picture-mcq":
+            case "listening-mcq": {
+              const resolved = resolveChoiceAnswer(question, rawAnswer);
+              if (typeof resolved !== "number") {
+                return question;
+              }
+              appliedCount += 1;
+              return { ...question, correctAnswer: resolved };
+            }
+
+            case "fill-blank":
+            case "wordbank-fill":
+            case "story-fill": {
+              const resolved = resolveFillBlankAnswer(rawAnswer, wordBank);
+              if (!resolved) {
+                return question;
+              }
+              appliedCount += 1;
+              return { ...question, correctAnswer: resolved };
+            }
+
+            default:
+              return question;
+          }
+        })
+      : [];
+
+    return {
+      ...section,
+      questions,
+    };
+  });
+
+  return { sections: nextSections, appliedCount };
 }
 
 function createSection(
@@ -705,7 +888,7 @@ export function parseMaterialsLocally(input: ParseMaterialsInput) {
   }));
   const combinedText = pages.map((page) => page.text).join(" ");
   const nextQuestionId = nextQuestionIdFactory();
-  const sections: ParsedSection[] = [];
+  let sections: ParsedSection[] = [];
 
   const vocabularyText = extractBetween(combinedText, "Vocabulary", "Grammar");
   const grammarText = extractBetween(combinedText, "Grammar", "Speaking");
@@ -727,6 +910,13 @@ export function parseMaterialsLocally(input: ParseMaterialsInput) {
     sections.push(createFallbackSection(nextQuestionId, "Imported Content", fallbackSource));
   }
 
+  const answerMap = extractAnswerKeyMap(input.answerTextContent);
+  const { sections: sectionsWithAnswers, appliedCount } = applyAnswerKeyToSections(
+    sections,
+    answerMap
+  );
+  sections = sectionsWithAnswers;
+
   const sourceName = pages[0]?.sourceName?.replace(/\.pdf$/i, "").trim();
   const derivedTitle =
     sourceName ||
@@ -739,7 +929,9 @@ export function parseMaterialsLocally(input: ParseMaterialsInput) {
     title: derivedTitle,
     subtitle: "Locally parsed draft",
     description:
-      "This draft was generated by the local fallback parser because cloud AI is not configured on the server. Review all sections, questions, answers, and images manually.",
+      answerMap.size > 0
+        ? `This draft was generated by the local fallback parser. ${appliedCount} answers were auto-filled from the uploaded answer key. Review all sections, question text, remaining answers, and images manually.`
+        : "This draft was generated by the local fallback parser. Review all sections, questions, answers, and images manually.",
     icon: "📝",
     color: "text-blue-600",
     sections,
@@ -754,8 +946,13 @@ export function parseMaterialsLocally(input: ParseMaterialsInput) {
       )
     ),
     extractedImageAssets: [],
-    blueprintLabel: "Local Parsed Draft",
+    blueprintLabel: "Free Local Parsed Draft",
     interpretation:
-      "当前服务器未配置云端 AI，这份草稿由本地解析器根据 PDF 文本自动拆出。题型和答案请重点人工校对。",
+      answerMap.size > 0
+        ? `当前草稿由免费本地解析器生成，并尝试从答案 PDF 中回填答案：识别到 ${answerMap.size} 条答案，成功应用 ${appliedCount} 条。请重点校对题型、题干、未命中的答案和图片。`
+        : "当前草稿由免费本地解析器根据题目 PDF 文本自动拆出。请重点人工校对题型、题干、答案和图片。",
+    parseModeUsed: "local",
+    answerKeyDetectedCount: answerMap.size,
+    answerKeyAppliedCount: appliedCount,
   };
 }

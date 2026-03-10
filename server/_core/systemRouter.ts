@@ -17,7 +17,7 @@ export const systemRouter = router({
   runtimeStatus: publicProcedure.query(() => {
     const forge = getForgeConfigStatus();
     return {
-      aiConfigured: true,
+      aiConfigured: forge.isConfigured,
       storageConfigured: true,
       aiProvider: forge.isConfigured ? "forge" : "local",
       storageProvider: forge.isConfigured ? "forge" : "local",

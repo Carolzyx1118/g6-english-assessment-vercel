@@ -154,6 +154,7 @@ IMPORTANT RULES:
 - For fill-blank with grammarPassage: blanks MUST use <b>(N) ___</b> format, correctAnswer is the LETTER
 - For fill-blank without grammarPassage: each question MUST have a "question" field with ___, correctAnswer is the WORD
 - For listening sections, include audioUrl (will be provided separately)
+- If an answer key or marking scheme is provided, use it to fill correctAnswer / answer fields instead of guessing
 - For reading sections with a passage, put the passage text in the "passage" field
 - Ensure all text content is properly escaped for JSON
 - wordBank letters MUST be uppercase single letters: A, B, C, D, etc.
@@ -208,8 +209,11 @@ export const paperRouter = router({
   parseMaterials: publicProcedure
     .input(
       z.object({
+        mode: z.enum(["local", "cloud", "auto"]).optional(),
         // Text content extracted from uploaded files
         textContent: z.string().optional(),
+        // Text content extracted from uploaded answer keys / marking schemes
+        answerTextContent: z.string().optional(),
         // URLs of uploaded images for AI to analyze
         imageUrls: z.array(z.string()).optional(),
         // Full-page PDF screenshots generated in the browser; used for image auto-cropping
@@ -224,6 +228,12 @@ export const paperRouter = router({
     )
     .mutation(async ({ input }) => {
       const forge = getForgeConfigStatus();
+      const mode = input.mode || "auto";
+
+      if (mode === "local") {
+        return parseMaterialsLocally(input);
+      }
+
       if (!forge.isConfigured) {
         return parseMaterialsLocally(input);
       }
@@ -259,6 +269,10 @@ export const paperRouter = router({
 
       if (input.textContent) {
         textPrompt += `Extracted text content:\n${input.textContent}\n\n`;
+      }
+
+      if (input.answerTextContent) {
+        textPrompt += `Answer key / marking scheme:\n${input.answerTextContent}\n\n`;
       }
 
       if (extractedImages.length > 0) {
@@ -349,6 +363,7 @@ export const paperRouter = router({
           return {
             ...JSON.parse(content),
             extractedImageAssets: extractedImages,
+            parseModeUsed: "cloud",
           };
         }
         throw new Error("No content in AI response");
