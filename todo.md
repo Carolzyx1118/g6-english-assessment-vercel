@@ -203,3 +203,4 @@
 - [x] Sync GitHub latest changes
 - [x] Fix nested <a> tag error in PaperIntake.tsx
 - [x] Add "passage word bank fill blank" question type to Manual Paper Builder (supports inputting a full passage/article with blanks, word bank same as fill-blank)
+- [x] Fix SyntaxError: MANUAL_QUESTION_TYPE_OPTIONS import binding not found on /paper-intake page
