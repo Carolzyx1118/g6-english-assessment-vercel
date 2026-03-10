@@ -1,9 +1,8 @@
 import type { Paper, Section } from './papers';
 
+const LOCAL_ASSET_BASE = '/local-paper-assets/paper-assets';
 const LISTENING_AUDIO_URL = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/LiBhwFnCzcNfOBcL.mp3';
-const LISTENING_PAGE_1 = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/sCvcSTdJFsLKsZHV.png';
-const LISTENING_PAGE_2 = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/zHvANXbjXiRErxFR.png';
-const WRITING_PART_2_PAGE = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/QjPhoXQfWsNpjxEL.png';
+const WRITING_PART_2_PAGE = `${LOCAL_ASSET_BASE}/pet-writing-part-2-notice.png`;
 
 const LISTENING_OPTION_IMAGES: Record<string, string> = {
   'q1-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/HZeASSFioTBMYTZH.png',
@@ -640,7 +639,6 @@ This restaurant specialises in fish and seafood, but also offers a large vegetar
     bgColor: 'bg-[oklch(0.95_0.04_285)]',
     description: 'For each question, choose the correct answer. Listen and choose A, B, or C.',
     audioUrl: LISTENING_AUDIO_URL,
-    storyImages: [LISTENING_PAGE_1, LISTENING_PAGE_2],
     questions: [
       {
         id: 81,
