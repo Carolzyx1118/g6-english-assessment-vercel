@@ -30,6 +30,7 @@ import type {
 } from "@shared/manualPaperBlueprint";
 import {
   MANUAL_QUESTION_TYPE_LABELS,
+  MANUAL_QUESTION_TYPE_OPTIONS,
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
 import { toast } from "sonner";
@@ -886,12 +887,15 @@ export default function PaperIntake() {
                                 }
                                 className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                               >
-                                {Object.entries(MANUAL_QUESTION_TYPE_LABELS).map(([value, label]) => (
-                                  <option key={value} value={value}>
-                                    {label}
+                                {MANUAL_QUESTION_TYPE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
                                   </option>
                                 ))}
                               </select>
+                              <p className="text-xs text-slate-500">
+                                Choose `Passage Word Bank` for an article with multiple `___` blanks.
+                              </p>
                             </div>
                           </div>
 
