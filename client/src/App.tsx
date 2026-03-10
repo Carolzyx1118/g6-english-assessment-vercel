@@ -9,6 +9,7 @@ import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Login from "./pages/Login";
+import PaperIntake from "./pages/PaperIntake";
 import Register from "./pages/Register";
 
 function Router() {
@@ -27,6 +28,11 @@ function Router() {
       <Route path={"/history"}>
         <AuthGuard>
           <History />
+        </AuthGuard>
+      </Route>
+      <Route path={"/paper-intake"}>
+        <AuthGuard>
+          <PaperIntake />
         </AuthGuard>
       </Route>
 

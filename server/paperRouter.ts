@@ -1,8 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
+import { generatePaperDraftInputSchema } from "@shared/paperDraft";
 
 import { router, publicProcedure } from "./_core/trpc";
+import { buildPaperDraft } from "./paperDraftParser";
 import { storagePut } from "./storage";
+import { z } from "zod";
 
 export const paperRouter = router({
   // Shared upload endpoint used by speaking audio recording.
@@ -27,6 +29,20 @@ export const paperRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message:
             err instanceof Error ? err.message : "File upload failed unexpectedly.",
+        });
+      }
+    }),
+
+  generateDraft: publicProcedure
+    .input(generatePaperDraftInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        return await buildPaperDraft(input);
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            err instanceof Error ? err.message : "Paper draft generation failed unexpectedly.",
         });
       }
     }),

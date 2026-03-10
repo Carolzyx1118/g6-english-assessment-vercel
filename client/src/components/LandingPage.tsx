@@ -78,6 +78,7 @@ function BrandHeader() {
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
   const { papers } = useQuiz();
   const { user } = useLocalAuth();
+  const canOpenPaperIntake = import.meta.env.DEV || user?.role === 'admin';
   const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all'>('all');
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
@@ -155,6 +156,14 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     View Test History
                   </Button>
                 </Link>
+                {canOpenPaperIntake && (
+                  <Link href="/paper-intake">
+                    <Button variant="outline" className="gap-2 bg-white/5 border-white/15 text-white/80 hover:bg-white/10 hover:text-white hover:border-white/30">
+                      <FileText className="w-4 h-4" />
+                      Paper Intake
+                    </Button>
+                  </Link>
+                )}
               </div>
             </motion.div>
 
