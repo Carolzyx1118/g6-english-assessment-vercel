@@ -170,15 +170,22 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     // Convert manual papers from DB into Paper format
     const manualPapers: Paper[] = (manualPapersData ?? []).map((mp) => {
       try {
+        const subject = PAPER_SUBJECT_ORDER.includes(mp.subject as PaperSubject)
+          ? (mp.subject as PaperSubject)
+          : "english";
+        if (!allowedSubjects.includes(subject)) {
+          return null;
+        }
+
         const blueprint: ManualPaperBlueprint = JSON.parse(mp.blueprintJson);
         const converted = blueprintToPaper(blueprint, {
-          subject: mp.subject,
+          subject,
           category: mp.category,
         });
         return {
           ...converted,
           id: mp.paperId,
-          subject: (mp.subject || 'english') as PaperSubject,
+          subject,
           category: (mp.category || 'assessment') as any,
           sections: converted.sections as unknown as Section[],
         } as Paper;

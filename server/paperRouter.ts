@@ -89,6 +89,13 @@ export const paperRouter = router({
           hasWriting: hasWriting ? 1 : 0,
         });
 
+        if (id === null) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Manual paper could not be persisted.",
+          });
+        }
+
         return { id, paperId: input.paperId };
       } catch (err) {
         if (err instanceof TRPCError) throw err;

@@ -615,6 +615,7 @@ function PassageFillBlankSubsectionPreview({ subsection }: { subsection: ManualS
 
 export default function PaperIntake() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
   const saveManualPaperMutation = trpc.papers.saveManualPaper.useMutation();
   const [paperSeed] = useState(() => createLocalId());
@@ -629,15 +630,33 @@ export default function PaperIntake() {
     [createdAt, description, paperSeed, sections, title],
   );
 
-  /** Strip base64 dataUrl from images/audio before saving to DB (keep only S3 previewUrl) */
-  const stripBase64FromBlueprint = (bp: ManualPaperBlueprint): ManualPaperBlueprint => {
+  const getDurableAssetUrl = (value?: string) => {
+    if (!value) return undefined;
+    if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/")) {
+      return value;
+    }
+    return undefined;
+  };
+
+  /** Persist durable asset URLs when available, otherwise keep embedded data for reliability. */
+  const prepareBlueprintForSave = (bp: ManualPaperBlueprint): ManualPaperBlueprint => {
     const stripImage = (img?: ManualOptionImage): ManualOptionImage | undefined => {
       if (!img) return undefined;
-      return { ...img, dataUrl: img.previewUrl || img.dataUrl };
+      const durableUrl = getDurableAssetUrl(img.previewUrl) ?? getDurableAssetUrl(img.dataUrl);
+      return {
+        ...img,
+        dataUrl: durableUrl ?? img.dataUrl,
+        previewUrl: durableUrl,
+      };
     };
     const stripAudio = (audio?: ManualAudioFile): ManualAudioFile | undefined => {
       if (!audio) return undefined;
-      return { ...audio, dataUrl: audio.previewUrl || audio.dataUrl };
+      const durableUrl = getDurableAssetUrl(audio.previewUrl) ?? getDurableAssetUrl(audio.dataUrl);
+      return {
+        ...audio,
+        dataUrl: durableUrl ?? audio.dataUrl,
+        previewUrl: durableUrl,
+      };
     };
     return {
       ...bp,
@@ -2912,8 +2931,9 @@ export default function PaperIntake() {
                     paperId,
                     title: title.trim(),
                     description: description.trim() || undefined,
-                    blueprintJson: JSON.stringify(stripBase64FromBlueprint(blueprint)),
+                    blueprintJson: JSON.stringify(prepareBlueprintForSave(blueprint)),
                   });
+                  await utils.papers.listManualPapers.invalidate();
                   setIsSaved(true);
                   toast.success("Paper saved! It will now appear on the home page.");
                   setTimeout(() => navigate("/"), 1500);

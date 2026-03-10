@@ -7,15 +7,26 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let hasLoggedLocalAuthFileFallback = false;
+let hasLoggedManualPaperFileFallback = false;
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || path.resolve(import.meta.dirname, "..", "tmp", "local-users.json");
+}
+
+function getLocalManualPapersFilePath() {
+  return process.env.LOCAL_MANUAL_PAPERS_FILE || path.resolve(import.meta.dirname, "..", "tmp", "manual-papers.json");
 }
 
 function logLocalAuthFileFallback() {
   if (hasLoggedLocalAuthFileFallback) return;
   hasLoggedLocalAuthFileFallback = true;
   console.warn(`[LocalAuth] DATABASE_URL not configured. Falling back to file storage at ${getLocalAuthUsersFilePath()}`);
+}
+
+function logManualPaperFileFallback() {
+  if (hasLoggedManualPaperFileFallback) return;
+  hasLoggedManualPaperFileFallback = true;
+  console.warn(`[ManualPapers] DATABASE_URL not configured. Falling back to file storage at ${getLocalManualPapersFilePath()}`);
 }
 
 function normalizeLocalUserRecord(raw: any): LocalUser {
@@ -28,6 +39,24 @@ function normalizeLocalUserRecord(raw: any): LocalUser {
     role: raw.role === "admin" ? "admin" : "user",
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastLoginAt: raw.lastLoginAt ? new Date(raw.lastLoginAt) : new Date(),
+  };
+}
+
+function normalizeManualPaperRecord(raw: any): ManualPaper {
+  return {
+    id: Number(raw.id),
+    paperId: String(raw.paperId),
+    title: String(raw.title),
+    description: typeof raw.description === "string" ? raw.description : null,
+    subject: typeof raw.subject === "string" ? raw.subject : "english",
+    category: typeof raw.category === "string" ? raw.category : "assessment",
+    blueprintJson: String(raw.blueprintJson),
+    published: Number(raw.published ?? 1),
+    totalQuestions: Number(raw.totalQuestions ?? 0),
+    hasListening: Number(raw.hasListening ?? 0),
+    hasWriting: Number(raw.hasWriting ?? 0),
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
   };
 }
 
@@ -64,6 +93,47 @@ async function writeLocalAuthUsersFile(data: { lastId: number; users: LocalUser[
         lastLoginAt: user.lastLoginAt.toISOString(),
       })),
     }, null, 2),
+    "utf8",
+  );
+}
+
+async function readManualPapersFile(): Promise<{ lastId: number; papers: ManualPaper[] }> {
+  const filePath = getLocalManualPapersFilePath();
+
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as { lastId?: number; papers?: unknown[] };
+    const papers = Array.isArray(parsed.papers) ? parsed.papers.map(normalizeManualPaperRecord) : [];
+    const maxId = papers.reduce((currentMax, paper) => Math.max(currentMax, paper.id), 0);
+    return {
+      lastId: Math.max(Number(parsed.lastId) || 0, maxId),
+      papers,
+    };
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return { lastId: 0, papers: [] };
+    }
+    throw error;
+  }
+}
+
+async function writeManualPapersFile(data: { lastId: number; papers: ManualPaper[] }): Promise<void> {
+  const filePath = getLocalManualPapersFilePath();
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(
+    filePath,
+    JSON.stringify(
+      {
+        lastId: data.lastId,
+        papers: data.papers.map((paper) => ({
+          ...paper,
+          createdAt: paper.createdAt.toISOString(),
+          updatedAt: paper.updatedAt.toISOString(),
+        })),
+      },
+      null,
+      2,
+    ),
     "utf8",
   );
 }
@@ -199,8 +269,29 @@ export async function deleteTestResult(id: number): Promise<void> {
 export async function saveManualPaper(data: InsertManualPaper): Promise<number | null> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot save manual paper: database not available");
-    return null;
+    logManualPaperFileFallback();
+    const current = await readManualPapersFile();
+    const nextId = current.lastId + 1;
+    const now = new Date();
+    const record: ManualPaper = {
+      id: nextId,
+      paperId: data.paperId,
+      title: data.title,
+      description: data.description ?? null,
+      subject: data.subject ?? "english",
+      category: data.category ?? "assessment",
+      blueprintJson: data.blueprintJson,
+      published: data.published ?? 1,
+      totalQuestions: data.totalQuestions ?? 0,
+      hasListening: data.hasListening ?? 0,
+      hasWriting: data.hasWriting ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    current.lastId = nextId;
+    current.papers.push(record);
+    await writeManualPapersFile(current);
+    return nextId;
   }
   const [result] = await db.insert(manualPapers).values(data).$returningId();
   return result?.id ?? null;
@@ -208,32 +299,74 @@ export async function saveManualPaper(data: InsertManualPaper): Promise<number |
 
 export async function getAllManualPapers(): Promise<ManualPaper[]> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    logManualPaperFileFallback();
+    const data = await readManualPapersFile();
+    return [...data.papers].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   return db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
 }
 
 export async function getPublishedManualPapers(): Promise<ManualPaper[]> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    logManualPaperFileFallback();
+    const data = await readManualPapersFile();
+    return data.papers
+      .filter((paper) => paper.published === 1)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   return db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
 }
 
 export async function getManualPaperByPaperId(paperId: string): Promise<ManualPaper | undefined> {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    logManualPaperFileFallback();
+    const data = await readManualPapersFile();
+    return data.papers.find((paper) => paper.paperId === paperId);
+  }
   const rows = await db.select().from(manualPapers).where(eq(manualPapers.paperId, paperId)).limit(1);
   return rows[0];
 }
 
 export async function deleteManualPaper(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    logManualPaperFileFallback();
+    const data = await readManualPapersFile();
+    data.papers = data.papers.filter((paper) => paper.id !== id);
+    await writeManualPapersFile(data);
+    return;
+  }
   await db.delete(manualPapers).where(eq(manualPapers.id, id));
 }
 
 export async function updateManualPaper(id: number, data: Partial<InsertManualPaper>): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    logManualPaperFileFallback();
+    const current = await readManualPapersFile();
+    current.papers = current.papers.map((paper) =>
+      paper.id === id
+        ? {
+            ...paper,
+            ...data,
+            description: data.description ?? paper.description,
+            subject: data.subject ?? paper.subject,
+            category: data.category ?? paper.category,
+            blueprintJson: data.blueprintJson ?? paper.blueprintJson,
+            published: data.published ?? paper.published,
+            totalQuestions: data.totalQuestions ?? paper.totalQuestions,
+            hasListening: data.hasListening ?? paper.hasListening,
+            hasWriting: data.hasWriting ?? paper.hasWriting,
+            updatedAt: new Date(),
+          }
+        : paper,
+    );
+    await writeManualPapersFile(current);
+    return;
+  }
   await db.update(manualPapers).set(data).where(eq(manualPapers.id, id));
 }
 
