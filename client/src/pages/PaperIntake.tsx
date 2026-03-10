@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FileJson, FileUp, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileJson, FileUp, Loader2, MonitorSmartphone, Trash2 } from "lucide-react";
 import type { PaperDraft, PaperDraftFileRole } from "@shared/paperDraft";
-import { trpc } from "@/lib/trpc";
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, type PaperCategory, type PaperSubject } from "@/data/papers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { buildPaperDraftFromBrowser, revokePaperDraftObjectUrls } from "@/lib/paperDraftClient";
 import { toast } from "sonner";
 
 type IntakeFile = {
@@ -39,23 +39,6 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        reject(new Error(`Failed to read ${file.name}`));
-        return;
-      }
-      const [, base64 = ""] = result.split(",");
-      resolve(base64);
-    };
-    reader.onerror = () => reject(reader.error || new Error(`Failed to read ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-}
-
 function guessFileRole(file: File, existingFiles: IntakeFile[]): PaperDraftFileRole {
   const name = file.name.toLowerCase();
 
@@ -83,21 +66,15 @@ export default function PaperIntake() {
   const [tagsInput, setTagsInput] = useState("");
   const [files, setFiles] = useState<IntakeFile[]>([]);
   const [draft, setDraft] = useState<PaperDraft | null>(null);
-
-  const generateDraftMutation = trpc.papers.generateDraft.useMutation({
-    onSuccess: (result) => {
-      setDraft(result);
-      toast.success("Paper draft generated.");
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to generate paper draft");
-    },
-  });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
 
   const parsedTags = useMemo(
     () => tagsInput.split(",").map((tag) => tag.trim()).filter(Boolean),
     [tagsInput],
   );
+
+  useEffect(() => () => revokePaperDraftObjectUrls(draft), [draft]);
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files || []);
@@ -134,25 +111,48 @@ export default function PaperIntake() {
       return;
     }
 
-    const payloadFiles = await Promise.all(
-      files.map(async (item) => ({
-        id: item.id,
-        role: item.role,
-        fileName: item.file.name,
-        contentType: item.file.type || "application/octet-stream",
-        fileBase64: await fileToBase64(item.file),
-      })),
-    );
+    setIsGenerating(true);
+    setGenerationStatus("Preparing local parser...");
 
-    generateDraftMutation.mutate({
-      title: title.trim(),
-      subtitle: subtitle.trim(),
-      description: description.trim(),
-      subject,
-      category,
-      tags: parsedTags,
-      files: payloadFiles,
-    });
+    try {
+      const result = await buildPaperDraftFromBrowser({
+        title: title.trim(),
+        subtitle: subtitle.trim(),
+        description: description.trim(),
+        subject,
+        category,
+        tags: parsedTags,
+        files: files.map((item) => ({
+          id: item.id,
+          role: item.role,
+          fileName: item.file.name,
+          contentType: item.file.type || "application/octet-stream",
+          file: item.file,
+        })),
+        onProgress: setGenerationStatus,
+      });
+
+      revokePaperDraftObjectUrls(draft);
+      setDraft(result);
+      toast.success("Local paper draft generated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to generate paper draft";
+      toast.error(message);
+    } finally {
+      setIsGenerating(false);
+      setGenerationStatus("");
+    }
+  };
+
+  const handleDownloadDraft = () => {
+    if (!draft) return;
+    const blob = new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${draft.suggestedPaperId || "paper-draft"}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -168,13 +168,13 @@ export default function PaperIntake() {
             </Link>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Intake</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Upload source files and generate a structured draft that matches the current assessment data model.
-              This first version builds a reviewable scaffold and keeps all uploaded assets attached for later cleanup.
+              Upload source files and generate a structured draft directly in the browser. This version avoids server-side
+              parsing so it still works when you sync the project to Manus preview environments.
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/10 px-4 py-2 text-sm font-medium text-[#8A6318]">
-            <Sparkles className="w-4 h-4" />
-            Ready for future GPT-4o parser swap-in
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#1E3A5F]/15 bg-[#1E3A5F]/5 px-4 py-2 text-sm font-medium text-[#1E3A5F]">
+            <MonitorSmartphone className="w-4 h-4" />
+            Local browser parse
           </div>
         </div>
 
@@ -267,7 +267,8 @@ export default function PaperIntake() {
                   <div>
                     <Label htmlFor="paper-files">Source Files</Label>
                     <p className="text-xs text-slate-500 mt-1">
-                      Supported now: PDFs, TXT, audio, and images. PDFs are uploaded and text-extracted into the draft.
+                      Supported now: PDFs, TXT, audio, and images. PDFs are parsed locally in your browser, and media files
+                      stay attached to the draft for preview.
                     </p>
                   </div>
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-4 py-2 text-sm font-medium text-[#1E3A5F] hover:border-[#D4A84B] hover:text-[#A97C21] transition-colors">
@@ -333,18 +334,18 @@ export default function PaperIntake() {
                 <Button
                   type="button"
                   onClick={handleGenerateDraft}
-                  disabled={generateDraftMutation.isPending}
+                  disabled={isGenerating}
                   className="min-w-[220px] bg-[#1E3A5F] hover:bg-[#16304F]"
                 >
-                  {generateDraftMutation.isPending ? (
+                  {isGenerating ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating Draft...
+                      {generationStatus || "Generating Draft..."}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
                       <FileJson className="w-4 h-4" />
-                      Generate Paper Draft
+                      Generate Local Draft
                     </span>
                   )}
                 </Button>
@@ -370,11 +371,19 @@ export default function PaperIntake() {
                 {draft && (
                   <>
                     <div className="rounded-xl bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-800">{draft.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {PAPER_SUBJECT_LABELS[draft.subject]} · {PAPER_CATEGORY_LABELS[draft.category]} · {draft.sections.length} sections
-                      </p>
-                      <p className="mt-3 text-xs text-slate-500">Suggested paper id: {draft.suggestedPaperId}</p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{draft.title}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {PAPER_SUBJECT_LABELS[draft.subject]} · {PAPER_CATEGORY_LABELS[draft.category]} · {draft.sections.length} sections
+                          </p>
+                          <p className="mt-3 text-xs text-slate-500">Suggested paper id: {draft.suggestedPaperId}</p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={handleDownloadDraft}>
+                          <Download className="w-4 h-4" />
+                          Download JSON
+                        </Button>
+                      </div>
                     </div>
 
                     {draft.warnings.length > 0 && (
