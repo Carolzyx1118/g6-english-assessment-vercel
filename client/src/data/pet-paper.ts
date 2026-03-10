@@ -1,13 +1,36 @@
 import type { Paper, Section } from './papers';
 
-const LOCAL_ASSET_BASE = '/local-paper-assets/paper-assets';
-const LISTENING_AUDIO_URL = `${LOCAL_ASSET_BASE}/pet-final-listening.mp3`;
-const LISTENING_PAGE_1 = `${LOCAL_ASSET_BASE}/pet-final-listening-questions-1-5.png`;
-const LISTENING_PAGE_2 = `${LOCAL_ASSET_BASE}/pet-final-listening-questions-6-7.png`;
-const WRITING_PART_2_PAGE = `${LOCAL_ASSET_BASE}/pet-writing-part-2-page.png`;
+const LISTENING_AUDIO_URL = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/LiBhwFnCzcNfOBcL.mp3';
+const LISTENING_PAGE_1 = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/sCvcSTdJFsLKsZHV.png';
+const LISTENING_PAGE_2 = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/zHvANXbjXiRErxFR.png';
+const WRITING_PART_2_PAGE = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/QjPhoXQfWsNpjxEL.png';
+
+const LISTENING_OPTION_IMAGES: Record<string, string> = {
+  'q1-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/HZeASSFioTBMYTZH.png',
+  'q1-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/mBgmICSTPpGpNQpJ.png',
+  'q1-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/skaszYIBlePwYfwf.png',
+  'q2-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bzFqOUtEUWRjsVrO.png',
+  'q2-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/rsQnFNzoxMWRdrWD.png',
+  'q2-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/ccyiCZOMPulfxJkF.png',
+  'q3-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/HgoIkgMXkTmHwSJz.png',
+  'q3-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/lShBRdxjrHBLRuiI.png',
+  'q3-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/nDJQedcrVJUgUYiX.png',
+  'q4-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/TmdTvjnYKyvvxxbG.png',
+  'q4-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/UOIwWrxTjhubwqEW.png',
+  'q4-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bXyXAVjcJMeNnWZX.png',
+  'q5-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/cHWslIHwqVSxcNgl.png',
+  'q5-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/MMydQfnDSmoETPyG.png',
+  'q5-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/zOcYADVCLceocnOz.png',
+  'q6-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/AQOZubrHknjWXwgd.png',
+  'q6-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/XJxccySQjWsrxRTg.png',
+  'q6-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/vMTrvpTHnlzbYPnj.png',
+  'q7-a': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/NxYOPQJrKsyZPzGA.png',
+  'q7-b': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/clrJjENmRDrvXzwH.png',
+  'q7-c': 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/YsguXPUvzbMTpgdT.png',
+};
 
 function listeningOptionImage(questionNumber: number, label: 'a' | 'b' | 'c'): string {
-  return `${LOCAL_ASSET_BASE}/pet-listening-q${questionNumber}-${label}.png`;
+  return LISTENING_OPTION_IMAGES[`q${questionNumber}-${label}`] || '';
 }
 
 const restaurantOptions = [
