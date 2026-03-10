@@ -19,18 +19,9 @@ export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
-  "fill-blank": "Sentence Word Bank",
-  "passage-fill-blank": "Passage Word Bank",
+  "fill-blank": "Sentence Word Bank Fill Blank",
+  "passage-fill-blank": "Passage Word Bank Fill Blank",
 };
-
-export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
-  value: ManualQuestionType;
-  label: string;
-}> = [
-  { value: "mcq", label: "Multiple Choice" },
-  { value: "fill-blank", label: "Sentence Word Bank" },
-  { value: "passage-fill-blank", label: "Passage Word Bank" },
-];
 
 export interface ManualOptionImage {
   dataUrl: string;
