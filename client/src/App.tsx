@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -9,8 +10,9 @@ import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Login from "./pages/Login";
-import PaperIntake from "./pages/PaperIntake";
 import Register from "./pages/Register";
+
+const PaperIntake = lazy(() => import("./pages/PaperIntake"));
 
 function Router() {
   return (
@@ -32,7 +34,15 @@ function Router() {
       </Route>
       <Route path={"/paper-intake"}>
         <AuthGuard>
-          <PaperIntake />
+          <Suspense
+            fallback={
+              <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">
+                Loading paper builder...
+              </div>
+            }
+          >
+            <PaperIntake />
+          </Suspense>
         </AuthGuard>
       </Route>
 
