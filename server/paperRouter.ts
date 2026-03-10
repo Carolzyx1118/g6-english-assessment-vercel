@@ -2,6 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { generatePaperDraftInputSchema } from "@shared/paperDraft";
 
 import { router, publicProcedure } from "./_core/trpc";
+import { getForgeConfigStatus } from "./_core/env";
+import { buildAIPaperDraft } from "./paperAIDraftParser";
 import { buildPaperDraft } from "./paperDraftParser";
 import { storagePut } from "./storage";
 import { z } from "zod";
@@ -43,6 +45,29 @@ export const paperRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message:
             err instanceof Error ? err.message : "Paper draft generation failed unexpectedly.",
+        });
+      }
+    }),
+
+  generateAiDraft: publicProcedure
+    .input(generatePaperDraftInputSchema)
+    .mutation(async ({ input }) => {
+      const forge = getForgeConfigStatus();
+      if (!forge.isConfigured) {
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message:
+            "AI draft extraction requires BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY on the server.",
+        });
+      }
+
+      try {
+        return await buildAIPaperDraft(input);
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            err instanceof Error ? err.message : "AI paper draft generation failed unexpectedly.",
         });
       }
     }),

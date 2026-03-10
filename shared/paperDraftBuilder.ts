@@ -28,6 +28,8 @@ type CreatePaperDraftInput = {
   rawAnswerText: string;
   warnings?: string[];
   createdAt?: string;
+  sections?: PaperDraftSection[];
+  nextSteps?: string[];
 };
 
 export function slugify(value: string): string {
@@ -243,9 +245,12 @@ export function createPaperDraft(input: CreatePaperDraftInput): PaperDraft {
     warnings.push("No answer PDF text was found. Correct-answer mapping will need manual work later.");
   }
 
-  const questionBlocks = splitTextIntoBlocks(input.rawQuestionText, input.subject, input.title || "Imported Section");
-  const answerBlocks = splitTextIntoBlocks(input.rawAnswerText, input.subject, "Answer Key");
-  const sections = buildSectionDrafts(questionBlocks, answerBlocks, input.sourceFiles);
+  const defaultSections = (() => {
+    const questionBlocks = splitTextIntoBlocks(input.rawQuestionText, input.subject, input.title || "Imported Section");
+    const answerBlocks = splitTextIntoBlocks(input.rawAnswerText, input.subject, "Answer Key");
+    return buildSectionDrafts(questionBlocks, answerBlocks, input.sourceFiles);
+  })();
+  const sections = input.sections ?? defaultSections;
 
   if (sections.length === 0) {
     warnings.push("No section blocks could be identified. Check whether the PDF is text-based or needs OCR.");
@@ -266,7 +271,7 @@ export function createPaperDraft(input: CreatePaperDraftInput): PaperDraft {
     rawAnswerText: input.rawAnswerText,
     sections,
     warnings,
-    nextSteps: [
+    nextSteps: input.nextSteps ?? [
       "Review each section title and instructions before publishing.",
       "Map uploaded audio and image assets to the exact listening or writing questions.",
       "Replace session-local blob asset URLs before publishing a final paper definition.",
