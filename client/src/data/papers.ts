@@ -165,6 +165,23 @@ export interface Section {
 }
 
 // Paper definition
+export type PaperSubject = 'english' | 'math' | 'vocabulary';
+export type PaperCategory = 'assessment' | 'practice' | 'memorization';
+
+export const PAPER_SUBJECT_ORDER: PaperSubject[] = ['english', 'math', 'vocabulary'];
+
+export const PAPER_SUBJECT_LABELS: Record<PaperSubject, string> = {
+  english: 'English',
+  math: 'Math',
+  vocabulary: 'Vocabulary',
+};
+
+export const PAPER_CATEGORY_LABELS: Record<PaperCategory, string> = {
+  assessment: 'Assessment',
+  practice: 'Practice',
+  memorization: 'Memorization',
+};
+
 export interface Paper {
   id: string;
   title: string;
@@ -172,6 +189,9 @@ export interface Paper {
   description: string;
   icon: string;
   color: string;
+  subject: PaperSubject;
+  category: PaperCategory;
+  tags?: string[];
   sections: Section[];
   readingWordBank?: { word: string; imageUrl: string }[];
   totalQuestions: number;
@@ -209,4 +229,8 @@ export const papers: Paper[] = [widaPaper, huazhongPaper, petPaper];
 
 export function getPaperById(id: string): Paper | undefined {
   return papers.find((p) => p.id === id);
+}
+
+export function getAvailablePaperSubjects(availablePapers: Paper[]): PaperSubject[] {
+  return PAPER_SUBJECT_ORDER.filter((subject) => availablePapers.some((paper) => paper.subject === subject));
 }

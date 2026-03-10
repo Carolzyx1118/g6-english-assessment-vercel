@@ -1,9 +1,9 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
-import type { Paper, Section } from '@/data/papers';
+import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
 import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList, LogOut, User, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
 import { Link } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
@@ -77,6 +77,11 @@ function BrandHeader() {
 
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
   const { papers } = useQuiz();
+  const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all'>('all');
+  const filteredPapers = useMemo(
+    () => (selectedSubject === 'all' ? papers : papers.filter((paper) => paper.subject === selectedSubject)),
+    [papers, selectedSubject],
+  );
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -104,17 +109,17 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
             >
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A84B]/15 border border-[#D4A84B]/25 mb-6">
                 <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
-                <span className="text-xs font-medium text-[#D4A84B]">专注新加坡国际教育 · AEIS / KET / PET</span>
+                <span className="text-xs font-medium text-[#D4A84B]">Assessment Library · English / Math / Vocabulary</span>
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-                English
+                Assessment
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876]">
-                  Proficiency
+                  Categories
                 </span>
-                <span className="block text-white/90">Assessment</span>
+                <span className="block text-white/90">for Every Subject</span>
               </h1>
               <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
-                Choose an assessment paper to begin. Each paper tests different aspects of English proficiency with unique question formats and difficulty levels.
+                Organize your library by subject now, then expand it later with math papers, vocabulary drills, and other assessment types without changing the structure again.
               </p>
               <div className="mt-8 flex gap-3 flex-wrap">
                 <Link href="/history">
@@ -160,11 +165,43 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
           transition={{ duration: 0.5, delay: 0.4 }}
         >
           <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">Choose Your Assessment</h2>
-          <p className="text-slate-500 mb-8">Select a paper to view its details and start the assessment.</p>
+          <p className="text-slate-500 mb-5">Filter by subject, then select a paper to view its details and start the assessment.</p>
+          <div className="flex flex-wrap gap-3 mb-8">
+            <button
+              type="button"
+              onClick={() => setSelectedSubject('all')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                selectedSubject === 'all'
+                  ? 'bg-[#1E3A5F] text-white shadow-lg shadow-[#1E3A5F]/15'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
+              }`}
+            >
+              All Subjects
+              <span className="ml-2 text-xs opacity-70">{papers.length}</span>
+            </button>
+            {PAPER_SUBJECT_ORDER.map((subject) => {
+              const count = papers.filter((paper) => paper.subject === subject).length;
+              return (
+                <button
+                  key={subject}
+                  type="button"
+                  onClick={() => setSelectedSubject(subject)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    selectedSubject === subject
+                      ? 'bg-[#D4A84B] text-white shadow-lg shadow-[#D4A84B]/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
+                  }`}
+                >
+                  {PAPER_SUBJECT_LABELS[subject]}
+                  <span className="ml-2 text-xs opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </motion.div>
 
         <div className="grid sm:grid-cols-2 gap-6">
-          {papers.map((paper: Paper, i: number) => (
+          {filteredPapers.map((paper: Paper, i: number) => (
             <motion.button
               key={paper.id}
               initial={{ opacity: 0, y: 20 }}
@@ -184,6 +221,19 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
                 </div>
               </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {PAPER_SUBJECT_LABELS[paper.subject]}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
+                  {PAPER_CATEGORY_LABELS[paper.category]}
+                </span>
+                {paper.tags?.slice(0, 2).map((tag) => (
+                  <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
+                    {tag}
+                  </span>
+                ))}
+              </div>
               <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
               <div className="flex flex-wrap gap-3">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
@@ -198,6 +248,11 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
             </motion.button>
           ))}
         </div>
+        {filteredPapers.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
+            No papers in this subject yet. Add one later and it will appear here automatically.
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -253,6 +308,19 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
             >
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-4xl">{paper.icon}</span>
+              </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">
+                  {PAPER_SUBJECT_LABELS[paper.subject]}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-[#D4A84B]/15 px-3 py-1 text-xs font-semibold text-[#E8C876]">
+                  {PAPER_CATEGORY_LABELS[paper.category]}
+                </span>
+                {paper.tags?.map((tag) => (
+                  <span key={tag} className="inline-flex items-center rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-white/60">
+                    {tag}
+                  </span>
+                ))}
               </div>
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 {paper.title}
