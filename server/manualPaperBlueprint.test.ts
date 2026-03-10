@@ -3,6 +3,7 @@ import type {
   ManualPassageFillBlankQuestion,
   ManualPassageMCQQuestion,
   ManualFillBlankQuestion,
+  ManualTypedFillBlankQuestion,
   ManualSubsection,
   ManualQuestionType,
 } from "../shared/manualPaperBlueprint";
@@ -42,22 +43,39 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(option!.description).toContain("PET");
   });
 
-  it("has all four question types in labels", () => {
+  it("includes typed-fill-blank in MANUAL_QUESTION_TYPE_LABELS", () => {
+    expect(MANUAL_QUESTION_TYPE_LABELS["typed-fill-blank"]).toBe(
+      "Fill in Blank",
+    );
+  });
+
+  it("includes typed-fill-blank in MANUAL_QUESTION_TYPE_OPTIONS", () => {
+    const option = MANUAL_QUESTION_TYPE_OPTIONS.find(
+      (o) => o.value === "typed-fill-blank",
+    );
+    expect(option).toBeDefined();
+    expect(option!.label).toBe("Fill in Blank");
+    expect(option!.description).toContain("type answers directly");
+  });
+
+  it("has all five question types in labels", () => {
     const keys = Object.keys(MANUAL_QUESTION_TYPE_LABELS);
     expect(keys).toContain("mcq");
     expect(keys).toContain("fill-blank");
     expect(keys).toContain("passage-fill-blank");
     expect(keys).toContain("passage-mcq");
-    expect(keys).toHaveLength(4);
+    expect(keys).toContain("typed-fill-blank");
+    expect(keys).toHaveLength(5);
   });
 
-  it("has all four question types in options array", () => {
+  it("has all five question types in options array", () => {
     const values = MANUAL_QUESTION_TYPE_OPTIONS.map((o) => o.value);
     expect(values).toContain("mcq");
     expect(values).toContain("fill-blank");
     expect(values).toContain("passage-fill-blank");
     expect(values).toContain("passage-mcq");
-    expect(values).toHaveLength(4);
+    expect(values).toContain("typed-fill-blank");
+    expect(values).toHaveLength(5);
   });
 
   it("passage-fill-blank question type is assignable", () => {
@@ -68,6 +86,11 @@ describe("manualPaperBlueprint types and labels", () => {
   it("passage-mcq question type is assignable", () => {
     const qt: ManualQuestionType = "passage-mcq";
     expect(qt).toBe("passage-mcq");
+  });
+
+  it("typed-fill-blank question type is assignable", () => {
+    const qt: ManualQuestionType = "typed-fill-blank";
+    expect(qt).toBe("typed-fill-blank");
   });
 
   it("ManualPassageFillBlankQuestion has correct shape", () => {
@@ -115,6 +138,30 @@ describe("manualPaperBlueprint types and labels", () => {
     };
     expect(question.options).toHaveLength(3);
     expect(question.correctAnswer).toBe("B");
+  });
+
+  it("ManualTypedFillBlankQuestion has correct shape", () => {
+    const question: ManualTypedFillBlankQuestion = {
+      id: "test-typed-1",
+      type: "typed-fill-blank",
+      prompt: "The capital of France is ___.",
+      correctAnswer: "Paris",
+    };
+    expect(question.type).toBe("typed-fill-blank");
+    expect(question.prompt).toContain("___");
+    expect(question.correctAnswer).toBe("Paris");
+  });
+
+  it("ManualTypedFillBlankQuestion works without blank marker in prompt", () => {
+    const question: ManualTypedFillBlankQuestion = {
+      id: "test-typed-2",
+      type: "typed-fill-blank",
+      prompt: "What is 2 + 2?",
+      correctAnswer: "4",
+    };
+    expect(question.type).toBe("typed-fill-blank");
+    expect(question.prompt).not.toContain("___");
+    expect(question.correctAnswer).toBe("4");
   });
 
   it("ManualSubsection supports passageText field", () => {
@@ -175,6 +222,34 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(subsection.questions).toHaveLength(2);
     // No wordBank for passage-mcq
     expect(subsection.wordBank).toBeUndefined();
+  });
+
+  it("ManualSubsection supports typed-fill-blank questions", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-typed-1",
+      title: "Grammar Fill in Blank",
+      instructions: "Type the correct answer in each blank.",
+      questionType: "typed-fill-blank",
+      questions: [
+        {
+          id: "q-1",
+          type: "typed-fill-blank",
+          prompt: "She ___ to school every day.",
+          correctAnswer: "goes",
+        },
+        {
+          id: "q-2",
+          type: "typed-fill-blank",
+          prompt: "They ___ playing football.",
+          correctAnswer: "are",
+        },
+      ],
+    };
+    expect(subsection.questionType).toBe("typed-fill-blank");
+    expect(subsection.questions).toHaveLength(2);
+    // No wordBank or passageText for typed-fill-blank
+    expect(subsection.wordBank).toBeUndefined();
+    expect(subsection.passageText).toBeUndefined();
   });
 
   it("ManualSubsection passageText is optional", () => {

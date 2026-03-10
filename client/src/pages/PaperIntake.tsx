@@ -29,6 +29,7 @@ import type {
   ManualSection,
   ManualSectionType,
   ManualSubsection,
+  ManualTypedFillBlankQuestion,
   ManualWordBankItem,
 } from "@shared/manualPaperBlueprint";
 import {
@@ -122,6 +123,15 @@ function createPassageFillBlankQuestion(correctAnswerWordBankId: string): Manual
   };
 }
 
+function createTypedFillBlankQuestion(): ManualTypedFillBlankQuestion {
+  return {
+    id: createLocalId(),
+    type: "typed-fill-blank",
+    prompt: "",
+    correctAnswer: "",
+  };
+}
+
 function createPassageMCQOption(index: number): ManualPassageMCQOption {
   return {
     id: createLocalId(),
@@ -188,6 +198,16 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "typed-fill-blank") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createTypedFillBlankQuestion()],
+    };
+  }
+
   return {
     id: createLocalId(),
     title: "",
@@ -223,6 +243,10 @@ function isAnyFillBlankQuestion(question: ManualQuestion): question is ManualFil
 
 function isManualPassageMCQQuestion(question: ManualQuestion): question is ManualPassageMCQQuestion {
   return question.type === "passage-mcq";
+}
+
+function isManualTypedFillBlankQuestion(question: ManualQuestion): question is ManualTypedFillBlankQuestion {
+  return question.type === "typed-fill-blank";
 }
 
 /** Returns true for question types that use a passage */
@@ -264,6 +288,13 @@ function buildBlueprint(
               ...question,
               options: relabelOptions(question.options as ManualMCQOption[]) as unknown as ManualPassageMCQOption[],
             })),
+          };
+        }
+
+        if (subsection.questionType === "typed-fill-blank") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualTypedFillBlankQuestion),
           };
         }
 
@@ -559,6 +590,17 @@ export default function PaperIntake() {
     ));
   };
 
+  const updateTypedFillBlankQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualTypedFillBlankQuestion) => ManualTypedFillBlankQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualTypedFillBlankQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const addSection = () => {
     setSections((prev) => [...prev, createSection()]);
   };
@@ -624,6 +666,16 @@ export default function PaperIntake() {
           questions: [
             ...subsection.questions.filter(isManualPassageFillBlankQuestion),
             createPassageFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "typed-fill-blank") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualTypedFillBlankQuestion),
+            createTypedFillBlankQuestion(),
           ],
         };
       }
@@ -1509,6 +1561,75 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Typed fill-blank questions (direct input) */}
+                            {subsection.questionType === "typed-fill-blank" &&
+                              subsection.questions.filter(isManualTypedFillBlankQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Question type: Fill in Blank</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                                    <div className="space-y-2">
+                                      <Label>Sentence / Prompt</Label>
+                                      <Textarea
+                                        rows={3}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateTypedFillBlankQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="Type the sentence and use ___ where the blank should appear."
+                                      />
+                                      <p className="text-xs text-slate-500">
+                                        Example: The capital of France is ___.
+                                      </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Correct Answer</Label>
+                                      <Input
+                                        value={question.correctAnswer}
+                                        onChange={(event) =>
+                                          updateTypedFillBlankQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              correctAnswer: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="Type the correct answer"
+                                      />
+                                      <p className="text-xs text-slate-500">
+                                        The answer students should type in the blank.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
                             {/* Passage MCQ — per-blank options editor */}
                             {subsection.questionType === "passage-mcq" && (() => {
                               const passageMCQQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
@@ -1653,7 +1774,7 @@ export default function PaperIntake() {
                           {!isPassageSubsectionType(subsection.questionType) && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
-                              {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
+                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "typed-fill-blank" ? "Add Question" : "Add Question"}
                             </Button>
                           )}
                         </div>
@@ -1773,6 +1894,33 @@ export default function PaperIntake() {
                                 sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
                               />
                             )}
+
+                            {subsection.questionType === "typed-fill-blank" &&
+                              subsection.questions.filter(isManualTypedFillBlankQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {`${questionIndex + 1}. `}
+                                    {(() => {
+                                      const prompt = question.prompt.trim() || "Question prompt goes here.";
+                                      if (!prompt.includes("___")) {
+                                        return <>{prompt} <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span></>;
+                                      }
+                                      const parts = prompt.split("___");
+                                      return parts.map((part, partIndex) => (
+                                        <span key={partIndex}>
+                                          {part}
+                                          {partIndex < parts.length - 1 && (
+                                            <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span>
+                                          )}
+                                        </span>
+                                      ));
+                                    })()}
+                                  </p>
+                                  <p className="mt-2 text-xs font-medium text-emerald-700">
+                                    Correct answer: {question.correctAnswer || "(not set)"}
+                                  </p>
+                                </div>
+                              ))}
                           </div>
                         </div>
                       ))}

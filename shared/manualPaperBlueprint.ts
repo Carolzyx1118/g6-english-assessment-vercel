@@ -15,13 +15,14 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq";
+export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
   "fill-blank": "Word Bank Fill Blank",
   "passage-fill-blank": "Passage Word Bank Fill Blank",
   "passage-mcq": "Passage Multiple Choice",
+  "typed-fill-blank": "Fill in Blank",
 };
 
 export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
@@ -31,6 +32,7 @@ export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
 }> = [
   { value: "mcq", label: "Multiple Choice", description: "Each question has its own set of options." },
   { value: "fill-blank", label: "Word Bank Fill Blank", description: "Individual sentences with blanks, shared word bank." },
+  { value: "typed-fill-blank", label: "Fill in Blank", description: "Individual questions with blanks — students type answers directly." },
   { value: "passage-fill-blank", label: "Passage Word Bank Fill Blank", description: "A full passage/article with numbered blanks and a shared word bank." },
   { value: "passage-mcq", label: "Passage Multiple Choice", description: "A passage with numbered blanks — click each blank to choose from MCQ options (PET-style cloze)." },
 ];
@@ -95,7 +97,17 @@ export interface ManualPassageMCQQuestion {
   correctAnswer: string; // label of the correct option, e.g. "A"
 }
 
-export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion;
+/** Fill in blank — student types the answer directly (no word bank) */
+export interface ManualTypedFillBlankQuestion {
+  id: string;
+  type: "typed-fill-blank";
+  /** The sentence/question with ___ marking the blank */
+  prompt: string;
+  /** The correct answer text that should go in the blank */
+  correctAnswer: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion;
 
 export interface ManualSubsection {
   id: string;

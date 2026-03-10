@@ -206,3 +206,4 @@
 - [x] Fix SyntaxError: MANUAL_QUESTION_TYPE_OPTIONS import binding not found on /paper-intake page
 - [x] Add "passage multiple choice" question type to Manual Paper Builder (full passage with numbered blanks, clicking each blank shows MCQ options like PET Reading Part 5)
 - [x] Change passage-mcq default options from 4 (A/B/C/D) to 3 (A/B/C)
+- [x] Add "fill in blank" question type to Manual Paper Builder (individual questions, students type answers directly into blank fields, no word bank)
