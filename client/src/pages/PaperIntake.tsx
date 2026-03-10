@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Download, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
+import { ArrowLeft, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
 import type {
   ManualMCQOption,
   ManualMCQQuestion,
@@ -279,23 +279,6 @@ export default function PaperIntake() {
     }
   };
 
-  const handleDownloadBlueprint = () => {
-    if (!title.trim()) {
-      toast.error("Please enter the paper name before exporting.");
-      return;
-    }
-
-    const blob = new Blob([JSON.stringify(blueprint, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${blueprint.id || "manual-paper"}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -311,10 +294,6 @@ export default function PaperIntake() {
               entry with optional square option images and explicit correct answers for checking.
             </p>
           </div>
-          <Button type="button" onClick={handleDownloadBlueprint} className="bg-[#1E3A5F] hover:bg-[#16304F]">
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON
-          </Button>
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
@@ -679,18 +658,6 @@ export default function PaperIntake() {
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader>
-                <CardTitle>Blueprint JSON</CardTitle>
-                <CardDescription>Exported structure for this manual paper.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="max-h-[34rem] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">
-                  {JSON.stringify(blueprint, null, 2)}
-                </pre>
               </CardContent>
             </Card>
           </div>
