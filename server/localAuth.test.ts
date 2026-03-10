@@ -1,3 +1,5 @@
+process.env.JWT_SECRET = "test-local-auth-secret";
+
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -41,7 +43,7 @@ describe("localAuth.register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Set the INVITE_CODE env var for tests
-    process.env.INVITE_CODE = "TESTCODE123";
+    process.env.INVITE_CODE = "TESTCODE123=english,LEGACYCODE";
   });
 
   it("rejects registration with invalid invite code", async () => {
@@ -66,7 +68,7 @@ describe("localAuth.register", () => {
       id: 1,
       username: "testuser",
       passwordHash: "hash",
-      inviteCode: "TESTCODE123",
+      inviteCode: "TESTCODE123::english",
       displayName: "testuser",
       role: "user",
       createdAt: new Date(),
@@ -100,6 +102,7 @@ describe("localAuth.register", () => {
     expect(result.success).toBe(true);
     expect(result.user.id).toBe(42);
     expect(result.user.username).toBe("newuser");
+    expect(result.user.allowedSubjects).toEqual(["english"]);
     // Token should be returned in the response body
     expect(result.token).toBeTruthy();
     expect(typeof result.token).toBe("string");
@@ -111,7 +114,7 @@ describe("localAuth.register", () => {
     expect(createCall.username).toBe("newuser");
     expect(createCall.passwordHash).toBeTruthy();
     expect(createCall.passwordHash).not.toBe("password123"); // should be hashed
-    expect(createCall.inviteCode).toBe("TESTCODE123");
+    expect(createCall.inviteCode).toBe("TESTCODE123::english");
   });
 
   it("invite code is case-insensitive", async () => {
@@ -129,6 +132,24 @@ describe("localAuth.register", () => {
 
     expect(result.success).toBe(true);
     expect(result.token).toBeTruthy();
+    expect(result.user.allowedSubjects).toEqual(["english"]);
+  });
+
+  it("supports legacy invite code format and grants full subject access", async () => {
+    const { ctx } = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce(undefined);
+    vi.mocked(db.createLocalUser).mockResolvedValueOnce(44);
+
+    const result = await caller.localAuth.register({
+      username: "legacyuser",
+      password: "password123",
+      inviteCode: "LEGACYCODE",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.user.allowedSubjects).toEqual(["english", "math", "vocabulary"]);
   });
 
   it("rejects username shorter than 3 characters", async () => {
@@ -189,7 +210,7 @@ describe("localAuth.login", () => {
       id: 1,
       username: "testuser",
       passwordHash: hash,
-      inviteCode: "TESTCODE123",
+      inviteCode: "TESTCODE123::english",
       displayName: "testuser",
       role: "user",
       createdAt: new Date(),
@@ -215,7 +236,7 @@ describe("localAuth.login", () => {
       id: 5,
       username: "testuser",
       passwordHash: hash,
-      inviteCode: "TESTCODE123",
+      inviteCode: "TESTCODE123::english",
       displayName: "Test User",
       role: "user",
       createdAt: new Date(),
@@ -231,6 +252,7 @@ describe("localAuth.login", () => {
     expect(result.user.id).toBe(5);
     expect(result.user.username).toBe("testuser");
     expect(result.user.displayName).toBe("Test User");
+    expect(result.user.allowedSubjects).toEqual(["english"]);
     // Token should be returned in the response body
     expect(result.token).toBeTruthy();
     expect(typeof result.token).toBe("string");
@@ -274,7 +296,7 @@ describe("localAuth.me", () => {
       id: 10,
       username: "tokenuser",
       passwordHash: hash,
-      inviteCode: "TESTCODE123",
+      inviteCode: "TESTCODE123::english",
       displayName: "Token User",
       role: "user",
       createdAt: new Date(),
@@ -294,7 +316,7 @@ describe("localAuth.me", () => {
       id: 10,
       username: "tokenuser",
       passwordHash: hash,
-      inviteCode: "TESTCODE123",
+      inviteCode: "TESTCODE123::english",
       displayName: "Token User",
       role: "user",
       createdAt: new Date(),
@@ -306,6 +328,7 @@ describe("localAuth.me", () => {
     expect(meResult?.id).toBe(10);
     expect(meResult?.username).toBe("tokenuser");
     expect(meResult?.displayName).toBe("Token User");
+    expect(meResult?.allowedSubjects).toEqual(["english"]);
   });
 });
 

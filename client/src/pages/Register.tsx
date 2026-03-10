@@ -28,7 +28,8 @@ export default function Register() {
         id: data.user.id,
         username: data.user.username,
         displayName: data.user.displayName,
-        role: "user",
+        role: data.user.role as 'user' | 'admin',
+        allowedSubjects: data.user.allowedSubjects,
       });
       toast.success("注册成功！正在进入系统...");
       navigate("/");
@@ -105,8 +106,8 @@ export default function Register() {
           <Card className="shadow-xl border border-slate-200/60 bg-white">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">注册账号</CardTitle>
-              <CardDescription className="text-center">
-                填写以下信息创建账号，需要有效的邀请码
+            <CardDescription className="text-center">
+                填写以下信息创建账号。邀请码会决定这个账号可以进入哪些科目页面。
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
@@ -198,7 +199,7 @@ export default function Register() {
                     className="tracking-wider"
                   />
                   <p className="text-xs text-muted-foreground">
-                    请联系管理员获取邀请码
+                    请联系管理员获取邀请码。不同邀请码可限制 English、Math 或 Vocabulary 页面访问权限。
                   </p>
                 </div>
               </CardContent>

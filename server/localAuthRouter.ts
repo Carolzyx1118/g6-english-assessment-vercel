@@ -12,16 +12,95 @@ import {
 } from "./db";
 
 const SALT_ROUNDS = 10;
+const PAPER_SUBJECTS = ["english", "math", "vocabulary"] as const;
+type PaperSubject = (typeof PAPER_SUBJECTS)[number];
+type InviteAccess = {
+  code: string;
+  allowedSubjects: PaperSubject[];
+};
 
 // The invite code is read from env. Fallback to a default for development.
-function getValidInviteCodes(): string[] {
+function normalizeInviteCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+function isPaperSubject(value: string): value is PaperSubject {
+  return PAPER_SUBJECTS.includes(value as PaperSubject);
+}
+
+function parseSubjectList(raw: string): PaperSubject[] {
+  const subjects = raw
+    .split(/[|+]/)
+    .map((subject) => subject.trim().toLowerCase())
+    .filter(Boolean)
+    .filter(isPaperSubject);
+
+  return Array.from(new Set(subjects));
+}
+
+function serializeInviteAccess(access: InviteAccess): string {
+  return `${access.code}::${access.allowedSubjects.join("|")}`;
+}
+
+function parseStoredInviteAccess(inviteCode: string): InviteAccess | null {
+  const [rawCode, rawSubjects] = inviteCode.split("::");
+  const code = normalizeInviteCode(rawCode || "");
+  if (!code) return null;
+
+  if (!rawSubjects) {
+    return null;
+  }
+
+  const allowedSubjects = parseSubjectList(rawSubjects);
+  if (allowedSubjects.length === 0) {
+    return null;
+  }
+
+  return { code, allowedSubjects };
+}
+
+function getInviteAccessList(): InviteAccess[] {
   const raw = process.env.INVITE_CODE || "PUREONE2025";
-  // Support multiple codes separated by commas
-  return raw.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .flatMap((entry) => {
+      const [rawCode, rawSubjects] = entry.split("=");
+      const code = normalizeInviteCode(rawCode || "");
+      if (!code) return [];
+
+      if (!rawSubjects) {
+        return [{ code, allowedSubjects: [...PAPER_SUBJECTS] }];
+      }
+
+      const allowedSubjects = parseSubjectList(rawSubjects);
+      if (allowedSubjects.length === 0) {
+        console.warn(`[localAuth] Ignoring invite code "${code}" because no valid subjects were configured.`);
+        return [];
+      }
+
+      return [{ code, allowedSubjects }];
+    });
+}
+
+function resolveInviteAccess(inviteCode: string): InviteAccess | null {
+  const storedAccess = parseStoredInviteAccess(inviteCode);
+  if (storedAccess) {
+    return storedAccess;
+  }
+
+  const normalizedCode = normalizeInviteCode(inviteCode);
+  return getInviteAccessList().find((access) => access.code === normalizedCode) ?? null;
+}
+
+function getUserAllowedSubjects(inviteCode: string): PaperSubject[] {
+  return resolveInviteAccess(inviteCode)?.allowedSubjects ?? [...PAPER_SUBJECTS];
 }
 
 function getJwtSecret() {
-  return new TextEncoder().encode(ENV.cookieSecret);
+  const secret = ENV.cookieSecret || "local-auth-dev-secret";
+  return new TextEncoder().encode(secret);
 }
 
 async function createLocalSessionToken(userId: number, username: string): Promise<string> {
@@ -109,8 +188,8 @@ export const localAuthRouter = router({
     )
     .mutation(async ({ input }) => {
       // Validate invite code
-      const validCodes = getValidInviteCodes();
-      if (!validCodes.includes(input.inviteCode.trim().toUpperCase())) {
+      const inviteAccess = resolveInviteAccess(input.inviteCode);
+      if (!inviteAccess) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "邀请码无效，请联系管理员获取正确的邀请码",
@@ -133,7 +212,7 @@ export const localAuthRouter = router({
       const userId = await createLocalUser({
         username: input.username,
         passwordHash,
-        inviteCode: input.inviteCode.trim().toUpperCase(),
+        inviteCode: serializeInviteAccess(inviteAccess),
         displayName: input.username,
       });
 
@@ -154,6 +233,8 @@ export const localAuthRouter = router({
           id: userId,
           username: input.username,
           displayName: input.username,
+          role: "user",
+          allowedSubjects: inviteAccess.allowedSubjects,
         },
       };
     }),
@@ -196,6 +277,8 @@ export const localAuthRouter = router({
           id: user.id,
           username: user.username,
           displayName: user.displayName || user.username,
+          role: user.role,
+          allowedSubjects: getUserAllowedSubjects(user.inviteCode),
         },
       };
     }),
@@ -219,6 +302,7 @@ export const localAuthRouter = router({
       username: user.username,
       displayName: user.displayName || user.username,
       role: user.role,
+      allowedSubjects: getUserAllowedSubjects(user.inviteCode),
     };
   }),
 

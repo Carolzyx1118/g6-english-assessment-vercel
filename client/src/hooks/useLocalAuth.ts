@@ -7,7 +7,8 @@ export type LocalUser = {
   id: number;
   username: string;
   displayName: string;
-  role: string;
+  role: 'user' | 'admin';
+  allowedSubjects: string[];
 };
 
 /** Save the auth token to localStorage */

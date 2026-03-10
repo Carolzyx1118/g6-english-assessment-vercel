@@ -25,7 +25,8 @@ export default function Login() {
         id: data.user.id,
         username: data.user.username,
         displayName: data.user.displayName,
-        role: "user",
+        role: data.user.role as 'user' | 'admin',
+        allowedSubjects: data.user.allowedSubjects,
       });
       toast.success("登录成功！");
       navigate("/");
@@ -76,8 +77,8 @@ export default function Login() {
           <Card className="shadow-xl border border-slate-200/60 bg-white">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">登录</CardTitle>
-              <CardDescription className="text-center">
-                输入用户名和密码登录系统
+            <CardDescription className="text-center">
+                输入用户名和密码登录系统。账号可访问的科目由注册时的邀请码决定。
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>

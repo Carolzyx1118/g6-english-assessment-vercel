@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { papers as staticPapers, type Paper, type Section, type Question } from '@/data/papers';
+import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
+import { useLocalAuth } from '@/hooks/useLocalAuth';
 
 export interface StudentInfo {
   name: string;
@@ -45,6 +46,7 @@ function answerKey(sectionId: string, questionId: number): string {
 }
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useLocalAuth();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [state, setState] = useState<QuizState>({
     currentSectionIndex: 0,
@@ -59,10 +61,41 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
-  const allPapers = staticPapers;
+  const allowedSubjects = useMemo(() => {
+    const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
+      PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
+    );
+
+    return subjects.length > 0 ? subjects : PAPER_SUBJECT_ORDER;
+  }, [user?.allowedSubjects]);
+  const allPapers = useMemo(
+    () => staticPapers.filter((paper) => allowedSubjects.includes(paper.subject)),
+    [allowedSubjects],
+  );
 
   const currentSections = selectedPaper?.sections || [];
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];
+
+  useEffect(() => {
+    if (!selectedPaper) return;
+
+    const stillAllowed = allPapers.some((paper) => paper.id === selectedPaper.id);
+    if (stillAllowed) return;
+
+    setSelectedPaper(null);
+    setIsStarted(false);
+    setStudentInfoState(null);
+    sectionTimingsRef.current = {};
+    sectionEnteredAtRef.current = null;
+    currentSectionIdRef.current = '';
+    setState({
+      currentSectionIndex: 0,
+      answers: {},
+      submitted: false,
+      startTime: null,
+      endTime: null,
+    });
+  }, [allPapers, selectedPaper]);
 
   useEffect(() => {
     if (!isStarted || state.submitted || !selectedPaper) return;

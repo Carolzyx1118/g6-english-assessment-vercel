@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
 import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList, LogOut, User, Sparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StudentInfoForm from '@/components/StudentInfoForm';
 import { Link } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
@@ -77,11 +77,32 @@ function BrandHeader() {
 
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
   const { papers } = useQuiz();
+  const { user } = useLocalAuth();
   const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all'>('all');
+  const allowedSubjects = useMemo(() => {
+    const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
+      PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
+    );
+
+    return subjects.length > 0 ? subjects : PAPER_SUBJECT_ORDER;
+  }, [user?.allowedSubjects]);
+  const hasSingleSubjectAccess = allowedSubjects.length === 1;
+  const activeSubject = hasSingleSubjectAccess ? allowedSubjects[0] : selectedSubject;
   const filteredPapers = useMemo(
-    () => (selectedSubject === 'all' ? papers : papers.filter((paper) => paper.subject === selectedSubject)),
-    [papers, selectedSubject],
+    () => (activeSubject === 'all' ? papers : papers.filter((paper) => paper.subject === activeSubject)),
+    [papers, activeSubject],
   );
+
+  useEffect(() => {
+    if (hasSingleSubjectAccess) {
+      setSelectedSubject(allowedSubjects[0]);
+      return;
+    }
+
+    if (selectedSubject !== 'all' && !allowedSubjects.includes(selectedSubject)) {
+      setSelectedSubject('all');
+    }
+  }, [allowedSubjects, hasSingleSubjectAccess, selectedSubject]);
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -121,6 +142,12 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
                 Organize your library by subject now, then expand it later with math papers, vocabulary drills, and other assessment types without changing the structure again.
               </p>
+              {hasSingleSubjectAccess && (
+                <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
+                  <span className="text-[#D4A84B]">Access</span>
+                  <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
+                </div>
+              )}
               <div className="mt-8 flex gap-3 flex-wrap">
                 <Link href="/history">
                   <Button variant="outline" className="gap-2 bg-white/5 border-white/15 text-white/80 hover:bg-white/10 hover:text-white hover:border-white/30">
@@ -165,39 +192,45 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
           transition={{ duration: 0.5, delay: 0.4 }}
         >
           <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">Choose Your Assessment</h2>
-          <p className="text-slate-500 mb-5">Filter by subject, then select a paper to view its details and start the assessment.</p>
-          <div className="flex flex-wrap gap-3 mb-8">
-            <button
-              type="button"
-              onClick={() => setSelectedSubject('all')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                selectedSubject === 'all'
-                  ? 'bg-[#1E3A5F] text-white shadow-lg shadow-[#1E3A5F]/15'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
-              }`}
-            >
-              All Subjects
-              <span className="ml-2 text-xs opacity-70">{papers.length}</span>
-            </button>
-            {PAPER_SUBJECT_ORDER.map((subject) => {
-              const count = papers.filter((paper) => paper.subject === subject).length;
-              return (
-                <button
-                  key={subject}
-                  type="button"
-                  onClick={() => setSelectedSubject(subject)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                    selectedSubject === subject
-                      ? 'bg-[#D4A84B] text-white shadow-lg shadow-[#D4A84B]/20'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
-                  }`}
-                >
-                  {PAPER_SUBJECT_LABELS[subject]}
-                  <span className="ml-2 text-xs opacity-70">{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <p className="text-slate-500 mb-5">
+            {hasSingleSubjectAccess
+              ? `This account can enter the ${PAPER_SUBJECT_LABELS[allowedSubjects[0]]} subject page only.`
+              : 'Filter by subject, then select a paper to view its details and start the assessment.'}
+          </p>
+          {!hasSingleSubjectAccess && (
+            <div className="flex flex-wrap gap-3 mb-8">
+              <button
+                type="button"
+                onClick={() => setSelectedSubject('all')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  selectedSubject === 'all'
+                    ? 'bg-[#1E3A5F] text-white shadow-lg shadow-[#1E3A5F]/15'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
+                }`}
+              >
+                All Subjects
+                <span className="ml-2 text-xs opacity-70">{papers.length}</span>
+              </button>
+              {allowedSubjects.map((subject) => {
+                const count = papers.filter((paper) => paper.subject === subject).length;
+                return (
+                  <button
+                    key={subject}
+                    type="button"
+                    onClick={() => setSelectedSubject(subject)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      selectedSubject === subject
+                        ? 'bg-[#D4A84B] text-white shadow-lg shadow-[#D4A84B]/20'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
+                    }`}
+                  >
+                    {PAPER_SUBJECT_LABELS[subject]}
+                    <span className="ml-2 text-xs opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </motion.div>
 
         <div className="grid sm:grid-cols-2 gap-6">
