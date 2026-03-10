@@ -1,15 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
-import type {
-  ManualMCQOption,
-  ManualMCQQuestion,
-  ManualPaperBlueprint,
-  ManualSection,
-  ManualSectionType,
-  ManualSubsection,
-} from "@shared/manualPaperBlueprint";
-import { MANUAL_SECTION_TYPE_LABELS } from "@shared/manualPaperBlueprint";
+import type { FillBlankQuestion } from "@/data/papers";
+import DragDropFillBlank from "@/components/DragDropFillBlank";
 import { createSquareImageDataUrl, formatFileSize, validateImageFile } from "@/lib/imageUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -17,9 +10,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type {
+  ManualFillBlankQuestion,
+  ManualMCQOption,
+  ManualMCQQuestion,
+  ManualPaperBlueprint,
+  ManualQuestion,
+  ManualQuestionType,
+  ManualSection,
+  ManualSectionType,
+  ManualSubsection,
+  ManualWordBankItem,
+} from "@shared/manualPaperBlueprint";
+import {
+  MANUAL_QUESTION_TYPE_LABELS,
+  MANUAL_SECTION_TYPE_LABELS,
+} from "@shared/manualPaperBlueprint";
 import { toast } from "sonner";
 
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
+const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
+const DEFAULT_WORD_BANK_SIZE = 4;
 
 function createLocalId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -33,6 +44,29 @@ function getOptionLabel(index: number) {
   return String.fromCharCode(65 + index);
 }
 
+function relabelOptions(options: ManualMCQOption[]) {
+  return options.map((option, optionIndex) => ({
+    ...option,
+    label: getOptionLabel(optionIndex),
+  }));
+}
+
+function relabelWordBank(wordBank: ManualWordBankItem[]) {
+  return wordBank.map((item, itemIndex) => ({
+    ...item,
+    letter: getOptionLabel(itemIndex),
+  }));
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function createOption(index: number): ManualMCQOption {
   return {
     id: createLocalId(),
@@ -41,7 +75,7 @@ function createOption(index: number): ManualMCQOption {
   };
 }
 
-function createQuestion(): ManualMCQQuestion {
+function createMCQQuestion(): ManualMCQQuestion {
   return {
     id: createLocalId(),
     type: "mcq",
@@ -51,12 +85,45 @@ function createQuestion(): ManualMCQQuestion {
   };
 }
 
-function createSubsection(): ManualSubsection {
+function createWordBankItem(index: number): ManualWordBankItem {
+  return {
+    id: createLocalId(),
+    letter: getOptionLabel(index),
+    word: "",
+  };
+}
+
+function createFillBlankQuestion(correctAnswerWordBankId: string): ManualFillBlankQuestion {
+  return {
+    id: createLocalId(),
+    type: "fill-blank",
+    prompt: "",
+    correctAnswerWordBankId,
+  };
+}
+
+function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TYPE): ManualSubsection {
+  if (questionType === "fill-blank") {
+    const wordBank = relabelWordBank(
+      Array.from({ length: DEFAULT_WORD_BANK_SIZE }, (_, index) => createWordBankItem(index)),
+    );
+
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      wordBank,
+      questions: [createFillBlankQuestion(wordBank[0]?.id || "")],
+    };
+  }
+
   return {
     id: createLocalId(),
     title: "",
     instructions: "",
-    questions: [createQuestion()],
+    questionType,
+    questions: [createMCQQuestion()],
   };
 }
 
@@ -66,6 +133,14 @@ function createSection(sectionType: ManualSectionType = DEFAULT_SECTION_TYPE): M
     sectionType,
     subsections: [createSubsection()],
   };
+}
+
+function isManualMCQQuestion(question: ManualQuestion): question is ManualMCQQuestion {
+  return question.type === "mcq";
+}
+
+function isManualFillBlankQuestion(question: ManualQuestion): question is ManualFillBlankQuestion {
+  return question.type === "fill-blank";
 }
 
 function buildBlueprint(
@@ -86,19 +161,114 @@ function buildBlueprint(
     sections: sections.map((section, sectionIndex) => ({
       ...section,
       partLabel: `Part ${sectionIndex + 1}`,
-      subsections: section.subsections.map((subsection) => ({
-        ...subsection,
-        questions: subsection.questions.map((question) => ({
-          ...question,
-          options: question.options.map((option, optionIndex) => ({
-            ...option,
-            label: getOptionLabel(optionIndex),
+      subsections: section.subsections.map((subsection) => {
+        if (subsection.questionType === "fill-blank") {
+          return {
+            ...subsection,
+            wordBank: relabelWordBank(subsection.wordBank ?? []),
+            questions: subsection.questions.filter(isManualFillBlankQuestion),
+          };
+        }
+
+        return {
+          ...subsection,
+          questions: subsection.questions.filter(isManualMCQQuestion).map((question) => ({
+            ...question,
+            options: relabelOptions(question.options),
           })),
-        })),
-      })),
+        };
+      }),
     })),
     createdAt,
   };
+}
+
+function buildFillBlankPreviewPassage(questions: ManualFillBlankQuestion[]) {
+  return questions
+    .map((question, questionIndex) => {
+      const safePrompt = escapeHtml(question.prompt.trim() || `Sentence ${questionIndex + 1}`);
+
+      if (safePrompt.includes("___")) {
+        return safePrompt.replace("___", `<b>(${questionIndex + 1}) ___</b>`);
+      }
+
+      return `${safePrompt} <b>(${questionIndex + 1}) ___</b>`;
+    })
+    .join("\n\n");
+}
+
+function getCorrectWord(wordBank: ManualWordBankItem[] | undefined, wordBankId: string) {
+  return wordBank?.find((item) => item.id === wordBankId)?.word || "";
+}
+
+function FillBlankSubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+
+  const wordBank = subsection.wordBank ?? [];
+  const questions = useMemo(
+    () => subsection.questions.filter(isManualFillBlankQuestion),
+    [subsection.questions],
+  );
+
+  const previewQuestions = useMemo<FillBlankQuestion[]>(
+    () =>
+      questions.map((question, questionIndex) => ({
+        id: questionIndex + 1,
+        type: "fill-blank",
+        question: question.prompt,
+        correctAnswer: getCorrectWord(wordBank, question.correctAnswerWordBankId),
+      })),
+    [questions, wordBank],
+  );
+
+  const answerKey = useMemo(
+    () =>
+      questions.map((question, questionIndex) => ({
+        id: questionIndex + 1,
+        answer: getCorrectWord(wordBank, question.correctAnswerWordBankId) || "Not set",
+      })),
+    [questions, wordBank],
+  );
+
+  if (!questions.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+        Add at least one blank to preview this question block.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <DragDropFillBlank
+        questions={previewQuestions}
+        wordBank={wordBank.map((item) => ({ letter: item.letter, word: item.word || "Untitled word" }))}
+        grammarPassage={buildFillBlankPreviewPassage(questions)}
+        sectionId={`manual-fillblank-preview-${subsection.id}`}
+        getAnswer={(_, id) => answers[id]}
+        setAnswer={(_, id, value) => {
+          setAnswers((prev) => ({
+            ...prev,
+            [id]: value,
+          }));
+        }}
+      />
+
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Answer Key</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {answerKey.map((item) => (
+            <span
+              key={item.id}
+              className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-700"
+            >
+              {item.id}. {item.answer}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function PaperIntake() {
@@ -115,9 +285,56 @@ export default function PaperIntake() {
   );
 
   const updateSection = (sectionId: string, updater: (section: ManualSection) => ManualSection) => {
-    setSections((prev) => prev.map((section) => (
-      section.id === sectionId ? updater(section) : section
-    )));
+    setSections((prev) => prev.map((section) => (section.id === sectionId ? updater(section) : section)));
+  };
+
+  const updateSubsection = (
+    sectionId: string,
+    subsectionId: string,
+    updater: (subsection: ManualSubsection) => ManualSubsection,
+  ) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      subsections: section.subsections.map((subsection) => (
+        subsection.id === subsectionId ? updater(subsection) : subsection
+      )),
+    }));
+  };
+
+  const updateQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualQuestion) => ManualQuestion,
+  ) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => ({
+      ...subsection,
+      questions: subsection.questions.map((question) => (
+        question.id === questionId ? updater(question) : question
+      )),
+    }));
+  };
+
+  const updateMCQQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualMCQQuestion) => ManualMCQQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualMCQQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateFillBlankQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualFillBlankQuestion) => ManualFillBlankQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualFillBlankQuestion(question) ? updater(question) : question
+    ));
   };
 
   const addSection = () => {
@@ -145,24 +362,44 @@ export default function PaperIntake() {
     }));
   };
 
-  const updateSubsection = (
+  const changeSubsectionQuestionType = (
     sectionId: string,
     subsectionId: string,
-    updater: (subsection: ManualSubsection) => ManualSubsection,
+    nextQuestionType: ManualQuestionType,
   ) => {
-    updateSection(sectionId, (section) => ({
-      ...section,
-      subsections: section.subsections.map((subsection) => (
-        subsection.id === subsectionId ? updater(subsection) : subsection
-      )),
-    }));
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      if (subsection.questionType === nextQuestionType) {
+        return subsection;
+      }
+
+      const nextSubsection = createSubsection(nextQuestionType);
+
+      return {
+        ...subsection,
+        questionType: nextQuestionType,
+        wordBank: nextSubsection.wordBank,
+        questions: nextSubsection.questions,
+      };
+    });
   };
 
   const addQuestion = (sectionId: string, subsectionId: string) => {
-    updateSubsection(sectionId, subsectionId, (subsection) => ({
-      ...subsection,
-      questions: [...subsection.questions, createQuestion()],
-    }));
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      if (subsection.questionType === "fill-blank") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualFillBlankQuestion),
+            createFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
+          ],
+        };
+      }
+
+      return {
+        ...subsection,
+        questions: [...subsection.questions.filter(isManualMCQQuestion), createMCQQuestion()],
+      };
+    });
   };
 
   const removeQuestion = (sectionId: string, subsectionId: string, questionId: string) => {
@@ -175,39 +412,20 @@ export default function PaperIntake() {
     }));
   };
 
-  const updateQuestion = (
-    sectionId: string,
-    subsectionId: string,
-    questionId: string,
-    updater: (question: ManualMCQQuestion) => ManualMCQQuestion,
-  ) => {
-    updateSubsection(sectionId, subsectionId, (subsection) => ({
-      ...subsection,
-      questions: subsection.questions.map((question) => (
-        question.id === questionId ? updater(question) : question
-      )),
-    }));
-  };
-
   const addOption = (sectionId: string, subsectionId: string, questionId: string) => {
-    updateQuestion(sectionId, subsectionId, questionId, (question) => ({
+    updateMCQQuestion(sectionId, subsectionId, questionId, (question) => ({
       ...question,
       options: [...question.options, createOption(question.options.length)],
     }));
   };
 
   const removeOption = (sectionId: string, subsectionId: string, questionId: string, optionId: string) => {
-    updateQuestion(sectionId, subsectionId, questionId, (question) => {
+    updateMCQQuestion(sectionId, subsectionId, questionId, (question) => {
       if (question.options.length <= 2) {
         return question;
       }
 
-      const nextOptions = question.options
-        .filter((option) => option.id !== optionId)
-        .map((option, optionIndex) => ({
-          ...option,
-          label: getOptionLabel(optionIndex),
-        }));
+      const nextOptions = relabelOptions(question.options.filter((option) => option.id !== optionId));
       const hasCorrectAnswer = nextOptions.some((option) => option.label === question.correctAnswer);
 
       return {
@@ -225,12 +443,92 @@ export default function PaperIntake() {
     optionId: string,
     updater: (option: ManualMCQOption) => ManualMCQOption,
   ) => {
-    updateQuestion(sectionId, subsectionId, questionId, (question) => ({
+    updateMCQQuestion(sectionId, subsectionId, questionId, (question) => ({
       ...question,
       options: question.options.map((option) => (
         option.id === optionId ? updater(option) : option
       )),
     }));
+  };
+
+  const addWordBankItem = (sectionId: string, subsectionId: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      if (subsection.questionType !== "fill-blank") {
+        return subsection;
+      }
+
+      const nextWordBank = relabelWordBank([
+        ...(subsection.wordBank ?? []),
+        createWordBankItem((subsection.wordBank ?? []).length),
+      ]);
+
+      return {
+        ...subsection,
+        wordBank: nextWordBank,
+        questions: subsection.questions.map((question) => {
+          if (!isManualFillBlankQuestion(question) || question.correctAnswerWordBankId) {
+            return question;
+          }
+
+          return {
+            ...question,
+            correctAnswerWordBankId: nextWordBank[0]?.id || "",
+          };
+        }),
+      };
+    });
+  };
+
+  const removeWordBankItem = (sectionId: string, subsectionId: string, wordBankId: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      if (subsection.questionType !== "fill-blank") {
+        return subsection;
+      }
+
+      const currentWordBank = subsection.wordBank ?? [];
+      if (currentWordBank.length <= 1) {
+        return subsection;
+      }
+
+      const nextWordBank = relabelWordBank(currentWordBank.filter((item) => item.id !== wordBankId));
+      const fallbackWordBankId = nextWordBank[0]?.id || "";
+
+      return {
+        ...subsection,
+        wordBank: nextWordBank,
+        questions: subsection.questions.map((question) => {
+          if (!isManualFillBlankQuestion(question)) {
+            return question;
+          }
+
+          return {
+            ...question,
+            correctAnswerWordBankId:
+              question.correctAnswerWordBankId === wordBankId
+                ? fallbackWordBankId
+                : question.correctAnswerWordBankId,
+          };
+        }),
+      };
+    });
+  };
+
+  const updateWordBankItem = (
+    sectionId: string,
+    subsectionId: string,
+    wordBankId: string,
+    updater: (item: ManualWordBankItem) => ManualWordBankItem,
+  ) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      if (subsection.questionType !== "fill-blank") {
+        return subsection;
+      }
+
+      return {
+        ...subsection,
+        wordBank: (subsection.wordBank ?? []).map((item) => (item.id === wordBankId ? updater(item) : item)),
+      };
+    });
   };
 
   const handleOptionImageUpload = async (
@@ -284,14 +582,17 @@ export default function PaperIntake() {
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Assessments
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Assessments
             </Link>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Manual Paper Builder</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Build a paper manually by section, subsection, and question type. This version focuses on multiple-choice
-              entry with optional square option images and explicit correct answers for checking.
+              Build a paper manually by section, big question, and question type. Multiple-choice and word-bank
+              fill-blank blocks both preview in a student-facing layout on the right.
             </p>
           </div>
         </div>
@@ -332,7 +633,9 @@ export default function PaperIntake() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <CardTitle>{`Part ${sectionIndex + 1}`}</CardTitle>
-                      <CardDescription>Choose the section type, then add one or more big questions below.</CardDescription>
+                      <CardDescription>
+                        Choose the section type, then add one or more big questions below.
+                      </CardDescription>
                     </div>
                     <Button
                       type="button"
@@ -388,19 +691,43 @@ export default function PaperIntake() {
                         </div>
 
                         <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Big Question Title</Label>
-                            <Input
-                              value={subsection.title}
-                              onChange={(event) =>
-                                updateSubsection(section.id, subsection.id, (currentSubsection) => ({
-                                  ...currentSubsection,
-                                  title: event.target.value,
-                                }))
-                              }
-                              placeholder="e.g. Matching people to notices"
-                            />
+                          <div className="grid gap-4 lg:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Big Question Title</Label>
+                              <Input
+                                value={subsection.title}
+                                onChange={(event) =>
+                                  updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                    ...currentSubsection,
+                                    title: event.target.value,
+                                  }))
+                                }
+                                placeholder="e.g. Choose the correct word to fill each blank"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Question Type</Label>
+                              <select
+                                value={subsection.questionType}
+                                onChange={(event) =>
+                                  changeSubsectionQuestionType(
+                                    section.id,
+                                    subsection.id,
+                                    event.target.value as ManualQuestionType,
+                                  )
+                                }
+                                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                              >
+                                {Object.entries(MANUAL_QUESTION_TYPE_LABELS).map(([value, label]) => (
+                                  <option key={value} value={value}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
+
                           <div className="space-y-2">
                             <Label>Instructions</Label>
                             <Textarea
@@ -416,154 +743,298 @@ export default function PaperIntake() {
                             />
                           </div>
 
-                          <div className="space-y-4">
-                            {subsection.questions.map((question, questionIndex) => (
-                              <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-                                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
-                                    <p className="text-xs text-slate-500">Question type: Multiple Choice</p>
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => removeQuestion(section.id, subsection.id, question.id)}
-                                    className="text-slate-500 hover:text-red-500"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                          {subsection.questionType === "fill-blank" && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-amber-800">Word Bank</p>
+                                  <p className="text-xs text-amber-700/80">
+                                    Letters are assigned automatically and shown in preview just like the live paper.
+                                  </p>
                                 </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => addWordBankItem(section.id, subsection.id)}
+                                  className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add Word
+                                </Button>
+                              </div>
 
-                                <div className="space-y-4">
-                                  <div className="space-y-2">
-                                    <Label>Question Prompt</Label>
-                                    <Textarea
-                                      rows={3}
-                                      value={question.prompt}
-                                      onChange={(event) =>
-                                        updateQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
-                                          ...currentQuestion,
-                                          prompt: event.target.value,
-                                        }))
-                                      }
-                                      placeholder="Type the stem of the multiple-choice question."
-                                    />
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {(subsection.wordBank ?? []).map((item) => (
+                                  <div key={item.id} className="rounded-xl border border-amber-200 bg-white p-4">
+                                    <div className="mb-3 flex items-center justify-between gap-3">
+                                      <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-amber-100 px-2 text-sm font-semibold text-amber-800">
+                                        {item.letter}
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeWordBankItem(section.id, subsection.id, item.id)}
+                                        className="text-slate-500 hover:text-red-500"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>{`Word ${item.letter}`}</Label>
+                                      <Input
+                                        value={item.word}
+                                        onChange={(event) =>
+                                          updateWordBankItem(section.id, subsection.id, item.id, (currentItem) => ({
+                                            ...currentItem,
+                                            word: event.target.value,
+                                          }))
+                                        }
+                                        placeholder="Type the word or phrase in the bank"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-4">
+                            {subsection.questionType === "mcq" &&
+                              subsection.questions.filter(isManualMCQQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Question type: Multiple Choice</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
                                   </div>
 
-                                  <div className="grid gap-3 md:grid-cols-3">
-                                    {question.options.map((option) => (
-                                      <div key={option.id} className="rounded-xl border border-slate-200 p-4">
-                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                                          <p className="text-sm font-semibold text-slate-700">{`Option ${option.label}`}</p>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => removeOption(section.id, subsection.id, question.id, option.id)}
-                                            className="text-slate-500 hover:text-red-500"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </div>
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Question Prompt</Label>
+                                      <Textarea
+                                        rows={3}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateMCQQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            prompt: event.target.value,
+                                          }))
+                                        }
+                                        placeholder="Type the stem of the multiple-choice question."
+                                      />
+                                    </div>
 
-                                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_156px]">
-                                          <div className="space-y-2">
-                                            <Label>{`Option ${option.label} Text`}</Label>
-                                            <Input
-                                              value={option.text}
-                                              onChange={(event) =>
-                                                updateOption(section.id, subsection.id, question.id, option.id, (currentOption) => ({
-                                                  ...currentOption,
-                                                  text: event.target.value,
-                                                }))
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                      {question.options.map((option) => (
+                                        <div key={option.id} className="rounded-xl border border-slate-200 p-4">
+                                          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                            <p className="text-sm font-semibold text-slate-700">{`Option ${option.label}`}</p>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() =>
+                                                removeOption(section.id, subsection.id, question.id, option.id)
                                               }
-                                              placeholder="Optional text for this option"
-                                            />
-                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
-                                              <ImagePlus className="h-4 w-4" />
-                                              {option.image ? "Replace Image" : "Add Image"}
-                                              <input
-                                                type="file"
-                                                accept="image/png,image/jpeg,image/webp,image/gif"
-                                                className="hidden"
+                                              className="text-slate-500 hover:text-red-500"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+
+                                          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_156px]">
+                                            <div className="space-y-2">
+                                              <Label>{`Option ${option.label} Text`}</Label>
+                                              <Input
+                                                value={option.text}
                                                 onChange={(event) =>
-                                                  handleOptionImageUpload(
+                                                  updateOption(
                                                     section.id,
                                                     subsection.id,
                                                     question.id,
                                                     option.id,
-                                                    event.target.files?.[0],
+                                                    (currentOption) => ({
+                                                      ...currentOption,
+                                                      text: event.target.value,
+                                                    }),
                                                   )
                                                 }
+                                                placeholder="Optional text for this option"
                                               />
-                                            </label>
-                                          </div>
-
-                                          <div className="space-y-2">
-                                            <Label>{`Option ${option.label} Preview`}</Label>
-                                            <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-28 sm:w-28">
-                                              {option.image ? (
-                                                <img
-                                                  src={option.image.previewUrl || option.image.dataUrl}
-                                                  alt={`Option ${option.label}`}
-                                                  className="h-full w-full object-contain"
+                                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                                <ImagePlus className="h-4 w-4" />
+                                                {option.image ? "Replace Image" : "Add Image"}
+                                                <input
+                                                  type="file"
+                                                  accept="image/png,image/jpeg,image/webp,image/gif"
+                                                  className="hidden"
+                                                  onChange={(event) =>
+                                                    handleOptionImageUpload(
+                                                      section.id,
+                                                      subsection.id,
+                                                      question.id,
+                                                      option.id,
+                                                      event.target.files?.[0],
+                                                    )
+                                                  }
                                                 />
-                                              ) : (
-                                                <span className="px-4 text-center text-xs text-slate-400">
-                                                  No image uploaded
-                                                </span>
+                                              </label>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              <Label>{`Option ${option.label} Preview`}</Label>
+                                              <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-28 sm:w-28">
+                                                {option.image ? (
+                                                  <img
+                                                    src={option.image.previewUrl || option.image.dataUrl}
+                                                    alt={`Option ${option.label}`}
+                                                    className="h-full w-full object-contain"
+                                                  />
+                                                ) : (
+                                                  <span className="px-4 text-center text-xs text-slate-400">
+                                                    No image uploaded
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {option.image && (
+                                                <p className="text-xs text-slate-500">
+                                                  {option.image.fileName} · {formatFileSize(option.image.size)}
+                                                </p>
                                               )}
                                             </div>
-                                            {option.image && (
-                                              <p className="text-xs text-slate-500">
-                                                {option.image.fileName} · {formatFileSize(option.image.size)}
-                                              </p>
-                                            )}
                                           </div>
                                         </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                                      ))}
+                                    </div>
 
-                                  <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      onClick={() => addOption(section.id, subsection.id, question.id)}
-                                    >
-                                      <Plus className="mr-2 h-4 w-4" />
-                                      Add Option
-                                    </Button>
-
-                                    <div className="min-w-[180px] space-y-2">
-                                      <Label>Correct Answer</Label>
-                                      <select
-                                        value={question.correctAnswer}
-                                        onChange={(event) =>
-                                          updateQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
-                                            ...currentQuestion,
-                                            correctAnswer: event.target.value,
-                                          }))
-                                        }
-                                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => addOption(section.id, subsection.id, question.id)}
                                       >
-                                        {question.options.map((option, optionIndex) => (
-                                          <option key={option.id} value={getOptionLabel(optionIndex)}>
-                                            {getOptionLabel(optionIndex)}
-                                          </option>
-                                        ))}
-                                      </select>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Option
+                                      </Button>
+
+                                      <div className="min-w-[180px] space-y-2">
+                                        <Label>Correct Answer</Label>
+                                        <select
+                                          value={question.correctAnswer}
+                                          onChange={(event) =>
+                                            updateMCQQuestion(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              (currentQuestion) => ({
+                                                ...currentQuestion,
+                                                correctAnswer: event.target.value,
+                                              }),
+                                            )
+                                          }
+                                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                        >
+                                          {question.options.map((option, optionIndex) => (
+                                            <option key={option.id} value={getOptionLabel(optionIndex)}>
+                                              {getOptionLabel(optionIndex)}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+
+                            {subsection.questionType === "fill-blank" &&
+                              subsection.questions.filter(isManualFillBlankQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">{`Blank ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Question type: Word Bank Fill Blank</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                                    <div className="space-y-2">
+                                      <Label>Sentence / Prompt</Label>
+                                      <Textarea
+                                        rows={3}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateFillBlankQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="Type the sentence and use ___ where the blank should appear."
+                                      />
+                                      <p className="text-xs text-slate-500">
+                                        Example: I usually go to school ___ bus.
+                                      </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Correct Answer</Label>
+                                      <select
+                                        value={question.correctAnswerWordBankId}
+                                        onChange={(event) =>
+                                          updateFillBlankQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              correctAnswerWordBankId: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                      >
+                                        {(subsection.wordBank ?? []).map((item) => (
+                                          <option key={item.id} value={item.id}>
+                                            {item.letter}. {item.word || "Untitled word"}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <p className="text-xs text-slate-500">
+                                        Pick the word bank item students should drag into this blank.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                           </div>
 
                           <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                             <FilePlus2 className="mr-2 h-4 w-4" />
-                            Add Question
+                            {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
                           </Button>
                         </div>
                       </div>
@@ -611,47 +1082,55 @@ export default function PaperIntake() {
                     <div className="mt-4 space-y-4">
                       {section.subsections.map((subsection, subsectionIndex) => (
                         <div key={subsection.id} className="rounded-xl bg-slate-50 p-4">
-                          <p className="text-sm font-semibold text-slate-800">
-                            {subsection.title || `Big Question ${subsectionIndex + 1}`}
-                          </p>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-800">
+                              {subsection.title || `Big Question ${subsectionIndex + 1}`}
+                            </p>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              {MANUAL_QUESTION_TYPE_LABELS[subsection.questionType]}
+                            </span>
+                          </div>
                           <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">
                             {subsection.instructions || "No instructions yet."}
                           </p>
 
                           <div className="mt-4 space-y-4">
-                            {subsection.questions.map((question, questionIndex) => (
-                              <div key={question.id} className="rounded-xl border border-white bg-white p-4">
-                                <p className="text-sm font-medium text-slate-800">
-                                  {`${questionIndex + 1}. ${question.prompt || "Question prompt goes here."}`}
-                                </p>
-                                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                                  {question.options.map((option) => (
-                                    <div key={option.id} className="rounded-xl border border-slate-200 p-3">
-                                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        {option.label}
-                                      </p>
-                                      <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-28">
-                                        {option.image ? (
-                                          <img
-                                            src={option.image.previewUrl || option.image.dataUrl}
-                                            alt={`Preview ${option.label}`}
-                                            className="h-full w-full object-contain"
-                                          />
-                                        ) : (
-                                          <span className="px-3 text-center text-xs text-slate-400">No image</span>
-                                        )}
+                            {subsection.questionType === "mcq" &&
+                              subsection.questions.filter(isManualMCQQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {`${questionIndex + 1}. ${question.prompt || "Question prompt goes here."}`}
+                                  </p>
+                                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                    {question.options.map((option) => (
+                                      <div key={option.id} className="rounded-xl border border-slate-200 p-3">
+                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                          {option.label}
+                                        </p>
+                                        <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-28">
+                                          {option.image ? (
+                                            <img
+                                              src={option.image.previewUrl || option.image.dataUrl}
+                                              alt={`Preview ${option.label}`}
+                                              className="h-full w-full object-contain"
+                                            />
+                                          ) : (
+                                            <span className="px-3 text-center text-xs text-slate-400">No image</span>
+                                          )}
+                                        </div>
+                                        {option.text && <p className="mt-2 text-xs text-slate-600">{option.text}</p>}
                                       </div>
-                                      {option.text && (
-                                        <p className="mt-2 text-xs text-slate-600">{option.text}</p>
-                                      )}
-                                    </div>
-                                  ))}
+                                    ))}
+                                  </div>
+                                  <p className="mt-3 text-xs font-medium text-emerald-700">
+                                    Correct answer: {question.correctAnswer}
+                                  </p>
                                 </div>
-                                <p className="mt-3 text-xs font-medium text-emerald-700">
-                                  Correct answer: {question.correctAnswer}
-                                </p>
-                              </div>
-                            ))}
+                              ))}
+
+                            {subsection.questionType === "fill-blank" && (
+                              <FillBlankSubsectionPreview subsection={subsection} />
+                            )}
                           </div>
                         </div>
                       ))}

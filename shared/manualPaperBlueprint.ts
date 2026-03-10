@@ -15,7 +15,12 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq";
+export type ManualQuestionType = "mcq" | "fill-blank";
+
+export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
+  mcq: "Multiple Choice",
+  "fill-blank": "Word Bank Fill Blank",
+};
 
 export interface ManualOptionImage {
   dataUrl: string;
@@ -34,17 +39,34 @@ export interface ManualMCQOption {
 
 export interface ManualMCQQuestion {
   id: string;
-  type: ManualQuestionType;
+  type: "mcq";
   prompt: string;
   options: ManualMCQOption[];
   correctAnswer: string;
 }
 
+export interface ManualWordBankItem {
+  id: string;
+  letter: string;
+  word: string;
+}
+
+export interface ManualFillBlankQuestion {
+  id: string;
+  type: "fill-blank";
+  prompt: string;
+  correctAnswerWordBankId: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion;
+
 export interface ManualSubsection {
   id: string;
   title: string;
   instructions: string;
-  questions: ManualMCQQuestion[];
+  questionType: ManualQuestionType;
+  questions: ManualQuestion[];
+  wordBank?: ManualWordBankItem[];
 }
 
 export interface ManualSection {
