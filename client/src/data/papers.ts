@@ -203,8 +203,9 @@ export function getAutoGradableCount(paper: Paper): number {
 // Paper registry - import and register all papers here
 import { widaPaper } from './wida-paper';
 import { huazhongPaper } from './huazhong-paper';
+import { petPaper } from './pet-paper';
 
-export const papers: Paper[] = [widaPaper, huazhongPaper];
+export const papers: Paper[] = [widaPaper, huazhongPaper, petPaper];
 
 export function getPaperById(id: string): Paper | undefined {
   return papers.find((p) => p.id === id);
