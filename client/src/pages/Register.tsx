@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from "@/lib/branding";
 import { toast } from "sonner";
 import { Eye, EyeOff, UserPlus, KeyRound } from "lucide-react";
 
@@ -93,9 +94,9 @@ export default function Register() {
           {/* Brand heading */}
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-[#1E3A5F]">
-              English Proficiency Assessment
+              {APP_BRAND_TITLE}
             </h1>
-            <p className="text-slate-500 mt-1 text-sm">英语能力测评系统</p>
+            <p className="text-slate-500 mt-1 text-sm">{APP_BRAND_SUBTITLE}</p>
             <div className="mt-3 flex items-center justify-center gap-2">
               <div className="h-px w-12 bg-[#D4A84B]/30" />
               <span className="text-[10px] text-[#D4A84B] font-medium tracking-widest">AEIS · KET · PET</span>
