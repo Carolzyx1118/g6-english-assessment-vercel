@@ -11,6 +11,7 @@ import type {
 } from "@shared/manualPaperBlueprint";
 import { MANUAL_SECTION_TYPE_LABELS } from "@shared/manualPaperBlueprint";
 import { createSquareImageDataUrl, formatFileSize, validateImageFile } from "@/lib/imageUtils";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -101,6 +102,7 @@ function buildBlueprint(
 }
 
 export default function PaperIntake() {
+  const uploadFileMutation = trpc.papers.uploadFile.useMutation();
   const [paperSeed] = useState(() => createLocalId());
   const [createdAt] = useState(() => new Date().toISOString());
   const [title, setTitle] = useState("");
@@ -248,11 +250,24 @@ export default function PaperIntake() {
 
     try {
       const normalizedImage = await createSquareImageDataUrl(file, 320);
+      let previewUrl = normalizedImage.previewUrl;
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `option-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: normalizedImage.mimeType,
+          fileBase64: normalizedImage.dataUrl.split(",")[1] ?? "",
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
+
       updateOption(sectionId, subsectionId, questionId, optionId, (option) => ({
         ...option,
         image: {
           dataUrl: normalizedImage.dataUrl,
-          previewUrl: normalizedImage.previewUrl,
+          previewUrl,
           fileName: file.name,
           mimeType: normalizedImage.mimeType,
           size: normalizedImage.size,
