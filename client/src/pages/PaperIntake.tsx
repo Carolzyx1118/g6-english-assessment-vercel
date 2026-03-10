@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Plus, Trash2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
@@ -922,7 +922,7 @@ export default function PaperIntake() {
                                   Optional. This image will appear above all questions in this big question block.
                                 </p>
                                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
-                                  <ImagePlus className="h-4 w-4" />
+                                  <Plus className="h-4 w-4" />
                                   {subsection.sceneImage ? "Replace Image" : "Add Image"}
                                   <input
                                     type="file"
@@ -1128,7 +1128,7 @@ export default function PaperIntake() {
                                                 placeholder="Optional text for this option"
                                               />
                                               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
-                                                <ImagePlus className="h-4 w-4" />
+                                                <Plus className="h-4 w-4" />
                                                 {option.image ? "Replace Image" : "Add Image"}
                                                 <input
                                                   type="file"
@@ -1329,7 +1329,7 @@ export default function PaperIntake() {
 
                           {subsection.questionType !== "passage-fill-blank" && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
-                              <FilePlus2 className="mr-2 h-4 w-4" />
+                              <Plus className="mr-2 h-4 w-4" />
                               {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
                             </Button>
                           )}
@@ -1339,7 +1339,7 @@ export default function PaperIntake() {
                   </div>
 
                   <Button type="button" variant="outline" onClick={() => addSubsection(section.id)}>
-                    <SquarePen className="mr-2 h-4 w-4" />
+                    <FileText className="mr-2 h-4 w-4" />
                     Add Big Question
                   </Button>
                 </CardContent>
