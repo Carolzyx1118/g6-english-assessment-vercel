@@ -22,6 +22,8 @@ import type {
   ManualMCQQuestion,
   ManualPaperBlueprint,
   ManualPassageFillBlankQuestion,
+  ManualPassageMCQOption,
+  ManualPassageMCQQuestion,
   ManualQuestion,
   ManualQuestionType,
   ManualSection,
@@ -35,6 +37,7 @@ import {
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
 import { toast } from "sonner";
+import PassageMCQPreview from "@/components/PassageMCQPreview";
 
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
@@ -119,6 +122,24 @@ function createPassageFillBlankQuestion(correctAnswerWordBankId: string): Manual
   };
 }
 
+function createPassageMCQOption(index: number): ManualPassageMCQOption {
+  return {
+    id: createLocalId(),
+    label: getOptionLabel(index),
+    text: "",
+  };
+}
+
+function createPassageMCQQuestion(blankNumber: number): ManualPassageMCQQuestion {
+  return {
+    id: createLocalId(),
+    type: "passage-mcq",
+    prompt: `Blank ${blankNumber}`,
+    options: [createPassageMCQOption(0), createPassageMCQOption(1), createPassageMCQOption(2), createPassageMCQOption(3)],
+    correctAnswer: "A",
+  };
+}
+
 /** Returns true for question types that use a word bank */
 function isWordBankSubsectionType(questionType: ManualQuestionType) {
   return questionType === "fill-blank" || questionType === "passage-fill-blank";
@@ -151,6 +172,17 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
       instructions: "",
       questionType,
       wordBank,
+      passageText: "",
+      questions: [],
+    };
+  }
+
+  if (questionType === "passage-mcq") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
       passageText: "",
       questions: [],
     };
@@ -189,6 +221,15 @@ function isAnyFillBlankQuestion(question: ManualQuestion): question is ManualFil
   return question.type === "fill-blank" || question.type === "passage-fill-blank";
 }
 
+function isManualPassageMCQQuestion(question: ManualQuestion): question is ManualPassageMCQQuestion {
+  return question.type === "passage-mcq";
+}
+
+/** Returns true for question types that use a passage */
+function isPassageSubsectionType(questionType: ManualQuestionType) {
+  return questionType === "passage-fill-blank" || questionType === "passage-mcq";
+}
+
 function buildBlueprint(
   paperSeed: string,
   createdAt: string,
@@ -213,6 +254,16 @@ function buildBlueprint(
             ...subsection,
             wordBank: relabelWordBank(subsection.wordBank ?? []),
             questions: subsection.questions.filter(isAnyFillBlankQuestion),
+          };
+        }
+
+        if (subsection.questionType === "passage-mcq") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualPassageMCQQuestion).map((question) => ({
+              ...question,
+              options: relabelOptions(question.options as ManualMCQOption[]) as unknown as ManualPassageMCQOption[],
+            })),
           };
         }
 
@@ -497,6 +548,17 @@ export default function PaperIntake() {
     ));
   };
 
+  const updatePassageMCQQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPassageMCQQuestion) => ManualPassageMCQQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPassageMCQQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const addSection = () => {
     setSections((prev) => [...prev, createSection()]);
   };
@@ -729,6 +791,55 @@ export default function PaperIntake() {
         ...subsection,
         passageText: newPassageText,
         questions: nextQuestions,
+      };
+    });
+  };
+
+  /**
+   * For passage-mcq: auto-sync the questions array to match the number of ___ in the passage.
+   * Each blank gets its own set of MCQ options (A/B/C/D).
+   */
+  const syncPassageMCQBlanksToQuestions = (sectionId: string, subsectionId: string, newPassageText: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const blankCount = countPassageBlanks(newPassageText);
+      const existingQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
+
+      let nextQuestions: ManualPassageMCQQuestion[];
+      if (existingQuestions.length < blankCount) {
+        nextQuestions = [
+          ...existingQuestions,
+          ...Array.from({ length: blankCount - existingQuestions.length }, (_, i) =>
+            createPassageMCQQuestion(existingQuestions.length + i + 1),
+          ),
+        ];
+      } else {
+        nextQuestions = existingQuestions.slice(0, blankCount);
+      }
+
+      return {
+        ...subsection,
+        passageText: newPassageText,
+        questions: nextQuestions,
+      };
+    });
+  };
+
+  const addPassageMCQOption = (sectionId: string, subsectionId: string, questionId: string) => {
+    updatePassageMCQQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      options: [...question.options, createPassageMCQOption(question.options.length)],
+    }));
+  };
+
+  const removePassageMCQOption = (sectionId: string, subsectionId: string, questionId: string, optionId: string) => {
+    updatePassageMCQQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.options.length <= 2) return question;
+      const nextOptions = question.options.filter((o) => o.id !== optionId).map((o, i) => ({ ...o, label: getOptionLabel(i) }));
+      const hasCorrect = nextOptions.some((o) => o.label === question.correctAnswer);
+      return {
+        ...question,
+        options: nextOptions,
+        correctAnswer: hasCorrect ? question.correctAnswer : nextOptions[0]?.label || "A",
       };
     });
   };
@@ -1116,7 +1227,30 @@ export default function PaperIntake() {
                             </div>
                           )}
 
-                          {/* Passage text editor — only for passage-fill-blank */}
+                          {/* Passage text editor — for passage-fill-blank and passage-mcq */}
+                          {subsection.questionType === "passage-mcq" && (
+                            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-violet-800">Passage Text</p>
+                                <p className="text-xs text-violet-700/80">
+                                  Type or paste the full passage. Use <code className="rounded bg-violet-100 px-1 py-0.5 text-violet-900">___</code> (three underscores) to mark each blank. Each blank will have its own MCQ options.
+                                </p>
+                              </div>
+                              <Textarea
+                                rows={8}
+                                value={subsection.passageText ?? ""}
+                                onChange={(event) =>
+                                  syncPassageMCQBlanksToQuestions(section.id, subsection.id, event.target.value)
+                                }
+                                placeholder={`Example:\n\nLast summer, I ___ to the beach with my family. We ___ a wonderful time. The weather was ___ and sunny.`}
+                                className="font-mono text-sm"
+                              />
+                              <p className="mt-2 text-xs text-violet-700">
+                                {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
+                              </p>
+                            </div>
+                          )}
+
                           {subsection.questionType === "passage-fill-blank" && (
                             <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
                               <div className="mb-3">
@@ -1375,6 +1509,95 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Passage MCQ — per-blank options editor */}
+                            {subsection.questionType === "passage-mcq" && (() => {
+                              const passageMCQQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
+                              if (passageMCQQuestions.length === 0) {
+                                return (
+                                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                                    Add ___ blanks in the passage above to create MCQ slots.
+                                  </div>
+                                );
+                              }
+                              return passageMCQQuestions.map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-violet-800">{`Blank ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Define the MCQ options for this blank.</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {question.options.map((option) => (
+                                        <div key={option.id} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-800">
+                                            {option.label}
+                                          </span>
+                                          <Input
+                                            value={option.text}
+                                            onChange={(event) =>
+                                              updatePassageMCQQuestion(section.id, subsection.id, question.id, (q) => ({
+                                                ...q,
+                                                options: q.options.map((o) =>
+                                                  o.id === option.id ? { ...o, text: event.target.value } : o,
+                                                ),
+                                              }))
+                                            }
+                                            placeholder={`Option ${option.label} text`}
+                                            className="h-8 text-sm"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removePassageMCQOption(section.id, subsection.id, question.id, option.id)}
+                                            className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => addPassageMCQOption(section.id, subsection.id, question.id)}
+                                        className="text-xs"
+                                      >
+                                        <Plus className="mr-1 h-3 w-3" />
+                                        Add Option
+                                      </Button>
+
+                                      <div className="min-w-[140px] space-y-1">
+                                        <Label className="text-xs">Correct Answer</Label>
+                                        <select
+                                          value={question.correctAnswer}
+                                          onChange={(event) =>
+                                            updatePassageMCQQuestion(section.id, subsection.id, question.id, (q) => ({
+                                              ...q,
+                                              correctAnswer: event.target.value,
+                                            }))
+                                          }
+                                          className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                                        >
+                                          {question.options.map((option, optionIndex) => (
+                                            <option key={option.id} value={getOptionLabel(optionIndex)}>
+                                              {getOptionLabel(optionIndex)}. {option.text || "—"}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+
                             {/* Passage fill-blank answer mapping */}
                             {subsection.questionType === "passage-fill-blank" && (() => {
                               const passageQuestions = subsection.questions.filter(isManualPassageFillBlankQuestion);
@@ -1426,8 +1649,8 @@ export default function PaperIntake() {
                             })()}
                           </div>
 
-                          {/* Add question/blank button — not shown for passage-fill-blank (blanks auto-sync from passage) */}
-                          {subsection.questionType !== "passage-fill-blank" && (
+                          {/* Add question/blank button — not shown for passage types (blanks auto-sync from passage) */}
+                          {!isPassageSubsectionType(subsection.questionType) && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
                               {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
@@ -1541,6 +1764,14 @@ export default function PaperIntake() {
 
                             {subsection.questionType === "passage-fill-blank" && (
                               <PassageFillBlankSubsectionPreview subsection={subsection} />
+                            )}
+
+                            {subsection.questionType === "passage-mcq" && (
+                              <PassageMCQPreview
+                                passageText={subsection.passageText ?? ""}
+                                questions={subsection.questions.filter(isManualPassageMCQQuestion)}
+                                sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
+                              />
                             )}
                           </div>
                         </div>

@@ -204,3 +204,4 @@
 - [x] Fix nested <a> tag error in PaperIntake.tsx
 - [x] Add "passage word bank fill blank" question type to Manual Paper Builder (supports inputting a full passage/article with blanks, word bank same as fill-blank)
 - [x] Fix SyntaxError: MANUAL_QUESTION_TYPE_OPTIONS import binding not found on /paper-intake page
+- [x] Add "passage multiple choice" question type to Manual Paper Builder (full passage with numbered blanks, clicking each blank shows MCQ options like PET Reading Part 5)

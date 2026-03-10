@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   ManualPassageFillBlankQuestion,
+  ManualPassageMCQQuestion,
   ManualFillBlankQuestion,
   ManualSubsection,
   ManualQuestionType,
@@ -26,25 +27,47 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(option!.description).toContain("passage");
   });
 
-  it("has all three question types in labels", () => {
+  it("includes passage-mcq in MANUAL_QUESTION_TYPE_LABELS", () => {
+    expect(MANUAL_QUESTION_TYPE_LABELS["passage-mcq"]).toBe(
+      "Passage Multiple Choice",
+    );
+  });
+
+  it("includes passage-mcq in MANUAL_QUESTION_TYPE_OPTIONS", () => {
+    const option = MANUAL_QUESTION_TYPE_OPTIONS.find(
+      (o) => o.value === "passage-mcq",
+    );
+    expect(option).toBeDefined();
+    expect(option!.label).toBe("Passage Multiple Choice");
+    expect(option!.description).toContain("PET");
+  });
+
+  it("has all four question types in labels", () => {
     const keys = Object.keys(MANUAL_QUESTION_TYPE_LABELS);
     expect(keys).toContain("mcq");
     expect(keys).toContain("fill-blank");
     expect(keys).toContain("passage-fill-blank");
-    expect(keys).toHaveLength(3);
+    expect(keys).toContain("passage-mcq");
+    expect(keys).toHaveLength(4);
   });
 
-  it("has all three question types in options array", () => {
+  it("has all four question types in options array", () => {
     const values = MANUAL_QUESTION_TYPE_OPTIONS.map((o) => o.value);
     expect(values).toContain("mcq");
     expect(values).toContain("fill-blank");
     expect(values).toContain("passage-fill-blank");
-    expect(values).toHaveLength(3);
+    expect(values).toContain("passage-mcq");
+    expect(values).toHaveLength(4);
   });
 
   it("passage-fill-blank question type is assignable", () => {
     const qt: ManualQuestionType = "passage-fill-blank";
     expect(qt).toBe("passage-fill-blank");
+  });
+
+  it("passage-mcq question type is assignable", () => {
+    const qt: ManualQuestionType = "passage-mcq";
+    expect(qt).toBe("passage-mcq");
   });
 
   it("ManualPassageFillBlankQuestion has correct shape", () => {
@@ -56,6 +79,42 @@ describe("manualPaperBlueprint types and labels", () => {
     };
     expect(question.type).toBe("passage-fill-blank");
     expect(question.correctAnswerWordBankId).toBe("wb-1");
+  });
+
+  it("ManualPassageMCQQuestion has correct shape", () => {
+    const question: ManualPassageMCQQuestion = {
+      id: "test-mcq-1",
+      type: "passage-mcq",
+      prompt: "Blank 1",
+      options: [
+        { id: "opt-a", label: "A", text: "went" },
+        { id: "opt-b", label: "B", text: "goes" },
+        { id: "opt-c", label: "C", text: "going" },
+        { id: "opt-d", label: "D", text: "gone" },
+      ],
+      correctAnswer: "A",
+    };
+    expect(question.type).toBe("passage-mcq");
+    expect(question.options).toHaveLength(4);
+    expect(question.options[0].label).toBe("A");
+    expect(question.options[0].text).toBe("went");
+    expect(question.correctAnswer).toBe("A");
+  });
+
+  it("ManualPassageMCQQuestion options can have varying count", () => {
+    const question: ManualPassageMCQQuestion = {
+      id: "test-mcq-2",
+      type: "passage-mcq",
+      prompt: "Blank 2",
+      options: [
+        { id: "opt-a", label: "A", text: "happy" },
+        { id: "opt-b", label: "B", text: "sad" },
+        { id: "opt-c", label: "C", text: "angry" },
+      ],
+      correctAnswer: "B",
+    };
+    expect(question.options).toHaveLength(3);
+    expect(question.correctAnswer).toBe("B");
   });
 
   it("ManualSubsection supports passageText field", () => {
@@ -77,6 +136,45 @@ describe("manualPaperBlueprint types and labels", () => {
     };
     expect(subsection.passageText).toBe("The boy ___ to school every day.");
     expect(subsection.questionType).toBe("passage-fill-blank");
+  });
+
+  it("ManualSubsection supports passage-mcq with passageText", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-mcq-1",
+      title: "PET Cloze Test",
+      instructions: "Read the passage and choose the best word for each blank.",
+      questionType: "passage-mcq",
+      questions: [
+        {
+          id: "q-1",
+          type: "passage-mcq",
+          prompt: "Blank 1",
+          options: [
+            { id: "opt-a", label: "A", text: "went" },
+            { id: "opt-b", label: "B", text: "goes" },
+            { id: "opt-c", label: "C", text: "going" },
+          ],
+          correctAnswer: "A",
+        },
+        {
+          id: "q-2",
+          type: "passage-mcq",
+          prompt: "Blank 2",
+          options: [
+            { id: "opt-a2", label: "A", text: "had" },
+            { id: "opt-b2", label: "B", text: "have" },
+            { id: "opt-c2", label: "C", text: "has" },
+          ],
+          correctAnswer: "B",
+        },
+      ],
+      passageText: "Last summer, I ___ to the beach. We ___ a wonderful time.",
+    };
+    expect(subsection.questionType).toBe("passage-mcq");
+    expect(subsection.passageText).toContain("___");
+    expect(subsection.questions).toHaveLength(2);
+    // No wordBank for passage-mcq
+    expect(subsection.wordBank).toBeUndefined();
   });
 
   it("ManualSubsection passageText is optional", () => {
