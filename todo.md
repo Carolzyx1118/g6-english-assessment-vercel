@@ -200,3 +200,5 @@
 - [x] Save Speaking audio recordings to S3 and store URLs in database (already saved via answersJson)
 - [x] Update test results saving to include speaking audio URLs (already included in answersJson)
 - [x] Add audio playback controls in test history detail view
+- [x] Sync GitHub latest changes
+- [x] Fix nested <a> tag error in PaperIntake.tsx
