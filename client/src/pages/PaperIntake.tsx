@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FilePlus2, ImagePlus, Music, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
+import { ArrowLeft, FilePlus2, ImagePlus, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
@@ -32,6 +32,7 @@ import type {
   ManualSubsection,
   ManualTypedFillBlankQuestion,
   ManualPassageOpenEndedQuestion,
+  ManualWritingQuestion,
   ManualWordBankItem,
 } from "@shared/manualPaperBlueprint";
 import {
@@ -143,6 +144,14 @@ function createPassageOpenEndedQuestion(): ManualPassageOpenEndedQuestion {
   };
 }
 
+function createWritingQuestion(): ManualWritingQuestion {
+  return {
+    id: createLocalId(),
+    type: "writing",
+    prompt: "",
+  };
+}
+
 function createPassageMCQOption(index: number): ManualPassageMCQOption {
   return {
     id: createLocalId(),
@@ -230,6 +239,16 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "writing") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createWritingQuestion()],
+    };
+  }
+
   return {
     id: createLocalId(),
     title: "",
@@ -273,6 +292,10 @@ function isManualTypedFillBlankQuestion(question: ManualQuestion): question is M
 
 function isManualPassageOpenEndedQuestion(question: ManualQuestion): question is ManualPassageOpenEndedQuestion {
   return question.type === "passage-open-ended";
+}
+
+function isManualWritingQuestion(question: ManualQuestion): question is ManualWritingQuestion {
+  return question.type === "writing";
 }
 
 /** Returns true for question types that use a passage */
@@ -328,6 +351,13 @@ function buildBlueprint(
           return {
             ...subsection,
             questions: subsection.questions.filter(isManualPassageOpenEndedQuestion),
+          };
+        }
+
+        if (subsection.questionType === "writing") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualWritingQuestion),
           };
         }
 
@@ -645,6 +675,65 @@ export default function PaperIntake() {
     ));
   };
 
+  const updateWritingQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualWritingQuestion) => ManualWritingQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualWritingQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const handleWritingImageUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const compressedFile = await compressImage(file, "scene");
+      const fileBase64 = await fileToBase64(compressedFile);
+      const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `writing-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
+
+      updateWritingQuestion(sectionId, subsectionId, questionId, (question) => ({
+        ...question,
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
+      }));
+
+      toast.success("Writing prompt image updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
+    }
+  };
+
   const addSection = () => {
     setSections((prev) => [...prev, createSection()]);
   };
@@ -730,6 +819,17 @@ export default function PaperIntake() {
           questions: [
             ...subsection.questions.filter(isManualPassageOpenEndedQuestion),
             createPassageOpenEndedQuestion(),
+          ],
+        };
+      }
+
+      // Writing type: typically only 1 question per subsection, but allow adding more
+      if (subsection.questionType === "writing") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualWritingQuestion),
+            createWritingQuestion(),
           ],
         };
       }
@@ -1886,6 +1986,173 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Writing questions editor */}
+                            {subsection.questionType === "writing" &&
+                              subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-rose-800">{`Writing Task ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Define the writing prompt, optional image, and word count guidelines.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Writing Prompt / Requirements</Label>
+                                      <Textarea
+                                        rows={4}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateWritingQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="e.g. Write a letter to your friend about your recent holiday. Include details about where you went, what you did, and how you felt."
+                                      />
+                                    </div>
+
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                                        <div className="space-y-2">
+                                          <Label>Prompt Image <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                          <p className="text-xs text-slate-500">
+                                            Upload an image related to the writing task (e.g. a picture prompt).
+                                          </p>
+                                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-rose-300/60 bg-white px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:border-rose-400 hover:text-rose-800">
+                                            <ImagePlus className="h-4 w-4" />
+                                            {question.image ? "Replace Image" : "Add Image"}
+                                            <input
+                                              type="file"
+                                              accept="image/png,image/jpeg,image/webp,image/gif"
+                                              className="hidden"
+                                              onChange={(event) =>
+                                                handleWritingImageUpload(
+                                                  section.id,
+                                                  subsection.id,
+                                                  question.id,
+                                                  event.target.files?.[0],
+                                                )
+                                              }
+                                            />
+                                          </label>
+                                          {question.image && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                              onClick={() =>
+                                                updateWritingQuestion(section.id, subsection.id, question.id, (q) => ({
+                                                  ...q,
+                                                  image: undefined,
+                                                }))
+                                              }
+                                            >
+                                              Remove Image
+                                            </Button>
+                                          )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          <Label>Preview</Label>
+                                          <div className="flex min-h-[100px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white p-2">
+                                            {question.image ? (
+                                              <img
+                                                src={question.image.previewUrl || question.image.dataUrl}
+                                                alt="Writing prompt"
+                                                className="max-h-28 w-full object-contain"
+                                              />
+                                            ) : (
+                                              <span className="px-4 text-center text-xs text-slate-400">
+                                                No image
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                      <div className="space-y-2">
+                                        <Label>Min Words <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={question.minWords ?? ""}
+                                          onChange={(event) =>
+                                            updateWritingQuestion(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              (currentQuestion) => ({
+                                                ...currentQuestion,
+                                                minWords: event.target.value ? Number(event.target.value) : undefined,
+                                              }),
+                                            )
+                                          }
+                                          placeholder="e.g. 80"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>Max Words <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={question.maxWords ?? ""}
+                                          onChange={(event) =>
+                                            updateWritingQuestion(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              (currentQuestion) => ({
+                                                ...currentQuestion,
+                                                maxWords: event.target.value ? Number(event.target.value) : undefined,
+                                              }),
+                                            )
+                                          }
+                                          placeholder="e.g. 150"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Reference Answer <span className="text-xs font-normal text-slate-400">(optional, for grading reference)</span></Label>
+                                      <Textarea
+                                        rows={4}
+                                        value={question.referenceAnswer ?? ""}
+                                        onChange={(event) =>
+                                          updateWritingQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              referenceAnswer: event.target.value || undefined,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="Type a model/reference answer for grading purposes."
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
                             {/* Passage MCQ — per-blank options editor */}
                             {subsection.questionType === "passage-mcq" && (() => {
                               const passageMCQQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
@@ -2030,7 +2297,7 @@ export default function PaperIntake() {
                           {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq") && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
-                              {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
+                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "writing" ? "Add Writing Task" : "Add Question"}
                             </Button>
                           )}
                         </div>
@@ -2224,6 +2491,50 @@ export default function PaperIntake() {
                                 ))}
                               </div>
                             )}
+
+                            {subsection.questionType === "writing" &&
+                              subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <PenLine className="h-4 w-4 text-rose-600" />
+                                    <p className="text-sm font-semibold text-slate-800">{`Writing Task ${questionIndex + 1}`}</p>
+                                  </div>
+
+                                  {question.image && (
+                                    <div className="mb-4 flex justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                      <img
+                                        src={question.image.previewUrl || question.image.dataUrl}
+                                        alt="Writing prompt"
+                                        className="max-h-48 w-full object-contain"
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4 mb-4">
+                                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rose-700">Writing Prompt</p>
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                                      {question.prompt || "Writing prompt goes here."}
+                                    </p>
+                                    {(question.minWords || question.maxWords) && (
+                                      <p className="mt-2 text-xs text-slate-500">
+                                        Word count: {question.minWords ? `min ${question.minWords}` : ""}
+                                        {question.minWords && question.maxWords ? " – " : ""}
+                                        {question.maxWords ? `max ${question.maxWords}` : ""}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-xs text-slate-400">
+                                    Student writing area
+                                  </div>
+
+                                  {question.referenceAnswer && (
+                                    <p className="mt-3 text-xs font-medium text-emerald-700">
+                                      Reference answer: {question.referenceAnswer.length > 100 ? question.referenceAnswer.slice(0, 100) + "…" : question.referenceAnswer}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
                           </div>
                         </div>
                       ))}

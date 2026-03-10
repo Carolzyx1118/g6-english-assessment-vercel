@@ -15,7 +15,7 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank" | "passage-open-ended";
+export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank" | "passage-open-ended" | "writing";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
@@ -24,6 +24,7 @@ export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   "passage-mcq": "Passage Multiple Choice",
   "typed-fill-blank": "Fill in Blank",
   "passage-open-ended": "Passage Open-Ended",
+  writing: "Writing",
 };
 
 export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
@@ -37,6 +38,7 @@ export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
   { value: "passage-fill-blank", label: "Passage Word Bank Fill Blank", description: "A full passage/article with numbered blanks and a shared word bank." },
   { value: "passage-mcq", label: "Passage Multiple Choice", description: "A passage with numbered blanks — click each blank to choose from MCQ options (PET-style cloze)." },
   { value: "passage-open-ended", label: "Passage Open-Ended", description: "A passage followed by open-ended questions — students read the article and type free-form answers (文章问答题)." },
+  { value: "writing", label: "Writing", description: "A writing task with optional image and prompt — students compose an essay or short text (写作题)." },
 ];
 
 export interface ManualOptionImage {
@@ -119,7 +121,23 @@ export interface ManualPassageOpenEndedQuestion {
   referenceAnswer: string;
 }
 
-export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion;
+/** Writing question — student writes an essay/composition based on a prompt */
+export interface ManualWritingQuestion {
+  id: string;
+  type: "writing";
+  /** The writing prompt/requirements, e.g. "Write a letter to your friend about your holiday." */
+  prompt: string;
+  /** Optional image for the writing task (e.g. a picture prompt) */
+  image?: ManualOptionImage;
+  /** Minimum word count suggestion (optional) */
+  minWords?: number;
+  /** Maximum word count suggestion (optional) */
+  maxWords?: number;
+  /** A model/reference answer for grading (optional) */
+  referenceAnswer?: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion | ManualWritingQuestion;
 
 /** Audio file attached to a subsection (used for listening sections) */
 export interface ManualAudioFile {

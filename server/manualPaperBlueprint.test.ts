@@ -5,6 +5,7 @@ import type {
   ManualFillBlankQuestion,
   ManualTypedFillBlankQuestion,
   ManualPassageOpenEndedQuestion,
+  ManualWritingQuestion,
   ManualSubsection,
   ManualQuestionType,
 } from "../shared/manualPaperBlueprint";
@@ -74,7 +75,20 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(option!.description).toContain("文章问答题");
   });
 
-  it("has all six question types in labels", () => {
+  it("includes writing in MANUAL_QUESTION_TYPE_LABELS", () => {
+    expect(MANUAL_QUESTION_TYPE_LABELS["writing"]).toBe("Writing");
+  });
+
+  it("includes writing in MANUAL_QUESTION_TYPE_OPTIONS", () => {
+    const option = MANUAL_QUESTION_TYPE_OPTIONS.find(
+      (o) => o.value === "writing",
+    );
+    expect(option).toBeDefined();
+    expect(option!.label).toBe("Writing");
+    expect(option!.description).toContain("写作题");
+  });
+
+  it("has all seven question types in labels", () => {
     const keys = Object.keys(MANUAL_QUESTION_TYPE_LABELS);
     expect(keys).toContain("mcq");
     expect(keys).toContain("fill-blank");
@@ -82,10 +96,11 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(keys).toContain("passage-mcq");
     expect(keys).toContain("typed-fill-blank");
     expect(keys).toContain("passage-open-ended");
-    expect(keys).toHaveLength(6);
+    expect(keys).toContain("writing");
+    expect(keys).toHaveLength(7);
   });
 
-  it("has all six question types in options array", () => {
+  it("has all seven question types in options array", () => {
     const values = MANUAL_QUESTION_TYPE_OPTIONS.map((o) => o.value);
     expect(values).toContain("mcq");
     expect(values).toContain("fill-blank");
@@ -93,7 +108,8 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(values).toContain("passage-mcq");
     expect(values).toContain("typed-fill-blank");
     expect(values).toContain("passage-open-ended");
-    expect(values).toHaveLength(6);
+    expect(values).toContain("writing");
+    expect(values).toHaveLength(7);
   });
 
   it("passage-fill-blank question type is assignable", () => {
@@ -416,5 +432,97 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(subsection.audio).toBeDefined();
     expect(subsection.audio!.previewUrl).toBeUndefined();
     expect(subsection.audio!.mimeType).toBe("audio/wav");
+  });
+
+  it("writing question type is assignable", () => {
+    const qt: ManualQuestionType = "writing";
+    expect(qt).toBe("writing");
+  });
+
+  it("ManualWritingQuestion has correct shape with all fields", () => {
+    const question: ManualWritingQuestion = {
+      id: "test-writing-1",
+      type: "writing",
+      prompt: "Write a letter to your friend about your recent holiday.",
+      image: {
+        dataUrl: "data:image/png;base64,abc123",
+        previewUrl: "https://cdn.example.com/images/holiday.png",
+        fileName: "holiday.png",
+        mimeType: "image/png",
+        size: 204800,
+      },
+      minWords: 80,
+      maxWords: 150,
+      referenceAnswer: "Dear Tom, I had a wonderful holiday...",
+    };
+    expect(question.type).toBe("writing");
+    expect(question.prompt).toContain("letter");
+    expect(question.image).toBeDefined();
+    expect(question.image!.fileName).toBe("holiday.png");
+    expect(question.minWords).toBe(80);
+    expect(question.maxWords).toBe(150);
+    expect(question.referenceAnswer).toContain("wonderful");
+  });
+
+  it("ManualWritingQuestion works with minimal fields (no image, no word count, no reference)", () => {
+    const question: ManualWritingQuestion = {
+      id: "test-writing-2",
+      type: "writing",
+      prompt: "Describe your favorite animal.",
+    };
+    expect(question.type).toBe("writing");
+    expect(question.prompt).toContain("animal");
+    expect(question.image).toBeUndefined();
+    expect(question.minWords).toBeUndefined();
+    expect(question.maxWords).toBeUndefined();
+    expect(question.referenceAnswer).toBeUndefined();
+  });
+
+  it("ManualSubsection supports writing question type", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-writing-1",
+      title: "Essay Writing",
+      instructions: "Write an essay on the given topic.",
+      questionType: "writing",
+      questions: [
+        {
+          id: "q-1",
+          type: "writing",
+          prompt: "Write about your favorite place to visit.",
+          minWords: 100,
+          maxWords: 200,
+        },
+      ],
+    };
+    expect(subsection.questionType).toBe("writing");
+    expect(subsection.questions).toHaveLength(1);
+    expect(subsection.wordBank).toBeUndefined();
+    expect(subsection.passageText).toBeUndefined();
+  });
+
+  it("ManualSubsection supports writing with image prompt", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-writing-2",
+      title: "Picture Writing",
+      instructions: "Look at the picture and write a story.",
+      questionType: "writing",
+      questions: [
+        {
+          id: "q-1",
+          type: "writing",
+          prompt: "Look at the picture below and write a story about what is happening.",
+          image: {
+            dataUrl: "data:image/jpeg;base64,xyz",
+            fileName: "scene.jpg",
+            mimeType: "image/jpeg",
+            size: 102400,
+          },
+        },
+      ],
+    };
+    expect(subsection.questionType).toBe("writing");
+    const writingQ = subsection.questions[0] as ManualWritingQuestion;
+    expect(writingQ.image).toBeDefined();
+    expect(writingQ.image!.fileName).toBe("scene.jpg");
   });
 });
