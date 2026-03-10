@@ -474,7 +474,7 @@ export default function PaperIntake() {
                                           </Button>
                                         </div>
 
-                                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_200px]">
+                                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_156px]">
                                           <div className="space-y-2">
                                             <Label>{`Option ${option.label} Text`}</Label>
                                             <Input
@@ -509,12 +509,12 @@ export default function PaperIntake() {
 
                                           <div className="space-y-2">
                                             <Label>{`Option ${option.label} Preview`}</Label>
-                                            <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                                            <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-28 sm:w-28">
                                               {option.image ? (
                                                 <img
                                                   src={option.image.dataUrl}
                                                   alt={`Option ${option.label}`}
-                                                  className="h-full w-full object-cover"
+                                                  className="h-full w-full object-contain"
                                                 />
                                               ) : (
                                                 <span className="px-4 text-center text-xs text-slate-400">
@@ -631,18 +631,18 @@ export default function PaperIntake() {
                                 <p className="text-sm font-medium text-slate-800">
                                   {`${questionIndex + 1}. ${question.prompt || "Question prompt goes here."}`}
                                 </p>
-                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                   {question.options.map((option) => (
                                     <div key={option.id} className="rounded-xl border border-slate-200 p-3">
                                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                         {option.label}
                                       </p>
-                                      <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-slate-100">
+                                      <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-28">
                                         {option.image ? (
                                           <img
                                             src={option.image.dataUrl}
                                             alt={`Preview ${option.label}`}
-                                            className="h-full w-full object-cover"
+                                            className="h-full w-full object-contain"
                                           />
                                         ) : (
                                           <span className="px-3 text-center text-xs text-slate-400">No image</span>
