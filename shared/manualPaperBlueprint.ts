@@ -15,7 +15,7 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank";
+export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank" | "passage-open-ended";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
@@ -23,6 +23,7 @@ export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   "passage-fill-blank": "Passage Word Bank Fill Blank",
   "passage-mcq": "Passage Multiple Choice",
   "typed-fill-blank": "Fill in Blank",
+  "passage-open-ended": "Passage Open-Ended",
 };
 
 export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
@@ -35,6 +36,7 @@ export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
   { value: "typed-fill-blank", label: "Fill in Blank", description: "Individual questions with blanks — students type answers directly." },
   { value: "passage-fill-blank", label: "Passage Word Bank Fill Blank", description: "A full passage/article with numbered blanks and a shared word bank." },
   { value: "passage-mcq", label: "Passage Multiple Choice", description: "A passage with numbered blanks — click each blank to choose from MCQ options (PET-style cloze)." },
+  { value: "passage-open-ended", label: "Passage Open-Ended", description: "A passage followed by open-ended questions — students read the article and type free-form answers (文章问答题)." },
 ];
 
 export interface ManualOptionImage {
@@ -107,7 +109,17 @@ export interface ManualTypedFillBlankQuestion {
   correctAnswer: string;
 }
 
-export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion;
+/** Passage open-ended — student reads a passage then answers free-form questions */
+export interface ManualPassageOpenEndedQuestion {
+  id: string;
+  type: "passage-open-ended";
+  /** The question text, e.g. "What is the main idea of the passage?" */
+  prompt: string;
+  /** A reference/model answer for grading (optional — teacher may grade manually) */
+  referenceAnswer: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion;
 
 export interface ManualSubsection {
   id: string;
@@ -117,7 +129,7 @@ export interface ManualSubsection {
   questionType: ManualQuestionType;
   questions: ManualQuestion[];
   wordBank?: ManualWordBankItem[];
-  /** Full passage text for passage-fill-blank and passage-mcq types. Use ___ to mark blanks. */
+  /** Full passage text for passage-fill-blank, passage-mcq, and passage-open-ended types. Use ___ to mark blanks (for fill/mcq types). */
   passageText?: string;
 }
 

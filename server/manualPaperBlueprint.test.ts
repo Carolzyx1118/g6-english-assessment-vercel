@@ -4,6 +4,7 @@ import type {
   ManualPassageMCQQuestion,
   ManualFillBlankQuestion,
   ManualTypedFillBlankQuestion,
+  ManualPassageOpenEndedQuestion,
   ManualSubsection,
   ManualQuestionType,
 } from "../shared/manualPaperBlueprint";
@@ -58,24 +59,41 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(option!.description).toContain("type answers directly");
   });
 
-  it("has all five question types in labels", () => {
+  it("includes passage-open-ended in MANUAL_QUESTION_TYPE_LABELS", () => {
+    expect(MANUAL_QUESTION_TYPE_LABELS["passage-open-ended"]).toBe(
+      "Passage Open-Ended",
+    );
+  });
+
+  it("includes passage-open-ended in MANUAL_QUESTION_TYPE_OPTIONS", () => {
+    const option = MANUAL_QUESTION_TYPE_OPTIONS.find(
+      (o) => o.value === "passage-open-ended",
+    );
+    expect(option).toBeDefined();
+    expect(option!.label).toBe("Passage Open-Ended");
+    expect(option!.description).toContain("文章问答题");
+  });
+
+  it("has all six question types in labels", () => {
     const keys = Object.keys(MANUAL_QUESTION_TYPE_LABELS);
     expect(keys).toContain("mcq");
     expect(keys).toContain("fill-blank");
     expect(keys).toContain("passage-fill-blank");
     expect(keys).toContain("passage-mcq");
     expect(keys).toContain("typed-fill-blank");
-    expect(keys).toHaveLength(5);
+    expect(keys).toContain("passage-open-ended");
+    expect(keys).toHaveLength(6);
   });
 
-  it("has all five question types in options array", () => {
+  it("has all six question types in options array", () => {
     const values = MANUAL_QUESTION_TYPE_OPTIONS.map((o) => o.value);
     expect(values).toContain("mcq");
     expect(values).toContain("fill-blank");
     expect(values).toContain("passage-fill-blank");
     expect(values).toContain("passage-mcq");
     expect(values).toContain("typed-fill-blank");
-    expect(values).toHaveLength(5);
+    expect(values).toContain("passage-open-ended");
+    expect(values).toHaveLength(6);
   });
 
   it("passage-fill-blank question type is assignable", () => {
@@ -91,6 +109,11 @@ describe("manualPaperBlueprint types and labels", () => {
   it("typed-fill-blank question type is assignable", () => {
     const qt: ManualQuestionType = "typed-fill-blank";
     expect(qt).toBe("typed-fill-blank");
+  });
+
+  it("passage-open-ended question type is assignable", () => {
+    const qt: ManualQuestionType = "passage-open-ended";
+    expect(qt).toBe("passage-open-ended");
   });
 
   it("ManualPassageFillBlankQuestion has correct shape", () => {
@@ -164,6 +187,29 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(question.correctAnswer).toBe("4");
   });
 
+  it("ManualPassageOpenEndedQuestion has correct shape", () => {
+    const question: ManualPassageOpenEndedQuestion = {
+      id: "test-oe-1",
+      type: "passage-open-ended",
+      prompt: "What is the main idea of the passage?",
+      referenceAnswer: "The passage is about the importance of reading.",
+    };
+    expect(question.type).toBe("passage-open-ended");
+    expect(question.prompt).toContain("main idea");
+    expect(question.referenceAnswer).toContain("reading");
+  });
+
+  it("ManualPassageOpenEndedQuestion works with empty referenceAnswer", () => {
+    const question: ManualPassageOpenEndedQuestion = {
+      id: "test-oe-2",
+      type: "passage-open-ended",
+      prompt: "Why did the character feel sad?",
+      referenceAnswer: "",
+    };
+    expect(question.type).toBe("passage-open-ended");
+    expect(question.referenceAnswer).toBe("");
+  });
+
   it("ManualSubsection supports passageText field", () => {
     const subsection: ManualSubsection = {
       id: "sub-1",
@@ -220,7 +266,6 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(subsection.questionType).toBe("passage-mcq");
     expect(subsection.passageText).toContain("___");
     expect(subsection.questions).toHaveLength(2);
-    // No wordBank for passage-mcq
     expect(subsection.wordBank).toBeUndefined();
   });
 
@@ -247,9 +292,55 @@ describe("manualPaperBlueprint types and labels", () => {
     };
     expect(subsection.questionType).toBe("typed-fill-blank");
     expect(subsection.questions).toHaveLength(2);
-    // No wordBank or passageText for typed-fill-blank
     expect(subsection.wordBank).toBeUndefined();
     expect(subsection.passageText).toBeUndefined();
+  });
+
+  it("ManualSubsection supports passage-open-ended with passageText and questions", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-oe-1",
+      title: "Reading Comprehension",
+      instructions: "Read the passage and answer the questions.",
+      questionType: "passage-open-ended",
+      questions: [
+        {
+          id: "q-1",
+          type: "passage-open-ended",
+          prompt: "What is the main idea of the passage?",
+          referenceAnswer: "The passage discusses the importance of exercise.",
+        },
+        {
+          id: "q-2",
+          type: "passage-open-ended",
+          prompt: "How does the author support the argument?",
+          referenceAnswer: "",
+        },
+      ],
+      passageText: "Exercise is important for maintaining good health. Regular physical activity can help prevent many chronic diseases...",
+    };
+    expect(subsection.questionType).toBe("passage-open-ended");
+    expect(subsection.passageText).toContain("Exercise");
+    expect(subsection.questions).toHaveLength(2);
+    expect(subsection.wordBank).toBeUndefined();
+  });
+
+  it("ManualSubsection passage-open-ended can have 1 to 3 questions", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-oe-2",
+      title: "Short Story Questions",
+      instructions: "Answer the following question.",
+      questionType: "passage-open-ended",
+      questions: [
+        {
+          id: "q-1",
+          type: "passage-open-ended",
+          prompt: "Describe the setting of the story.",
+          referenceAnswer: "The story takes place in a small village.",
+        },
+      ],
+      passageText: "In a small village by the river, there lived an old man...",
+    };
+    expect(subsection.questions).toHaveLength(1);
   });
 
   it("ManualSubsection passageText is optional", () => {

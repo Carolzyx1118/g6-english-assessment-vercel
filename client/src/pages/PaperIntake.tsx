@@ -30,6 +30,7 @@ import type {
   ManualSectionType,
   ManualSubsection,
   ManualTypedFillBlankQuestion,
+  ManualPassageOpenEndedQuestion,
   ManualWordBankItem,
 } from "@shared/manualPaperBlueprint";
 import {
@@ -132,6 +133,15 @@ function createTypedFillBlankQuestion(): ManualTypedFillBlankQuestion {
   };
 }
 
+function createPassageOpenEndedQuestion(): ManualPassageOpenEndedQuestion {
+  return {
+    id: createLocalId(),
+    type: "passage-open-ended",
+    prompt: "",
+    referenceAnswer: "",
+  };
+}
+
 function createPassageMCQOption(index: number): ManualPassageMCQOption {
   return {
     id: createLocalId(),
@@ -208,6 +218,17 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "passage-open-ended") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      passageText: "",
+      questions: [createPassageOpenEndedQuestion()],
+    };
+  }
+
   return {
     id: createLocalId(),
     title: "",
@@ -249,9 +270,13 @@ function isManualTypedFillBlankQuestion(question: ManualQuestion): question is M
   return question.type === "typed-fill-blank";
 }
 
+function isManualPassageOpenEndedQuestion(question: ManualQuestion): question is ManualPassageOpenEndedQuestion {
+  return question.type === "passage-open-ended";
+}
+
 /** Returns true for question types that use a passage */
 function isPassageSubsectionType(questionType: ManualQuestionType) {
-  return questionType === "passage-fill-blank" || questionType === "passage-mcq";
+  return questionType === "passage-fill-blank" || questionType === "passage-mcq" || questionType === "passage-open-ended";
 }
 
 function buildBlueprint(
@@ -295,6 +320,13 @@ function buildBlueprint(
           return {
             ...subsection,
             questions: subsection.questions.filter(isManualTypedFillBlankQuestion),
+          };
+        }
+
+        if (subsection.questionType === "passage-open-ended") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualPassageOpenEndedQuestion),
           };
         }
 
@@ -601,6 +633,17 @@ export default function PaperIntake() {
     ));
   };
 
+  const updatePassageOpenEndedQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPassageOpenEndedQuestion) => ManualPassageOpenEndedQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPassageOpenEndedQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const addSection = () => {
     setSections((prev) => [...prev, createSection()]);
   };
@@ -676,6 +719,16 @@ export default function PaperIntake() {
           questions: [
             ...subsection.questions.filter(isManualTypedFillBlankQuestion),
             createTypedFillBlankQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "passage-open-ended") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualPassageOpenEndedQuestion),
+            createPassageOpenEndedQuestion(),
           ],
         };
       }
@@ -1279,6 +1332,30 @@ export default function PaperIntake() {
                             </div>
                           )}
 
+                          {/* Passage text editor — for passage-open-ended */}
+                          {subsection.questionType === "passage-open-ended" && (
+                            <div className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-teal-800">Passage Text</p>
+                                <p className="text-xs text-teal-700/80">
+                                  Type or paste the full passage/article that students will read before answering the questions below.
+                                </p>
+                              </div>
+                              <Textarea
+                                rows={10}
+                                value={subsection.passageText ?? ""}
+                                onChange={(event) =>
+                                  updateSubsection(section.id, subsection.id, (sub) => ({
+                                    ...sub,
+                                    passageText: event.target.value,
+                                  }))
+                                }
+                                placeholder={`Example:\n\nOnce upon a time, there was a little girl who loved to read. Every day after school, she would go to the library and spend hours reading books about faraway lands and magical creatures...`}
+                                className="font-mono text-sm"
+                              />
+                            </div>
+                          )}
+
                           {/* Passage text editor — for passage-fill-blank and passage-mcq */}
                           {subsection.questionType === "passage-mcq" && (
                             <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
@@ -1630,6 +1707,70 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Passage open-ended questions editor */}
+                            {subsection.questionType === "passage-open-ended" &&
+                              subsection.questions.filter(isManualPassageOpenEndedQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-teal-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-teal-800">{`Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Open-ended question — students type a free-form answer.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Question</Label>
+                                      <Textarea
+                                        rows={2}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updatePassageOpenEndedQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="e.g. What is the main idea of the passage?"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Reference Answer <span className="text-xs font-normal text-slate-400">(optional, for grading reference)</span></Label>
+                                      <Textarea
+                                        rows={3}
+                                        value={question.referenceAnswer}
+                                        onChange={(event) =>
+                                          updatePassageOpenEndedQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              referenceAnswer: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="Type a model/reference answer for grading purposes."
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
                             {/* Passage MCQ — per-blank options editor */}
                             {subsection.questionType === "passage-mcq" && (() => {
                               const passageMCQQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
@@ -1770,11 +1911,11 @@ export default function PaperIntake() {
                             })()}
                           </div>
 
-                          {/* Add question/blank button — not shown for passage types (blanks auto-sync from passage) */}
-                          {!isPassageSubsectionType(subsection.questionType) && (
+                          {/* Add question/blank button — not shown for passage-fill-blank and passage-mcq (blanks auto-sync from passage) */}
+                          {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq") && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
-                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "typed-fill-blank" ? "Add Question" : "Add Question"}
+                              {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
                             </Button>
                           )}
                         </div>
@@ -1921,6 +2062,39 @@ export default function PaperIntake() {
                                   </p>
                                 </div>
                               ))}
+
+                            {subsection.questionType === "passage-open-ended" && (
+                              <div className="space-y-4">
+                                {(subsection.passageText ?? "").trim() ? (
+                                  <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-teal-700">Passage</p>
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                                      {subsection.passageText}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                                    Add a passage above to preview.
+                                  </div>
+                                )}
+
+                                {subsection.questions.filter(isManualPassageOpenEndedQuestion).map((question, questionIndex) => (
+                                  <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                    <p className="text-sm font-medium text-slate-800">
+                                      {`${questionIndex + 1}. ${question.prompt || "Question goes here."}`}
+                                    </p>
+                                    <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">
+                                      Student answer area
+                                    </div>
+                                    {question.referenceAnswer && (
+                                      <p className="mt-2 text-xs font-medium text-emerald-700">
+                                        Reference answer: {question.referenceAnswer}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
