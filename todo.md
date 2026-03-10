@@ -212,3 +212,4 @@
 - [x] Add "writing" question type to Manual Paper Builder (optional image, writing prompt/requirements, large text area for essay response)
 - [ ] Fix API Query Error "The string did not match the expected pattern" on home page
 - [x] Add "passage matching" question type to Manual Paper Builder (PET Reading Part 2 style: passage with labeled descriptions A-H, person descriptions matched to best description)
+- [x] Rename "Big Question" to "Main Question" throughout PaperIntake UI

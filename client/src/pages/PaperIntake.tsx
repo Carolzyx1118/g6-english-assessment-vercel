@@ -1404,7 +1404,7 @@ export default function PaperIntake() {
                       <div key={subsection.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-slate-800">{`Big Question ${subsectionIndex + 1}`}</p>
+                            <p className="text-sm font-semibold text-slate-800">{`Main Question ${subsectionIndex + 1}`}</p>
                             <p className="text-xs text-slate-500">
                               Add the title, instructions, and the questions in this block.
                             </p>
@@ -1423,7 +1423,7 @@ export default function PaperIntake() {
                         <div className="space-y-4">
                           <div className="grid gap-4 lg:grid-cols-2">
                             <div className="space-y-2">
-                              <Label>Big Question Title</Label>
+                              <Label>Main Question Title</Label>
                               <Input
                                 value={subsection.title}
                                 onChange={(event) =>
@@ -2558,7 +2558,7 @@ export default function PaperIntake() {
 
                   <Button type="button" variant="outline" onClick={() => addSubsection(section.id)}>
                     <SquarePen className="mr-2 h-4 w-4" />
-                    Add Big Question
+                    Add Main Question
                   </Button>
                 </CardContent>
               </Card>
@@ -2599,7 +2599,7 @@ export default function PaperIntake() {
                         <div key={subsection.id} className="rounded-xl bg-slate-50 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-slate-800">
-                              {subsection.title || `Big Question ${subsectionIndex + 1}`}
+                              {subsection.title || `Main Question ${subsectionIndex + 1}`}
                             </p>
                             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                               {MANUAL_QUESTION_TYPE_LABELS[subsection.questionType]}
@@ -2613,7 +2613,7 @@ export default function PaperIntake() {
                             <div className="mt-4 flex justify-center rounded-2xl border border-slate-200 bg-white p-3">
                               <img
                                 src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
-                                alt={subsection.title || `Big Question ${subsectionIndex + 1}`}
+                                alt={subsection.title || `Main Question ${subsectionIndex + 1}`}
                                 className="max-h-60 w-full object-contain"
                               />
                             </div>
