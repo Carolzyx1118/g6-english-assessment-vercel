@@ -818,7 +818,7 @@ A: <b>(103) ___</b>. It's a good way to relax and laugh about things that have h
 
 export const petPaper: Paper = {
   id: 'pet-final-test',
-  title: 'PET Final Test',
+  title: 'PET English Assessment',
   subtitle: 'Compact Preliminary for Schools',
   description: 'A full PET-style paper with vocabulary, grammar, reading, writing, listening, and speaking tasks based on the uploaded materials.',
   icon: '🎓',
