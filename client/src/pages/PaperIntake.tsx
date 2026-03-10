@@ -286,11 +286,9 @@ export default function PaperIntake() {
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Link href="/">
-              <a className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700">
+            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" />
                 Back to Assessments
-              </a>
             </Link>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Manual Paper Builder</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
