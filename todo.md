@@ -210,3 +210,5 @@
 - [x] Add "passage open-ended" (文章问答题) question type to Manual Paper Builder (full passage + 1-3 open-ended questions, students type free-form answers after reading)
 - [x] Add audio upload to each big question (subsection) when part type is "listening" in Manual Paper Builder
 - [x] Add "writing" question type to Manual Paper Builder (optional image, writing prompt/requirements, large text area for essay response)
+- [ ] Fix API Query Error "The string did not match the expected pattern" on home page
+- [x] Add "passage matching" question type to Manual Paper Builder (PET Reading Part 2 style: passage with labeled descriptions A-H, person descriptions matched to best description)

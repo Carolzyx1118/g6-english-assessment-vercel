@@ -15,7 +15,7 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank" | "passage-open-ended" | "writing";
+export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank" | "passage-mcq" | "typed-fill-blank" | "passage-open-ended" | "writing" | "passage-matching";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
@@ -25,6 +25,7 @@ export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   "typed-fill-blank": "Fill in Blank",
   "passage-open-ended": "Passage Open-Ended",
   writing: "Writing",
+  "passage-matching": "Passage Matching",
 };
 
 export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
@@ -38,6 +39,7 @@ export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
   { value: "passage-fill-blank", label: "Passage Word Bank Fill Blank", description: "A full passage/article with numbered blanks and a shared word bank." },
   { value: "passage-mcq", label: "Passage Multiple Choice", description: "A passage with numbered blanks — click each blank to choose from MCQ options (PET-style cloze)." },
   { value: "passage-open-ended", label: "Passage Open-Ended", description: "A passage followed by open-ended questions — students read the article and type free-form answers (文章问答题)." },
+  { value: "passage-matching", label: "Passage Matching", description: "A passage with labeled descriptions (A-H) — match person descriptions to the best option (PET Reading Part 2 style)." },
   { value: "writing", label: "Writing", description: "A writing task with optional image and prompt — students compose an essay or short text (写作题)." },
 ];
 
@@ -137,7 +139,28 @@ export interface ManualWritingQuestion {
   referenceAnswer?: string;
 }
 
-export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion | ManualWritingQuestion;
+/** A labeled description item in a passage-matching subsection (e.g. "A - Marina") */
+export interface ManualMatchingDescription {
+  id: string;
+  /** Label like "A", "B", "C", etc. */
+  label: string;
+  /** The name/title of the description */
+  name: string;
+  /** The full description text */
+  text: string;
+}
+
+/** Passage matching — match person descriptions to labeled descriptions (PET Reading Part 2) */
+export interface ManualPassageMatchingQuestion {
+  id: string;
+  type: "passage-matching";
+  /** The person description with criteria, e.g. "Thomas and his sister enjoy eating French food..." */
+  prompt: string;
+  /** The label of the correct matching description, e.g. "D" */
+  correctAnswer: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion | ManualWritingQuestion | ManualPassageMatchingQuestion;
 
 /** Audio file attached to a subsection (used for listening sections) */
 export interface ManualAudioFile {
@@ -162,6 +185,8 @@ export interface ManualSubsection {
   passageText?: string;
   /** Audio file for listening sections — each big question can have its own audio clip */
   audio?: ManualAudioFile;
+  /** Labeled descriptions for passage-matching type (A-H descriptions of places/items) */
+  matchingDescriptions?: ManualMatchingDescription[];
 }
 
 export interface ManualSection {

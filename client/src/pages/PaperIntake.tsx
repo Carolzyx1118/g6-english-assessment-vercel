@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FilePlus2, ImagePlus, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
+import { ArrowLeft, FilePlus2, ImagePlus, Link2, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
@@ -21,10 +21,12 @@ import type {
   ManualFillBlankQuestion,
   ManualMCQOption,
   ManualMCQQuestion,
+  ManualMatchingDescription,
   ManualPaperBlueprint,
   ManualPassageFillBlankQuestion,
   ManualPassageMCQOption,
   ManualPassageMCQQuestion,
+  ManualPassageMatchingQuestion,
   ManualQuestion,
   ManualQuestionType,
   ManualSection,
@@ -152,6 +154,24 @@ function createWritingQuestion(): ManualWritingQuestion {
   };
 }
 
+function createMatchingDescription(index: number): ManualMatchingDescription {
+  return {
+    id: createLocalId(),
+    label: getOptionLabel(index),
+    name: "",
+    text: "",
+  };
+}
+
+function createPassageMatchingQuestion(): ManualPassageMatchingQuestion {
+  return {
+    id: createLocalId(),
+    type: "passage-matching",
+    prompt: "",
+    correctAnswer: "A",
+  };
+}
+
 function createPassageMCQOption(index: number): ManualPassageMCQOption {
   return {
     id: createLocalId(),
@@ -249,6 +269,17 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "passage-matching") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      matchingDescriptions: Array.from({ length: 5 }, (_, i) => createMatchingDescription(i)),
+      questions: [createPassageMatchingQuestion()],
+    };
+  }
+
   return {
     id: createLocalId(),
     title: "",
@@ -296,6 +327,10 @@ function isManualPassageOpenEndedQuestion(question: ManualQuestion): question is
 
 function isManualWritingQuestion(question: ManualQuestion): question is ManualWritingQuestion {
   return question.type === "writing";
+}
+
+function isManualPassageMatchingQuestion(question: ManualQuestion): question is ManualPassageMatchingQuestion {
+  return question.type === "passage-matching";
 }
 
 /** Returns true for question types that use a passage */
@@ -358,6 +393,17 @@ function buildBlueprint(
           return {
             ...subsection,
             questions: subsection.questions.filter(isManualWritingQuestion),
+          };
+        }
+
+        if (subsection.questionType === "passage-matching") {
+          return {
+            ...subsection,
+            matchingDescriptions: (subsection.matchingDescriptions ?? []).map((desc, i) => ({
+              ...desc,
+              label: getOptionLabel(i),
+            })),
+            questions: subsection.questions.filter(isManualPassageMatchingQuestion),
           };
         }
 
@@ -686,6 +732,67 @@ export default function PaperIntake() {
     ));
   };
 
+  const updatePassageMatchingQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPassageMatchingQuestion) => ManualPassageMatchingQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPassageMatchingQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const addMatchingDescription = (sectionId: string, subsectionId: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const descriptions = subsection.matchingDescriptions ?? [];
+      return {
+        ...subsection,
+        matchingDescriptions: [
+          ...descriptions,
+          createMatchingDescription(descriptions.length),
+        ],
+      };
+    });
+  };
+
+  const removeMatchingDescription = (sectionId: string, subsectionId: string, descriptionId: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const descriptions = subsection.matchingDescriptions ?? [];
+      if (descriptions.length <= 2) return subsection;
+      const nextDescriptions = descriptions
+        .filter((d) => d.id !== descriptionId)
+        .map((d, i) => ({ ...d, label: getOptionLabel(i) }));
+      // Update any question correctAnswers that referenced the removed label
+      const removedLabel = descriptions.find((d) => d.id === descriptionId)?.label || "";
+      return {
+        ...subsection,
+        matchingDescriptions: nextDescriptions,
+        questions: subsection.questions.map((q) => {
+          if (!isManualPassageMatchingQuestion(q)) return q;
+          if (q.correctAnswer === removedLabel) {
+            return { ...q, correctAnswer: nextDescriptions[0]?.label || "A" };
+          }
+          return q;
+        }),
+      };
+    });
+  };
+
+  const updateMatchingDescription = (
+    sectionId: string,
+    subsectionId: string,
+    descriptionId: string,
+    updater: (desc: ManualMatchingDescription) => ManualMatchingDescription,
+  ) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => ({
+      ...subsection,
+      matchingDescriptions: (subsection.matchingDescriptions ?? []).map((d) =>
+        d.id === descriptionId ? updater(d) : d,
+      ),
+    }));
+  };
+
   const handleWritingImageUpload = async (
     sectionId: string,
     subsectionId: string,
@@ -777,6 +884,7 @@ export default function PaperIntake() {
         wordBank: nextSubsection.wordBank,
         questions: nextSubsection.questions,
         passageText: nextSubsection.passageText,
+        matchingDescriptions: nextSubsection.matchingDescriptions,
       };
     });
   };
@@ -830,6 +938,16 @@ export default function PaperIntake() {
           questions: [
             ...subsection.questions.filter(isManualWritingQuestion),
             createWritingQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "passage-matching") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualPassageMatchingQuestion),
+            createPassageMatchingQuestion(),
           ],
         };
       }
@@ -1547,6 +1665,75 @@ export default function PaperIntake() {
                             </div>
                           )}
 
+                          {/* Matching descriptions editor — for passage-matching */}
+                          {subsection.questionType === "passage-matching" && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-amber-800">Descriptions</p>
+                                <p className="text-xs text-amber-700/80">
+                                  Add labeled descriptions (A, B, C...) that students will match to the questions below. Each description has a name/title and a detailed text.
+                                </p>
+                              </div>
+
+                              <div className="space-y-3">
+                                {(subsection.matchingDescriptions ?? []).map((desc) => (
+                                  <div key={desc.id} className="rounded-xl border border-amber-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start gap-3">
+                                      <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-800">
+                                        {desc.label}
+                                      </span>
+                                      <div className="flex-1 space-y-2">
+                                        <Input
+                                          value={desc.name}
+                                          onChange={(event) =>
+                                            updateMatchingDescription(section.id, subsection.id, desc.id, (d) => ({
+                                              ...d,
+                                              name: event.target.value,
+                                            }))
+                                          }
+                                          placeholder={`Name / Title (e.g. "Marina")`}
+                                          className="h-8 text-sm font-medium"
+                                        />
+                                        <Textarea
+                                          rows={2}
+                                          value={desc.text}
+                                          onChange={(event) =>
+                                            updateMatchingDescription(section.id, subsection.id, desc.id, (d) => ({
+                                              ...d,
+                                              text: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="Description text — what makes this option unique..."
+                                          className="text-sm"
+                                        />
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeMatchingDescription(section.id, subsection.id, desc.id)}
+                                        className="mt-1 h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => addMatchingDescription(section.id, subsection.id)}
+                                className="mt-3 text-xs"
+                              >
+                                <Plus className="mr-1 h-3 w-3" />
+                                Add Description
+                              </Button>
+                            </div>
+                          )}
+
                           {/* Passage text editor — for passage-open-ended */}
                           {subsection.questionType === "passage-open-ended" && (
                             <div className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
@@ -1986,6 +2173,70 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Passage matching questions editor */}
+                            {subsection.questionType === "passage-matching" &&
+                              subsection.questions.filter(isManualPassageMatchingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-amber-800">{`Person ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Describe the person and their criteria — students match to the best description above.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Person Description</Label>
+                                      <Textarea
+                                        rows={2}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updatePassageMatchingQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="e.g. Thomas and his sister enjoy eating French food. They want a restaurant that also has live music."
+                                      />
+                                    </div>
+
+                                    <div className="min-w-[180px] space-y-1">
+                                      <Label className="text-xs">Correct Match</Label>
+                                      <select
+                                        value={question.correctAnswer}
+                                        onChange={(event) =>
+                                          updatePassageMatchingQuestion(section.id, subsection.id, question.id, (q) => ({
+                                            ...q,
+                                            correctAnswer: event.target.value,
+                                          }))
+                                        }
+                                        className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                                      >
+                                        {(subsection.matchingDescriptions ?? []).map((desc) => (
+                                          <option key={desc.id} value={desc.label}>
+                                            {desc.label}. {desc.name || "Untitled"}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
                             {/* Writing questions editor */}
                             {subsection.questionType === "writing" &&
                               subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
@@ -2297,7 +2548,7 @@ export default function PaperIntake() {
                           {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq") && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
-                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "writing" ? "Add Writing Task" : "Add Question"}
+                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "writing" ? "Add Writing Task" : subsection.questionType === "passage-matching" ? "Add Person" : "Add Question"}
                             </Button>
                           )}
                         </div>
@@ -2491,6 +2742,66 @@ export default function PaperIntake() {
                                 ))}
                               </div>
                             )}
+
+                            {subsection.questionType === "passage-matching" && (() => {
+                              const descriptions = subsection.matchingDescriptions ?? [];
+                              const matchingQuestions = subsection.questions.filter(isManualPassageMatchingQuestion);
+                              return (
+                                <div className="space-y-4">
+                                  {descriptions.length > 0 ? (
+                                    <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+                                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-amber-700">Descriptions</p>
+                                      <div className="space-y-3">
+                                        {descriptions.map((desc) => (
+                                          <div key={desc.id} className="flex gap-3">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">
+                                              {desc.label}
+                                            </span>
+                                            <div>
+                                              <p className="text-sm font-semibold text-slate-800">{desc.name || "Untitled"}</p>
+                                              <p className="text-sm leading-relaxed text-slate-600">{desc.text || "No description yet."}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                                      Add descriptions above to preview.
+                                    </div>
+                                  )}
+
+                                  {matchingQuestions.map((question, questionIndex) => (
+                                    <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Link2 className="h-4 w-4 text-amber-600" />
+                                        <p className="text-sm font-semibold text-slate-800">{`Person ${questionIndex + 1}`}</p>
+                                      </div>
+                                      <p className="text-sm leading-relaxed text-slate-700">
+                                        {question.prompt || "Person description goes here."}
+                                      </p>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {descriptions.map((desc) => (
+                                          <span
+                                            key={desc.id}
+                                            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                                              desc.label === question.correctAnswer
+                                                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                                : "border-slate-200 bg-white text-slate-500"
+                                            }`}
+                                          >
+                                            {desc.label}. {desc.name || "Untitled"}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <p className="mt-2 text-xs font-medium text-emerald-700">
+                                        Correct match: {question.correctAnswer}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
 
                             {subsection.questionType === "writing" &&
                               subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (

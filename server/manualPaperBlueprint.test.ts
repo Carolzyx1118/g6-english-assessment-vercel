@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type {
   ManualPassageFillBlankQuestion,
   ManualPassageMCQQuestion,
+  ManualPassageMatchingQuestion,
+  ManualMatchingDescription,
   ManualFillBlankQuestion,
   ManualTypedFillBlankQuestion,
   ManualPassageOpenEndedQuestion,
@@ -88,7 +90,21 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(option!.description).toContain("写作题");
   });
 
-  it("has all seven question types in labels", () => {
+  it("includes passage-matching in MANUAL_QUESTION_TYPE_LABELS", () => {
+    expect(MANUAL_QUESTION_TYPE_LABELS["passage-matching"]).toBe(
+      "Passage Matching",
+    );
+  });
+
+  it("includes passage-matching in MANUAL_QUESTION_TYPE_OPTIONS", () => {
+    const option = MANUAL_QUESTION_TYPE_OPTIONS.find(
+      (o) => o.value === "passage-matching",
+    );
+    expect(option).toBeDefined();
+    expect(option!.label).toBe("Passage Matching");
+  });
+
+  it("has all eight question types in labels", () => {
     const keys = Object.keys(MANUAL_QUESTION_TYPE_LABELS);
     expect(keys).toContain("mcq");
     expect(keys).toContain("fill-blank");
@@ -97,10 +113,11 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(keys).toContain("typed-fill-blank");
     expect(keys).toContain("passage-open-ended");
     expect(keys).toContain("writing");
-    expect(keys).toHaveLength(7);
+    expect(keys).toContain("passage-matching");
+    expect(keys).toHaveLength(8);
   });
 
-  it("has all seven question types in options array", () => {
+  it("has all eight question types in options array", () => {
     const values = MANUAL_QUESTION_TYPE_OPTIONS.map((o) => o.value);
     expect(values).toContain("mcq");
     expect(values).toContain("fill-blank");
@@ -109,7 +126,8 @@ describe("manualPaperBlueprint types and labels", () => {
     expect(values).toContain("typed-fill-blank");
     expect(values).toContain("passage-open-ended");
     expect(values).toContain("writing");
-    expect(values).toHaveLength(7);
+    expect(values).toContain("passage-matching");
+    expect(values).toHaveLength(8);
   });
 
   it("passage-fill-blank question type is assignable", () => {
@@ -524,5 +542,82 @@ describe("manualPaperBlueprint types and labels", () => {
     const writingQ = subsection.questions[0] as ManualWritingQuestion;
     expect(writingQ.image).toBeDefined();
     expect(writingQ.image!.fileName).toBe("scene.jpg");
+  });
+
+  it("passage-matching question type is assignable", () => {
+    const qt: ManualQuestionType = "passage-matching";
+    expect(qt).toBe("passage-matching");
+  });
+
+  it("ManualPassageMatchingQuestion has correct shape", () => {
+    const question: ManualPassageMatchingQuestion = {
+      id: "test-matching-1",
+      type: "passage-matching",
+      prompt: "Thomas and his sister enjoy eating French food.",
+      correctAnswer: "C",
+    };
+    expect(question.type).toBe("passage-matching");
+    expect(question.prompt).toContain("Thomas");
+    expect(question.correctAnswer).toBe("C");
+  });
+
+  it("ManualMatchingDescription has correct shape", () => {
+    const desc: ManualMatchingDescription = {
+      id: "desc-1",
+      label: "A",
+      name: "Marina",
+      text: "A cozy Italian restaurant with live jazz music.",
+    };
+    expect(desc.label).toBe("A");
+    expect(desc.name).toBe("Marina");
+    expect(desc.text).toContain("Italian");
+  });
+
+  it("ManualSubsection supports passage-matching with matchingDescriptions", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-matching-1",
+      title: "Restaurant Matching",
+      instructions: "Match each person to the best restaurant.",
+      questionType: "passage-matching",
+      matchingDescriptions: [
+        { id: "d1", label: "A", name: "Marina", text: "Italian food, live jazz" },
+        { id: "d2", label: "B", name: "The Golden Wok", text: "Chinese food, family-friendly" },
+        { id: "d3", label: "C", name: "Le Petit Bistro", text: "French food, live music" },
+        { id: "d4", label: "D", name: "Sakura", text: "Japanese food, quiet atmosphere" },
+        { id: "d5", label: "E", name: "El Toro", text: "Spanish food, outdoor seating" },
+      ],
+      questions: [
+        {
+          id: "q-1",
+          type: "passage-matching",
+          prompt: "Thomas and his sister enjoy eating French food. They want live music.",
+          correctAnswer: "C",
+        },
+        {
+          id: "q-2",
+          type: "passage-matching",
+          prompt: "Sarah wants a quiet place to eat Japanese food.",
+          correctAnswer: "D",
+        },
+      ],
+    };
+    expect(subsection.questionType).toBe("passage-matching");
+    expect(subsection.matchingDescriptions).toHaveLength(5);
+    expect(subsection.matchingDescriptions![0].label).toBe("A");
+    expect(subsection.matchingDescriptions![0].name).toBe("Marina");
+    expect(subsection.questions).toHaveLength(2);
+    expect(subsection.wordBank).toBeUndefined();
+    expect(subsection.passageText).toBeUndefined();
+  });
+
+  it("ManualSubsection matchingDescriptions is optional", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-no-matching",
+      title: "MCQ Block",
+      instructions: "",
+      questionType: "mcq",
+      questions: [],
+    };
+    expect(subsection.matchingDescriptions).toBeUndefined();
   });
 });
