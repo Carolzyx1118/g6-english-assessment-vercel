@@ -217,3 +217,4 @@
 - [x] Create database table/schema for storing manual papers
 - [x] Create tRPC procedure to save manual paper data
 - [x] Display saved manual papers on home page for students to select and take
+- [x] Fix database insert error when saving manual paper (blueprintJson with base64 image data too large for column)

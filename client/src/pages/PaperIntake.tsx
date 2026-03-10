@@ -18,10 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
+  ManualAudioFile,
   ManualFillBlankQuestion,
   ManualMCQOption,
   ManualMCQQuestion,
   ManualMatchingDescription,
+  ManualOptionImage,
   ManualPaperBlueprint,
   ManualPassageFillBlankQuestion,
   ManualPassageMCQOption,
@@ -626,6 +628,38 @@ export default function PaperIntake() {
     () => buildBlueprint(paperSeed, createdAt, title, description, sections),
     [createdAt, description, paperSeed, sections, title],
   );
+
+  /** Strip base64 dataUrl from images/audio before saving to DB (keep only S3 previewUrl) */
+  const stripBase64FromBlueprint = (bp: ManualPaperBlueprint): ManualPaperBlueprint => {
+    const stripImage = (img?: ManualOptionImage): ManualOptionImage | undefined => {
+      if (!img) return undefined;
+      return { ...img, dataUrl: img.previewUrl || img.dataUrl };
+    };
+    const stripAudio = (audio?: ManualAudioFile): ManualAudioFile | undefined => {
+      if (!audio) return undefined;
+      return { ...audio, dataUrl: audio.previewUrl || audio.dataUrl };
+    };
+    return {
+      ...bp,
+      sections: bp.sections.map((section) => ({
+        ...section,
+        subsections: section.subsections.map((sub) => ({
+          ...sub,
+          sceneImage: stripImage(sub.sceneImage),
+          audio: stripAudio(sub.audio),
+          questions: sub.questions.map((q) => {
+            if (q.type === "mcq") {
+              return { ...q, options: q.options.map((opt) => ({ ...opt, image: stripImage(opt.image) })) };
+            }
+            if (q.type === "writing" && (q as ManualWritingQuestion).image) {
+              return { ...q, image: stripImage((q as ManualWritingQuestion).image) };
+            }
+            return q;
+          }),
+        })),
+      })),
+    };
+  };
 
   const updateSection = (sectionId: string, updater: (section: ManualSection) => ManualSection) => {
     setSections((prev) => prev.map((section) => (section.id === sectionId ? updater(section) : section)));
@@ -2878,7 +2912,7 @@ export default function PaperIntake() {
                     paperId,
                     title: title.trim(),
                     description: description.trim() || undefined,
-                    blueprintJson: JSON.stringify(blueprint),
+                    blueprintJson: JSON.stringify(stripBase64FromBlueprint(blueprint)),
                   });
                   setIsSaved(true);
                   toast.success("Paper saved! It will now appear on the home page.");

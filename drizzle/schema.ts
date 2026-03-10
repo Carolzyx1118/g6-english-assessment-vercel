@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, longtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -82,8 +82,8 @@ export const manualPapers = mysqlTable("manualPapers", {
   subject: varchar("subject", { length: 64 }).notNull().default("english"),
   /** Category classification */
   category: varchar("category", { length: 64 }).notNull().default("assessment"),
-  /** Full ManualPaperBlueprint as JSON */
-  blueprintJson: text("blueprintJson").notNull(),
+  /** Full ManualPaperBlueprint as JSON (longtext to support large payloads with images) */
+  blueprintJson: longtext("blueprintJson").notNull(),
   /** Whether the paper is published and visible to students */
   published: int("published").notNull().default(1),
   /** Total question count (cached for display) */

@@ -43,6 +43,13 @@
       "when": 1773160836071,
       "tag": "0005_greedy_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1773161950290,
+      "tag": "0006_glossy_mister_fear",
+      "breakpoints": true
     }
   ]
 }

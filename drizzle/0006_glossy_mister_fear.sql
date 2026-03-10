@@ -1,0 +1,1 @@
+ALTER TABLE `manualPapers` MODIFY COLUMN `blueprintJson` longtext NOT NULL;
