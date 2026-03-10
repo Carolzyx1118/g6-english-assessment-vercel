@@ -8,8 +8,6 @@ import { QuizProvider } from "./contexts/QuizContext";
 import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import History from "./pages/History";
-import PaperCreator from "./pages/PaperCreator";
-import PaperManager from "./pages/PaperManager";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
@@ -29,16 +27,6 @@ function Router() {
       <Route path={"/history"}>
         <AuthGuard>
           <History />
-        </AuthGuard>
-      </Route>
-      <Route path={"/paper-creator"}>
-        <AuthGuard>
-          <PaperCreator />
-        </AuthGuard>
-      </Route>
-      <Route path={"/paper-manager"}>
-        <AuthGuard>
-          <PaperManager />
         </AuthGuard>
       </Route>
 

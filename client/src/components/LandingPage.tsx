@@ -123,12 +123,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     View Test History
                   </Button>
                 </Link>
-                <Link href="/paper-creator">
-                  <Button variant="outline" className="gap-2 bg-white/5 border-white/15 text-white/80 hover:bg-white/10 hover:text-white hover:border-white/30">
-                    <PenTool className="w-4 h-4" />
-                    Create Paper
-                  </Button>
-                </Link>
               </div>
             </motion.div>
 

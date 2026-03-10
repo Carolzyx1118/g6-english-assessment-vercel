@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { papers as staticPapers, type Paper, type Section, type Question } from '@/data/papers';
-import { trpc } from '@/lib/trpc';
-import { normalizeSections } from '@/lib/normalizeSection';
 
 export interface StudentInfo {
   name: string;
@@ -46,55 +44,6 @@ function answerKey(sectionId: string, questionId: number): string {
   return `${sectionId}:${questionId}`;
 }
 
-/**
- * Convert a custom paper from the database into the Paper format used by the quiz system.
- */
-function convertCustomPaper(cp: {
-  paperId: string;
-  title: string;
-  subtitle: string | null;
-  description: string | null;
-  icon: string | null;
-  color: string | null;
-  totalQuestions: number;
-  hasListening: boolean;
-  hasWriting: boolean;
-  sectionsJson: string;
-  readingWordBankJson: string | null;
-}): Paper {
-  let sections: Section[] = [];
-  try {
-    const rawSections = JSON.parse(cp.sectionsJson);
-    // Normalize AI-generated data to match expected component structures
-    sections = normalizeSections(rawSections);
-  } catch (e) {
-    console.error('Failed to parse custom paper sections:', e);
-  }
-
-  let readingWordBank: { word: string; imageUrl: string }[] | undefined;
-  if (cp.readingWordBankJson) {
-    try {
-      readingWordBank = JSON.parse(cp.readingWordBankJson);
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  return {
-    id: cp.paperId,
-    title: cp.title,
-    subtitle: cp.subtitle || '',
-    description: cp.description || '',
-    icon: cp.icon || '📝',
-    color: cp.color || 'text-blue-600',
-    sections,
-    totalQuestions: cp.totalQuestions,
-    hasListening: cp.hasListening,
-    hasWriting: cp.hasWriting,
-    readingWordBank,
-  };
-}
-
 export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [state, setState] = useState<QuizState>({
@@ -110,15 +59,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
-
-  // Fetch published custom papers from the database
-  const customPapersQuery = trpc.papers.listPublished.useQuery();
-
-  // Merge static papers with custom papers
-  const allPapers = useMemo(() => {
-    const customPapers = (customPapersQuery.data || []).map(convertCustomPaper);
-    return [...staticPapers, ...customPapers];
-  }, [customPapersQuery.data]);
+  const allPapers = staticPapers;
 
   const currentSections = selectedPaper?.sections || [];
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, testResults, customPapers, localUsers, type InsertTestResult, type TestResult, type CustomPaper, type InsertCustomPaper, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
+import { InsertUser, users, testResults, localUsers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -129,53 +129,6 @@ export async function deleteTestResult(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(testResults).where(eq(testResults.id, id));
-}
-
-// ── Custom Papers ──
-
-export async function saveCustomPaper(data: InsertCustomPaper): Promise<number | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const [result] = await db.insert(customPapers).values(data).$returningId();
-  return result?.id ?? null;
-}
-
-export async function getAllCustomPapers(): Promise<CustomPaper[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(customPapers).orderBy(customPapers.createdAt);
-}
-
-export async function getPublishedCustomPapers(): Promise<CustomPaper[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(customPapers).where(eq(customPapers.status, 'published')).orderBy(customPapers.createdAt);
-}
-
-export async function getCustomPaperById(id: number): Promise<CustomPaper | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(customPapers).where(eq(customPapers.id, id)).limit(1);
-  return rows[0];
-}
-
-export async function getCustomPaperByPaperId(paperId: string): Promise<CustomPaper | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(customPapers).where(eq(customPapers.paperId, paperId)).limit(1);
-  return rows[0];
-}
-
-export async function updateCustomPaper(id: number, updates: Partial<InsertCustomPaper>): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(customPapers).set(updates).where(eq(customPapers.id, id));
-}
-
-export async function deleteCustomPaper(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(customPapers).where(eq(customPapers.id, id));
 }
 
 // ── Local Auth Users ──
