@@ -29,6 +29,13 @@
       "when": 1772767653917,
       "tag": "0003_sparkling_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1773124000550,
+      "tag": "0004_furry_spirit",
+      "breakpoints": true
     }
   ]
 }
