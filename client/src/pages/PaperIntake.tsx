@@ -21,6 +21,7 @@ import type {
   ManualMCQOption,
   ManualMCQQuestion,
   ManualPaperBlueprint,
+  ManualPassageFillBlankQuestion,
   ManualQuestion,
   ManualQuestionType,
   ManualSection,
@@ -30,6 +31,7 @@ import type {
 } from "@shared/manualPaperBlueprint";
 import {
   MANUAL_QUESTION_TYPE_LABELS,
+  MANUAL_QUESTION_TYPE_OPTIONS,
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
 import { toast } from "sonner";
@@ -108,6 +110,20 @@ function createFillBlankQuestion(correctAnswerWordBankId: string): ManualFillBla
   };
 }
 
+function createPassageFillBlankQuestion(correctAnswerWordBankId: string): ManualPassageFillBlankQuestion {
+  return {
+    id: createLocalId(),
+    type: "passage-fill-blank",
+    prompt: "",
+    correctAnswerWordBankId,
+  };
+}
+
+/** Returns true for question types that use a word bank */
+function isWordBankSubsectionType(questionType: ManualQuestionType) {
+  return questionType === "fill-blank" || questionType === "passage-fill-blank";
+}
+
 function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TYPE): ManualSubsection {
   if (questionType === "fill-blank") {
     const wordBank = relabelWordBank(
@@ -121,6 +137,22 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
       questionType,
       wordBank,
       questions: [createFillBlankQuestion(wordBank[0]?.id || "")],
+    };
+  }
+
+  if (questionType === "passage-fill-blank") {
+    const wordBank = relabelWordBank(
+      Array.from({ length: DEFAULT_WORD_BANK_SIZE }, (_, index) => createWordBankItem(index)),
+    );
+
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      wordBank,
+      passageText: "",
+      questions: [],
     };
   }
 
@@ -149,6 +181,14 @@ function isManualFillBlankQuestion(question: ManualQuestion): question is Manual
   return question.type === "fill-blank";
 }
 
+function isManualPassageFillBlankQuestion(question: ManualQuestion): question is ManualPassageFillBlankQuestion {
+  return question.type === "passage-fill-blank";
+}
+
+function isAnyFillBlankQuestion(question: ManualQuestion): question is ManualFillBlankQuestion | ManualPassageFillBlankQuestion {
+  return question.type === "fill-blank" || question.type === "passage-fill-blank";
+}
+
 function buildBlueprint(
   paperSeed: string,
   createdAt: string,
@@ -168,11 +208,11 @@ function buildBlueprint(
       ...section,
       partLabel: `Part ${sectionIndex + 1}`,
       subsections: section.subsections.map((subsection) => {
-        if (subsection.questionType === "fill-blank") {
+        if (isWordBankSubsectionType(subsection.questionType)) {
           return {
             ...subsection,
             wordBank: relabelWordBank(subsection.wordBank ?? []),
-            questions: subsection.questions.filter(isManualFillBlankQuestion),
+            questions: subsection.questions.filter(isAnyFillBlankQuestion),
           };
         }
 
@@ -201,6 +241,23 @@ function buildFillBlankPreviewPassage(questions: ManualFillBlankQuestion[]) {
       return `${safePrompt} <b>(${questionIndex + 1}) ___</b>`;
     })
     .join("\n\n");
+}
+
+/**
+ * Build a passage preview for passage-fill-blank type.
+ * The passage text contains ___ markers which we number sequentially.
+ */
+function buildPassageFillBlankPreviewPassage(passageText: string) {
+  let blankIndex = 0;
+  return escapeHtml(passageText).replace(/___/g, () => {
+    blankIndex++;
+    return `<b>(${blankIndex}) ___</b>`;
+  });
+}
+
+/** Count the number of ___ blanks in a passage */
+function countPassageBlanks(passageText: string): number {
+  return (passageText.match(/___/g) || []).length;
 }
 
 function getCorrectWord(wordBank: ManualWordBankItem[] | undefined, wordBankId: string) {
@@ -252,6 +309,91 @@ function FillBlankSubsectionPreview({ subsection }: { subsection: ManualSubsecti
         grammarPassage={buildFillBlankPreviewPassage(questions)}
         sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
         sectionId={`manual-fillblank-preview-${subsection.id}`}
+        getAnswer={(_, id) => answers[id]}
+        setAnswer={(_, id, value) => {
+          setAnswers((prev) => ({
+            ...prev,
+            [id]: value,
+          }));
+        }}
+      />
+
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Answer Key</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {answerKey.map((item) => (
+            <span
+              key={item.id}
+              className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-700"
+            >
+              {item.id}. {item.answer}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PassageFillBlankSubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+
+  const wordBank = subsection.wordBank ?? [];
+  const passageText = subsection.passageText ?? "";
+  const blankCount = countPassageBlanks(passageText);
+  const questions = useMemo(
+    () => subsection.questions.filter(isManualPassageFillBlankQuestion),
+    [subsection.questions],
+  );
+
+  const previewQuestions = useMemo<FillBlankQuestion[]>(
+    () =>
+      Array.from({ length: blankCount }, (_, i) => ({
+        id: i + 1,
+        type: "fill-blank" as const,
+        question: "",
+        correctAnswer: questions[i]
+          ? getCorrectWord(wordBank, questions[i].correctAnswerWordBankId)
+          : "",
+      })),
+    [blankCount, questions, wordBank],
+  );
+
+  const answerKey = useMemo(
+    () =>
+      Array.from({ length: blankCount }, (_, i) => ({
+        id: i + 1,
+        answer: questions[i]
+          ? getCorrectWord(wordBank, questions[i].correctAnswerWordBankId) || "Not set"
+          : "Not set",
+      })),
+    [blankCount, questions, wordBank],
+  );
+
+  if (!passageText.trim()) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+        Enter the passage text with ___ blanks to preview this question block.
+      </div>
+    );
+  }
+
+  if (blankCount === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-6 text-sm text-amber-700">
+        The passage does not contain any ___ blanks. Add ___ where you want blanks to appear.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <DragDropFillBlank
+        questions={previewQuestions}
+        wordBank={wordBank.map((item) => ({ letter: item.letter, word: item.word || "Untitled word" }))}
+        grammarPassage={buildPassageFillBlankPreviewPassage(passageText)}
+        sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
+        sectionId={`manual-passage-fillblank-preview-${subsection.id}`}
         getAnswer={(_, id) => answers[id]}
         setAnswer={(_, id, value) => {
           setAnswers((prev) => ({
@@ -344,6 +486,17 @@ export default function PaperIntake() {
     ));
   };
 
+  const updatePassageFillBlankQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPassageFillBlankQuestion) => ManualPassageFillBlankQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPassageFillBlankQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const addSection = () => {
     setSections((prev) => [...prev, createSection()]);
   };
@@ -386,6 +539,7 @@ export default function PaperIntake() {
         questionType: nextQuestionType,
         wordBank: nextSubsection.wordBank,
         questions: nextSubsection.questions,
+        passageText: nextSubsection.passageText,
       };
     });
   };
@@ -398,6 +552,16 @@ export default function PaperIntake() {
           questions: [
             ...subsection.questions.filter(isManualFillBlankQuestion),
             createFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "passage-fill-blank") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualPassageFillBlankQuestion),
+            createPassageFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
           ],
         };
       }
@@ -460,7 +624,7 @@ export default function PaperIntake() {
 
   const addWordBankItem = (sectionId: string, subsectionId: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
-      if (subsection.questionType !== "fill-blank") {
+      if (!isWordBankSubsectionType(subsection.questionType)) {
         return subsection;
       }
 
@@ -473,7 +637,7 @@ export default function PaperIntake() {
         ...subsection,
         wordBank: nextWordBank,
         questions: subsection.questions.map((question) => {
-          if (!isManualFillBlankQuestion(question) || question.correctAnswerWordBankId) {
+          if (!isAnyFillBlankQuestion(question) || question.correctAnswerWordBankId) {
             return question;
           }
 
@@ -488,7 +652,7 @@ export default function PaperIntake() {
 
   const removeWordBankItem = (sectionId: string, subsectionId: string, wordBankId: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
-      if (subsection.questionType !== "fill-blank") {
+      if (!isWordBankSubsectionType(subsection.questionType)) {
         return subsection;
       }
 
@@ -504,7 +668,7 @@ export default function PaperIntake() {
         ...subsection,
         wordBank: nextWordBank,
         questions: subsection.questions.map((question) => {
-          if (!isManualFillBlankQuestion(question)) {
+          if (!isAnyFillBlankQuestion(question)) {
             return question;
           }
 
@@ -527,13 +691,44 @@ export default function PaperIntake() {
     updater: (item: ManualWordBankItem) => ManualWordBankItem,
   ) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
-      if (subsection.questionType !== "fill-blank") {
+      if (!isWordBankSubsectionType(subsection.questionType)) {
         return subsection;
       }
 
       return {
         ...subsection,
         wordBank: (subsection.wordBank ?? []).map((item) => (item.id === wordBankId ? updater(item) : item)),
+      };
+    });
+  };
+
+  /**
+   * For passage-fill-blank: auto-sync the questions array to match the number of ___ in the passage.
+   */
+  const syncPassageBlanksToQuestions = (sectionId: string, subsectionId: string, newPassageText: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const blankCount = countPassageBlanks(newPassageText);
+      const existingQuestions = subsection.questions.filter(isManualPassageFillBlankQuestion);
+      const fallbackWordBankId = subsection.wordBank?.[0]?.id || "";
+
+      let nextQuestions: ManualPassageFillBlankQuestion[];
+      if (existingQuestions.length < blankCount) {
+        // Add more questions
+        nextQuestions = [
+          ...existingQuestions,
+          ...Array.from({ length: blankCount - existingQuestions.length }, () =>
+            createPassageFillBlankQuestion(fallbackWordBankId),
+          ),
+        ];
+      } else {
+        // Trim excess questions
+        nextQuestions = existingQuestions.slice(0, blankCount);
+      }
+
+      return {
+        ...subsection,
+        passageText: newPassageText,
+        questions: nextQuestions,
       };
     });
   };
@@ -645,8 +840,8 @@ export default function PaperIntake() {
             </Link>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Manual Paper Builder</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Build a paper manually by section, big question, and question type. Multiple-choice and word-bank
-              fill-blank blocks both preview in a student-facing layout on the right.
+              Build a paper manually by section, big question, and question type. Multiple-choice, word-bank
+              fill-blank, and passage word-bank blocks all preview in a student-facing layout on the right.
             </p>
           </div>
         </div>
@@ -773,12 +968,15 @@ export default function PaperIntake() {
                                 }
                                 className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                               >
-                                {Object.entries(MANUAL_QUESTION_TYPE_LABELS).map(([value, label]) => (
-                                  <option key={value} value={value}>
-                                    {label}
+                                {MANUAL_QUESTION_TYPE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
                                   </option>
                                 ))}
                               </select>
+                              <p className="text-xs text-slate-500">
+                                {MANUAL_QUESTION_TYPE_OPTIONS.find((o) => o.value === subsection.questionType)?.description}
+                              </p>
                             </div>
                           </div>
 
@@ -861,7 +1059,8 @@ export default function PaperIntake() {
                             </div>
                           </div>
 
-                          {subsection.questionType === "fill-blank" && (
+                          {/* Word Bank editor — shared by fill-blank and passage-fill-blank */}
+                          {isWordBankSubsectionType(subsection.questionType) && (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
                               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                 <div>
@@ -917,7 +1116,33 @@ export default function PaperIntake() {
                             </div>
                           )}
 
+                          {/* Passage text editor — only for passage-fill-blank */}
+                          {subsection.questionType === "passage-fill-blank" && (
+                            <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-blue-800">Passage Text</p>
+                                <p className="text-xs text-blue-700/80">
+                                  Type or paste the full passage. Use <code className="rounded bg-blue-100 px-1 py-0.5 text-blue-900">___</code> (three underscores) to mark each blank. Blanks are numbered automatically.
+                                </p>
+                              </div>
+                              <Textarea
+                                rows={8}
+                                value={subsection.passageText ?? ""}
+                                onChange={(event) =>
+                                  syncPassageBlanksToQuestions(section.id, subsection.id, event.target.value)
+                                }
+                                placeholder={`Example:\n\nThe boy ___ to school every day. He ___ his lunch in a bag. His mother always ___ him goodbye at the door.`}
+                                className="font-mono text-sm"
+                              />
+                              <p className="mt-2 text-xs text-blue-700">
+                                {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Questions editor */}
                           <div className="space-y-4">
+                            {/* MCQ questions */}
                             {subsection.questionType === "mcq" &&
                               subsection.questions.filter(isManualMCQQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
@@ -1075,6 +1300,7 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Fill-blank questions (sentence mode) */}
                             {subsection.questionType === "fill-blank" &&
                               subsection.questions.filter(isManualFillBlankQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
@@ -1148,12 +1374,65 @@ export default function PaperIntake() {
                                   </div>
                                 </div>
                               ))}
+
+                            {/* Passage fill-blank answer mapping */}
+                            {subsection.questionType === "passage-fill-blank" && (() => {
+                              const passageQuestions = subsection.questions.filter(isManualPassageFillBlankQuestion);
+                              if (passageQuestions.length === 0) {
+                                return (
+                                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                                    Add ___ blanks in the passage above to create answer slots.
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                  <div className="mb-3">
+                                    <p className="text-sm font-semibold text-slate-800">Answer Mapping</p>
+                                    <p className="text-xs text-slate-500">
+                                      Assign the correct word bank item for each blank in the passage.
+                                    </p>
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    {passageQuestions.map((question, questionIndex) => (
+                                      <div key={question.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                        <p className="mb-2 text-sm font-semibold text-slate-700">Blank {questionIndex + 1}</p>
+                                        <select
+                                          value={question.correctAnswerWordBankId}
+                                          onChange={(event) =>
+                                            updatePassageFillBlankQuestion(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              (currentQuestion) => ({
+                                                ...currentQuestion,
+                                                correctAnswerWordBankId: event.target.value,
+                                              }),
+                                            )
+                                          }
+                                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                                        >
+                                          {(subsection.wordBank ?? []).map((item) => (
+                                            <option key={item.id} value={item.id}>
+                                              {item.letter}. {item.word || "Untitled word"}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
 
-                          <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
-                            <FilePlus2 className="mr-2 h-4 w-4" />
-                            {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
-                          </Button>
+                          {/* Add question/blank button — not shown for passage-fill-blank (blanks auto-sync from passage) */}
+                          {subsection.questionType !== "passage-fill-blank" && (
+                            <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
+                              <FilePlus2 className="mr-2 h-4 w-4" />
+                              {subsection.questionType === "fill-blank" ? "Add Blank" : "Add Question"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1258,6 +1537,10 @@ export default function PaperIntake() {
 
                             {subsection.questionType === "fill-blank" && (
                               <FillBlankSubsectionPreview subsection={subsection} />
+                            )}
+
+                            {subsection.questionType === "passage-fill-blank" && (
+                              <PassageFillBlankSubsectionPreview subsection={subsection} />
                             )}
                           </div>
                         </div>

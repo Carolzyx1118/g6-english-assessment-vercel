@@ -202,3 +202,4 @@
 - [x] Add audio playback controls in test history detail view
 - [x] Sync GitHub latest changes
 - [x] Fix nested <a> tag error in PaperIntake.tsx
+- [x] Add "passage word bank fill blank" question type to Manual Paper Builder (supports inputting a full passage/article with blanks, word bank same as fill-blank)

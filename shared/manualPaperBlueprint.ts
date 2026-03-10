@@ -15,12 +15,23 @@ export const MANUAL_SECTION_TYPE_LABELS: Record<ManualSectionType, string> = {
   vocabulary: "Vocabulary",
 };
 
-export type ManualQuestionType = "mcq" | "fill-blank";
+export type ManualQuestionType = "mcq" | "fill-blank" | "passage-fill-blank";
 
 export const MANUAL_QUESTION_TYPE_LABELS: Record<ManualQuestionType, string> = {
   mcq: "Multiple Choice",
   "fill-blank": "Word Bank Fill Blank",
+  "passage-fill-blank": "Passage Word Bank Fill Blank",
 };
+
+export const MANUAL_QUESTION_TYPE_OPTIONS: Array<{
+  value: ManualQuestionType;
+  label: string;
+  description: string;
+}> = [
+  { value: "mcq", label: "Multiple Choice", description: "Each question has its own set of options." },
+  { value: "fill-blank", label: "Word Bank Fill Blank", description: "Individual sentences with blanks, shared word bank." },
+  { value: "passage-fill-blank", label: "Passage Word Bank Fill Blank", description: "A full passage/article with numbered blanks and a shared word bank." },
+];
 
 export interface ManualOptionImage {
   dataUrl: string;
@@ -58,7 +69,15 @@ export interface ManualFillBlankQuestion {
   correctAnswerWordBankId: string;
 }
 
-export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion;
+export interface ManualPassageFillBlankQuestion {
+  id: string;
+  type: "passage-fill-blank";
+  /** Not used for passage type — the passage text is on the subsection */
+  prompt: string;
+  correctAnswerWordBankId: string;
+}
+
+export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion;
 
 export interface ManualSubsection {
   id: string;
@@ -68,6 +87,8 @@ export interface ManualSubsection {
   questionType: ManualQuestionType;
   questions: ManualQuestion[];
   wordBank?: ManualWordBankItem[];
+  /** Full passage text for passage-fill-blank type. Use ___ to mark blanks. */
+  passageText?: string;
 }
 
 export interface ManualSection {
