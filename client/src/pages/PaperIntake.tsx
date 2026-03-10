@@ -451,7 +451,7 @@ export default function PaperIntake() {
                                     />
                                   </div>
 
-                                  <div className="space-y-3">
+                                  <div className="grid gap-3 md:grid-cols-3">
                                     {question.options.map((option) => (
                                       <div key={option.id} className="rounded-xl border border-slate-200 p-4">
                                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -624,7 +624,7 @@ export default function PaperIntake() {
                                 <p className="text-sm font-medium text-slate-800">
                                   {`${questionIndex + 1}. ${question.prompt || "Question prompt goes here."}`}
                                 </p>
-                                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="mt-3 grid gap-3 md:grid-cols-3">
                                   {question.options.map((option) => (
                                     <div key={option.id} className="rounded-xl border border-slate-200 p-3">
                                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
