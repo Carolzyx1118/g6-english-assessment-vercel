@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
+import { ArrowLeft, FilePlus2, ImagePlus, Music, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
@@ -8,6 +8,7 @@ import {
   createSquareImageDataUrl,
   fileToBase64,
   formatFileSize,
+  validateAudioFile,
   validateImageFile,
 } from "@/lib/imageUtils";
 import { trpc } from "@/lib/trpc";
@@ -1042,6 +1043,52 @@ export default function PaperIntake() {
     }
   };
 
+  const handleSubsectionAudioUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateAudioFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const fileBase64 = await fileToBase64(file);
+      const dataUrl = `data:${file.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(file);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: file.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
+
+      updateSubsection(sectionId, subsectionId, (subsection) => ({
+        ...subsection,
+        audio: {
+          dataUrl,
+          previewUrl,
+          fileName: file.name,
+          mimeType: file.type,
+          size: file.size,
+        },
+      }));
+
+      toast.success("Audio file uploaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process audio file");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -1274,6 +1321,74 @@ export default function PaperIntake() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Audio upload — shown only when section type is listening */}
+                          {section.sectionType === "listening" && (
+                            <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+                              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Volume2 className="h-4 w-4 text-sky-700" />
+                                    <Label className="text-sm font-semibold text-sky-800">Listening Audio</Label>
+                                  </div>
+                                  <p className="text-xs text-sky-700/80">
+                                    Upload an audio clip for this big question. Students will listen to it before answering.
+                                  </p>
+                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-sky-400/50 bg-white px-3 py-2 text-sm font-medium text-sky-700 transition-colors hover:border-sky-500 hover:text-sky-800">
+                                    <Music className="h-4 w-4" />
+                                    {subsection.audio ? "Replace Audio" : "Upload Audio"}
+                                    <input
+                                      type="file"
+                                      accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
+                                      className="hidden"
+                                      onChange={(event) =>
+                                        handleSubsectionAudioUpload(
+                                          section.id,
+                                          subsection.id,
+                                          event.target.files?.[0],
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                  {subsection.audio && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                      onClick={() =>
+                                        updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                          ...currentSubsection,
+                                          audio: undefined,
+                                        }))
+                                      }
+                                    >
+                                      Remove Audio
+                                    </Button>
+                                  )}
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>Preview</Label>
+                                  {subsection.audio ? (
+                                    <div className="space-y-2">
+                                      <audio
+                                        controls
+                                        className="w-full"
+                                        src={subsection.audio.previewUrl || subsection.audio.dataUrl}
+                                      />
+                                      <p className="text-xs text-slate-500">
+                                        {subsection.audio.fileName} · {formatFileSize(subsection.audio.size)}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex min-h-[60px] items-center justify-center rounded-xl border border-dashed border-sky-300 bg-white p-3">
+                                      <span className="text-xs text-slate-400">No audio uploaded</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Word Bank editor — shared by fill-blank and passage-fill-blank */}
                           {isWordBankSubsectionType(subsection.questionType) && (
@@ -1982,6 +2097,20 @@ export default function PaperIntake() {
                                 src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
                                 alt={subsection.title || `Big Question ${subsectionIndex + 1}`}
                                 className="max-h-60 w-full object-contain"
+                              />
+                            </div>
+                          )}
+
+                          {subsection.audio && (
+                            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Volume2 className="h-3.5 w-3.5 text-sky-700" />
+                                <p className="text-xs font-semibold text-sky-800">Listening Audio</p>
+                              </div>
+                              <audio
+                                controls
+                                className="w-full"
+                                src={subsection.audio.previewUrl || subsection.audio.dataUrl}
                               />
                             </div>
                           )}

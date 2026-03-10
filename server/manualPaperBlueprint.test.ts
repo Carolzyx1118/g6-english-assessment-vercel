@@ -353,4 +353,68 @@ describe("manualPaperBlueprint types and labels", () => {
     };
     expect(subsection.passageText).toBeUndefined();
   });
+
+  it("ManualSubsection supports audio field for listening sections", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-audio-1",
+      title: "Listening Comprehension",
+      instructions: "Listen to the audio and answer the questions.",
+      questionType: "mcq",
+      questions: [
+        {
+          id: "q-1",
+          type: "mcq",
+          prompt: "What did the speaker say?",
+          options: [
+            { id: "o1", label: "A", text: "Hello" },
+            { id: "o2", label: "B", text: "Goodbye" },
+          ],
+          correctAnswer: "A",
+        },
+      ],
+      audio: {
+        dataUrl: "data:audio/mpeg;base64,abc123",
+        previewUrl: "https://cdn.example.com/audio/clip.mp3",
+        fileName: "listening-clip.mp3",
+        mimeType: "audio/mpeg",
+        size: 1024000,
+      },
+    };
+    expect(subsection.audio).toBeDefined();
+    expect(subsection.audio!.fileName).toBe("listening-clip.mp3");
+    expect(subsection.audio!.mimeType).toBe("audio/mpeg");
+    expect(subsection.audio!.size).toBe(1024000);
+    expect(subsection.audio!.previewUrl).toContain("cdn.example.com");
+  });
+
+  it("ManualSubsection audio is optional", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-no-audio",
+      title: "Reading Block",
+      instructions: "",
+      questionType: "mcq",
+      questions: [],
+    };
+    expect(subsection.audio).toBeUndefined();
+  });
+
+  it("ManualAudioFile previewUrl is optional", () => {
+    const subsection: ManualSubsection = {
+      id: "sub-audio-2",
+      title: "Listening Q2",
+      instructions: "Listen and answer.",
+      questionType: "fill-blank",
+      questions: [],
+      wordBank: [],
+      audio: {
+        dataUrl: "data:audio/wav;base64,xyz789",
+        fileName: "recording.wav",
+        mimeType: "audio/wav",
+        size: 512000,
+      },
+    };
+    expect(subsection.audio).toBeDefined();
+    expect(subsection.audio!.previewUrl).toBeUndefined();
+    expect(subsection.audio!.mimeType).toBe("audio/wav");
+  });
 });

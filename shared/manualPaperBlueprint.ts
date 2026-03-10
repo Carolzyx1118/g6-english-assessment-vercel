@@ -121,6 +121,17 @@ export interface ManualPassageOpenEndedQuestion {
 
 export type ManualQuestion = ManualMCQQuestion | ManualFillBlankQuestion | ManualPassageFillBlankQuestion | ManualPassageMCQQuestion | ManualTypedFillBlankQuestion | ManualPassageOpenEndedQuestion;
 
+/** Audio file attached to a subsection (used for listening sections) */
+export interface ManualAudioFile {
+  /** Base64 data URL for local fallback */
+  dataUrl: string;
+  /** Uploaded CDN URL (preferred for playback) */
+  previewUrl?: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface ManualSubsection {
   id: string;
   title: string;
@@ -131,6 +142,8 @@ export interface ManualSubsection {
   wordBank?: ManualWordBankItem[];
   /** Full passage text for passage-fill-blank, passage-mcq, and passage-open-ended types. Use ___ to mark blanks (for fill/mcq types). */
   passageText?: string;
+  /** Audio file for listening sections — each big question can have its own audio clip */
+  audio?: ManualAudioFile;
 }
 
 export interface ManualSection {

@@ -130,6 +130,20 @@ export function validateImageFile(file: File): string | null {
 }
 
 /**
+ * Validate that a file is an acceptable audio file.
+ */
+export function validateAudioFile(file: File): string | null {
+  const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac'];
+  if (!validTypes.includes(file.type)) {
+    return 'Please select an audio file (MP3, WAV, OGG, M4A, AAC, WebM)';
+  }
+  if (file.size > 16 * 1024 * 1024) {
+    return 'Audio file size must be under 16MB';
+  }
+  return null;
+}
+
+/**
  * Crop an image to a centered square and export it as a data URL for option previews.
  */
 export async function createSquareImageDataUrl(

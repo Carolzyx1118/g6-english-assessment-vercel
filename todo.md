@@ -208,3 +208,4 @@
 - [x] Change passage-mcq default options from 4 (A/B/C/D) to 3 (A/B/C)
 - [x] Add "fill in blank" question type to Manual Paper Builder (individual questions, students type answers directly into blank fields, no word bank)
 - [x] Add "passage open-ended" (文章问答题) question type to Manual Paper Builder (full passage + 1-3 open-ended questions, students type free-form answers after reading)
+- [x] Add audio upload to each big question (subsection) when part type is "listening" in Manual Paper Builder
