@@ -135,7 +135,7 @@ function createPassageMCQQuestion(blankNumber: number): ManualPassageMCQQuestion
     id: createLocalId(),
     type: "passage-mcq",
     prompt: `Blank ${blankNumber}`,
-    options: [createPassageMCQOption(0), createPassageMCQOption(1), createPassageMCQOption(2), createPassageMCQOption(3)],
+    options: [createPassageMCQOption(0), createPassageMCQOption(1), createPassageMCQOption(2)],
     correctAnswer: "A",
   };
 }
