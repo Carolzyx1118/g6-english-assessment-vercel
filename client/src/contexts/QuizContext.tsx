@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { trpc } from '@/lib/trpc';
+import { blueprintToPaper } from '@shared/blueprintToPaper';
+import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
 
 export interface StudentInfo {
   name: string;
@@ -156,10 +159,36 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     return subjects.length > 0 ? subjects : PAPER_SUBJECT_ORDER;
   }, [user?.allowedSubjects]);
-  const allPapers = useMemo(
-    () => staticPapers.filter((paper) => allowedSubjects.includes(paper.subject)),
-    [allowedSubjects],
-  );
+  // Fetch manual papers from database
+  const { data: manualPapersData } = trpc.papers.listManualPapers.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+
+  const allPapers = useMemo(() => {
+    const filteredStatic = staticPapers.filter((paper) => allowedSubjects.includes(paper.subject));
+
+    // Convert manual papers from DB into Paper format
+    const manualPapers: Paper[] = (manualPapersData ?? []).map((mp) => {
+      try {
+        const blueprint: ManualPaperBlueprint = JSON.parse(mp.blueprintJson);
+        const converted = blueprintToPaper(blueprint, {
+          subject: mp.subject,
+          category: mp.category,
+        });
+        return {
+          ...converted,
+          id: mp.paperId,
+          subject: (mp.subject || 'english') as PaperSubject,
+          category: (mp.category || 'assessment') as any,
+          sections: converted.sections as unknown as Section[],
+        } as Paper;
+      } catch {
+        return null;
+      }
+    }).filter((p): p is Paper => p !== null);
+
+    return [...filteredStatic, ...manualPapers];
+  }, [allowedSubjects, manualPapersData]);
 
   const currentSections = selectedPaper?.sections || [];
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];

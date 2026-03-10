@@ -67,6 +67,41 @@ export type TestResult = typeof testResults.$inferSelect;
 export type InsertTestResult = typeof testResults.$inferInsert;
 
 /**
+ * Manual papers table - stores papers created via the Manual Paper Builder.
+ * The full blueprint is stored as JSON; metadata columns enable listing/filtering.
+ */
+export const manualPapers = mysqlTable("manualPapers", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Slug-style paper ID derived from title, used as the Paper.id in the quiz system */
+  paperId: varchar("paperId", { length: 255 }).notNull().unique(),
+  /** Human-readable title */
+  title: varchar("title", { length: 255 }).notNull(),
+  /** Short description */
+  description: text("description"),
+  /** Subject classification */
+  subject: varchar("subject", { length: 64 }).notNull().default("english"),
+  /** Category classification */
+  category: varchar("category", { length: 64 }).notNull().default("assessment"),
+  /** Full ManualPaperBlueprint as JSON */
+  blueprintJson: text("blueprintJson").notNull(),
+  /** Whether the paper is published and visible to students */
+  published: int("published").notNull().default(1),
+  /** Total question count (cached for display) */
+  totalQuestions: int("totalQuestions").notNull().default(0),
+  /** Whether the paper has listening sections */
+  hasListening: int("hasListening").notNull().default(0),
+  /** Whether the paper has writing sections */
+  hasWriting: int("hasWriting").notNull().default(0),
+  /** Creation timestamp */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** Last update timestamp */
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ManualPaper = typeof manualPapers.$inferSelect;
+export type InsertManualPaper = typeof manualPapers.$inferInsert;
+
+/**
  * Local authentication users table.
  * Stores users who register with username/password + invite code.
  * Separate from the Manus OAuth users table.

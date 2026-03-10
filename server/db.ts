@@ -1,8 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, testResults, localUsers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
+import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -192,6 +192,49 @@ export async function deleteTestResult(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(testResults).where(eq(testResults.id, id));
+}
+
+// ── Manual Papers ──
+
+export async function saveManualPaper(data: InsertManualPaper): Promise<number | null> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save manual paper: database not available");
+    return null;
+  }
+  const [result] = await db.insert(manualPapers).values(data).$returningId();
+  return result?.id ?? null;
+}
+
+export async function getAllManualPapers(): Promise<ManualPaper[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
+}
+
+export async function getPublishedManualPapers(): Promise<ManualPaper[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
+}
+
+export async function getManualPaperByPaperId(paperId: string): Promise<ManualPaper | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(manualPapers).where(eq(manualPapers.paperId, paperId)).limit(1);
+  return rows[0];
+}
+
+export async function deleteManualPaper(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(manualPapers).where(eq(manualPapers.id, id));
+}
+
+export async function updateManualPaper(id: number, data: Partial<InsertManualPaper>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(manualPapers).set(data).where(eq(manualPapers.id, id));
 }
 
 // ── Local Auth Users ──

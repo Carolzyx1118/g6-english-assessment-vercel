@@ -36,6 +36,13 @@
       "when": 1773124000550,
       "tag": "0004_furry_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1773160836071,
+      "tag": "0005_greedy_maestro",
+      "breakpoints": true
     }
   ]
 }

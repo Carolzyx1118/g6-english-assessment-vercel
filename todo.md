@@ -213,3 +213,7 @@
 - [ ] Fix API Query Error "The string did not match the expected pattern" on home page
 - [x] Add "passage matching" question type to Manual Paper Builder (PET Reading Part 2 style: passage with labeled descriptions A-H, person descriptions matched to best description)
 - [x] Rename "Big Question" to "Main Question" throughout PaperIntake UI
+- [x] Add "Confirm/Submit" button in PaperIntake to save manually created paper to database
+- [x] Create database table/schema for storing manual papers
+- [x] Create tRPC procedure to save manual paper data
+- [x] Display saved manual papers on home page for students to select and take

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
-import { ArrowLeft, FilePlus2, ImagePlus, Link2, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, Check, FilePlus2, ImagePlus, Link2, Loader2, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
@@ -612,12 +612,15 @@ function PassageFillBlankSubsectionPreview({ subsection }: { subsection: ManualS
 }
 
 export default function PaperIntake() {
+  const [, navigate] = useLocation();
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
+  const saveManualPaperMutation = trpc.papers.saveManualPaper.useMutation();
   const [paperSeed] = useState(() => createLocalId());
   const [createdAt] = useState(() => new Date().toISOString());
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sections, setSections] = useState<ManualSection[]>([createSection()]);
+  const [isSaved, setIsSaved] = useState(false);
 
   const blueprint = useMemo(
     () => buildBlueprint(paperSeed, createdAt, title, description, sections),
@@ -2855,6 +2858,50 @@ export default function PaperIntake() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* ── Confirm / Save Button ── */}
+        <div className="mt-8 flex items-center justify-end gap-4">
+          {isSaved ? (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-6 py-3 text-emerald-700">
+              <Check className="h-5 w-5" />
+              <span className="text-sm font-semibold">Paper saved successfully!</span>
+            </div>
+          ) : (
+            <Button
+              size="lg"
+              disabled={!title.trim() || sections.every(s => s.subsections.every(sub => sub.questions.length === 0)) || saveManualPaperMutation.isPending}
+              onClick={async () => {
+                try {
+                  const paperId = `manual-${paperSeed}`;
+                  await saveManualPaperMutation.mutateAsync({
+                    paperId,
+                    title: title.trim(),
+                    description: description.trim() || undefined,
+                    blueprintJson: JSON.stringify(blueprint),
+                  });
+                  setIsSaved(true);
+                  toast.success("Paper saved! It will now appear on the home page.");
+                  setTimeout(() => navigate("/"), 1500);
+                } catch (err: any) {
+                  toast.error(err?.message || "Failed to save paper. Please try again.");
+                }
+              }}
+              className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+            >
+              {saveManualPaperMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Confirm & Save Paper
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>
