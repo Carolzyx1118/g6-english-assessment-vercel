@@ -64,6 +64,7 @@ export interface ManualSubsection {
   id: string;
   title: string;
   instructions: string;
+  sceneImage?: ManualOptionImage;
   questionType: ManualQuestionType;
   questions: ManualQuestion[];
   wordBank?: ManualWordBankItem[];

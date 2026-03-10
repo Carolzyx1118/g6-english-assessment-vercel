@@ -3,7 +3,13 @@ import { Link } from "wouter";
 import { ArrowLeft, FilePlus2, ImagePlus, Plus, SquarePen, Trash2 } from "lucide-react";
 import type { FillBlankQuestion } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
-import { createSquareImageDataUrl, formatFileSize, validateImageFile } from "@/lib/imageUtils";
+import {
+  compressImage,
+  createSquareImageDataUrl,
+  fileToBase64,
+  formatFileSize,
+  validateImageFile,
+} from "@/lib/imageUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -244,6 +250,7 @@ function FillBlankSubsectionPreview({ subsection }: { subsection: ManualSubsecti
         questions={previewQuestions}
         wordBank={wordBank.map((item) => ({ letter: item.letter, word: item.word || "Untitled word" }))}
         grammarPassage={buildFillBlankPreviewPassage(questions)}
+        sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
         sectionId={`manual-fillblank-preview-${subsection.id}`}
         getAnswer={(_, id) => answers[id]}
         setAnswer={(_, id, value) => {
@@ -577,6 +584,53 @@ export default function PaperIntake() {
     }
   };
 
+  const handleSubsectionImageUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const compressedFile = await compressImage(file, "scene");
+      const fileBase64 = await fileToBase64(compressedFile);
+      const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `scene-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
+
+      updateSubsection(sectionId, subsectionId, (subsection) => ({
+        ...subsection,
+        sceneImage: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
+      }));
+
+      toast.success("Question block image updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -741,6 +795,70 @@ export default function PaperIntake() {
                               }
                               placeholder="Write the instructions for this big question."
                             />
+                          </div>
+
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                              <div className="space-y-2">
+                                <Label>Question Block Image</Label>
+                                <p className="text-xs text-slate-500">
+                                  Optional. This image will appear above all questions in this big question block.
+                                </p>
+                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                  <ImagePlus className="h-4 w-4" />
+                                  {subsection.sceneImage ? "Replace Image" : "Add Image"}
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp,image/gif"
+                                    className="hidden"
+                                    onChange={(event) =>
+                                      handleSubsectionImageUpload(
+                                        section.id,
+                                        subsection.id,
+                                        event.target.files?.[0],
+                                      )
+                                    }
+                                  />
+                                </label>
+                                {subsection.sceneImage && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                    onClick={() =>
+                                      updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                        ...currentSubsection,
+                                        sceneImage: undefined,
+                                      }))
+                                    }
+                                  >
+                                    Remove Image
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label>Preview</Label>
+                                <div className="flex min-h-[132px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-2">
+                                  {subsection.sceneImage ? (
+                                    <img
+                                      src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
+                                      alt="Question block preview"
+                                      className="max-h-32 w-full object-contain"
+                                    />
+                                  ) : (
+                                    <span className="px-4 text-center text-xs text-slate-400">
+                                      No image uploaded
+                                    </span>
+                                  )}
+                                </div>
+                                {subsection.sceneImage && (
+                                  <p className="text-xs text-slate-500">
+                                    {subsection.sceneImage.fileName} · {formatFileSize(subsection.sceneImage.size)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
                           {subsection.questionType === "fill-blank" && (
@@ -1093,6 +1211,16 @@ export default function PaperIntake() {
                           <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">
                             {subsection.instructions || "No instructions yet."}
                           </p>
+
+                          {subsection.sceneImage && (
+                            <div className="mt-4 flex justify-center rounded-2xl border border-slate-200 bg-white p-3">
+                              <img
+                                src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
+                                alt={subsection.title || `Big Question ${subsectionIndex + 1}`}
+                                className="max-h-60 w-full object-contain"
+                              />
+                            </div>
+                          )}
 
                           <div className="mt-4 space-y-4">
                             {subsection.questionType === "mcq" &&
