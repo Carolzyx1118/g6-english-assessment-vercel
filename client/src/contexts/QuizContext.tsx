@@ -15,6 +15,15 @@ interface QuizState {
   endTime: number | null;
 }
 
+interface PersistedQuizSession {
+  version: 1;
+  username: string;
+  selectedPaperId: string | null;
+  state: QuizState;
+  isStarted: boolean;
+  studentInfo: StudentInfo | null;
+}
+
 interface QuizContextType {
   state: QuizState;
   studentInfo: StudentInfo | null;
@@ -33,6 +42,7 @@ interface QuizContextType {
   resetQuiz: () => void;
   startQuiz: () => void;
   isStarted: boolean;
+  isRestoringSession: boolean;
   getScore: () => { correct: number; total: number; bySection: Record<string, { correct: number; total: number }> };
   getSectionProgress: (sectionId: string) => { answered: number; total: number };
   getSectionTimings: () => Record<string, number>;
@@ -40,27 +50,105 @@ interface QuizContextType {
 }
 
 const QuizContext = createContext<QuizContextType | null>(null);
+const QUIZ_SESSION_STORAGE_KEY = 'pureon_assessment_quiz_session_v1';
+
+function createInitialQuizState(): QuizState {
+  return {
+    currentSectionIndex: 0,
+    answers: {},
+    submitted: false,
+    startTime: null,
+    endTime: null,
+  };
+}
+
+function hasMeaningfulQuizState(session: {
+  selectedPaperId: string | null;
+  studentInfo: StudentInfo | null;
+  state: QuizState;
+  isStarted: boolean;
+}) {
+  return Boolean(
+    session.selectedPaperId ||
+    session.isStarted ||
+    session.studentInfo ||
+    session.state.submitted ||
+    session.state.startTime ||
+    session.state.endTime ||
+    Object.keys(session.state.answers).length,
+  );
+}
+
+function readPersistedQuizSession(): PersistedQuizSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(QUIZ_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<PersistedQuizSession>;
+    if (parsed.version !== 1 || typeof parsed.username !== 'string') return null;
+
+    return {
+      version: 1,
+      username: parsed.username,
+      selectedPaperId: typeof parsed.selectedPaperId === 'string' ? parsed.selectedPaperId : null,
+      state: {
+        currentSectionIndex: typeof parsed.state?.currentSectionIndex === 'number' ? parsed.state.currentSectionIndex : 0,
+        answers: parsed.state?.answers && typeof parsed.state.answers === 'object' ? parsed.state.answers : {},
+        submitted: Boolean(parsed.state?.submitted),
+        startTime: typeof parsed.state?.startTime === 'number' ? parsed.state.startTime : null,
+        endTime: typeof parsed.state?.endTime === 'number' ? parsed.state.endTime : null,
+      },
+      isStarted: Boolean(parsed.isStarted),
+      studentInfo: parsed.studentInfo && typeof parsed.studentInfo === 'object'
+        ? {
+            name: typeof parsed.studentInfo.name === 'string' ? parsed.studentInfo.name : '',
+            grade: typeof parsed.studentInfo.grade === 'string' ? parsed.studentInfo.grade : '',
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedQuizSession(session: PersistedQuizSession) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(QUIZ_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // ignore storage failures in private mode or restricted browsers
+  }
+}
+
+function clearPersistedQuizSession() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.removeItem(QUIZ_SESSION_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 function answerKey(sectionId: string, questionId: number): string {
   return `${sectionId}:${questionId}`;
 }
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useLocalAuth();
+  const { user, loading: authLoading } = useLocalAuth();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
-  const [state, setState] = useState<QuizState>({
-    currentSectionIndex: 0,
-    answers: {},
-    submitted: false,
-    startTime: null,
-    endTime: null,
-  });
+  const [state, setState] = useState<QuizState>(createInitialQuizState);
   const [isStarted, setIsStarted] = useState(false);
   const [studentInfo, setStudentInfoState] = useState<StudentInfo | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
+  const restoredSessionOwnerRef = useRef<string | null>(null);
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
       PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
@@ -77,6 +165,87 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];
 
   useEffect(() => {
+    if (authLoading) {
+      setIsRestoringSession(true);
+      return;
+    }
+
+    const restoreOwner = user?.username ?? '__guest__';
+    if (restoredSessionOwnerRef.current !== restoreOwner) {
+      setIsRestoringSession(true);
+    }
+  }, [authLoading, user?.username]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    const restoreOwner = user?.username ?? '__guest__';
+    if (restoredSessionOwnerRef.current === restoreOwner) return;
+    restoredSessionOwnerRef.current = restoreOwner;
+
+    if (!user?.username) {
+      setIsRestoringSession(false);
+      return;
+    }
+
+    const persisted = readPersistedQuizSession();
+    if (!persisted || persisted.username !== user.username) {
+      if (persisted && persisted.username !== user.username) {
+        clearPersistedQuizSession();
+      }
+      setIsRestoringSession(false);
+      return;
+    }
+
+    const restoredPaper = persisted.selectedPaperId
+      ? allPapers.find((paper) => paper.id === persisted.selectedPaperId)
+      : null;
+    const maxSectionIndex = restoredPaper ? Math.max(restoredPaper.sections.length - 1, 0) : 0;
+    const restoredState: QuizState = {
+      currentSectionIndex: Math.min(Math.max(persisted.state.currentSectionIndex, 0), maxSectionIndex),
+      answers: persisted.state.answers,
+      submitted: persisted.state.submitted,
+      startTime: persisted.state.startTime,
+      endTime: persisted.state.endTime,
+    };
+
+    setSelectedPaper(restoredPaper ?? null);
+    setState(restoredState);
+    setStudentInfoState(persisted.studentInfo);
+    setIsStarted(Boolean(restoredPaper && (persisted.isStarted || persisted.state.submitted)));
+    currentSectionIdRef.current = restoredPaper?.sections[restoredState.currentSectionIndex]?.id || restoredPaper?.sections[0]?.id || '';
+    sectionEnteredAtRef.current = restoredPaper && !persisted.state.submitted && (persisted.isStarted || persisted.state.submitted)
+      ? Date.now()
+      : null;
+    setIsRestoringSession(false);
+  }, [allPapers, authLoading, user?.username]);
+
+  useEffect(() => {
+    if (authLoading || isRestoringSession) return;
+
+    if (!user?.username) {
+      clearPersistedQuizSession();
+      return;
+    }
+
+    const session: PersistedQuizSession = {
+      version: 1,
+      username: user.username,
+      selectedPaperId: selectedPaper?.id ?? null,
+      state,
+      isStarted,
+      studentInfo,
+    };
+
+    if (!hasMeaningfulQuizState(session)) {
+      clearPersistedQuizSession();
+      return;
+    }
+
+    writePersistedQuizSession(session);
+  }, [authLoading, isRestoringSession, user?.username, selectedPaper?.id, state, isStarted, studentInfo]);
+
+  useEffect(() => {
     if (!selectedPaper) return;
 
     const stillAllowed = allPapers.some((paper) => paper.id === selectedPaper.id);
@@ -88,13 +257,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     sectionTimingsRef.current = {};
     sectionEnteredAtRef.current = null;
     currentSectionIdRef.current = '';
-    setState({
-      currentSectionIndex: 0,
-      answers: {},
-      submitted: false,
-      startTime: null,
-      endTime: null,
-    });
+    clearPersistedQuizSession();
+    setState(createInitialQuizState());
   }, [allPapers, selectedPaper]);
 
   useEffect(() => {
@@ -160,13 +324,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     sectionTimingsRef.current = {};
     sectionEnteredAtRef.current = null;
     currentSectionIdRef.current = '';
-    setState({
-      currentSectionIndex: 0,
-      answers: {},
-      submitted: false,
-      startTime: null,
-      endTime: null,
-    });
+    clearPersistedQuizSession();
+    setState(createInitialQuizState());
   }, []);
 
   const startQuiz = useCallback(() => {
@@ -296,11 +455,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     resetQuiz,
     startQuiz,
     isStarted,
+    isRestoringSession,
     getScore,
     getSectionProgress,
     getSectionTimings,
     getTotalTime,
-  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, allPapers, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
+  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, allPapers, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, isRestoringSession, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>

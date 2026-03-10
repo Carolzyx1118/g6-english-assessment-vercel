@@ -9,9 +9,21 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import LandingPage from '@/components/LandingPage';
 import QuizLayout from '@/components/QuizLayout';
+import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const { isStarted } = useQuiz();
+  const { isStarted, isRestoringSession } = useQuiz();
+
+  if (isRestoringSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFBFD]">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Loader2 className="w-8 h-8 animate-spin text-[#1E3A5F]" />
+          <p className="text-sm">Restoring your assessment...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isStarted) {
     return <LandingPage />;
