@@ -135,7 +135,7 @@ export function validateImageFile(file: File): string | null {
 export async function createSquareImageDataUrl(
   file: File,
   size = 320
-): Promise<{ dataUrl: string; mimeType: string; size: number }> {
+): Promise<{ dataUrl: string; previewUrl: string; mimeType: string; size: number }> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     const url = URL.createObjectURL(file);
@@ -163,15 +163,34 @@ export async function createSquareImageDataUrl(
 
       const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
       const quality = mimeType === 'image/png' ? undefined : COMPRESSION_QUALITY;
-      const dataUrl = canvas.toDataURL(mimeType, quality);
-      const base64 = dataUrl.split(',')[1] ?? '';
-      const approximateSize = Math.ceil((base64.length * 3) / 4);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to create square preview image'));
+            return;
+          }
 
-      resolve({
-        dataUrl,
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+            if (!dataUrl) {
+              reject(new Error('Failed to read processed image'));
+              return;
+            }
+
+            resolve({
+              dataUrl,
+              previewUrl: URL.createObjectURL(blob),
+              mimeType,
+              size: blob.size,
+            });
+          };
+          reader.onerror = () => reject(new Error('Failed to read processed image'));
+          reader.readAsDataURL(blob);
+        },
         mimeType,
-        size: approximateSize,
-      });
+        quality
+      );
     };
 
     img.onerror = () => {

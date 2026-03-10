@@ -19,6 +19,7 @@ export type ManualQuestionType = "mcq";
 
 export interface ManualOptionImage {
   dataUrl: string;
+  previewUrl?: string;
   fileName: string;
   mimeType: string;
   size: number;

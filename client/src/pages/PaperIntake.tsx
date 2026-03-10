@@ -252,6 +252,7 @@ export default function PaperIntake() {
         ...option,
         image: {
           dataUrl: normalizedImage.dataUrl,
+          previewUrl: normalizedImage.previewUrl,
           fileName: file.name,
           mimeType: normalizedImage.mimeType,
           size: normalizedImage.size,
@@ -512,7 +513,7 @@ export default function PaperIntake() {
                                             <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-28 sm:w-28">
                                               {option.image ? (
                                                 <img
-                                                  src={option.image.dataUrl}
+                                                  src={option.image.previewUrl || option.image.dataUrl}
                                                   alt={`Option ${option.label}`}
                                                   className="h-full w-full object-contain"
                                                 />
@@ -640,7 +641,7 @@ export default function PaperIntake() {
                                       <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-28">
                                         {option.image ? (
                                           <img
-                                            src={option.image.dataUrl}
+                                            src={option.image.previewUrl || option.image.dataUrl}
                                             alt={`Preview ${option.label}`}
                                             className="h-full w-full object-contain"
                                           />
