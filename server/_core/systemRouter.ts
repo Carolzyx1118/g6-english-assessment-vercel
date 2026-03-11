@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { getForgeConfigStatus } from "./env";
+import { getForgeConfigStatus, getStorageConfigStatus } from "./env";
 import { notifyOwner } from "./notification";
+import { isVercelRuntime } from "./runtime";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 
 export const systemRouter = router({
@@ -16,13 +17,15 @@ export const systemRouter = router({
 
   runtimeStatus: publicProcedure.query(() => {
     const forge = getForgeConfigStatus();
+    const storage = getStorageConfigStatus();
     return {
       aiConfigured: forge.isConfigured,
-      storageConfigured: true,
+      storageConfigured: storage.isConfigured,
       aiProvider: forge.isConfigured ? "forge" : "local",
-      storageProvider: forge.isConfigured ? "forge" : "local",
-      usingLocalFallback: !forge.isConfigured,
-      missingVariables: forge.missingVariables,
+      storageProvider: storage.provider,
+      usingLocalFallback: !storage.isConfigured,
+      missingVariables: storage.missingVariables,
+      runtime: isVercelRuntime() ? "vercel" : "node",
     };
   }),
 

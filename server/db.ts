@@ -1,32 +1,56 @@
 import fs from "fs/promises";
 import path from "path";
 import { eq, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let hasLoggedLocalAuthFileFallback = false;
 let hasLoggedManualPaperFileFallback = false;
+let hasLoggedTestResultsFileFallback = false;
+let hasLoggedEphemeralPersistenceWarning = false;
 
 function getLocalAuthUsersFilePath() {
-  return process.env.LOCAL_AUTH_USERS_FILE || path.resolve(import.meta.dirname, "..", "tmp", "local-users.json");
+  return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
 }
 
 function getLocalManualPapersFilePath() {
-  return process.env.LOCAL_MANUAL_PAPERS_FILE || path.resolve(import.meta.dirname, "..", "tmp", "manual-papers.json");
+  return process.env.LOCAL_MANUAL_PAPERS_FILE || getWritableDataPath("manual-papers.json");
+}
+
+function getLocalTestResultsFilePath() {
+  return process.env.LOCAL_TEST_RESULTS_FILE || getWritableDataPath("test-results.json");
+}
+
+function logEphemeralPersistenceWarning() {
+  if (hasLoggedEphemeralPersistenceWarning || !isVercelRuntime()) return;
+  hasLoggedEphemeralPersistenceWarning = true;
+  console.warn(
+    "[Database] DATABASE_URL is not configured on Vercel. File-backed data uses /tmp and is not durable across deployments or cold starts."
+  );
 }
 
 function logLocalAuthFileFallback() {
   if (hasLoggedLocalAuthFileFallback) return;
   hasLoggedLocalAuthFileFallback = true;
+  logEphemeralPersistenceWarning();
   console.warn(`[LocalAuth] DATABASE_URL not configured. Falling back to file storage at ${getLocalAuthUsersFilePath()}`);
 }
 
 function logManualPaperFileFallback() {
   if (hasLoggedManualPaperFileFallback) return;
   hasLoggedManualPaperFileFallback = true;
+  logEphemeralPersistenceWarning();
   console.warn(`[ManualPapers] DATABASE_URL not configured. Falling back to file storage at ${getLocalManualPapersFilePath()}`);
+}
+
+function logTestResultsFileFallback() {
+  if (hasLoggedTestResultsFileFallback) return;
+  hasLoggedTestResultsFileFallback = true;
+  logEphemeralPersistenceWarning();
+  console.warn(`[TestResults] DATABASE_URL not configured. Falling back to file storage at ${getLocalTestResultsFilePath()}`);
 }
 
 function normalizeLocalUserRecord(raw: any): LocalUser {
@@ -57,6 +81,35 @@ function normalizeManualPaperRecord(raw: any): ManualPaper {
     hasWriting: Number(raw.hasWriting ?? 0),
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
+  };
+}
+
+function normalizeTestResultRecord(raw: any): TestResult {
+  return {
+    id: Number(raw.id),
+    studentName: String(raw.studentName),
+    studentGrade: typeof raw.studentGrade === "string" ? raw.studentGrade : null,
+    paperId: String(raw.paperId),
+    paperTitle: String(raw.paperTitle),
+    totalCorrect: Number(raw.totalCorrect ?? 0),
+    totalQuestions: Number(raw.totalQuestions ?? 0),
+    totalTimeSeconds:
+      raw.totalTimeSeconds === null || raw.totalTimeSeconds === undefined
+        ? null
+        : Number(raw.totalTimeSeconds),
+    answersJson: String(raw.answersJson ?? "{}"),
+    scoreBySectionJson:
+      typeof raw.scoreBySectionJson === "string" ? raw.scoreBySectionJson : null,
+    sectionTimingsJson:
+      typeof raw.sectionTimingsJson === "string" ? raw.sectionTimingsJson : null,
+    readingResultsJson:
+      typeof raw.readingResultsJson === "string" ? raw.readingResultsJson : null,
+    writingResultJson:
+      typeof raw.writingResultJson === "string" ? raw.writingResultJson : null,
+    explanationsJson:
+      typeof raw.explanationsJson === "string" ? raw.explanationsJson : null,
+    reportJson: typeof raw.reportJson === "string" ? raw.reportJson : null,
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
   };
 }
 
@@ -138,6 +191,54 @@ async function writeManualPapersFile(data: { lastId: number; papers: ManualPaper
   );
 }
 
+async function readTestResultsFile(): Promise<{ lastId: number; results: TestResult[] }> {
+  const filePath = getLocalTestResultsFilePath();
+
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as { lastId?: number; results?: unknown[] };
+    const results = Array.isArray(parsed.results)
+      ? parsed.results.map(normalizeTestResultRecord)
+      : [];
+    const maxId = results.reduce(
+      (currentMax, result) => Math.max(currentMax, result.id),
+      0
+    );
+    return {
+      lastId: Math.max(Number(parsed.lastId) || 0, maxId),
+      results,
+    };
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return { lastId: 0, results: [] };
+    }
+    throw error;
+  }
+}
+
+async function writeTestResultsFile(data: {
+  lastId: number;
+  results: TestResult[];
+}): Promise<void> {
+  const filePath = getLocalTestResultsFilePath();
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(
+    filePath,
+    JSON.stringify(
+      {
+        lastId: data.lastId,
+        results: data.results.map((result) => ({
+          ...result,
+          createdAt: result.createdAt.toISOString(),
+        })),
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -201,7 +302,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    updateSet.updatedAt = new Date();
+
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {
@@ -227,22 +331,57 @@ export async function getUserByOpenId(openId: string) {
 export async function saveTestResult(data: InsertTestResult): Promise<number | null> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot save test result: database not available");
-    return null;
+    logTestResultsFileFallback();
+    const current = await readTestResultsFile();
+    const nextId = current.lastId + 1;
+    current.lastId = nextId;
+    current.results.push({
+      id: nextId,
+      studentName: data.studentName,
+      studentGrade: data.studentGrade ?? null,
+      paperId: data.paperId,
+      paperTitle: data.paperTitle,
+      totalCorrect: data.totalCorrect,
+      totalQuestions: data.totalQuestions,
+      totalTimeSeconds: data.totalTimeSeconds ?? null,
+      answersJson: data.answersJson,
+      scoreBySectionJson: data.scoreBySectionJson ?? null,
+      sectionTimingsJson: data.sectionTimingsJson ?? null,
+      readingResultsJson: data.readingResultsJson ?? null,
+      writingResultJson: data.writingResultJson ?? null,
+      explanationsJson: data.explanationsJson ?? null,
+      reportJson: data.reportJson ?? null,
+      createdAt: data.createdAt ?? new Date(),
+    });
+    await writeTestResultsFile(current);
+    return nextId;
   }
-  const [result] = await db.insert(testResults).values(data).$returningId();
+  const [result] = await db
+    .insert(testResults)
+    .values(data)
+    .returning({ id: testResults.id });
   return result?.id ?? null;
 }
 
 export async function getAllTestResults(): Promise<TestResult[]> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    logTestResultsFileFallback();
+    const current = await readTestResultsFile();
+    return [...current.results].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+    );
+  }
   return db.select().from(testResults).orderBy(testResults.createdAt);
 }
 
 export async function getTestResultById(id: number): Promise<TestResult | undefined> {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    logTestResultsFileFallback();
+    const current = await readTestResultsFile();
+    return current.results.find((result) => result.id === id);
+  }
   const rows = await db.select().from(testResults).where(eq(testResults.id, id)).limit(1);
   return rows[0];
 }
@@ -254,13 +393,32 @@ export async function updateTestResultAI(id: number, updates: {
   reportJson?: string;
 }): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    logTestResultsFileFallback();
+    const current = await readTestResultsFile();
+    current.results = current.results.map((result) =>
+      result.id === id
+        ? {
+            ...result,
+            ...updates,
+          }
+        : result
+    );
+    await writeTestResultsFile(current);
+    return;
+  }
   await db.update(testResults).set(updates).where(eq(testResults.id, id));
 }
 
 export async function deleteTestResult(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    logTestResultsFileFallback();
+    const current = await readTestResultsFile();
+    current.results = current.results.filter((result) => result.id !== id);
+    await writeTestResultsFile(current);
+    return;
+  }
   await db.delete(testResults).where(eq(testResults.id, id));
 }
 
@@ -293,7 +451,10 @@ export async function saveManualPaper(data: InsertManualPaper): Promise<number |
     await writeManualPapersFile(current);
     return nextId;
   }
-  const [result] = await db.insert(manualPapers).values(data).$returningId();
+  const [result] = await db
+    .insert(manualPapers)
+    .values(data)
+    .returning({ id: manualPapers.id });
   return result?.id ?? null;
 }
 
@@ -378,7 +539,10 @@ export async function updateManualPaper(id: number, data: Partial<InsertManualPa
     await writeManualPapersFile(current);
     return;
   }
-  await db.update(manualPapers).set(data).where(eq(manualPapers.id, id));
+  await db
+    .update(manualPapers)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(manualPapers.id, id));
 }
 
 // ── Local Auth Users ──
@@ -426,7 +590,10 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
     await writeLocalAuthUsersFile(current);
     return nextId;
   }
-  const [result] = await db.insert(localUsers).values(data).$returningId();
+  const [result] = await db
+    .insert(localUsers)
+    .values(data)
+    .returning({ id: localUsers.id });
   return result?.id ?? null;
 }
 

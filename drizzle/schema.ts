@@ -1,24 +1,35 @@
-import { int, longtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  integer,
+  pgEnum,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
+
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const localRoleEnum = pgEnum("local_role", ["user", "admin"]);
 
 /**
  * Core user table backing auth flow.
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
+export const users = pgTable("users", {
   /**
    * Surrogate primary key. Auto-incremented numeric value managed by the database.
    * Use this for relations between tables.
    */
-  id: int("id").autoincrement().primaryKey(),
+  id: serial("id").primaryKey(),
   /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: userRoleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -29,8 +40,8 @@ export type InsertUser = typeof users.$inferInsert;
  * Test results table - stores all student assessment submissions.
  * Answers, scores, AI grading results, and reports are stored as JSON.
  */
-export const testResults = mysqlTable("testResults", {
-  id: int("id").autoincrement().primaryKey(),
+export const testResults = pgTable("testResults", {
+  id: serial("id").primaryKey(),
   /** Student name entered before the test */
   studentName: varchar("studentName", { length: 255 }).notNull(),
   /** Student grade (optional) */
@@ -40,11 +51,11 @@ export const testResults = mysqlTable("testResults", {
   /** Paper title for display */
   paperTitle: varchar("paperTitle", { length: 255 }).notNull(),
   /** Total correct answers */
-  totalCorrect: int("totalCorrect").notNull(),
+  totalCorrect: integer("totalCorrect").notNull(),
   /** Total questions */
-  totalQuestions: int("totalQuestions").notNull(),
+  totalQuestions: integer("totalQuestions").notNull(),
   /** Total time in seconds */
-  totalTimeSeconds: int("totalTimeSeconds"),
+  totalTimeSeconds: integer("totalTimeSeconds"),
   /** All answers as JSON: Record<string, string | number> */
   answersJson: text("answersJson").notNull(),
   /** Score breakdown by section as JSON */
@@ -70,8 +81,8 @@ export type InsertTestResult = typeof testResults.$inferInsert;
  * Manual papers table - stores papers created via the Manual Paper Builder.
  * The full blueprint is stored as JSON; metadata columns enable listing/filtering.
  */
-export const manualPapers = mysqlTable("manualPapers", {
-  id: int("id").autoincrement().primaryKey(),
+export const manualPapers = pgTable("manualPapers", {
+  id: serial("id").primaryKey(),
   /** Slug-style paper ID derived from title, used as the Paper.id in the quiz system */
   paperId: varchar("paperId", { length: 255 }).notNull().unique(),
   /** Human-readable title */
@@ -83,19 +94,19 @@ export const manualPapers = mysqlTable("manualPapers", {
   /** Category classification */
   category: varchar("category", { length: 64 }).notNull().default("assessment"),
   /** Full ManualPaperBlueprint as JSON (longtext to support large payloads with images) */
-  blueprintJson: longtext("blueprintJson").notNull(),
+  blueprintJson: text("blueprintJson").notNull(),
   /** Whether the paper is published and visible to students */
-  published: int("published").notNull().default(1),
+  published: integer("published").notNull().default(1),
   /** Total question count (cached for display) */
-  totalQuestions: int("totalQuestions").notNull().default(0),
+  totalQuestions: integer("totalQuestions").notNull().default(0),
   /** Whether the paper has listening sections */
-  hasListening: int("hasListening").notNull().default(0),
+  hasListening: integer("hasListening").notNull().default(0),
   /** Whether the paper has writing sections */
-  hasWriting: int("hasWriting").notNull().default(0),
+  hasWriting: integer("hasWriting").notNull().default(0),
   /** Creation timestamp */
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   /** Last update timestamp */
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
 });
 
 export type ManualPaper = typeof manualPapers.$inferSelect;
@@ -106,8 +117,8 @@ export type InsertManualPaper = typeof manualPapers.$inferInsert;
  * Stores users who register with username/password + invite code.
  * Separate from the Manus OAuth users table.
  */
-export const localUsers = mysqlTable("localUsers", {
-  id: int("id").autoincrement().primaryKey(),
+export const localUsers = pgTable("localUsers", {
+  id: serial("id").primaryKey(),
   /** Unique username chosen during registration */
   username: varchar("username", { length: 128 }).notNull().unique(),
   /** bcrypt-hashed password */
@@ -117,7 +128,7 @@ export const localUsers = mysqlTable("localUsers", {
   /** Display name (defaults to username) */
   displayName: varchar("displayName", { length: 255 }),
   /** User role */
-  role: mysqlEnum("localRole", ["user", "admin"]).default("user").notNull(),
+  role: localRoleEnum("role").default("user").notNull(),
   /** Creation timestamp */
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   /** Last login timestamp */

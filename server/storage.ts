@@ -1,19 +1,19 @@
 // Preconfigured storage helpers for Manus WebDev templates
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
+import { head, put } from "@vercel/blob";
 import fs from "fs/promises";
 import path from "path";
 import { ENV } from './_core/env';
 import { getForgeConfigStatus } from "./_core/env";
+import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
 export const LOCAL_STORAGE_ROUTE = "/local-paper-assets";
-export const LOCAL_STORAGE_DIR = path.resolve(
-  import.meta.dirname,
-  "..",
-  "local-paper-assets"
-);
+export const LOCAL_STORAGE_DIR = isVercelRuntime()
+  ? getWritableDataPath("local-paper-assets")
+  : path.resolve(import.meta.dirname, "..", "local-paper-assets");
 
 function getStorageConfig(): StorageConfig {
   const baseUrl = ENV.forgeApiUrl;
@@ -77,6 +77,18 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
+function toBuffer(data: Buffer | Uint8Array | string) {
+  if (typeof data === "string") {
+    return Buffer.from(data);
+  }
+
+  return Buffer.isBuffer(data) ? data : Buffer.from(data);
+}
+
+function hasBlobStorageConfig() {
+  return Boolean(ENV.blobReadWriteToken);
+}
+
 async function storagePutLocal(
   relKey: string,
   data: Buffer | Uint8Array | string
@@ -86,16 +98,43 @@ async function storagePutLocal(
   await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
   const buffer =
-    typeof data === "string"
-      ? Buffer.from(data)
-      : Buffer.isBuffer(data)
-        ? data
-        : Buffer.from(data);
+    toBuffer(data);
 
   await fs.writeFile(fullPath, buffer);
   return {
     key,
     url: `${LOCAL_STORAGE_ROUTE}/${key}`,
+  };
+}
+
+async function storagePutBlob(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType: string
+): Promise<{ key: string; url: string }> {
+  const key = normalizeKey(relKey);
+  const blob = await put(key, toBuffer(data), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType,
+  });
+
+  return {
+    key,
+    url: blob.url,
+  };
+}
+
+async function storageGetBlob(
+  relKey: string
+): Promise<{ key: string; url: string }> {
+  const key = normalizeKey(relKey);
+  const blob = await head(key);
+
+  return {
+    key,
+    url: blob.url,
   };
 }
 
@@ -105,44 +144,64 @@ export async function storagePut(
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
   const forge = getForgeConfigStatus();
-  if (!forge.isConfigured) {
-    return storagePutLocal(relKey, data);
+  if (forge.isConfigured) {
+    const { baseUrl, apiKey } = getStorageConfig();
+    const key = normalizeKey(relKey);
+    const uploadUrl = buildUploadUrl(baseUrl, key);
+    const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: buildAuthHeaders(apiKey),
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const message = await response.text().catch(() => response.statusText);
+      throw new Error(
+        `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+      );
+    }
+    const url = (await response.json()).url;
+    return { key, url };
   }
 
-  const { baseUrl, apiKey } = getStorageConfig();
-  const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData,
-  });
+  if (hasBlobStorageConfig()) {
+    return storagePutBlob(relKey, data, contentType);
+  }
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
+  if (isVercelRuntime()) {
     throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+      "Uploads on Vercel require BLOB_READ_WRITE_TOKEN or BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY."
     );
   }
-  const url = (await response.json()).url;
-  return { key, url };
+
+  return storagePutLocal(relKey, data);
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
   const forge = getForgeConfigStatus();
-  if (!forge.isConfigured) {
+  if (forge.isConfigured) {
+    const { baseUrl, apiKey } = getStorageConfig();
     const key = normalizeKey(relKey);
     return {
       key,
-      url: `${LOCAL_STORAGE_ROUTE}/${key}`,
+      url: await buildDownloadUrl(baseUrl, key, apiKey),
     };
   }
 
-  const { baseUrl, apiKey } = getStorageConfig();
+  if (hasBlobStorageConfig()) {
+    return storageGetBlob(relKey);
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error(
+      "File reads on Vercel require BLOB_READ_WRITE_TOKEN or BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY."
+    );
+  }
+
   const key = normalizeKey(relKey);
   return {
     key,
-    url: await buildDownloadUrl(baseUrl, key, apiKey),
+    url: `${LOCAL_STORAGE_ROUTE}/${key}`,
   };
 }

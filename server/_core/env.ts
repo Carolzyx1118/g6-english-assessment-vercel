@@ -7,6 +7,7 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  blobReadWriteToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
 };
 
 export function getForgeConfigStatus() {
@@ -23,6 +24,41 @@ export function getForgeConfigStatus() {
   return {
     isConfigured: missingVariables.length === 0,
     missingVariables,
+  };
+}
+
+export function getBlobConfigStatus() {
+  return {
+    isConfigured: Boolean(ENV.blobReadWriteToken),
+    missingVariables: ENV.blobReadWriteToken
+      ? []
+      : ["BLOB_READ_WRITE_TOKEN"],
+  };
+}
+
+export function getStorageConfigStatus() {
+  const forge = getForgeConfigStatus();
+  if (forge.isConfigured) {
+    return {
+      isConfigured: true,
+      provider: "forge" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  const blob = getBlobConfigStatus();
+  if (blob.isConfigured) {
+    return {
+      isConfigured: true,
+      provider: "vercel-blob" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  return {
+    isConfigured: false,
+    provider: "local" as const,
+    missingVariables: [...forge.missingVariables, ...blob.missingVariables],
   };
 }
 
