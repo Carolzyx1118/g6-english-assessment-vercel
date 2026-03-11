@@ -1,5 +1,5 @@
 import { useQuiz } from '@/contexts/QuizContext';
-import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil } from 'lucide-react';
+import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil, ScrollText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const sectionIcons: Record<string, React.ReactNode> = {
@@ -30,8 +30,16 @@ interface SidebarProps {
   onNavigate: () => void;
 }
 
+function normalizeSummaryText(value?: string) {
+  return value?.trim().replace(/\s+/g, ' ').toLowerCase() || '';
+}
+
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const { state, sections, selectedPaper, setCurrentSection, getSectionProgress } = useQuiz();
+  const overviewTitle = selectedPaper?.subtitle?.trim();
+  const overviewBody = selectedPaper?.description?.trim();
+  const showOverviewTitle = Boolean(overviewTitle) && normalizeSummaryText(overviewTitle) !== normalizeSummaryText(overviewBody);
+  const showOverview = Boolean(overviewBody || showOverviewTitle);
 
   const totalAnswered = sections.reduce((sum: number, s: { id: string }) => {
     const p = getSectionProgress(s.id);
@@ -47,10 +55,35 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     <div className="w-72 h-screen bg-white border-r border-slate-200 flex flex-col shadow-sm">
       {/* Header */}
       <div className="p-5 border-b border-slate-100">
-        <h1 className="font-extrabold text-lg text-slate-800 leading-tight">
-          {selectedPaper?.title || 'English Assessment'}
-          <span className="block text-blue-600 text-sm font-bold">{selectedPaper?.subtitle || ''}</span>
-        </h1>
+        <div className="space-y-3">
+          <h1 className="font-extrabold text-lg text-slate-800 leading-tight">
+            {selectedPaper?.title || 'English Assessment'}
+          </h1>
+          {showOverview ? (
+            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-50/60 px-3.5 py-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                  <ScrollText className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    Paper Overview
+                  </p>
+                  {showOverviewTitle ? (
+                    <p className="mt-1 text-sm font-semibold leading-snug text-slate-700 line-clamp-2">
+                      {overviewTitle}
+                    </p>
+                  ) : null}
+                  {overviewBody ? (
+                    <p className="mt-1.5 text-xs leading-5 text-slate-500 line-clamp-4">
+                      {overviewBody}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Overall Progress */}

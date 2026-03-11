@@ -75,6 +75,7 @@ describe("manual paper file fallback", () => {
       paperId: "manual-paper-1",
       title: "Manual Paper 1",
       description: "Stored without a database",
+      published: true,
       blueprintJson: JSON.stringify(makeBlueprint()),
     });
 
@@ -96,6 +97,7 @@ describe("manual paper file fallback", () => {
       paperId: "manual-paper-dup",
       title: "Duplicate",
       description: "Duplicate test",
+      published: true,
       blueprintJson: JSON.stringify(makeBlueprint()),
     };
 
@@ -113,6 +115,7 @@ describe("manual paper file fallback", () => {
       paperId: "manual-paper-delete",
       title: "Delete Me",
       description: "Delete test",
+      published: true,
       blueprintJson: JSON.stringify(makeBlueprint()),
     });
 
@@ -120,5 +123,113 @@ describe("manual paper file fallback", () => {
 
     const listed = await caller.papers.listManualPapers();
     expect(listed).toHaveLength(0);
+  });
+
+  it("can unpublish a file-backed manual paper without deleting it", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    const saved = await caller.papers.saveManualPaper({
+      paperId: "manual-paper-hidden",
+      title: "Hide Me",
+      description: "Unpublish test",
+      published: true,
+      blueprintJson: JSON.stringify(makeBlueprint()),
+    });
+
+    await caller.papers.setManualPaperPublished({
+      id: saved.id!,
+      published: false,
+    });
+
+    const published = await caller.papers.listManualPapers();
+    const allPapers = await caller.papers.listAllManualPapers();
+
+    expect(published).toHaveLength(0);
+    expect(allPapers).toHaveLength(1);
+    expect(allPapers[0].published).toBe(false);
+  });
+
+  it("loads and updates a file-backed manual paper for editing", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    const saved = await caller.papers.saveManualPaper({
+      paperId: "manual-paper-edit",
+      title: "Original Title",
+      description: "Original description",
+      published: true,
+      blueprintJson: JSON.stringify(makeBlueprint()),
+    });
+
+    const loaded = await caller.papers.getManualPaperDetail({
+      paperId: "manual-paper-edit",
+    });
+
+    expect(loaded.id).toBe(saved.id);
+    expect(loaded.title).toBe("Original Title");
+
+    const updatedBlueprint = {
+      ...makeBlueprint(),
+      title: "Updated Title",
+      description: "Updated description",
+    };
+
+    await caller.papers.updateManualPaper({
+      id: saved.id!,
+      title: "Updated Title",
+      description: "Updated description",
+      published: true,
+      blueprintJson: JSON.stringify(updatedBlueprint),
+    });
+
+    const reloaded = await caller.papers.getManualPaperDetail({
+      paperId: "manual-paper-edit",
+    });
+
+    expect(reloaded.title).toBe("Updated Title");
+    expect(reloaded.description).toBe("Updated description");
+
+    const allPapers = await caller.papers.listAllManualPapers();
+    expect(allPapers[0].title).toBe("Updated Title");
+  });
+
+  it("can save a manual paper as a draft without listing it publicly", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    const saved = await caller.papers.saveManualPaper({
+      paperId: "manual-paper-draft",
+      title: "Draft Paper",
+      description: "Draft mode",
+      published: false,
+      blueprintJson: JSON.stringify(makeBlueprint()),
+    });
+
+    const published = await caller.papers.listManualPapers();
+    const allPapers = await caller.papers.listAllManualPapers();
+
+    expect(saved.id).toBeTypeOf("number");
+    expect(published).toHaveLength(0);
+    expect(allPapers).toHaveLength(1);
+    expect(allPapers[0].published).toBe(false);
+  });
+
+  it("duplicates a manual paper into an unpublished draft copy", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    const source = await caller.papers.saveManualPaper({
+      paperId: "manual-paper-source",
+      title: "Source Paper",
+      description: "Original",
+      published: true,
+      blueprintJson: JSON.stringify(makeBlueprint()),
+    });
+
+    const duplicate = await caller.papers.duplicateManualPaper({ id: source.id! });
+    const allPapers = await caller.papers.listAllManualPapers();
+
+    expect(duplicate.id).toBeTypeOf("number");
+    expect(duplicate.paperId).toContain("manual-paper-source-copy-");
+    expect(allPapers).toHaveLength(2);
+    expect(allPapers.find((paper) => paper.id === duplicate.id)?.published).toBe(false);
+    expect(allPapers.find((paper) => paper.id === duplicate.id)?.title).toBe("Source Paper (Copy)");
   });
 });

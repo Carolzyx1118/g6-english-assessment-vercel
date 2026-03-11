@@ -1,87 +1,13 @@
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, Trash2, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, Lock, ShieldCheck, Download, Loader2, Mic, Play, Pause } from 'lucide-react';
+import { ArrowLeft, Trash2, Calendar, Clock, Award, User, BookOpen, ChevronDown, ChevronUp, Download, Loader2, Mic, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 
-const HISTORY_PASSWORD = import.meta.env.VITE_HISTORY_PASSWORD || '';
-
 type Lang = 'en' | 'cn';
-
-function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
-  const [shaking, setShaking] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === HISTORY_PASSWORD) {
-      sessionStorage.setItem('history_unlocked', 'true');
-      onUnlock();
-    } else {
-      setError(true);
-      setShaking(true);
-      setTimeout(() => setShaking(false), 500);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`bg-white rounded-2xl shadow-lg border border-slate-200 p-8 w-full max-w-sm ${shaking ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}
-      >
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-            <Lock className="w-8 h-8 text-blue-600" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">Access Protected</h2>
-          <p className="text-sm text-slate-500 mt-1 text-center">Enter password to view test history</p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(false); }}
-              placeholder="Enter password"
-              className={`w-full px-4 py-3 rounded-lg border-2 text-center text-lg tracking-widest transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-                error ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-slate-50 focus:border-blue-400'
-              }`}
-              autoFocus
-            />
-            {error && (
-              <p className="text-sm text-red-500 mt-2 text-center">Incorrect password, please try again</p>
-            )}
-          </div>
-          <Button type="submit" className="w-full gap-2" size="lg">
-            <ShieldCheck className="w-4 h-4" />
-            Unlock
-          </Button>
-        </form>
-        <div className="mt-4 text-center">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-1.5 text-slate-500">
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 export default function History() {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('history_unlocked') === 'true');
-
-  if (!unlocked) {
-    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
-  }
-
   return <HistoryContent />;
 }
 

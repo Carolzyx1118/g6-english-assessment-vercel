@@ -330,6 +330,17 @@ export async function getManualPaperByPaperId(paperId: string): Promise<ManualPa
   return rows[0];
 }
 
+export async function getManualPaperById(id: number): Promise<ManualPaper | undefined> {
+  const db = await getDb();
+  if (!db) {
+    logManualPaperFileFallback();
+    const data = await readManualPapersFile();
+    return data.papers.find((paper) => paper.id === id);
+  }
+  const rows = await db.select().from(manualPapers).where(eq(manualPapers.id, id)).limit(1);
+  return rows[0];
+}
+
 export async function deleteManualPaper(id: number): Promise<void> {
   const db = await getDb();
   if (!db) {

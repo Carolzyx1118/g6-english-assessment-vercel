@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useCallback, useMemo } from "react";
+import { PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 
 const LOCAL_AUTH_TOKEN_KEY = "local_auth_token";
 
@@ -10,6 +11,16 @@ export type LocalUser = {
   role: 'user' | 'admin';
   allowedSubjects: string[];
 };
+
+export function isTeacherAccount(user: LocalUser | null | undefined) {
+  if (!user) return false;
+
+  const allowedSubjects = user.allowedSubjects.filter((subject): subject is PaperSubject =>
+    PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
+  );
+
+  return PAPER_SUBJECT_ORDER.every((subject) => allowedSubjects.includes(subject));
+}
 
 /** Save the auth token to localStorage */
 export function saveAuthToken(token: string) {
@@ -97,6 +108,7 @@ export function useLocalAuth() {
 
   return {
     ...state,
+    isTeacher: isTeacherAccount(state.user),
     refresh: () => meQuery.refetch(),
     logout,
   };

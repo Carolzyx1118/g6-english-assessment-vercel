@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import TeacherGuard from "./components/TeacherGuard";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { QuizProvider } from "./contexts/QuizContext";
 import AuthGuard from "./components/AuthGuard";
@@ -10,6 +11,7 @@ import Home from "./pages/Home";
 import History from "./pages/History";
 import Login from "./pages/Login";
 import PaperIntake from "./pages/PaperIntake";
+import PaperManager from "./pages/PaperManager";
 import Register from "./pages/Register";
 
 function Router() {
@@ -27,12 +29,23 @@ function Router() {
       </Route>
       <Route path={"/history"}>
         <AuthGuard>
-          <History />
+          <TeacherGuard>
+            <History />
+          </TeacherGuard>
         </AuthGuard>
       </Route>
       <Route path={"/paper-intake"}>
         <AuthGuard>
-          <PaperIntake />
+          <TeacherGuard>
+            <PaperIntake />
+          </TeacherGuard>
+        </AuthGuard>
+      </Route>
+      <Route path={"/paper-manager"}>
+        <AuthGuard>
+          <TeacherGuard>
+            <PaperManager />
+          </TeacherGuard>
         </AuthGuard>
       </Route>
 

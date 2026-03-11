@@ -27,7 +27,7 @@ interface DragDropFillBlankProps {
   grammarPassage?: string;
   sceneImageUrl?: string;
   sectionId: string;
-  getAnswer: (sectionId: string, id: number) => string | number | undefined;
+  getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
 }
 
@@ -86,7 +86,7 @@ function PassageModeFillBlank({
   grammarPassage: string;
   sceneImageUrl?: string;
   sectionId: string;
-  getAnswer: (sectionId: string, id: number) => string | number | undefined;
+  getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
 }) {
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
@@ -144,7 +144,7 @@ function PassageModeFillBlank({
       <span
         key={key}
         className={`
-          inline-flex items-center min-w-[90px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
+          inline-flex items-center min-w-[72px] mx-1 px-2 py-0.5 rounded-lg border-2 border-dashed
           transition-all duration-200 cursor-pointer align-baseline
           ${answerWord
             ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
@@ -305,7 +305,7 @@ function SentenceModeFillBlank({
   wordBank: { letter: string; word: string }[];
   sceneImageUrl?: string;
   sectionId: string;
-  getAnswer: (sectionId: string, id: number) => string | number | undefined;
+  getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
 }) {
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
@@ -354,6 +354,61 @@ function SentenceModeFillBlank({
     text: q.question || `Question ${q.id}: ___`,
   }));
 
+  const renderSentenceParts = (
+    text: string,
+    blankId: number,
+    answerWord: string | null,
+  ) => {
+    const parts = text.split('___');
+    const blankNode = (
+      <span
+        key={`blank-${blankId}`}
+        className={`
+          inline-flex max-w-full items-center align-baseline mx-1 min-w-[72px] px-3 py-1 rounded-lg border-2 border-dashed
+          transition-all duration-200 cursor-pointer
+          ${answerWord
+            ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
+            : draggedWord || selectedWord
+              ? 'border-blue-400 bg-blue-50 animate-pulse'
+              : 'border-slate-300 bg-slate-50 text-slate-400'
+          }
+        `}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, blankId)}
+        onClick={() => {
+          if (answerWord) {
+            handleRemoveWord(blankId);
+          } else {
+            handleBlankClick(blankId);
+          }
+        }}
+      >
+        {answerWord ? (
+          <span className="flex items-center gap-1">
+            {answerWord}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRemoveWord(blankId); }}
+              className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-200 text-xs text-amber-600 hover:bg-amber-300"
+            >
+              x
+            </button>
+          </span>
+        ) : (
+          <span className="text-xs">___</span>
+        )}
+      </span>
+    );
+
+    return parts.flatMap((part, index) => (
+      index < parts.length - 1
+        ? [
+            <span key={`text-${blankId}-${index}`}>{part}</span>,
+            blankNode,
+          ]
+        : [<span key={`text-${blankId}-${index}`}>{part}</span>]
+    ));
+  };
+
   return (
     <div className="space-y-6 mb-8">
       {/* Word Bank */}
@@ -397,48 +452,10 @@ function SentenceModeFillBlank({
           if (!blank.id) return null;
           const answer = getAnswer(sectionId, blank.id);
           const answerWord = answer && typeof answer === 'string' ? answer : null;
-
-          const parts = blank.text.split('___');
           return (
-            <div key={blank.id} className="flex items-center gap-2 text-base text-slate-700 flex-wrap">
-              <span className="font-bold text-slate-500 mr-1">Q{blank.id}.</span>
-              <span>{parts[0]}</span>
-              <span
-                className={`
-                  inline-flex items-center min-w-[100px] px-3 py-1 rounded-lg border-2 border-dashed
-                  transition-all duration-200 cursor-pointer
-                  ${answerWord
-                    ? 'border-amber-400 bg-amber-50 text-amber-700 font-semibold'
-                    : draggedWord || selectedWord
-                      ? 'border-blue-400 bg-blue-50 animate-pulse'
-                      : 'border-slate-300 bg-slate-50 text-slate-400'
-                  }
-                `}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, blank.id)}
-                onClick={() => {
-                  if (answerWord) {
-                    handleRemoveWord(blank.id);
-                  } else {
-                    handleBlankClick(blank.id);
-                  }
-                }}
-              >
-                {answerWord ? (
-                  <span className="flex items-center gap-1">
-                    {answerWord}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRemoveWord(blank.id); }}
-                      className="ml-1 w-4 h-4 rounded-full bg-amber-200 text-amber-600 flex items-center justify-center text-xs hover:bg-amber-300"
-                    >
-                      x
-                    </button>
-                  </span>
-                ) : (
-                  <span className="text-xs">___</span>
-                )}
-              </span>
-              {parts[1] && <span>{parts[1]}</span>}
+            <div key={blank.id} className="text-base leading-[2.2] text-slate-700">
+              <span className="mr-2 inline-block font-bold text-slate-500 align-baseline">{`Q${blank.id}.`}</span>
+              {renderSentenceParts(blank.text, blank.id, answerWord)}
             </div>
           );
         })}

@@ -9,6 +9,8 @@ export interface PictureMCQ {
   question: string;
   options: { label: string; imageUrl: string; text?: string }[];
   correctAnswer: number;
+  correctAnswers?: number[];
+  selectionLimit?: number;
 }
 
 /** Standard text MCQ with optional scene image */
@@ -20,13 +22,32 @@ export interface MCQQuestion {
   options: string[];
   correctAnswer: number | string;
   imageUrl?: string;
+  correctAnswers?: number[];
+  selectionLimit?: number;
 }
 
 /** Fill-in-the-blank with word bank */
 export interface FillBlankQuestion {
   id: number;
   type: 'fill-blank';
-  question?: string; // sentence with ___ for the blank (used by custom papers)
+  question?: string; // sentence with ___ for the blank or inline input prompt
+  correctAnswer: string;
+}
+
+export interface PictureSpellingQuestion {
+  id: number;
+  type: 'picture-spelling';
+  question: string;
+  correctAnswer: string;
+  imageUrl?: string;
+}
+
+export interface WordCompletionQuestion {
+  id: number;
+  type: 'word-completion';
+  question: string;
+  imageUrl?: string;
+  wordPattern: string;
   correctAnswer: string;
 }
 
@@ -37,6 +58,8 @@ export interface ListeningMCQ {
   question: string;
   options: { label: string; imageUrl: string; text?: string }[];
   correctAnswer: number;
+  correctAnswers?: number[];
+  selectionLimit?: number;
 }
 
 /** Word-bank fill-in for reading */
@@ -65,13 +88,24 @@ export interface OpenEndedQuestion {
   answer?: string;
   correctAnswer?: string;
   imageUrl?: string;
+  responseMode?: 'text' | 'audio';
 }
 
 /** True/False question */
 export interface TrueFalseQuestion {
   id: number;
   type: 'true-false';
-  statements: { label: string; statement: string; isTrue: boolean; reason: string }[];
+  question?: string;
+  statements: {
+    label: string;
+    statement: string;
+    isTrue?: boolean;
+    correctChoice?: 'True' | 'False' | 'Not Given';
+    reason?: string;
+    explanation?: string;
+  }[];
+  choices?: Array<'True' | 'False' | 'Not Given'>;
+  requiresReason?: boolean;
 }
 
 /** Table question */
@@ -107,6 +141,31 @@ export interface PhraseQuestion {
   items: { clue: string; answer: string }[];
 }
 
+/** Sentence reordering / unscramble question */
+export interface SentenceReorderQuestion {
+  id: number;
+  type: 'sentence-reorder';
+  question: string;
+  items: { label: string; scrambledWords: string; correctAnswer: string }[];
+}
+
+/** Inline word-choice question */
+export interface InlineWordChoiceQuestion {
+  id: number;
+  type: 'inline-word-choice';
+  question: string;
+  items: { label: string; sentenceText?: string; beforeText: string; options: string[]; afterText: string; correctAnswer: number }[];
+}
+
+/** Passage inline word-choice question */
+export interface PassageInlineWordChoiceQuestion {
+  id: number;
+  type: 'passage-inline-word-choice';
+  question: string;
+  passageText: string;
+  items: { label: string; options: string[]; correctAnswer: number }[];
+}
+
 /** Checkbox question */
 export interface CheckboxQuestion {
   id: number;
@@ -114,6 +173,7 @@ export interface CheckboxQuestion {
   question: string;
   options: string[];
   correctAnswers: number[];
+  selectionLimit?: number;
 }
 
 /** Writing question */
@@ -124,6 +184,26 @@ export interface WritingQuestion {
   instructions: string;
   wordCount: string;
   prompts: string[];
+  imageUrl?: string;
+  minWords?: number;
+  maxWords?: number;
+  referenceAnswer?: string;
+}
+
+export interface ManualQuestionBlock {
+  id: string;
+  displayNumber: number;
+  questionType?: string;
+  instructions?: string;
+  taskDescription?: string;
+  questionIds: number[];
+  passage?: string;
+  wordBank?: { letter: string; word: string }[];
+  grammarPassage?: string;
+  audioUrl?: string;
+  sceneImageUrl?: string;
+  inlineCloze?: boolean;
+  matchingDescriptions?: { label: string; name: string; text: string }[];
 }
 
 // Union of all question types
@@ -131,6 +211,8 @@ export type Question =
   | PictureMCQ
   | MCQQuestion
   | FillBlankQuestion
+  | PictureSpellingQuestion
+  | WordCompletionQuestion
   | ListeningMCQ
   | WordBankFillIn
   | StoryFillIn
@@ -140,6 +222,9 @@ export type Question =
   | ReferenceQuestion
   | OrderQuestion
   | PhraseQuestion
+  | SentenceReorderQuestion
+  | InlineWordChoiceQuestion
+  | PassageInlineWordChoiceQuestion
   | CheckboxQuestion
   | WritingQuestion;
 
@@ -152,6 +237,7 @@ export interface Section {
   color: string;
   bgColor: string;
   description: string;
+  taskDescription?: string;
   questions: Question[];
   passage?: string;
   wordBank?: { letter: string; word: string }[];
@@ -159,6 +245,19 @@ export interface Section {
   imageUrl?: string;
   audioUrl?: string;
   sceneImageUrl?: string;
+  sectionType?:
+    | 'reading'
+    | 'listening'
+    | 'writing'
+    | 'speaking'
+    | 'grammar'
+    | 'vocabulary'
+    | 'math-multiple-choice'
+    | 'math-short-answer'
+    | 'math-application';
+  inlineCloze?: boolean;
+  matchingDescriptions?: { label: string; name: string; text: string }[];
+  manualBlocks?: ManualQuestionBlock[];
   wordBankImageUrl?: string;
   storyImages?: string[];
   storyParagraphs?: { text: string; questionIds: number[] }[];
@@ -211,7 +310,12 @@ export function getAutoGradableCount(paper: Paper): number {
         q.type === 'fill-blank' ||
         q.type === 'wordbank-fill' ||
         q.type === 'story-fill' ||
-        q.type === 'checkbox'
+        q.type === 'checkbox' ||
+        q.type === 'sentence-reorder' ||
+        q.type === 'inline-word-choice' ||
+        q.type === 'passage-inline-word-choice' ||
+        q.type === 'true-false' ||
+        q.type === 'order'
       ) {
         count++;
       }

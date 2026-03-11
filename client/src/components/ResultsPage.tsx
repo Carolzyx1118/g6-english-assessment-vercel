@@ -6,10 +6,12 @@ import {
   Trophy, RotateCcw, CheckCircle2, XCircle, BookOpen,
   PenTool, FileText, Loader2, Sparkles, Lightbulb,
   Clock, ChevronDown, ChevronUp, Globe,
-  Languages, Headphones, AlertCircle,
+  Headphones, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 
 const sectionMetaMap: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
@@ -46,14 +48,108 @@ type WritingEvalResult = {
   suggestions_en: string[]; suggestions_cn: string[];
 };
 type ExplanationResult = { questionId: number; explanation_en: string; explanation_cn: string; tip_en: string; tip_cn: string };
-type ReportResult = {
-  languageLevel: string;
-  summary_en: string; summary_cn: string;
-  strengths_en: string[]; strengths_cn: string[];
-  weaknesses_en: string[]; weaknesses_cn: string[];
-  recommendations_en: string[]; recommendations_cn: string[];
-  timeAnalysis_en: string; timeAnalysis_cn: string;
-};
+
+function normalizeTrueFalseChoice(value: unknown): 'True' | 'False' | 'Not Given' | undefined {
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') return 'True';
+  if (normalized === 'false') return 'False';
+  if (normalized === 'not given' || normalized === 'not-given' || normalized === 'not_given') {
+    return 'Not Given';
+  }
+
+  return undefined;
+}
+
+function getExpectedTrueFalseChoice(statement: {
+  isTrue?: boolean;
+  correctChoice?: 'True' | 'False' | 'Not Given';
+}) {
+  if (statement.correctChoice) return statement.correctChoice;
+  if (statement.isTrue === true) return 'True';
+  if (statement.isTrue === false) return 'False';
+  return 'Not Given';
+}
+
+function normalizeSentenceAnswer(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([?.!,;:])/g, '$1');
+}
+
+function sentenceReorderAnswerToString(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .join(' ');
+  }
+  return typeof value === 'string' ? value : '';
+}
+
+function parseSerializedChoiceMap(value: unknown): Record<string, unknown> {
+  try {
+    if (typeof value === 'string') {
+      return JSON.parse(value) as Record<string, unknown>;
+    }
+    if (value && typeof value === 'object') {
+      return value as Record<string, unknown>;
+    }
+  } catch {
+    // Ignore malformed serialized answers.
+  }
+
+  return {};
+}
+
+function getSerializedChoiceIndex(record: Record<string, unknown>, label: string) {
+  const raw = record[label];
+  const selectedIndex = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(selectedIndex) ? selectedIndex : undefined;
+}
+
+function formatPassageInlineWordChoicePrompt(
+  prompt: string,
+  item: { label: string; options: string[] },
+) {
+  const blankPrompt = `Blank ${item.label}: ${item.options.join(' / ')}`;
+  return prompt ? `${prompt} — ${blankPrompt}` : blankPrompt;
+}
+
+function formatInlineWordChoicePrompt(
+  item: { sentenceText?: string; beforeText: string; afterText: string; options: string[] },
+) {
+  if (typeof item.sentenceText === 'string' && item.sentenceText.trim()) {
+    return item.sentenceText;
+  }
+  return `${item.beforeText} ${item.options.join(' / ')} ${item.afterText}`.trim();
+}
+
+function getMCQCorrectIndexes(question: Question & { type: 'mcq' | 'picture-mcq' | 'listening-mcq' }) {
+  if (question.correctAnswers && question.correctAnswers.length > 0) {
+    return Array.from(new Set(question.correctAnswers));
+  }
+  return typeof question.correctAnswer === 'number' ? [question.correctAnswer] : [];
+}
+
+function getMCQSelectedIndexes(answer: unknown) {
+  if (Array.isArray(answer)) {
+    return answer.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  }
+  if (typeof answer === 'number' && Number.isFinite(answer)) {
+    return [answer];
+  }
+  return [];
+}
+
+function getMCQOptionDisplay(option: string | { label?: string; text?: string } | undefined) {
+  if (!option) return '';
+  return typeof option === 'string' ? option : option.text || option.label || '';
+}
 
 // Parse annotated essay for writing section
 function parseAnnotatedEssay(text: string): { type: 'text' | 'error'; content: string; correction?: string; explanation?: string }[] {
@@ -128,18 +224,9 @@ interface ReadingSubItem {
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
 }
 
-function LangToggle({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
-  return (
-    <button onClick={() => setLang(lang === 'en' ? 'cn' : 'en')}
-      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-violet-100 to-blue-100 hover:from-violet-200 hover:to-blue-200 text-sm font-semibold text-violet-700 transition-all shadow-sm border border-violet-200">
-      <Languages className="w-4 h-4" />
-      {lang === 'en' ? '切换中文' : 'Switch to English'}
-    </button>
-  );
-}
-
 export default function ResultsPage() {
   const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime, studentInfo, sections, selectedPaper } = useQuiz();
+  const { user } = useLocalAuth();
   const { correct, total, bySection } = getScore();
 
   const totalTime = getTotalTime();
@@ -147,20 +234,23 @@ export default function ResultsPage() {
   const minutes = Math.floor(totalTime / 60);
   const seconds = totalTime % 60;
 
-  const [lang, setLang] = useState<Lang>('en');
+  const lang: Lang = 'en';
+
+  const isWritingLikeSection = (section: Section) =>
+    section.id === 'writing' ||
+    section.sectionType === 'writing' ||
+    section.questions.some((q) => q.type === 'writing');
 
   // Detect if current paper has a writing section
-  const hasWritingSection = sections.some(s => s.id === 'writing');
+  const hasWritingSection = sections.some(isWritingLikeSection);
 
   // AI Grading states
   const [readingResults, setReadingResults] = useState<ReadingGradingResult[] | null>(null);
   const [writingResult, setWritingResult] = useState<WritingEvalResult | null>(null);
   const [explanations, setExplanations] = useState<ExplanationResult[] | null>(null);
-  const [report, setReport] = useState<ReportResult | null>(null);
   const [isGradingReading, setIsGradingReading] = useState(false);
   const [isGradingWriting, setIsGradingWriting] = useState(false);
   const [isLoadingExplanations, setIsLoadingExplanations] = useState(false);
-  const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [readingError, setReadingError] = useState<string | null>(null);
   const [writingError, setWritingError] = useState<string | null>(null);
   const hasStartedGrading = useRef(false);
@@ -170,7 +260,6 @@ export default function ResultsPage() {
   const checkReadingMutation = trpc.grading.checkReadingAnswers.useMutation();
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
   const explainMutation = trpc.grading.explainWrongAnswers.useMutation();
-  const reportMutation = trpc.grading.generateReport.useMutation();
 
   // Auto-save to database
   const saveResultMutation = trpc.results.save.useMutation();
@@ -192,10 +281,13 @@ export default function ResultsPage() {
       } else if (q.type === 'true-false') {
         const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
         for (const stmt of q.statements) {
+          const raw = parsed[stmt.label];
+          const userChoice = normalizeTrueFalseChoice(raw && typeof raw === 'object' ? raw.tf : raw);
+          const correctChoice = getExpectedTrueFalseChoice(stmt);
           items.push({ id: `${q.id}-${stmt.label}`, parentId: q.id, label: `Q${q.id}(${stmt.label})`,
             questionText: `True or False: "${stmt.statement}"`,
-            userAnswer: parsed[stmt.label] !== undefined ? (parsed[stmt.label] ? 'True' : 'False') : 'Not answered',
-            correctAnswer: stmt.isTrue ? 'True' : 'False', questionType: 'true-false-sub' });
+            userAnswer: userChoice || 'Not answered',
+            correctAnswer: correctChoice, questionType: 'true-false-sub' });
         }
       } else if (q.type === 'open-ended' && q.subQuestions) {
         const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
@@ -248,8 +340,62 @@ export default function ResultsPage() {
         const userArr = userAns as number[] | undefined;
         items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
           questionText: q.question,
-          userAnswer: userArr ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not answered',
+          userAnswer: userArr && userArr.length ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not answered',
           correctAnswer: q.correctAnswers.map((i: number) => q.options[i]).join(', '), questionType: 'checkbox' });
+      } else if (q.type === 'sentence-reorder') {
+        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+        q.items.forEach((item) => {
+          const userValue = sentenceReorderAnswerToString(parsed[item.label]);
+          items.push({
+            id: `${q.id}-${item.label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${item.label})`,
+            questionText: item.scrambledWords,
+            userAnswer: userValue || 'Not answered',
+            correctAnswer: item.correctAnswer,
+            questionType: 'sentence-reorder-sub',
+          });
+        });
+      } else if (q.type === 'inline-word-choice') {
+        const parsed = parseSerializedChoiceMap(userAns);
+        q.items.forEach((item) => {
+          const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+          const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+          items.push({
+            id: `${q.id}-${item.label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${item.label})`,
+            questionText: formatInlineWordChoicePrompt(item),
+            userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
+            correctAnswer: item.options[item.correctAnswer] || '',
+            questionType: 'inline-word-choice-sub',
+          });
+        });
+      } else if (q.type === 'passage-inline-word-choice') {
+        const parsed = parseSerializedChoiceMap(userAns);
+        q.items.forEach((item) => {
+          const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+          const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+          items.push({
+            id: `${q.id}-${item.label}`,
+            parentId: q.id,
+            label: `Q${q.id}(${item.label})`,
+            questionText: formatPassageInlineWordChoicePrompt(q.question, item),
+            userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
+            correctAnswer: item.options[item.correctAnswer] || '',
+            questionType: 'passage-inline-word-choice-sub',
+          });
+        });
+      } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
+        items.push({
+          id: `${q.id}`,
+          parentId: q.id,
+          label: `Q${q.id}`,
+          questionText: q.question || `Vocabulary question ${q.id}`,
+          userAnswer: typeof userAns === 'string' && userAns.trim() ? userAns : 'Not answered',
+          correctAnswer: q.correctAnswer,
+          questionType: q.type,
+        });
       }
     }
     return items;
@@ -259,20 +405,39 @@ export default function ResultsPage() {
   const detailedResults = useMemo(() => {
     const results: { sectionId: string; sectionTitle: string; questions: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] }[] = [];
     for (const section of sections) {
-      if (section.id === 'reading' || section.id === 'writing') continue;
+      if (section.id === 'reading' || isWritingLikeSection(section)) continue;
       const sectionResults: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] = [];
       for (const q of section.questions) {
         if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
           const userAns = getAnswer(section.id, q.id);
-          const userIdx = userAns !== undefined ? Number(userAns) : -1;
-          const userText = userIdx >= 0 ? (q.options[userIdx]?.text || q.options[userIdx]?.label) : 'Not answered';
-          const correctText = q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label;
+          const selectedIndexes = getMCQSelectedIndexes(userAns);
+          const correctIndexes = getMCQCorrectIndexes(q);
+          const userText = selectedIndexes.length
+            ? selectedIndexes.map((index) => q.options[index]?.text || q.options[index]?.label).filter(Boolean).join(', ')
+            : 'Not answered';
+          const correctText = correctIndexes.length
+            ? correctIndexes.map((index) => q.options[index]?.text || q.options[index]?.label).filter(Boolean).join(', ')
+            : (q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label);
           sectionResults.push({ id: q.id, question: q.question, userAnswer: userText, correctAnswer: correctText,
-            isCorrect: userIdx === q.correctAnswer,
-            context: `The correct answer is option ${q.options[q.correctAnswer]?.label}: ${correctText}.` });
+            isCorrect: JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b)),
+            context: correctIndexes.length > 1
+              ? `The correct answers are: ${correctText}.`
+              : `The correct answer is option ${q.options[q.correctAnswer]?.label}: ${correctText}.` });
         } else if (q.type === 'mcq') {
           const userAns = getAnswer(section.id, q.id);
-          if (typeof q.correctAnswer === 'number') {
+          const correctIndexes = getMCQCorrectIndexes(q);
+          if (correctIndexes.length > 1) {
+            const selectedIndexes = getMCQSelectedIndexes(userAns);
+            const userText = selectedIndexes.length
+              ? selectedIndexes.map((index) => getMCQOptionDisplay(q.options[index])).filter(Boolean).join(', ')
+              : 'Not answered';
+            const correctText = correctIndexes.map((index) => getMCQOptionDisplay(q.options[index])).filter(Boolean).join(', ');
+            sectionResults.push({ id: q.id, question: q.question.replace('___', q.highlightWord || '___'),
+              userAnswer: userText,
+              correctAnswer: correctText,
+              isCorrect: JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b)),
+              context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
+          } else if (typeof q.correctAnswer === 'number') {
             // Standard MCQ with numeric index answer
             const userIdx = userAns !== undefined ? Number(userAns) : -1;
             sectionResults.push({ id: q.id, question: q.question.replace('___', q.highlightWord || '___'),
@@ -291,13 +456,35 @@ export default function ResultsPage() {
         } else if (q.type === 'fill-blank') {
           const userAns = getAnswer(section.id, q.id);
           const wordBank = section.wordBank;
-          const correctWord = wordBank?.find((w: any) => w.letter === q.correctAnswer);
-          const userWord = wordBank?.find((w: any) => w.letter === String(userAns));
-          sectionResults.push({ id: q.id, question: `Fill in blank ${q.id}`,
-            userAnswer: userWord ? `${userWord.letter} ${userWord.word}` : (userAns ? String(userAns) : 'Not answered'),
-            correctAnswer: correctWord ? `${correctWord.letter} ${correctWord.word}` : q.correctAnswer,
-            isCorrect: String(userAns).toUpperCase() === q.correctAnswer.toUpperCase(),
-            context: `Grammar fill-in-the-blank. The correct word is "${correctWord?.word}".` });
+          const correctLetterEntry = wordBank?.find((w: any) => w.letter.toLowerCase() === q.correctAnswer.toLowerCase());
+          const userLetterEntry = wordBank?.find((w: any) => w.letter.toLowerCase() === String(userAns || '').toLowerCase());
+
+          if (correctLetterEntry) {
+            sectionResults.push({ id: q.id, question: q.question || `Fill in blank ${q.id}`,
+              userAnswer: userLetterEntry ? `${userLetterEntry.letter} ${userLetterEntry.word}` : (userAns ? String(userAns) : 'Not answered'),
+              correctAnswer: `${correctLetterEntry.letter} ${correctLetterEntry.word}`,
+              isCorrect: String(userAns).trim().toUpperCase() === q.correctAnswer.trim().toUpperCase(),
+              context: `Grammar fill-in-the-blank. The correct word is "${correctLetterEntry.word}".` });
+          } else {
+            sectionResults.push({ id: q.id, question: q.question || `Fill in blank ${q.id}`,
+              userAnswer: userAns ? String(userAns) : 'Not answered',
+              correctAnswer: q.correctAnswer,
+              isCorrect: String(userAns).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase(),
+              context: 'Type the correct word or phrase directly into the blank.' });
+          }
+        } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
+          const userAns = getAnswer(section.id, q.id);
+          const userValue = typeof userAns === 'string' && userAns.trim() ? userAns : 'Not answered';
+          sectionResults.push({
+            id: q.id,
+            question: q.question || `Vocabulary question ${q.id}`,
+            userAnswer: userValue,
+            correctAnswer: q.correctAnswer,
+            isCorrect: userValue !== 'Not answered' && normalizeVocabularyAnswer(userValue) === normalizeVocabularyAnswer(q.correctAnswer),
+            context: q.type === 'picture-spelling'
+              ? 'Spell the word that matches the picture.'
+              : 'Complete the missing letters to form the correct word.',
+          });
         } else if (q.type === 'open-ended') {
           const userAns = getAnswer(section.id, q.id);
           const userText = userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered';
@@ -323,22 +510,76 @@ export default function ResultsPage() {
           if (q.statements) {
             const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : (userAns || {}); } catch { return {}; } })();
             for (const stmt of q.statements) {
-              const userVal = parsed[stmt.label];
-              const userDisplay = userVal === true ? 'True (\u2713)' : userVal === false ? 'False (\u2717)' : 'Not answered';
-              const correctDisplay = stmt.isTrue ? 'True (\u2713)' : 'False (\u2717)';
+              const raw = parsed[stmt.label];
+              const userChoice = normalizeTrueFalseChoice(raw && typeof raw === 'object' ? raw.tf : raw);
+              const correctChoice = getExpectedTrueFalseChoice(stmt);
+              const userDisplay = userChoice ? `${userChoice}${userChoice === 'True' ? ' (\u2713)' : userChoice === 'False' ? ' (\u2717)' : ''}` : 'Not answered';
+              const correctDisplay = `${correctChoice}${correctChoice === 'True' ? ' (\u2713)' : correctChoice === 'False' ? ' (\u2717)' : ''}`;
               sectionResults.push({ id: q.id, question: stmt.statement,
                 userAnswer: userDisplay, correctAnswer: correctDisplay,
-                isCorrect: userVal === stmt.isTrue });
+                isCorrect: userChoice === correctChoice });
             }
           }
         } else if (q.type === 'checkbox') {
           const userAns = getAnswer(section.id, q.id) as number[] | undefined;
-          const userLabels = userAns ? userAns.map((i: number) => q.options[i]).join(', ') : 'Not answered';
+          const userLabels = userAns && userAns.length ? userAns.map((i: number) => q.options[i]).join(', ') : 'Not answered';
           const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
           const sorted1 = userAns ? [...userAns].sort() : [];
           const sorted2 = [...q.correctAnswers].sort();
           sectionResults.push({ id: q.id, question: q.question, userAnswer: userLabels,
             correctAnswer: correctLabels, isCorrect: JSON.stringify(sorted1) === JSON.stringify(sorted2) });
+        } else if (q.type === 'order') {
+          const userAns = getAnswer(section.id, q.id);
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          const userLabels = q.events.map((event, index) => `${event}: ${parsed[index] || '—'}`).join(' | ');
+          const correctLabels = q.events.map((event, index) => `${event}: ${q.correctOrder[index]}`).join(' | ');
+          const isCorrect = q.correctOrder.every((expected, index) => String(parsed[index] ?? '') === String(expected));
+          sectionResults.push({ id: q.id, question: q.question, userAnswer: userLabels, correctAnswer: correctLabels, isCorrect });
+        } else if (q.type === 'sentence-reorder') {
+          const userAns = getAnswer(section.id, q.id);
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.items.forEach((item) => {
+            const userValue = sentenceReorderAnswerToString(parsed[item.label]);
+            sectionResults.push({
+              id: q.id,
+              question: item.scrambledWords,
+              userAnswer: userValue || 'Not answered',
+              correctAnswer: item.correctAnswer,
+              isCorrect: userValue !== '' && normalizeSentenceAnswer(userValue) === normalizeSentenceAnswer(item.correctAnswer),
+            });
+          });
+        } else if (q.type === 'inline-word-choice') {
+          const userAns = getAnswer(section.id, q.id);
+          const parsed = parseSerializedChoiceMap(userAns);
+          q.items.forEach((item) => {
+            const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+            const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+            const userValue = hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered';
+            const correctValue = item.options[item.correctAnswer] || '';
+            sectionResults.push({
+              id: q.id,
+              question: formatInlineWordChoicePrompt(item),
+              userAnswer: userValue,
+              correctAnswer: correctValue,
+              isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
+            });
+          });
+        } else if (q.type === 'passage-inline-word-choice') {
+          const userAns = getAnswer(section.id, q.id);
+          const parsed = parseSerializedChoiceMap(userAns);
+          q.items.forEach((item) => {
+            const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+            const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+            const userValue = hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered';
+            const correctValue = item.options[item.correctAnswer] || '';
+            sectionResults.push({
+              id: q.id,
+              question: formatPassageInlineWordChoicePrompt(q.question, item),
+              userAnswer: userValue,
+              correctAnswer: correctValue,
+              isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
+            });
+          });
         }
       }
       if (sectionResults.length > 0) results.push({ sectionId: section.id, sectionTitle: section.title, questions: sectionResults });
@@ -346,14 +587,23 @@ export default function ResultsPage() {
     return results;
   }, [getAnswer, sections]);
 
+  const recordedStudentName = useMemo(
+    () => user?.displayName?.trim() || user?.username || studentInfo?.name || 'Unknown',
+    [studentInfo?.name, user?.displayName, user?.username],
+  );
+  const recordedStudentGrade = useMemo(
+    () => studentInfo?.grade?.trim() || undefined,
+    [studentInfo?.grade],
+  );
+
   // Send reading sub-items to AI for grading + writing evaluation
   // Auto-save initial results to database
   useEffect(() => {
     if (hasSavedInitial.current) return;
     hasSavedInitial.current = true;
     saveResultMutation.mutate({
-      studentName: studentInfo?.name || 'Unknown',
-      studentGrade: studentInfo?.grade || undefined,
+      studentName: recordedStudentName,
+      studentGrade: recordedStudentGrade,
       paperId: selectedPaper?.id || 'unknown',
       paperTitle: selectedPaper?.title || 'Assessment',
       totalCorrect: correct,
@@ -369,7 +619,7 @@ export default function ResultsPage() {
       },
       onError: (err) => console.error('[Results] Failed to save:', err),
     });
-  }, []);
+  }, [bySection, correct, recordedStudentGrade, recordedStudentName, saveResultMutation, sectionTimings, selectedPaper?.id, selectedPaper?.title, state.answers, total, totalTime]);
 
   // Update AI results in database when they become available
   useEffect(() => {
@@ -378,11 +628,10 @@ export default function ResultsPage() {
     if (readingResults) updates.readingResultsJson = JSON.stringify(readingResults);
     if (writingResult) updates.writingResultJson = JSON.stringify(writingResult);
     if (explanations) updates.explanationsJson = JSON.stringify(explanations);
-    if (report) updates.reportJson = JSON.stringify(report);
     if (Object.keys(updates).length > 0) {
       updateAIMutation.mutate({ id: savedResultId.current, ...updates });
     }
-  }, [readingResults, writingResult, explanations, report]);
+  }, [readingResults, writingResult, explanations]);
 
   useEffect(() => {
     if (hasStartedGrading.current) return;
@@ -399,7 +648,7 @@ export default function ResultsPage() {
       });
     }
     // Writing evaluation (HuaZhong paper only)
-    const writingSection = sections.find(s => s.id === 'writing');
+    const writingSection = sections.find(isWritingLikeSection);
     if (writingSection) {
       const writingQ = writingSection.questions.find((q: any) => q.type === 'writing');
       if (writingQ && writingQ.type === 'writing') {
@@ -455,26 +704,6 @@ export default function ResultsPage() {
   const gradeInfo = getGrade();
   const isStillGrading = isGradingReading || isGradingWriting;
 
-  // Generate report
-  useEffect(() => {
-    if (isStillGrading) return;
-    if (report !== null || isLoadingReport) return;
-    const sectionResults = sections.map(s => {
-      let sCorrect = 0; let sTotal = 0;
-      if (s.id === 'reading' && readingResults) { sCorrect = readingResults.filter(r => r.isCorrect).length; sTotal = readingResults.length; }
-      else if (s.id !== 'writing' && s.id !== 'reading') { const bs = bySection[s.id]; if (bs) { sCorrect = bs.correct; sTotal = bs.total; } }
-      return { sectionId: s.id, sectionTitle: s.title, correct: sCorrect, total: sTotal, timeSeconds: sectionTimings[s.id] || 0 };
-    }).filter(s => s.sectionId !== 'writing');
-    setIsLoadingReport(true);
-    reportMutation.mutate({
-      totalScore, totalPossible, percentage, grade: gradeInfo.grade, totalTimeSeconds: totalTime, sectionResults,
-      writingScore: writingResult?.score, writingMaxScore: writingResult?.maxScore, writingGrade: writingResult?.grade,
-    }, {
-      onSuccess: (data) => { setReport(data); setIsLoadingReport(false); },
-      onError: () => { setIsLoadingReport(false); },
-    });
-  }, [isStillGrading, report, isLoadingReport]);
-
   const getExplanation = (questionId: number): ExplanationResult | undefined => explanations?.find(e => e.questionId === questionId);
   const getReadingResult = (subItemId: string): ReadingGradingResult | undefined => readingResults?.find(r => r.questionId === subItemId);
 
@@ -492,13 +721,6 @@ export default function ResultsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-
-        {/* Top Controls */}
-        <div className="flex items-center justify-end gap-3 mb-6">
-          <LangToggle lang={lang} setLang={setLang} />
-
-        </div>
-
         {/* Score Card */}
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-white mb-6 shadow-lg shadow-amber-200">
@@ -518,10 +740,10 @@ export default function ResultsPage() {
         </motion.div>
 
         {/* Student Info */}
-        {studentInfo && (
+        {(recordedStudentName !== 'Unknown' || recordedStudentGrade) && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }} className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6 text-sm text-slate-500">
-            <span className="font-semibold text-slate-700">{studentInfo.name}</span>
-            {studentInfo.grade && <span>{lang === 'en' ? 'Grade' : '年级'}: {studentInfo.grade}</span>}
+            <span className="font-semibold text-slate-700">{recordedStudentName}</span>
+            {recordedStudentGrade && <span>{lang === 'en' ? 'Grade' : '年级'}: {recordedStudentGrade}</span>}
           </motion.div>
         )}
 
@@ -551,76 +773,6 @@ export default function ResultsPage() {
             </div>
           </div>
         </motion.div>
-
-        {/* Proficiency Report */}
-        {(report || isLoadingReport) && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }} className="mb-8">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-              <div className="px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-slate-200 flex items-center gap-2">
-                <Globe className="w-5 h-5 text-violet-600" />
-                <h3 className="font-bold text-lg text-slate-700">{lang === 'en' ? 'Proficiency Report' : '能力评估报告'}</h3>
-                <Sparkles className="w-5 h-5 text-violet-500" />
-              </div>
-              {isLoadingReport ? (
-                <div className="p-8 text-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-violet-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'Generating proficiency report...' : '正在生成能力评估报告...'}</p>
-                </div>
-              ) : report ? (
-                <div className="p-6 space-y-5">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 text-white flex items-center justify-center shadow-lg shadow-violet-200">
-                      <span className="text-2xl font-extrabold">{report.languageLevel}</span>
-                    </div>
-                    <div>
-                      <div className="text-base font-bold text-slate-700">{lang === 'en' ? 'CEFR Language Level' : 'CEFR 语言等级'}</div>
-                      <p className="text-sm text-slate-500 mt-0.5">{lang === 'en' ? 'Common European Framework of Reference' : '欧洲语言共同参考框架'}</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-violet-50 border border-violet-200">
-                    <p className="text-base text-slate-700 leading-relaxed">{lang === 'en' ? report.summary_en : report.summary_cn}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <h4 className="font-semibold text-base text-slate-700 mb-2 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-500" />{lang === 'en' ? 'Time Management' : '时间管理'}
-                    </h4>
-                    <p className="text-sm text-slate-600">{lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn}</p>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-base text-emerald-700 mb-2">{lang === 'en' ? 'Strengths' : '优势'}</h4>
-                    <ul className="space-y-1">
-                      {(lang === 'en' ? report.strengths_en : report.strengths_cn).map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />{s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-base text-amber-700 mb-2">{lang === 'en' ? 'Areas for Improvement' : '待提高'}</h4>
-                    <ul className="space-y-1">
-                      {(lang === 'en' ? report.weaknesses_en : report.weaknesses_cn).map((w, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                          <XCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />{w}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-base text-blue-700 mb-2">{lang === 'en' ? 'Recommendations' : '学习建议'}</h4>
-                    <ul className="space-y-1">
-                      {(lang === 'en' ? report.recommendations_en : report.recommendations_cn).map((r, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                          <span className="text-blue-500 font-bold mt-0.5">{i + 1}.</span>{r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </motion.div>
-        )}
 
         {/* Section Scores */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-white rounded-2xl border border-slate-200 shadow-lg p-6 mb-8">
@@ -678,7 +830,7 @@ export default function ResultsPage() {
               }
 
               // Writing section (AI evaluated, HuaZhong only)
-              if (section.id === 'writing') {
+              if (isWritingLikeSection(section)) {
                 if (isGradingWriting) {
                   return (
                     <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg}`}>

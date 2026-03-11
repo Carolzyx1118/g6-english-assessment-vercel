@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
+import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import { blueprintToPaper } from '@shared/blueprintToPaper';
 import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
 
@@ -10,9 +11,11 @@ export interface StudentInfo {
   grade: string;
 }
 
+type QuizAnswerValue = string | number | number[];
+
 interface QuizState {
   currentSectionIndex: number;
-  answers: Record<string, string | number>;
+  answers: Record<string, QuizAnswerValue>;
   submitted: boolean;
   startTime: number | null;
   endTime: number | null;
@@ -39,8 +42,8 @@ interface QuizContextType {
   currentSection: Section;
   sections: Section[];
   setCurrentSection: (index: number) => void;
-  setAnswer: (sectionId: string, questionId: number, answer: string | number) => void;
-  getAnswer: (sectionId: string, questionId: number) => string | number | undefined;
+  setAnswer: (sectionId: string, questionId: number, answer: QuizAnswerValue) => void;
+  getAnswer: (sectionId: string, questionId: number) => QuizAnswerValue | undefined;
   submitQuiz: () => void;
   resetQuiz: () => void;
   startQuiz: () => void;
@@ -80,6 +83,48 @@ function hasMeaningfulQuizState(session: {
     session.state.endTime ||
     Object.keys(session.state.answers).length,
   );
+}
+
+function normalizeTrueFalseChoice(value: unknown): 'True' | 'False' | 'Not Given' | undefined {
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') return 'True';
+  if (normalized === 'false') return 'False';
+  if (normalized === 'not given' || normalized === 'not-given' || normalized === 'not_given') {
+    return 'Not Given';
+  }
+
+  return undefined;
+}
+
+function getExpectedTrueFalseChoice(statement: {
+  isTrue?: boolean;
+  correctChoice?: 'True' | 'False' | 'Not Given';
+}) {
+  if (statement.correctChoice) return statement.correctChoice;
+  if (statement.isTrue === true) return 'True';
+  if (statement.isTrue === false) return 'False';
+  return 'Not Given';
+}
+
+function normalizeSentenceAnswer(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([?.!,;:])/g, '$1');
+}
+
+function sentenceReorderAnswerToString(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .join(' ');
+  }
+  return typeof value === 'string' ? value : '';
 }
 
 function readPersistedQuizSession(): PersistedQuizSession | null {
@@ -331,11 +376,22 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, currentSectionIndex: index }));
   }, []);
 
-  const setAnswer = useCallback((sectionId: string, questionId: number, answer: string | number) => {
-    setState(prev => ({
-      ...prev,
-      answers: { ...prev.answers, [answerKey(sectionId, questionId)]: answer },
-    }));
+  const setAnswer = useCallback((sectionId: string, questionId: number, answer: QuizAnswerValue) => {
+    setState(prev => {
+      const key = answerKey(sectionId, questionId);
+      const nextAnswers = { ...prev.answers };
+
+      if (Array.isArray(answer) && answer.length === 0) {
+        delete nextAnswers[key];
+      } else {
+        nextAnswers[key] = answer;
+      }
+
+      return {
+        ...prev,
+        answers: nextAnswers,
+      };
+    });
   }, []);
 
   const getAnswer = useCallback((sectionId: string, questionId: number) => {
@@ -384,13 +440,25 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         bySection[section.id].total++;
         const answer = state.answers[answerKey(section.id, q.id)];
 
-        if (answer === undefined || answer === '') continue;
+        if (answer === undefined || answer === '' || (Array.isArray(answer) && answer.length === 0)) continue;
 
         let isCorrect = false;
 
         if (q.type === 'mcq' || q.type === 'picture-mcq' || q.type === 'listening-mcq') {
-          // Handle both numeric index and string correctAnswer (e.g. yes/no MCQ)
-          if (typeof q.correctAnswer === 'number') {
+          const correctAnswers = q.correctAnswers && q.correctAnswers.length > 0
+            ? Array.from(new Set(q.correctAnswers))
+            : (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : []);
+
+          if (correctAnswers.length > 1 || (q.selectionLimit ?? 1) > 1) {
+            const selected = Array.isArray(answer)
+              ? answer.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+              : typeof answer === 'number' && Number.isFinite(answer)
+                ? [answer]
+                : [];
+            const sortedSelected = Array.from(new Set(selected)).sort((a, b) => a - b);
+            const sortedCorrect = [...correctAnswers].sort((a, b) => a - b);
+            isCorrect = JSON.stringify(sortedSelected) === JSON.stringify(sortedCorrect);
+          } else if (typeof q.correctAnswer === 'number') {
             isCorrect = Number(answer) === q.correctAnswer;
           } else {
             // Answer is stored as index (number), convert to option text for comparison
@@ -401,6 +469,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           }
         } else if (q.type === 'fill-blank') {
           isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+        } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
+          isCorrect = normalizeVocabularyAnswer(String(answer)) === normalizeVocabularyAnswer(q.correctAnswer);
         } else if (q.type === 'wordbank-fill') {
           isCorrect = String(answer).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
         } else if (q.type === 'story-fill') {
@@ -418,19 +488,61 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           }
           // Speaking (no correctAnswer) is excluded from auto-scoring
         } else if (q.type === 'true-false') {
-          // true-false scoring: compare JSON answers
           try {
             const userAnswers = typeof answer === 'string' ? JSON.parse(answer) : answer;
             if (q.statements) {
-              let allCorrect = true;
-              for (const stmt of q.statements) {
-                if (userAnswers[stmt.label] !== stmt.isTrue) allCorrect = false;
-              }
-              isCorrect = allCorrect;
+              isCorrect = q.statements.every((stmt) => {
+                const raw = userAnswers?.[stmt.label];
+                const userChoice = normalizeTrueFalseChoice(
+                  raw && typeof raw === 'object' && 'tf' in raw ? raw.tf : raw,
+                );
+                return userChoice === getExpectedTrueFalseChoice(stmt);
+              });
             }
           } catch { /* skip */ }
         } else if (q.type === 'checkbox') {
-          // Checkbox scoring handled separately
+          const selected = Array.isArray(answer) ? answer : [];
+          const sortedSelected = [...selected].sort((a, b) => a - b);
+          const sortedCorrect = [...q.correctAnswers].sort((a, b) => a - b);
+          isCorrect = JSON.stringify(sortedSelected) === JSON.stringify(sortedCorrect);
+        } else if (q.type === 'order') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            isCorrect = q.correctOrder.every((expected, index) => String(parsed?.[index] ?? '') === String(expected));
+          } catch {
+            isCorrect = false;
+          }
+        } else if (q.type === 'sentence-reorder') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            isCorrect = q.items.every((item) =>
+              normalizeSentenceAnswer(sentenceReorderAnswerToString(parsed?.[item.label])) === normalizeSentenceAnswer(item.correctAnswer),
+            );
+          } catch {
+            isCorrect = false;
+          }
+        } else if (q.type === 'inline-word-choice') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            isCorrect = q.items.every((item) => {
+              const raw = parsed?.[item.label];
+              const selectedIndex = typeof raw === 'number' ? raw : Number(raw);
+              return Number.isFinite(selectedIndex) && selectedIndex === item.correctAnswer;
+            });
+          } catch {
+            isCorrect = false;
+          }
+        } else if (q.type === 'passage-inline-word-choice') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            isCorrect = q.items.every((item) => {
+              const raw = parsed?.[item.label];
+              const selectedIndex = typeof raw === 'number' ? raw : Number(raw);
+              return Number.isFinite(selectedIndex) && selectedIndex === item.correctAnswer;
+            });
+          } catch {
+            isCorrect = false;
+          }
         }
 
         if (isCorrect) {
@@ -452,7 +564,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     for (const q of section.questions) {
       const answer = state.answers[answerKey(sectionId, q.id)];
-      if (answer !== undefined && answer !== '') {
+      if (answer !== undefined && answer !== '' && !(Array.isArray(answer) && answer.length === 0)) {
         answered++;
       }
     }

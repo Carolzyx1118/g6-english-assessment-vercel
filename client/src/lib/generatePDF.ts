@@ -83,6 +83,56 @@ interface QuestionDetail {
   tip?: string;              // AI tip if available
 }
 
+type PDFAnswerValue = string | number | number[];
+
+function getPDFMCQCorrectIndexes(question: Question & { type: 'mcq' | 'picture-mcq' | 'listening-mcq' }) {
+  if (question.correctAnswers && question.correctAnswers.length > 0) {
+    return Array.from(new Set(question.correctAnswers));
+  }
+  return typeof question.correctAnswer === 'number' ? [question.correctAnswer] : [];
+}
+
+function getPDFSelectedIndexes(answer: PDFAnswerValue | undefined) {
+  if (Array.isArray(answer)) {
+    return answer.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  }
+  if (typeof answer === 'number' && Number.isFinite(answer)) {
+    return [answer];
+  }
+  return [];
+}
+
+function getPDFOptionDisplay(option: string | { label?: string; text?: string } | undefined) {
+  if (!option) return '';
+  return typeof option === 'string' ? option : option.text || option.label || '';
+}
+
+function parsePDFChoiceMap(value: PDFAnswerValue | undefined): Record<string, unknown> {
+  try {
+    if (typeof value === 'string') {
+      return JSON.parse(value) as Record<string, unknown>;
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  } catch {
+    // Ignore malformed serialized answers.
+  }
+
+  return {};
+}
+
+function getPDFChoiceIndex(record: Record<string, unknown>, label: string) {
+  const raw = record[label];
+  const selectedIndex = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(selectedIndex) ? selectedIndex : undefined;
+}
+
+function formatPDFPassageInlinePrompt(prompt: string, item: { label: string; options: string[] }) {
+  const blankPrompt = `Blank ${item.label}: ${item.options.join(' / ')}`;
+  return prompt ? `${prompt} — ${blankPrompt}` : blankPrompt;
+}
+
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -100,20 +150,25 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
  */
 function buildAutoGradableDetails(
   section: Section,
-  answers: Record<string, string | number>,
+  answers: Record<string, PDFAnswerValue>,
   explanationsMap: Map<number, ExplanationResult>,
 ): QuestionDetail[] {
   const details: QuestionDetail[] = [];
   for (const q of section.questions) {
     const key = `${section.id}:${q.id}`;
     const userAns = answers[key];
-    const isAnswered = userAns !== undefined && userAns !== '';
+    const isAnswered = userAns !== undefined && userAns !== '' && !(Array.isArray(userAns) && userAns.length === 0);
 
     if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
-      const userIdx = isAnswered ? Number(userAns) : -1;
-      const userText = userIdx >= 0 ? (q.options[userIdx]?.text || q.options[userIdx]?.label || `Option ${userIdx + 1}`) : 'Not Answered';
-      const correctText = q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label || `Option ${q.correctAnswer + 1}`;
-      const isCorrect = userIdx === q.correctAnswer;
+      const selectedIndexes = getPDFSelectedIndexes(userAns);
+      const correctIndexes = getPDFMCQCorrectIndexes(q);
+      const userText = selectedIndexes.length
+        ? selectedIndexes.map((index) => q.options[index]?.text || q.options[index]?.label || `Option ${index + 1}`).join(', ')
+        : 'Not Answered';
+      const correctText = correctIndexes.length
+        ? correctIndexes.map((index) => q.options[index]?.text || q.options[index]?.label || `Option ${index + 1}`).join(', ')
+        : (q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label || `Option ${q.correctAnswer + 1}`);
+      const isCorrect = JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b));
       const expl = explanationsMap.get(q.id);
       details.push({
         questionNum: `Q${q.id}`,
@@ -126,9 +181,27 @@ function buildAutoGradableDetails(
         tip: expl?.tip_en,
       });
     } else if (q.type === 'mcq') {
-      const userIdx = isAnswered ? Number(userAns) : -1;
       const expl = explanationsMap.get(q.id);
-      if (typeof q.correctAnswer === 'number') {
+      const correctIndexes = getPDFMCQCorrectIndexes(q);
+      if (correctIndexes.length > 1) {
+        const selectedIndexes = getPDFSelectedIndexes(userAns);
+        const userText = selectedIndexes.length
+          ? selectedIndexes.map((index) => getPDFOptionDisplay(q.options[index])).join(', ')
+          : 'Not Answered';
+        const correctText = correctIndexes.map((index) => getPDFOptionDisplay(q.options[index])).join(', ');
+        const isCorrect = JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b));
+        details.push({
+          questionNum: `Q${q.id}`,
+          questionText: q.question.replace('___', q.highlightWord || '___'),
+          userAnswer: userText,
+          correctAnswer: correctText,
+          isCorrect: isAnswered && isCorrect,
+          isAnswered,
+          explanation: expl?.explanation_en,
+          tip: expl?.tip_en,
+        });
+      } else if (typeof q.correctAnswer === 'number') {
+        const userIdx = isAnswered ? Number(userAns) : -1;
         const userText = userIdx >= 0 ? q.options[userIdx] : 'Not Answered';
         const isCorrect = userIdx === q.correctAnswer;
         details.push({
@@ -143,6 +216,7 @@ function buildAutoGradableDetails(
         });
       } else {
         // MCQ with string correctAnswer (e.g., yes/no)
+        const userIdx = isAnswered ? Number(userAns) : -1;
         const userOptionText = (userIdx >= 0 && q.options[userIdx]) ? q.options[userIdx] : (isAnswered ? String(userAns) : 'Not Answered');
         const isCorrect = userOptionText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
         details.push({
@@ -190,6 +264,23 @@ function buildAutoGradableDetails(
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
       });
+    } else if (q.type === 'passage-inline-word-choice') {
+      const parsed = parsePDFChoiceMap(userAns);
+      q.items.forEach((item) => {
+        const selectedIndex = getPDFChoiceIndex(parsed, item.label);
+        const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+        const expl = explanationsMap.get(q.id);
+        details.push({
+          questionNum: `Q${q.id}(${item.label})`,
+          questionText: formatPDFPassageInlinePrompt(q.question, item),
+          userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not Answered' : 'Not Answered',
+          correctAnswer: item.options[item.correctAnswer] || '',
+          isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
+          isAnswered: hasAnswer,
+          explanation: expl?.explanation_en,
+          tip: expl?.tip_en,
+        });
+      });
     }
   }
   return details;
@@ -201,7 +292,7 @@ function buildAutoGradableDetails(
  */
 function buildReadingDetails(
   section: Section,
-  answers: Record<string, string | number>,
+  answers: Record<string, PDFAnswerValue>,
   readingResults: ReadingGradingResult[] | null,
   explanationsMap: Map<number, ExplanationResult>,
 ): QuestionDetail[] {
@@ -214,7 +305,7 @@ function buildReadingDetails(
   for (const q of section.questions) {
     const key = `${section.id}:${q.id}`;
     const userAns = answers[key];
-    const isAnswered = userAns !== undefined && userAns !== '';
+    const isAnswered = userAns !== undefined && userAns !== '' && !(Array.isArray(userAns) && userAns.length === 0);
 
     if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
       // These are AI-graded via readingResults
@@ -359,6 +450,22 @@ function buildReadingDetails(
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
         explanation: rr?.explanation_en,
       });
+    } else if (q.type === 'passage-inline-word-choice') {
+      const parsed = parsePDFChoiceMap(userAns);
+      q.items.forEach((item) => {
+        const selectedIndex = getPDFChoiceIndex(parsed, item.label);
+        const rr = readingMap.get(`${q.id}-${item.label}`);
+        const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+        details.push({
+          questionNum: `Q${q.id}(${item.label})`,
+          questionText: formatPDFPassageInlinePrompt(q.question, item),
+          userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not Answered' : 'Not Answered',
+          correctAnswer: item.options[item.correctAnswer] || '',
+          isCorrect: rr ? rr.isCorrect : (hasAnswer && selectedIndex === item.correctAnswer),
+          isAnswered: hasAnswer,
+          explanation: rr?.explanation_en,
+        });
+      });
     }
   }
   return details;
@@ -464,7 +571,7 @@ export function generateReportPDF(data: PDFData): void {
   };
 
   // ── Parse stored JSON data ──
-  const answers = safeParseJSON<Record<string, string | number>>(data.answersJson, {});
+  const answers = safeParseJSON<Record<string, PDFAnswerValue>>(data.answersJson, {});
   const bySection = safeParseJSON<Record<string, { correct: number; total: number }>>(data.scoreBySectionJson, {});
   const sectionTimings = safeParseJSON<Record<string, number>>(data.sectionTimingsJson, {});
   const readingResults = safeParseJSON<ReadingGradingResult[] | null>(data.readingResultsJson, null);

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
-import { ArrowLeft, Check, FilePlus2, ImagePlus, Link2, Loader2, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
-import type { FillBlankQuestion } from "@/data/papers";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mic, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
+import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
   compressImage,
@@ -12,6 +12,15 @@ import {
   validateImageFile,
 } from "@/lib/imageUtils";
 import { trpc } from "@/lib/trpc";
+import { renderTextWithFractions } from "@/lib/renderTextWithFractions";
+import {
+  buildWordCompletionAnswer,
+  getPictureSpellingCharacters,
+  getWordCompletionFilledLetters,
+  getWordPatternBlankCount,
+  normalizeVocabularyAnswer,
+  parseWordPattern,
+} from "@/lib/vocabularyWordHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,28 +28,46 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ManualAudioFile,
+  ManualCheckboxOption,
+  ManualCheckboxQuestion,
   ManualFillBlankQuestion,
+  ManualHeadingMatchQuestion,
+  ManualInlineWordChoiceItem,
+  ManualInlineWordChoiceOption,
+  ManualInlineWordChoiceQuestion,
   ManualMCQOption,
   ManualMCQQuestion,
   ManualMatchingDescription,
   ManualOptionImage,
+  ManualOrderingItem,
+  ManualOrderingQuestion,
   ManualPaperBlueprint,
   ManualPassageFillBlankQuestion,
+  ManualPassageInlineWordChoiceQuestion,
   ManualPassageMCQOption,
   ManualPassageMCQQuestion,
   ManualPassageMatchingQuestion,
+  ManualPictureSpellingQuestion,
   ManualQuestion,
   ManualQuestionType,
+  ManualSentenceReorderItem,
+  ManualSentenceReorderQuestion,
   ManualSection,
   ManualSectionType,
   ManualSubsection,
+  ManualTruthValue,
   ManualTypedFillBlankQuestion,
   ManualPassageOpenEndedQuestion,
+  ManualSpeakingQuestion,
+  ManualTrueFalseQuestion,
+  ManualTrueFalseStatement,
+  ManualWordCompletionQuestion,
   ManualWritingQuestion,
   ManualWordBankItem,
 } from "@shared/manualPaperBlueprint";
 import {
   MANUAL_QUESTION_TYPE_LABELS,
+  MANUAL_QUESTION_TYPE_GROUPS,
   MANUAL_QUESTION_TYPE_OPTIONS,
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
@@ -50,6 +77,26 @@ import PassageMCQPreview from "@/components/PassageMCQPreview";
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
 const DEFAULT_WORD_BANK_SIZE = 4;
+const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v1";
+const ENGLISH_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "speaking", "grammar", "vocabulary"];
+const MATH_SECTION_TYPES: ManualSectionType[] = ["math-multiple-choice", "math-short-answer", "math-application"];
+const DEFAULT_SECTION_TYPE_BY_SUBJECT: Record<PaperSubject, ManualSectionType> = {
+  english: "reading",
+  math: "math-multiple-choice",
+  vocabulary: "vocabulary",
+};
+const MATH_QUESTION_TYPE_GROUPS = [
+  {
+    label: "Math Questions",
+    values: ["mcq", "typed-fill-blank"] as ManualQuestionType[],
+  },
+];
+const VOCABULARY_QUESTION_TYPE_GROUPS = [
+  {
+    label: "Vocabulary Questions",
+    values: ["mcq", "picture-spelling", "word-completion"] as ManualQuestionType[],
+  },
+];
 
 function createLocalId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -63,7 +110,131 @@ function getOptionLabel(index: number) {
   return String.fromCharCode(65 + index);
 }
 
+function getNumberLabel(index: number) {
+  return String(index + 1);
+}
+
+function createCopyTitle(title: string) {
+  const trimmed = title.trim();
+  return trimmed ? `${trimmed} (Copy)` : "Untitled Paper (Copy)";
+}
+
+function isPaperSubjectValue(value: unknown): value is PaperSubject {
+  return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
+}
+
+function getDefaultSectionTypeForSubject(subject: PaperSubject): ManualSectionType {
+  return DEFAULT_SECTION_TYPE_BY_SUBJECT[subject];
+}
+
+function getAvailableSectionTypesForSubject(subject: PaperSubject): ManualSectionType[] {
+  if (subject === "math") return MATH_SECTION_TYPES;
+  if (subject === "vocabulary") return ["vocabulary"];
+  return ENGLISH_SECTION_TYPES;
+}
+
+function getQuestionTypeGroupsForSubject(subject: PaperSubject) {
+  if (subject === "math") return MATH_QUESTION_TYPE_GROUPS;
+  if (subject === "vocabulary") return VOCABULARY_QUESTION_TYPE_GROUPS;
+  return MANUAL_QUESTION_TYPE_GROUPS;
+}
+
+function getAllowedQuestionTypesForSubject(subject: PaperSubject): ManualQuestionType[] {
+  return getQuestionTypeGroupsForSubject(subject).flatMap((group) => group.values);
+}
+
+function getDefaultQuestionTypeForSectionType(sectionType: ManualSectionType): ManualQuestionType {
+  if (sectionType === "math-short-answer") return "typed-fill-blank";
+  if (sectionType === "math-application") return "typed-fill-blank";
+  return "mcq";
+}
+
+function getLockedMathQuestionType(sectionType: ManualSectionType): ManualQuestionType {
+  return getDefaultQuestionTypeForSectionType(sectionType);
+}
+
+function getPaperBuilderDraftKey(editPaperId: string, paperSubject: PaperSubject) {
+  return `${PAPER_BUILDER_DRAFT_STORAGE_PREFIX}:${editPaperId || `__new__:${paperSubject}`}`;
+}
+
+interface ManualPaperBuilderDraft {
+  version: 1;
+  subject: PaperSubject;
+  paperSeed: string;
+  createdAt: string;
+  title: string;
+  description: string;
+  sections: ManualSection[];
+  savedAt: string;
+}
+
+function readPaperBuilderDraft(storageKey: string, paperSubject: PaperSubject): ManualPaperBuilderDraft | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ManualPaperBuilderDraft>;
+    if (parsed.version !== 1) return null;
+
+    return {
+      version: 1,
+      subject: isPaperSubjectValue(parsed.subject) ? parsed.subject : paperSubject,
+      paperSeed: typeof parsed.paperSeed === "string" ? parsed.paperSeed : createLocalId(),
+      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : new Date().toISOString(),
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      description: typeof parsed.description === "string" ? parsed.description : "",
+      sections: Array.isArray(parsed.sections) ? parsed.sections : [createSection(getDefaultSectionTypeForSubject(paperSubject))],
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePaperBuilderDraft(storageKey: string, draft: ManualPaperBuilderDraft) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(draft));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearPaperBuilderDraft(storageKey: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+const manualQuestionTypeOptionMap = new Map(
+  MANUAL_QUESTION_TYPE_OPTIONS.map((option) => [option.value, option]),
+);
+
+function getDisplayedQuestionType(questionType: ManualQuestionType): ManualQuestionType {
+  return questionType === "heading-match" ? "passage-matching" : questionType;
+}
+
 function relabelOptions(options: ManualMCQOption[]) {
+  return options.map((option, optionIndex) => ({
+    ...option,
+    label: getOptionLabel(optionIndex),
+  }));
+}
+
+function relabelCheckboxOptions(options: ManualCheckboxOption[]) {
+  return options.map((option, optionIndex) => ({
+    ...option,
+    label: getOptionLabel(optionIndex),
+  }));
+}
+
+function relabelInlineWordChoiceOptions(options: ManualInlineWordChoiceOption[]) {
   return options.map((option, optionIndex) => ({
     ...option,
     label: getOptionLabel(optionIndex),
@@ -74,6 +245,13 @@ function relabelWordBank(wordBank: ManualWordBankItem[]) {
   return wordBank.map((item, itemIndex) => ({
     ...item,
     letter: getOptionLabel(itemIndex),
+  }));
+}
+
+function relabelStatements(statements: ManualTrueFalseStatement[]) {
+  return statements.map((statement, index) => ({
+    ...statement,
+    label: getNumberLabel(index),
   }));
 }
 
@@ -101,6 +279,8 @@ function createMCQQuestion(): ManualMCQQuestion {
     prompt: "",
     options: [createOption(0), createOption(1), createOption(2)],
     correctAnswer: "A",
+    correctAnswers: ["A"],
+    selectionLimit: 1,
   };
 }
 
@@ -139,6 +319,25 @@ function createTypedFillBlankQuestion(): ManualTypedFillBlankQuestion {
   };
 }
 
+function createPictureSpellingQuestion(): ManualPictureSpellingQuestion {
+  return {
+    id: createLocalId(),
+    type: "picture-spelling",
+    prompt: "",
+    correctAnswer: "",
+  };
+}
+
+function createWordCompletionQuestion(): ManualWordCompletionQuestion {
+  return {
+    id: createLocalId(),
+    type: "word-completion",
+    prompt: "",
+    wordPattern: "",
+    correctAnswer: "",
+  };
+}
+
 function createPassageOpenEndedQuestion(): ManualPassageOpenEndedQuestion {
   return {
     id: createLocalId(),
@@ -156,10 +355,18 @@ function createWritingQuestion(): ManualWritingQuestion {
   };
 }
 
-function createMatchingDescription(index: number): ManualMatchingDescription {
+function createSpeakingQuestion(): ManualSpeakingQuestion {
   return {
     id: createLocalId(),
-    label: getOptionLabel(index),
+    type: "speaking",
+    prompt: "",
+  };
+}
+
+function createMatchingDescription(index: number, labelFactory: (index: number) => string = getOptionLabel): ManualMatchingDescription {
+  return {
+    id: createLocalId(),
+    label: labelFactory(index),
     name: "",
     text: "",
   };
@@ -171,6 +378,156 @@ function createPassageMatchingQuestion(): ManualPassageMatchingQuestion {
     type: "passage-matching",
     prompt: "",
     correctAnswer: "A",
+  };
+}
+
+function createTrueFalseStatement(index: number): ManualTrueFalseStatement {
+  return {
+    id: createLocalId(),
+    label: getNumberLabel(index),
+    statement: "",
+    correctAnswer: "true",
+  };
+}
+
+function createTrueFalseQuestion(): ManualTrueFalseQuestion {
+  return {
+    id: createLocalId(),
+    type: "true-false",
+    prompt: "",
+    statements: [createTrueFalseStatement(0)],
+    requiresReason: false,
+  };
+}
+
+function createHeadingMatchQuestion(index = 0): ManualHeadingMatchQuestion {
+  return {
+    id: createLocalId(),
+    type: "heading-match",
+    prompt: `Paragraph ${getOptionLabel(index)}`,
+    correctAnswer: "1",
+  };
+}
+
+function createCheckboxOption(index: number): ManualCheckboxOption {
+  return {
+    id: createLocalId(),
+    label: getOptionLabel(index),
+    text: "",
+  };
+}
+
+function createCheckboxQuestion(): ManualCheckboxQuestion {
+  return {
+    id: createLocalId(),
+    type: "checkbox",
+    prompt: "",
+    options: [
+      createCheckboxOption(0),
+      createCheckboxOption(1),
+      createCheckboxOption(2),
+      createCheckboxOption(3),
+    ],
+    correctAnswers: ["A", "B"],
+    selectionLimit: 2,
+  };
+}
+
+function createOrderingItem(index: number): ManualOrderingItem {
+  return {
+    id: createLocalId(),
+    text: "",
+    correctPosition: index + 1,
+  };
+}
+
+function createOrderingQuestion(): ManualOrderingQuestion {
+  return {
+    id: createLocalId(),
+    type: "ordering",
+    prompt: "",
+    items: [
+      createOrderingItem(0),
+      createOrderingItem(1),
+      createOrderingItem(2),
+    ],
+  };
+}
+
+function createSentenceReorderItem(index: number): ManualSentenceReorderItem {
+  return {
+    id: createLocalId(),
+    label: getNumberLabel(index),
+    scrambledWords: "",
+    correctAnswer: "",
+  };
+}
+
+function createSentenceReorderQuestion(): ManualSentenceReorderQuestion {
+  return {
+    id: createLocalId(),
+    type: "sentence-reorder",
+    prompt: "",
+    items: [
+      createSentenceReorderItem(0),
+      createSentenceReorderItem(1),
+      createSentenceReorderItem(2),
+    ],
+  };
+}
+
+function createInlineWordChoiceOption(index: number): ManualInlineWordChoiceOption {
+  return {
+    id: createLocalId(),
+    label: getOptionLabel(index),
+    text: "",
+  };
+}
+
+function createInlineWordChoiceItem(index: number): ManualInlineWordChoiceItem {
+  return {
+    id: createLocalId(),
+    label: getNumberLabel(index),
+    sentenceText: "",
+    beforeText: "",
+    options: [createInlineWordChoiceOption(0), createInlineWordChoiceOption(1)],
+    afterText: "",
+    correctAnswer: "A",
+  };
+}
+
+function createInlineWordChoiceQuestion(): ManualInlineWordChoiceQuestion {
+  return {
+    id: createLocalId(),
+    type: "inline-word-choice",
+    prompt: "",
+    items: [
+      createInlineWordChoiceItem(0),
+      createInlineWordChoiceItem(1),
+      createInlineWordChoiceItem(2),
+    ],
+  };
+}
+
+function createPassageInlineWordChoiceItem(index: number): ManualPassageInlineWordChoiceQuestion["items"][number] {
+  return {
+    id: createLocalId(),
+    label: getNumberLabel(index),
+    options: [createInlineWordChoiceOption(0), createInlineWordChoiceOption(1)],
+    correctAnswer: "A",
+  };
+}
+
+function createPassageInlineWordChoiceQuestion(): ManualPassageInlineWordChoiceQuestion {
+  return {
+    id: createLocalId(),
+    type: "passage-inline-word-choice",
+    prompt: "",
+    items: [
+      createPassageInlineWordChoiceItem(0),
+      createPassageInlineWordChoiceItem(1),
+      createPassageInlineWordChoiceItem(2),
+    ],
   };
 }
 
@@ -250,6 +607,26 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "picture-spelling") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createPictureSpellingQuestion()],
+    };
+  }
+
+  if (questionType === "word-completion") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createWordCompletionQuestion()],
+    };
+  }
+
   if (questionType === "passage-open-ended") {
     return {
       id: createLocalId(),
@@ -258,6 +635,17 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
       questionType,
       passageText: "",
       questions: [createPassageOpenEndedQuestion()],
+    };
+  }
+
+  if (questionType === "passage-inline-word-choice") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      passageText: "",
+      questions: [createPassageInlineWordChoiceQuestion()],
     };
   }
 
@@ -271,14 +659,87 @@ function createSubsection(questionType: ManualQuestionType = DEFAULT_QUESTION_TY
     };
   }
 
+  if (questionType === "speaking") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createSpeakingQuestion()],
+    };
+  }
+
   if (questionType === "passage-matching") {
     return {
       id: createLocalId(),
       title: "",
       instructions: "",
       questionType,
+      passageText: "",
       matchingDescriptions: Array.from({ length: 5 }, (_, i) => createMatchingDescription(i)),
       questions: [createPassageMatchingQuestion()],
+    };
+  }
+
+  if (questionType === "true-false") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createTrueFalseQuestion()],
+    };
+  }
+
+  if (questionType === "heading-match") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      passageText: "",
+      matchingDescriptions: Array.from({ length: 4 }, (_, i) => createMatchingDescription(i, getNumberLabel)),
+      questions: [createHeadingMatchQuestion(0)],
+    };
+  }
+
+  if (questionType === "checkbox") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createCheckboxQuestion()],
+    };
+  }
+
+  if (questionType === "ordering") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createOrderingQuestion()],
+    };
+  }
+
+  if (questionType === "sentence-reorder") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createSentenceReorderQuestion()],
+    };
+  }
+
+  if (questionType === "inline-word-choice") {
+    return {
+      id: createLocalId(),
+      title: "",
+      instructions: "",
+      questionType,
+      questions: [createInlineWordChoiceQuestion()],
     };
   }
 
@@ -295,8 +756,137 @@ function createSection(sectionType: ManualSectionType = DEFAULT_SECTION_TYPE): M
   return {
     id: createLocalId(),
     sectionType,
-    subsections: [createSubsection()],
+    subsections: [createSubsection(getDefaultQuestionTypeForSectionType(sectionType))],
   };
+}
+
+const MANUAL_SECTION_TYPES = Object.keys(MANUAL_SECTION_TYPE_LABELS) as ManualSectionType[];
+const MANUAL_QUESTION_TYPES = Object.keys(MANUAL_QUESTION_TYPE_LABELS) as ManualQuestionType[];
+
+function isManualSectionTypeValue(value: unknown): value is ManualSectionType {
+  return typeof value === "string" && MANUAL_SECTION_TYPES.includes(value as ManualSectionType);
+}
+
+function isManualQuestionTypeValue(value: unknown): value is ManualQuestionType {
+  return typeof value === "string" && MANUAL_QUESTION_TYPES.includes(value as ManualQuestionType);
+}
+
+function normalizeLoadedSubsection(
+  rawSubsection: Partial<ManualSubsection> | undefined,
+  paperSubject: PaperSubject,
+  sectionType?: ManualSectionType,
+): ManualSubsection {
+  const rawQuestionType = isManualQuestionTypeValue(rawSubsection?.questionType)
+    ? rawSubsection.questionType
+    : DEFAULT_QUESTION_TYPE;
+  const questionType = paperSubject === "math" && sectionType
+    ? getLockedMathQuestionType(sectionType)
+    : (() => {
+        const allowedQuestionTypes = getAllowedQuestionTypesForSubject(paperSubject);
+        return allowedQuestionTypes.includes(rawQuestionType)
+          ? rawQuestionType
+          : DEFAULT_QUESTION_TYPE;
+      })();
+  const baseSubsection = createSubsection(questionType);
+  const loadedQuestions = (() => {
+    if (!Array.isArray(rawSubsection?.questions)) {
+      return baseSubsection.questions;
+    }
+
+    if (paperSubject === "math" && sectionType === "math-application" && rawQuestionType === "passage-open-ended") {
+      return rawSubsection.questions
+        .filter(isManualPassageOpenEndedQuestion)
+        .map((question) => ({
+          id: question.id,
+          type: "typed-fill-blank" as const,
+          prompt: question.prompt,
+          correctAnswer: question.referenceAnswer,
+        }));
+    }
+
+    if (rawQuestionType === questionType) {
+      return rawSubsection.questions.filter(Boolean) as ManualQuestion[];
+    }
+
+    return baseSubsection.questions;
+  })();
+
+  return {
+    ...baseSubsection,
+    ...rawSubsection,
+    id: typeof rawSubsection?.id === "string" && rawSubsection.id ? rawSubsection.id : baseSubsection.id,
+    title: typeof rawSubsection?.title === "string" ? rawSubsection.title : "",
+    instructions: typeof rawSubsection?.instructions === "string" ? rawSubsection.instructions : "",
+    taskDescription:
+      typeof rawSubsection?.taskDescription === "string" && rawSubsection.taskDescription.trim()
+        ? rawSubsection.taskDescription
+        : undefined,
+    questionType,
+    questions: loadedQuestions.length > 0 || baseSubsection.questions.length === 0
+      ? loadedQuestions
+      : baseSubsection.questions,
+    wordBank: Array.isArray(rawSubsection?.wordBank)
+      ? rawSubsection.wordBank
+      : baseSubsection.wordBank,
+    passageText: typeof rawSubsection?.passageText === "string"
+      ? rawSubsection.passageText
+      : baseSubsection.passageText,
+    matchingDescriptions: Array.isArray(rawSubsection?.matchingDescriptions)
+      ? rawSubsection.matchingDescriptions
+      : baseSubsection.matchingDescriptions,
+    sceneImage: rawSubsection?.sceneImage,
+    audio: rawSubsection?.audio,
+  };
+}
+
+function normalizeLoadedBuilderState(
+  rawBlueprint: Partial<ManualPaperBlueprint> | undefined,
+  paperSubject: PaperSubject,
+) {
+  const sections = Array.isArray(rawBlueprint?.sections) && rawBlueprint.sections.length > 0
+    ? rawBlueprint.sections.map((rawSection) => {
+        const sectionType = isManualSectionTypeValue(rawSection?.sectionType)
+          && getAvailableSectionTypesForSubject(paperSubject).includes(rawSection.sectionType)
+          ? rawSection.sectionType
+          : getDefaultSectionTypeForSubject(paperSubject);
+        const baseSection = createSection(sectionType);
+        const loadedSubsections = Array.isArray(rawSection?.subsections) && rawSection.subsections.length > 0
+          ? rawSection.subsections.map((subsection) => normalizeLoadedSubsection(subsection, paperSubject, sectionType))
+          : baseSection.subsections;
+
+        return {
+          ...baseSection,
+          ...rawSection,
+          id: typeof rawSection?.id === "string" && rawSection.id ? rawSection.id : baseSection.id,
+          sectionType,
+          subsections: loadedSubsections,
+        };
+      })
+    : [createSection(getDefaultSectionTypeForSubject(paperSubject))];
+
+  return {
+    paperSeed:
+      typeof rawBlueprint?.id === "string" && rawBlueprint.id
+        ? rawBlueprint.id
+        : createLocalId(),
+    createdAt:
+      typeof rawBlueprint?.createdAt === "string" && rawBlueprint.createdAt
+        ? rawBlueprint.createdAt
+        : new Date().toISOString(),
+    title: typeof rawBlueprint?.title === "string" ? rawBlueprint.title : "",
+    description: typeof rawBlueprint?.description === "string" ? rawBlueprint.description : "",
+    sections,
+  };
+}
+
+function buildExpandedImageBlockState(sections: ManualSection[]) {
+  return Object.fromEntries(
+    sections.flatMap((section) =>
+      section.subsections
+        .filter((subsection) => Boolean(subsection.sceneImage))
+        .map((subsection) => [subsection.id, true] as const)
+    ),
+  ) as Record<string, boolean>;
 }
 
 function isManualMCQQuestion(question: ManualQuestion): question is ManualMCQQuestion {
@@ -323,6 +913,14 @@ function isManualTypedFillBlankQuestion(question: ManualQuestion): question is M
   return question.type === "typed-fill-blank";
 }
 
+function isManualPictureSpellingQuestion(question: ManualQuestion): question is ManualPictureSpellingQuestion {
+  return question.type === "picture-spelling";
+}
+
+function isManualWordCompletionQuestion(question: ManualQuestion): question is ManualWordCompletionQuestion {
+  return question.type === "word-completion";
+}
+
 function isManualPassageOpenEndedQuestion(question: ManualQuestion): question is ManualPassageOpenEndedQuestion {
   return question.type === "passage-open-ended";
 }
@@ -331,13 +929,53 @@ function isManualWritingQuestion(question: ManualQuestion): question is ManualWr
   return question.type === "writing";
 }
 
+function isManualSpeakingQuestion(question: ManualQuestion): question is ManualSpeakingQuestion {
+  return question.type === "speaking";
+}
+
 function isManualPassageMatchingQuestion(question: ManualQuestion): question is ManualPassageMatchingQuestion {
   return question.type === "passage-matching";
 }
 
+function isManualTrueFalseQuestion(question: ManualQuestion): question is ManualTrueFalseQuestion {
+  return question.type === "true-false";
+}
+
+function isManualHeadingMatchQuestion(question: ManualQuestion): question is ManualHeadingMatchQuestion {
+  return question.type === "heading-match";
+}
+
+function isManualCheckboxQuestion(question: ManualQuestion): question is ManualCheckboxQuestion {
+  return question.type === "checkbox";
+}
+
+function isManualOrderingQuestion(question: ManualQuestion): question is ManualOrderingQuestion {
+  return question.type === "ordering";
+}
+
+function isManualSentenceReorderQuestion(question: ManualQuestion): question is ManualSentenceReorderQuestion {
+  return question.type === "sentence-reorder";
+}
+
+function isManualInlineWordChoiceQuestion(question: ManualQuestion): question is ManualInlineWordChoiceQuestion {
+  return question.type === "inline-word-choice";
+}
+
+function isManualPassageInlineWordChoiceQuestion(question: ManualQuestion): question is ManualPassageInlineWordChoiceQuestion {
+  return question.type === "passage-inline-word-choice";
+}
+
 /** Returns true for question types that use a passage */
 function isPassageSubsectionType(questionType: ManualQuestionType) {
-  return questionType === "passage-fill-blank" || questionType === "passage-mcq" || questionType === "passage-open-ended";
+  return questionType === "passage-fill-blank"
+    || questionType === "passage-mcq"
+    || questionType === "passage-inline-word-choice"
+    || questionType === "passage-open-ended"
+    || questionType === "heading-match";
+}
+
+function getMatchingLabelFactory(questionType: ManualQuestionType) {
+  return questionType === "heading-match" ? getNumberLabel : getOptionLabel;
 }
 
 function buildBlueprint(
@@ -384,6 +1022,20 @@ function buildBlueprint(
           };
         }
 
+        if (subsection.questionType === "picture-spelling") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualPictureSpellingQuestion),
+          };
+        }
+
+        if (subsection.questionType === "word-completion") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualWordCompletionQuestion),
+          };
+        }
+
         if (subsection.questionType === "passage-open-ended") {
           return {
             ...subsection,
@@ -391,10 +1043,39 @@ function buildBlueprint(
           };
         }
 
+        if (subsection.questionType === "passage-inline-word-choice") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualPassageInlineWordChoiceQuestion).map((question) => ({
+              ...question,
+              items: question.items.map((item, itemIndex) => {
+                const options = relabelInlineWordChoiceOptions(item.options);
+                const validCorrectAnswer = options.some((option) => option.label === item.correctAnswer)
+                  ? item.correctAnswer
+                  : options[0]?.label || "A";
+                return {
+                  ...item,
+                  label: getNumberLabel(itemIndex),
+                  options,
+                  correctAnswer: validCorrectAnswer,
+                };
+              }),
+            })),
+          };
+        }
+
         if (subsection.questionType === "writing") {
           return {
             ...subsection,
             questions: subsection.questions.filter(isManualWritingQuestion),
+          };
+        }
+
+        if (subsection.questionType === "speaking") {
+          return {
+            ...subsection,
+            taskDescription: subsection.taskDescription?.trim() || undefined,
+            questions: subsection.questions.filter(isManualSpeakingQuestion),
           };
         }
 
@@ -409,11 +1090,127 @@ function buildBlueprint(
           };
         }
 
+        if (subsection.questionType === "true-false") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualTrueFalseQuestion).map((question) => ({
+              ...question,
+              prompt: "",
+              statements: relabelStatements(question.statements),
+            })),
+          };
+        }
+
+        if (subsection.questionType === "heading-match") {
+          const matchingDescriptions = (subsection.matchingDescriptions ?? []).map((desc, i) => ({
+            ...desc,
+            label: getNumberLabel(i),
+          }));
+          return {
+            ...subsection,
+            matchingDescriptions,
+            questions: subsection.questions.filter(isManualHeadingMatchQuestion).map((question, questionIndex) => ({
+              ...question,
+              prompt: question.prompt || `Paragraph ${getOptionLabel(questionIndex)}`,
+              correctAnswer: matchingDescriptions.some((desc) => desc.label === question.correctAnswer)
+                ? question.correctAnswer
+                : matchingDescriptions[0]?.label || "1",
+            })),
+          };
+        }
+
+        if (subsection.questionType === "checkbox") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualCheckboxQuestion).map((question) => {
+              const options = relabelCheckboxOptions(question.options);
+              const validCorrectAnswers = question.correctAnswers.filter((answer) =>
+                options.some((option) => option.label === answer),
+              );
+              return {
+                ...question,
+                options,
+                correctAnswers: validCorrectAnswers.length ? validCorrectAnswers : options.slice(0, 2).map((option) => option.label),
+                selectionLimit: Math.max(
+                  1,
+                  Math.min(question.selectionLimit ?? (validCorrectAnswers.length || 2), options.length),
+                ),
+              };
+            }),
+          };
+        }
+
+        if (subsection.questionType === "ordering") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualOrderingQuestion).map((question) => ({
+              ...question,
+              items: question.items.map((item, itemIndex) => ({
+                ...item,
+                correctPosition: Math.max(1, Math.min(item.correctPosition || itemIndex + 1, question.items.length)),
+              })),
+            })),
+          };
+        }
+
+        if (subsection.questionType === "sentence-reorder") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualSentenceReorderQuestion).map((question) => ({
+              ...question,
+              prompt: "",
+              items: question.items.map((item, itemIndex) => ({
+                ...item,
+                label: getNumberLabel(itemIndex),
+              })),
+            })),
+          };
+        }
+
+        if (subsection.questionType === "inline-word-choice") {
+          return {
+            ...subsection,
+            questions: subsection.questions.filter(isManualInlineWordChoiceQuestion).map((question) => ({
+              ...question,
+              items: question.items.map((item, itemIndex) => {
+                const options = relabelInlineWordChoiceOptions(item.options);
+                const validCorrectAnswer = options.some((option) => option.label === item.correctAnswer)
+                  ? item.correctAnswer
+                  : options[0]?.label || "A";
+                return {
+                  ...item,
+                  label: getNumberLabel(itemIndex),
+                  options,
+                  correctAnswer: validCorrectAnswer,
+                };
+              }),
+            })),
+          };
+        }
+
         return {
           ...subsection,
           questions: subsection.questions.filter(isManualMCQQuestion).map((question) => ({
-            ...question,
-            options: relabelOptions(question.options),
+            ...(() => {
+              const options = relabelOptions(question.options);
+              const validCorrectAnswers = (question.correctAnswers && question.correctAnswers.length > 0
+                ? question.correctAnswers
+                : [question.correctAnswer]
+              ).filter((answer) => options.some((option) => option.label === answer));
+              const normalizedCorrectAnswers = validCorrectAnswers.length > 0
+                ? validCorrectAnswers
+                : [options[0]?.label || "A"];
+              return {
+                ...question,
+                options,
+                correctAnswer: normalizedCorrectAnswers[0],
+                correctAnswers: normalizedCorrectAnswers,
+                selectionLimit: Math.max(
+                  1,
+                  Math.min(question.selectionLimit ?? normalizedCorrectAnswers.length, options.length),
+                ),
+              };
+            })(),
           })),
         };
       }),
@@ -451,6 +1248,396 @@ function buildPassageFillBlankPreviewPassage(passageText: string) {
 /** Count the number of ___ blanks in a passage */
 function countPassageBlanks(passageText: string): number {
   return (passageText.match(/___/g) || []).length;
+}
+
+function PictureSpellingSubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const questions = subsection.questions.filter(isManualPictureSpellingQuestion);
+
+  return (
+    <div className="space-y-4">
+      {questions.map((question, questionIndex) => {
+        const letters = getPictureSpellingCharacters(question.correctAnswer);
+        return (
+          <div key={question.id} className="rounded-xl border border-white bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 md:w-40">
+                {question.image ? (
+                  <img
+                    src={question.image.previewUrl || question.image.dataUrl}
+                    alt={`Picture spelling ${questionIndex + 1}`}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <span className="px-4 text-center text-xs text-slate-400">Upload an image</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-4">
+                {question.prompt.trim() ? (
+                  <p className="whitespace-pre-wrap text-sm font-medium text-slate-700">
+                    {question.prompt}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {(letters.length > 0 ? letters : Array.from({ length: 5 }, () => "_")).map((_, letterIndex) => (
+                    <span
+                      key={`${question.id}-letter-${letterIndex}`}
+                      className="inline-flex h-11 w-10 items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-sm font-semibold text-slate-500"
+                    >
+                      _
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs font-medium text-emerald-700">
+                  Correct answer: {question.correctAnswer || "(not set)"}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WordCompletionSubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const questions = subsection.questions.filter(isManualWordCompletionQuestion);
+
+  return (
+    <div className="space-y-4">
+      {questions.map((question, questionIndex) => {
+        const tokens = parseWordPattern(question.wordPattern.trim() || "w__d");
+        return (
+          <div key={question.id} className="rounded-xl border border-white bg-white p-5 shadow-sm">
+            <div className="space-y-4">
+              {question.image ? (
+                <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                  <img
+                    src={question.image.previewUrl || question.image.dataUrl}
+                    alt={`Word completion ${questionIndex + 1}`}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              ) : null}
+              {question.prompt.trim() ? (
+                <p className="whitespace-pre-wrap text-sm font-medium text-slate-700">
+                  {`${questionIndex + 1}. ${question.prompt}`}
+                </p>
+              ) : (
+                <p className="text-sm font-medium text-slate-700">{`Question ${questionIndex + 1}`}</p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {tokens.map((token, tokenIndex) => (
+                  token.kind === "blank" ? (
+                    <span
+                      key={`${question.id}-blank-${tokenIndex}`}
+                      className="inline-flex h-11 w-10 items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-sm font-semibold text-slate-500"
+                    >
+                      _
+                    </span>
+                  ) : (
+                    <span
+                      key={`${question.id}-text-${tokenIndex}`}
+                      className={`inline-flex h-11 items-center justify-center px-2 text-base font-semibold ${
+                        /\s/.test(token.value) ? "min-w-[10px]" : "text-slate-800"
+                      }`}
+                    >
+                      {token.value}
+                    </span>
+                  )
+                ))}
+              </div>
+              <p className="text-xs font-medium text-emerald-700">
+                Correct answer: {question.correctAnswer || "(not set)"}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function validateManualPaperBuilder(title: string, sections: ManualSection[]) {
+  if (!title.trim()) {
+    return "Enter a paper name before saving.";
+  }
+
+  if (sections.length === 0) {
+    return "Add at least one part before saving.";
+  }
+
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex];
+    if (section.subsections.length === 0) {
+      return `Part ${sectionIndex + 1} needs at least one question block.`;
+    }
+
+    for (let subsectionIndex = 0; subsectionIndex < section.subsections.length; subsectionIndex += 1) {
+      const subsection = section.subsections[subsectionIndex];
+      const blockLabel = `Part ${sectionIndex + 1} Question ${subsectionIndex + 1}`;
+
+      if (subsection.questions.length === 0) {
+        return `${blockLabel} has no questions yet.`;
+      }
+
+      const wordBank = subsection.wordBank ?? [];
+      const validWordBankIds = new Set(
+        wordBank
+          .filter((item: ManualWordBankItem) => item.word.trim().length > 0)
+          .map((item: ManualWordBankItem) => item.id),
+      );
+
+      if (isWordBankSubsectionType(subsection.questionType)) {
+        if (wordBank.length === 0 || validWordBankIds.size === 0) {
+          return `${blockLabel} needs at least one word bank item.`;
+        }
+      }
+
+      if (
+        subsection.questionType === "passage-fill-blank" ||
+        subsection.questionType === "passage-mcq" ||
+        subsection.questionType === "passage-inline-word-choice"
+      ) {
+        const blankCount = countPassageBlanks(subsection.passageText ?? "");
+        if (!(subsection.passageText ?? "").trim()) {
+          return `${blockLabel} needs passage text.`;
+        }
+        if (blankCount === 0) {
+          return `${blockLabel} needs at least one ___ blank in the passage.`;
+        }
+        if (subsection.questions.length !== blankCount && subsection.questionType !== "passage-inline-word-choice") {
+          return `${blockLabel} has ${blankCount} blanks but ${subsection.questions.length} answer slots.`;
+        }
+      }
+
+      if (
+        subsection.questionType === "passage-open-ended"
+        && section.sectionType !== "math-application"
+        && !(subsection.passageText ?? "").trim()
+      ) {
+        return `${blockLabel} needs passage text above the questions.`;
+      }
+
+      if (subsection.questionType === "passage-matching") {
+        const matchingDescriptions = subsection.matchingDescriptions ?? [];
+        if (matchingDescriptions.length < 2) {
+          return `${blockLabel} needs at least two matching options.`;
+        }
+        for (const description of matchingDescriptions) {
+          if (!description.name.trim() && !description.text.trim()) {
+            return `${blockLabel} has an empty matching option.`;
+          }
+        }
+      }
+
+      for (let questionIndex = 0; questionIndex < subsection.questions.length; questionIndex += 1) {
+        const question = subsection.questions[questionIndex];
+        const questionLabel = `${blockLabel} item ${questionIndex + 1}`;
+
+        if (isManualMCQQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a question prompt.`;
+          }
+          if (question.options.length < 2) {
+            return `${questionLabel} needs at least two options.`;
+          }
+          for (const option of question.options) {
+            if (!option.text.trim() && !option.image) {
+              return `${questionLabel} has an empty option.`;
+            }
+          }
+          const correctAnswers = question.correctAnswers?.length ? question.correctAnswers : [question.correctAnswer];
+          if (correctAnswers.length === 0) {
+            return `${questionLabel} needs at least one correct answer.`;
+          }
+        }
+
+        if (isManualFillBlankQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a sentence.`;
+          }
+          if (!question.prompt.includes("___")) {
+            return `${questionLabel} should use ___ to mark the blank.`;
+          }
+          if (!validWordBankIds.has(question.correctAnswerWordBankId)) {
+            return `${questionLabel} needs a valid word bank answer.`;
+          }
+        }
+
+        if (isManualPassageFillBlankQuestion(question)) {
+          if (!validWordBankIds.has(question.correctAnswerWordBankId)) {
+            return `${questionLabel} needs a valid word bank answer.`;
+          }
+        }
+
+        if (isManualPassageMCQQuestion(question)) {
+          if (question.options.length < 2) {
+            return `${questionLabel} needs at least two options.`;
+          }
+          if (question.options.some((option) => !option.text.trim())) {
+            return `${questionLabel} has an empty option.`;
+          }
+        }
+
+        if (isManualTypedFillBlankQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a sentence.`;
+          }
+          if (section.sectionType !== "math-short-answer" && section.sectionType !== "math-application" && !question.prompt.includes("___")) {
+            return `${questionLabel} should use ___ to mark the blank.`;
+          }
+          if (!question.correctAnswer.trim()) {
+            return `${questionLabel} needs the typed correct answer.`;
+          }
+        }
+
+        if (isManualPictureSpellingQuestion(question)) {
+          if (!question.image) {
+            return `${questionLabel} needs an image.`;
+          }
+          if (!question.correctAnswer.trim()) {
+            return `${questionLabel} needs the correct spelling.`;
+          }
+        }
+
+        if (isManualWordCompletionQuestion(question)) {
+          if (!question.wordPattern.trim()) {
+            return `${questionLabel} needs a partial word pattern.`;
+          }
+          if (!question.wordPattern.includes("_")) {
+            return `${questionLabel} needs at least one _ in the word pattern.`;
+          }
+          if (!question.correctAnswer.trim()) {
+            return `${questionLabel} needs the completed word.`;
+          }
+          const blankCount = getWordPatternBlankCount(question.wordPattern);
+          const normalizedAnswer = normalizeVocabularyAnswer(question.correctAnswer);
+          const normalizedPatternLength = question.wordPattern.replace(/\s+/g, "").replace(/_/g, "").length + blankCount;
+          if (blankCount === 0) {
+            return `${questionLabel} needs at least one blank letter.`;
+          }
+          if (normalizedAnswer.length !== normalizedPatternLength) {
+            return `${questionLabel} pattern and correct answer length do not match.`;
+          }
+        }
+
+        if (isManualPassageOpenEndedQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a question prompt.`;
+          }
+        }
+
+        if (isManualWritingQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a writing prompt.`;
+          }
+        }
+
+        if (isManualSpeakingQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs a speaking prompt.`;
+          }
+        }
+
+        if (isManualPassageMatchingQuestion(question)) {
+          if (!question.prompt.trim()) {
+            return `${questionLabel} needs matching text.`;
+          }
+          const labels = new Set((subsection.matchingDescriptions ?? []).map((item: ManualMatchingDescription) => item.label));
+          if (!labels.has(question.correctAnswer)) {
+            return `${questionLabel} needs a valid matching answer.`;
+          }
+        }
+
+        if (isManualTrueFalseQuestion(question)) {
+          if (question.statements.length === 0) {
+            return `${questionLabel} needs at least one statement.`;
+          }
+          if (question.statements.some((statement) => !statement.statement.trim())) {
+            return `${questionLabel} has an empty statement.`;
+          }
+        }
+
+        if (isManualOrderingQuestion(question)) {
+          if (question.items.length < 2) {
+            return `${questionLabel} needs at least two ordering items.`;
+          }
+          if (question.items.some((item) => !item.text.trim())) {
+            return `${questionLabel} has an empty ordering item.`;
+          }
+        }
+
+        if (isManualSentenceReorderQuestion(question)) {
+          if (question.items.length === 0) {
+            return `${questionLabel} needs at least one sentence item.`;
+          }
+          if (question.items.some((item) => !item.scrambledWords.trim() || !item.correctAnswer.trim())) {
+            return `${questionLabel} needs both scrambled words and a correct sentence.`;
+          }
+        }
+
+        if (isManualInlineWordChoiceQuestion(question)) {
+          if (question.items.length === 0) {
+            return `${questionLabel} needs at least one sentence item.`;
+          }
+          for (const item of question.items) {
+            const sentence = buildInlineWordChoiceSentence(item).trim();
+            if (!sentence) {
+              return `${questionLabel} has an empty sentence.`;
+            }
+            if (!sentence.includes("___")) {
+              return `${questionLabel} should use ___ to mark the clickable blank.`;
+            }
+            if (item.options.length < 2 || item.options.some((option) => !option.text.trim())) {
+              return `${questionLabel} needs at least two filled options for each sentence.`;
+            }
+          }
+        }
+
+        if (isManualPassageInlineWordChoiceQuestion(question)) {
+          if (question.items.length === 0) {
+            return `${questionLabel} needs at least one passage blank.`;
+          }
+          for (const item of question.items) {
+            if (item.options.length < 2 || item.options.some((option) => !option.text.trim())) {
+              return `${questionLabel} needs at least two filled options for each blank.`;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildInlineWordChoiceSentence(item: ManualInlineWordChoiceItem) {
+  if (typeof item.sentenceText === "string") {
+    return item.sentenceText;
+  }
+
+  const before = item.beforeText.trim();
+  const after = item.afterText.trim();
+
+  if (before && after) {
+    return `${before} ___ ${after}`;
+  }
+  if (before) {
+    return before;
+  }
+  if (after) {
+    return after;
+  }
+  return "";
+}
+
+function splitInlineWordChoiceSentence(sentence: string) {
+  const [beforePart = "", ...afterParts] = sentence.split("___");
+  return {
+    sentenceText: sentence,
+    beforeText: beforePart.trim(),
+    afterText: afterParts.join("___").trim(),
+  };
 }
 
 function getCorrectWord(wordBank: ManualWordBankItem[] | undefined, wordBankId: string) {
@@ -613,22 +1800,233 @@ function PassageFillBlankSubsectionPreview({ subsection }: { subsection: ManualS
   );
 }
 
+function PassageInlineWordChoiceSubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const question = useMemo(
+    () => subsection.questions.find(isManualPassageInlineWordChoiceQuestion),
+    [subsection.questions],
+  );
+  const passageText = subsection.passageText ?? "";
+
+  if (!passageText.trim()) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+        Enter the passage text with ___ blanks to preview this question block.
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+        Add a passage question to preview this block.
+      </div>
+    );
+  }
+
+  let blankIndex = 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-emerald-100 bg-white p-4">
+        <div className="space-y-3">
+          {passageText.split('\n').map((paragraph, paragraphIndex) => {
+            if (!paragraph.trim()) {
+              return <div key={`preview-space-${paragraphIndex}`} className="h-3" />;
+            }
+
+            const parts = paragraph.split(/___/g);
+
+            return (
+              <p key={`preview-paragraph-${paragraphIndex}`} className="text-sm leading-8 text-slate-800">
+                {parts.map((part, partIndex) => {
+                  const item = partIndex < parts.length - 1 ? question.items[blankIndex++] : undefined;
+
+                  return (
+                    <span key={`preview-segment-${paragraphIndex}-${partIndex}`}>
+                      {part}
+                      {item ? (
+                        <span className="mx-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-100 px-2 text-[10px] font-bold text-emerald-800">
+                            {item.label}
+                          </span>
+                          {item.options.map((option) => (
+                            <span
+                              key={option.id}
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${
+                                option.label === item.correctAnswer
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                  : "border-slate-200 bg-white text-slate-500"
+                              }`}
+                            >
+                              {option.text || `Option ${option.label}`}
+                            </span>
+                          ))}
+                        </span>
+                      ) : partIndex < parts.length - 1 ? (
+                        <span className="mx-1 inline-flex rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-400">
+                          ___
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PaperIntake() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const utils = trpc.useUtils();
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
   const saveManualPaperMutation = trpc.papers.saveManualPaper.useMutation();
-  const [paperSeed] = useState(() => createLocalId());
-  const [createdAt] = useState(() => new Date().toISOString());
+  const updateManualPaperMutation = trpc.papers.updateManualPaper.useMutation();
+  const requestedSubject = useMemo(() => {
+    const value = new URLSearchParams(search).get("subject");
+    return isPaperSubjectValue(value) ? value : "english";
+  }, [search]);
+  const editPaperId = useMemo(
+    () => new URLSearchParams(search).get("edit")?.trim() || "",
+    [search],
+  );
+  const isEditing = editPaperId.length > 0;
+  const [paperSubject, setPaperSubject] = useState<PaperSubject>(requestedSubject);
+  const draftStorageKey = useMemo(
+    () => getPaperBuilderDraftKey(isEditing ? editPaperId : "", paperSubject),
+    [editPaperId, isEditing, paperSubject],
+  );
+  const [paperSeed, setPaperSeed] = useState(() => createLocalId());
+  const [createdAt, setCreatedAt] = useState(() => new Date().toISOString());
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [sections, setSections] = useState<ManualSection[]>([createSection()]);
-  const [isSaved, setIsSaved] = useState(false);
+  const [sections, setSections] = useState<ManualSection[]>([createSection(getDefaultSectionTypeForSubject(requestedSubject))]);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  const [currentPublished, setCurrentPublished] = useState(false);
+  const [expandedImageBlocks, setExpandedImageBlocks] = useState<Record<string, boolean>>({});
+  const [editingPaperMeta, setEditingPaperMeta] = useState<{ id: number; paperId: string; published: boolean } | null>(null);
+  const [hasHydratedEditState, setHasHydratedEditState] = useState(false);
+  const [hasRestoredLocalDraft, setHasRestoredLocalDraft] = useState(false);
+  const autosavePausedRef = useRef(false);
+  const availableSectionTypes = useMemo(() => getAvailableSectionTypesForSubject(paperSubject), [paperSubject]);
+  const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
+  const isMathPaper = paperSubject === "math";
+  const managerHref = `/paper-manager?subject=${paperSubject}`;
+
+  const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
+    { paperId: editPaperId },
+    {
+      enabled: isEditing,
+      staleTime: 0,
+      retry: false,
+    },
+  );
 
   const blueprint = useMemo(
     () => buildBlueprint(paperSeed, createdAt, title, description, sections),
     [createdAt, description, paperSeed, sections, title],
   );
+
+  useEffect(() => {
+    if (!isEditing) {
+      setPaperSubject(requestedSubject);
+    }
+  }, [isEditing, requestedSubject]);
+
+  useEffect(() => {
+    if (!isEditing || !editPaperQuery.data || hasHydratedEditState) return;
+
+    try {
+      const parsedBlueprint = JSON.parse(editPaperQuery.data.blueprintJson) as Partial<ManualPaperBlueprint>;
+      const loadedSubject = isPaperSubjectValue(editPaperQuery.data.subject)
+        ? editPaperQuery.data.subject
+        : requestedSubject;
+      const normalized = normalizeLoadedBuilderState(parsedBlueprint, loadedSubject);
+      setPaperSubject(loadedSubject);
+      setPaperSeed(normalized.paperSeed);
+      setCreatedAt(normalized.createdAt);
+      setTitle(editPaperQuery.data.title || normalized.title);
+      setDescription(editPaperQuery.data.description || normalized.description);
+      setSections(normalized.sections);
+      setExpandedImageBlocks(buildExpandedImageBlockState(normalized.sections));
+      setEditingPaperMeta({
+        id: editPaperQuery.data.id,
+        paperId: editPaperQuery.data.paperId,
+        published: editPaperQuery.data.published,
+      });
+      setCurrentPublished(editPaperQuery.data.published);
+      setHasHydratedEditState(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load the paper for editing.");
+      navigate(managerHref);
+    }
+  }, [editPaperQuery.data, hasHydratedEditState, isEditing, navigate, requestedSubject]);
+
+  useEffect(() => {
+    if (!editPaperQuery.error) return;
+    toast.error(editPaperQuery.error.message || "Failed to load the paper for editing.");
+    navigate(managerHref);
+  }, [editPaperQuery.error, navigate]);
+
+  useEffect(() => {
+    if (hasRestoredLocalDraft) return;
+    if (isEditing && !hasHydratedEditState) return;
+
+    const draft = readPaperBuilderDraft(draftStorageKey, paperSubject);
+    if (draft) {
+      setPaperSubject(draft.subject);
+      const normalized = normalizeLoadedBuilderState(draft as unknown as Partial<ManualPaperBlueprint>, draft.subject);
+      setPaperSeed(normalized.paperSeed);
+      setCreatedAt(normalized.createdAt);
+      setTitle(normalized.title);
+      setDescription(normalized.description);
+      setSections(normalized.sections);
+      setExpandedImageBlocks(buildExpandedImageBlockState(normalized.sections));
+      toast.success("Recovered your last unsaved draft.");
+    }
+
+    setHasRestoredLocalDraft(true);
+  }, [draftStorageKey, hasHydratedEditState, hasRestoredLocalDraft, isEditing, paperSubject]);
+
+  useEffect(() => {
+    if (!hasRestoredLocalDraft) return;
+    if (isEditing && !hasHydratedEditState) return;
+    if (autosavePausedRef.current) return;
+
+    const timeout = window.setTimeout(() => {
+      writePaperBuilderDraft(draftStorageKey, {
+        version: 1,
+        subject: paperSubject,
+        paperSeed,
+        createdAt,
+        title,
+        description,
+        sections,
+        savedAt: new Date().toISOString(),
+      });
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    createdAt,
+    description,
+    draftStorageKey,
+    hasHydratedEditState,
+    hasRestoredLocalDraft,
+    isEditing,
+    paperSeed,
+    paperSubject,
+    sections,
+    title,
+  ]);
+
+  useEffect(() => {
+    setSaveFeedback(null);
+  }, [title, description, sections]);
 
   const getDurableAssetUrl = (value?: string) => {
     if (!value) return undefined;
@@ -673,6 +2071,15 @@ export default function PaperIntake() {
             if (q.type === "writing" && (q as ManualWritingQuestion).image) {
               return { ...q, image: stripImage((q as ManualWritingQuestion).image) };
             }
+            if (q.type === "speaking" && (q as ManualSpeakingQuestion).image) {
+              return { ...q, image: stripImage((q as ManualSpeakingQuestion).image) };
+            }
+            if (q.type === "picture-spelling" && (q as ManualPictureSpellingQuestion).image) {
+              return { ...q, image: stripImage((q as ManualPictureSpellingQuestion).image) };
+            }
+            if (q.type === "word-completion" && (q as ManualWordCompletionQuestion).image) {
+              return { ...q, image: stripImage((q as ManualWordCompletionQuestion).image) };
+            }
             return q;
           }),
         })),
@@ -708,6 +2115,13 @@ export default function PaperIntake() {
       questions: subsection.questions.map((question) => (
         question.id === questionId ? updater(question) : question
       )),
+    }));
+  };
+
+  const toggleImageBlock = (subsectionId: string, currentValue: boolean) => {
+    setExpandedImageBlocks((prev) => ({
+      ...prev,
+      [subsectionId]: !currentValue,
     }));
   };
 
@@ -766,6 +2180,28 @@ export default function PaperIntake() {
     ));
   };
 
+  const updatePictureSpellingQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPictureSpellingQuestion) => ManualPictureSpellingQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPictureSpellingQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateWordCompletionQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualWordCompletionQuestion) => ManualWordCompletionQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualWordCompletionQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const updatePassageOpenEndedQuestion = (
     sectionId: string,
     subsectionId: string,
@@ -788,6 +2224,17 @@ export default function PaperIntake() {
     ));
   };
 
+  const updateSpeakingQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualSpeakingQuestion) => ManualSpeakingQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualSpeakingQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const updatePassageMatchingQuestion = (
     sectionId: string,
     subsectionId: string,
@@ -799,14 +2246,92 @@ export default function PaperIntake() {
     ));
   };
 
+  const updateTrueFalseQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualTrueFalseQuestion) => ManualTrueFalseQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualTrueFalseQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateHeadingMatchQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualHeadingMatchQuestion) => ManualHeadingMatchQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualHeadingMatchQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateCheckboxQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualCheckboxQuestion) => ManualCheckboxQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualCheckboxQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateOrderingQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualOrderingQuestion) => ManualOrderingQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualOrderingQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateSentenceReorderQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualSentenceReorderQuestion) => ManualSentenceReorderQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualSentenceReorderQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updateInlineWordChoiceQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualInlineWordChoiceQuestion) => ManualInlineWordChoiceQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualInlineWordChoiceQuestion(question) ? updater(question) : question
+    ));
+  };
+
+  const updatePassageInlineWordChoiceQuestion = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    updater: (question: ManualPassageInlineWordChoiceQuestion) => ManualPassageInlineWordChoiceQuestion,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => (
+      isManualPassageInlineWordChoiceQuestion(question) ? updater(question) : question
+    ));
+  };
+
   const addMatchingDescription = (sectionId: string, subsectionId: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const descriptions = subsection.matchingDescriptions ?? [];
+      const labelFactory = getMatchingLabelFactory(subsection.questionType);
       return {
         ...subsection,
         matchingDescriptions: [
           ...descriptions,
-          createMatchingDescription(descriptions.length),
+          createMatchingDescription(descriptions.length, labelFactory),
         ],
       };
     });
@@ -816,23 +2341,355 @@ export default function PaperIntake() {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const descriptions = subsection.matchingDescriptions ?? [];
       if (descriptions.length <= 2) return subsection;
+      const labelFactory = getMatchingLabelFactory(subsection.questionType);
       const nextDescriptions = descriptions
         .filter((d) => d.id !== descriptionId)
-        .map((d, i) => ({ ...d, label: getOptionLabel(i) }));
+        .map((d, i) => ({ ...d, label: labelFactory(i) }));
       // Update any question correctAnswers that referenced the removed label
       const removedLabel = descriptions.find((d) => d.id === descriptionId)?.label || "";
       return {
         ...subsection,
         matchingDescriptions: nextDescriptions,
         questions: subsection.questions.map((q) => {
-          if (!isManualPassageMatchingQuestion(q)) return q;
-          if (q.correctAnswer === removedLabel) {
+          if (!isManualPassageMatchingQuestion(q) && !isManualHeadingMatchQuestion(q)) return q;
+          if (q.correctAnswer === removedLabel || !nextDescriptions.some((desc) => desc.label === q.correctAnswer)) {
             return { ...q, correctAnswer: nextDescriptions[0]?.label || "A" };
           }
           return q;
         }),
       };
     });
+  };
+
+  const addTrueFalseStatement = (sectionId: string, subsectionId: string, questionId: string) => {
+    updateTrueFalseQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      statements: [
+        ...question.statements,
+        createTrueFalseStatement(question.statements.length),
+      ],
+    }));
+  };
+
+  const removeTrueFalseStatement = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    statementId: string,
+  ) => {
+    updateTrueFalseQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.statements.length <= 1) return question;
+      return {
+        ...question,
+        statements: relabelStatements(question.statements.filter((statement) => statement.id !== statementId)),
+      };
+    });
+  };
+
+  const updateTrueFalseStatement = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    statementId: string,
+    updater: (statement: ManualTrueFalseStatement) => ManualTrueFalseStatement,
+  ) => {
+    updateTrueFalseQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      statements: question.statements.map((statement) => (
+        statement.id === statementId ? updater(statement) : statement
+      )),
+    }));
+  };
+
+  const addCheckboxOption = (sectionId: string, subsectionId: string, questionId: string) => {
+    updateCheckboxQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      options: [...question.options, createCheckboxOption(question.options.length)],
+    }));
+  };
+
+  const removeCheckboxOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    optionId: string,
+  ) => {
+    updateCheckboxQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.options.length <= 2) return question;
+      const nextOptions = relabelCheckboxOptions(question.options.filter((option) => option.id !== optionId));
+      const validCorrectAnswers = question.correctAnswers.filter((answer) =>
+        nextOptions.some((option) => option.label === answer),
+      );
+
+      return {
+        ...question,
+        options: nextOptions,
+        correctAnswers: validCorrectAnswers,
+        selectionLimit: Math.max(
+          1,
+          Math.min(question.selectionLimit ?? (validCorrectAnswers.length || 2), nextOptions.length),
+        ),
+      };
+    });
+  };
+
+  const updateCheckboxOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    optionId: string,
+    updater: (option: ManualCheckboxOption) => ManualCheckboxOption,
+  ) => {
+    updateCheckboxQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      options: question.options.map((option) => (
+        option.id === optionId ? updater(option) : option
+      )),
+    }));
+  };
+
+  const addOrderingItem = (sectionId: string, subsectionId: string, questionId: string) => {
+    updateOrderingQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: [...question.items, createOrderingItem(question.items.length)],
+    }));
+  };
+
+  const removeOrderingItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+  ) => {
+    updateOrderingQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.items.length <= 2) return question;
+      const nextItems = question.items.filter((item) => item.id !== itemId);
+      return {
+        ...question,
+        items: nextItems.map((item, itemIndex) => ({
+          ...item,
+          correctPosition: Math.min(item.correctPosition, nextItems.length) || itemIndex + 1,
+        })),
+      };
+    });
+  };
+
+  const updateOrderingItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    updater: (item: ManualOrderingItem) => ManualOrderingItem,
+  ) => {
+    updateOrderingQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => (
+        item.id === itemId ? updater(item) : item
+      )),
+    }));
+  };
+
+  const addSentenceReorderItem = (sectionId: string, subsectionId: string, questionId: string) => {
+    updateSentenceReorderQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: [
+        ...question.items,
+        createSentenceReorderItem(question.items.length),
+      ],
+    }));
+  };
+
+  const removeSentenceReorderItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+  ) => {
+    updateSentenceReorderQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.items.length <= 1) return question;
+      return {
+        ...question,
+        items: question.items
+          .filter((item) => item.id !== itemId)
+          .map((item, itemIndex) => ({
+            ...item,
+            label: getNumberLabel(itemIndex),
+          })),
+      };
+    });
+  };
+
+  const updateSentenceReorderItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    updater: (item: ManualSentenceReorderItem) => ManualSentenceReorderItem,
+  ) => {
+    updateSentenceReorderQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => (
+        item.id === itemId ? updater(item) : item
+      )),
+    }));
+  };
+
+  const addInlineWordChoiceItem = (sectionId: string, subsectionId: string, questionId: string) => {
+    updateInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: [
+        ...question.items,
+        createInlineWordChoiceItem(question.items.length),
+      ],
+    }));
+  };
+
+  const removeInlineWordChoiceItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+  ) => {
+    updateInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => {
+      if (question.items.length <= 1) return question;
+      return {
+        ...question,
+        items: question.items
+          .filter((item) => item.id !== itemId)
+          .map((item, itemIndex) => ({
+            ...item,
+            label: getNumberLabel(itemIndex),
+          })),
+      };
+    });
+  };
+
+  const updateInlineWordChoiceItem = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    updater: (item: ManualInlineWordChoiceItem) => ManualInlineWordChoiceItem,
+  ) => {
+    updateInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => (
+        item.id === itemId ? updater(item) : item
+      )),
+    }));
+  };
+
+  const addPassageInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+  ) => {
+    updatePassageInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => (
+        item.id === itemId
+          ? {
+              ...item,
+              options: [...item.options, createInlineWordChoiceOption(item.options.length)],
+            }
+          : item
+      )),
+    }));
+  };
+
+  const removePassageInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    optionId: string,
+  ) => {
+    updatePassageInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => {
+        if (item.id !== itemId || item.options.length <= 2) return item;
+        const nextOptions = relabelInlineWordChoiceOptions(item.options.filter((option) => option.id !== optionId));
+        const hasCorrect = nextOptions.some((option) => option.label === item.correctAnswer);
+        return {
+          ...item,
+          options: nextOptions,
+          correctAnswer: hasCorrect ? item.correctAnswer : nextOptions[0]?.label || "A",
+        };
+      }),
+    }));
+  };
+
+  const updatePassageInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    optionId: string,
+    updater: (option: ManualInlineWordChoiceOption) => ManualInlineWordChoiceOption,
+  ) => {
+    updatePassageInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      items: question.items.map((item) => (
+        item.id === itemId
+          ? {
+              ...item,
+              options: item.options.map((option) => (
+                option.id === optionId ? updater(option) : option
+              )),
+            }
+          : item
+      )),
+    }));
+  };
+
+  const addInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+  ) => {
+    updateInlineWordChoiceItem(sectionId, subsectionId, questionId, itemId, (item) => ({
+      ...item,
+      options: [...item.options, createInlineWordChoiceOption(item.options.length)],
+    }));
+  };
+
+  const removeInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    optionId: string,
+  ) => {
+    updateInlineWordChoiceItem(sectionId, subsectionId, questionId, itemId, (item) => {
+      if (item.options.length <= 2) return item;
+      const nextOptions = relabelInlineWordChoiceOptions(item.options.filter((option) => option.id !== optionId));
+      const validCorrectAnswer = nextOptions.some((option) => option.label === item.correctAnswer)
+        ? item.correctAnswer
+        : nextOptions[0]?.label || "A";
+      return {
+        ...item,
+        options: nextOptions,
+        correctAnswer: validCorrectAnswer,
+      };
+    });
+  };
+
+  const updateInlineWordChoiceOption = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    itemId: string,
+    optionId: string,
+    updater: (option: ManualInlineWordChoiceOption) => ManualInlineWordChoiceOption,
+  ) => {
+    updateInlineWordChoiceItem(sectionId, subsectionId, questionId, itemId, (item) => ({
+      ...item,
+      options: item.options.map((option) => (
+        option.id === optionId ? updater(option) : option
+      )),
+    }));
   };
 
   const updateMatchingDescription = (
@@ -897,8 +2754,152 @@ export default function PaperIntake() {
     }
   };
 
+  const handleSpeakingImageUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const compressedFile = await compressImage(file, "scene");
+      const fileBase64 = await fileToBase64(compressedFile);
+      const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `speaking-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
+
+      updateSpeakingQuestion(sectionId, subsectionId, questionId, (question) => ({
+        ...question,
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
+      }));
+
+      toast.success("Speaking prompt image updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
+    }
+  };
+
+  const handlePictureSpellingImageUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const compressedFile = await compressImage(file, "scene");
+      const fileBase64 = await fileToBase64(compressedFile);
+      const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `vocabulary-picture-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to local preview when upload is unavailable.
+      }
+
+      updatePictureSpellingQuestion(sectionId, subsectionId, questionId, (question) => ({
+        ...question,
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
+      }));
+
+      toast.success("Vocabulary image updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
+    }
+  };
+
+  const handleWordCompletionImageUpload = async (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      const compressedFile = await compressImage(file, "scene");
+      const fileBase64 = await fileToBase64(compressedFile);
+      const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `vocabulary-completion-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = uploaded.url;
+      } catch {
+        // Fall back to local preview when upload is unavailable.
+      }
+
+      updateWordCompletionQuestion(sectionId, subsectionId, questionId, (question) => ({
+        ...question,
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
+      }));
+
+      toast.success("Word completion image updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
+    }
+  };
+
   const addSection = () => {
-    setSections((prev) => [...prev, createSection()]);
+    setSections((prev) => [...prev, createSection(getDefaultSectionTypeForSubject(paperSubject))]);
   };
 
   const removeSection = (sectionId: string) => {
@@ -908,7 +2909,7 @@ export default function PaperIntake() {
   const addSubsection = (sectionId: string) => {
     updateSection(sectionId, (section) => ({
       ...section,
-      subsections: [...section.subsections, createSubsection()],
+      subsections: [...section.subsections, createSubsection(getDefaultQuestionTypeForSectionType(section.sectionType))],
     }));
   };
 
@@ -928,7 +2929,7 @@ export default function PaperIntake() {
     nextQuestionType: ManualQuestionType,
   ) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
-      if (subsection.questionType === nextQuestionType) {
+      if (subsection.questionType === nextQuestionType || getDisplayedQuestionType(subsection.questionType) === nextQuestionType) {
         return subsection;
       }
 
@@ -977,6 +2978,26 @@ export default function PaperIntake() {
         };
       }
 
+      if (subsection.questionType === "picture-spelling") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualPictureSpellingQuestion),
+            createPictureSpellingQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "word-completion") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualWordCompletionQuestion),
+            createWordCompletionQuestion(),
+          ],
+        };
+      }
+
       if (subsection.questionType === "passage-open-ended") {
         return {
           ...subsection,
@@ -998,12 +3019,82 @@ export default function PaperIntake() {
         };
       }
 
+      if (subsection.questionType === "speaking") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualSpeakingQuestion),
+            createSpeakingQuestion(),
+          ],
+        };
+      }
+
       if (subsection.questionType === "passage-matching") {
         return {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualPassageMatchingQuestion),
             createPassageMatchingQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "true-false") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualTrueFalseQuestion),
+            createTrueFalseQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "heading-match") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualHeadingMatchQuestion),
+            createHeadingMatchQuestion(subsection.questions.filter(isManualHeadingMatchQuestion).length),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "checkbox") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualCheckboxQuestion),
+            createCheckboxQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "ordering") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualOrderingQuestion),
+            createOrderingQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "sentence-reorder") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualSentenceReorderQuestion),
+            createSentenceReorderQuestion(),
+          ],
+        };
+      }
+
+      if (subsection.questionType === "inline-word-choice") {
+        return {
+          ...subsection,
+          questions: [
+            ...subsection.questions.filter(isManualInlineWordChoiceQuestion),
+            createInlineWordChoiceQuestion(),
           ],
         };
       }
@@ -1029,6 +3120,7 @@ export default function PaperIntake() {
     updateMCQQuestion(sectionId, subsectionId, questionId, (question) => ({
       ...question,
       options: [...question.options, createOption(question.options.length)],
+      selectionLimit: Math.max(1, Math.min(question.selectionLimit ?? (question.correctAnswers?.length || 1), question.options.length + 1)),
     }));
   };
 
@@ -1039,12 +3131,23 @@ export default function PaperIntake() {
       }
 
       const nextOptions = relabelOptions(question.options.filter((option) => option.id !== optionId));
-      const hasCorrectAnswer = nextOptions.some((option) => option.label === question.correctAnswer);
+      const nextCorrectAnswers = (question.correctAnswers && question.correctAnswers.length > 0
+        ? question.correctAnswers
+        : [question.correctAnswer]
+      ).filter((answer) => nextOptions.some((option) => option.label === answer));
+      const normalizedCorrectAnswers = nextCorrectAnswers.length > 0
+        ? nextCorrectAnswers
+        : [nextOptions[0]?.label || "A"];
 
       return {
         ...question,
         options: nextOptions,
-        correctAnswer: hasCorrectAnswer ? question.correctAnswer : nextOptions[0]?.label || "A",
+        correctAnswer: normalizedCorrectAnswers[0],
+        correctAnswers: normalizedCorrectAnswers,
+        selectionLimit: Math.max(
+          1,
+          Math.min(question.selectionLimit ?? normalizedCorrectAnswers.length, nextOptions.length),
+        ),
       };
     });
   };
@@ -1200,6 +3303,46 @@ export default function PaperIntake() {
         ...subsection,
         passageText: newPassageText,
         questions: nextQuestions,
+      };
+    });
+  };
+
+  const syncPassageInlineWordChoiceBlanksToQuestions = (sectionId: string, subsectionId: string, newPassageText: string) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const blankCount = countPassageBlanks(newPassageText);
+      const existingQuestion = subsection.questions.find(isManualPassageInlineWordChoiceQuestion);
+      const baseQuestion = existingQuestion ?? createPassageInlineWordChoiceQuestion();
+      const existingItems = baseQuestion.items ?? [];
+
+      let nextItems = existingItems;
+      if (existingItems.length < blankCount) {
+        nextItems = [
+          ...existingItems,
+          ...Array.from({ length: blankCount - existingItems.length }, (_, i) =>
+            createPassageInlineWordChoiceItem(existingItems.length + i),
+          ),
+        ];
+      } else {
+        nextItems = existingItems.slice(0, blankCount);
+      }
+
+      nextItems = nextItems.map((item, index) => ({
+        ...item,
+        label: getNumberLabel(index),
+      }));
+
+      return {
+        ...subsection,
+        passageText: newPassageText,
+        questions: blankCount > 0
+          ? [{
+              ...baseQuestion,
+              items: nextItems,
+            }]
+          : [{
+              ...baseQuestion,
+              items: [],
+            }],
       };
     });
   };
@@ -1363,23 +3506,155 @@ export default function PaperIntake() {
     }
   };
 
+  const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
+
+  const persistPaper = async (published: boolean) => {
+    const validationError = validateManualPaperBuilder(title, sections);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    const preparedBlueprint = prepareBlueprintForSave(blueprint);
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim() || undefined;
+
+    try {
+      if (isEditing) {
+        if (!editingPaperMeta) {
+          throw new Error("The paper is still loading. Please wait a moment and try again.");
+        }
+
+        await updateManualPaperMutation.mutateAsync({
+          id: editingPaperMeta.id,
+          title: trimmedTitle,
+          description: trimmedDescription,
+          subject: paperSubject,
+          published,
+          blueprintJson: JSON.stringify(preparedBlueprint),
+        });
+        await Promise.all([
+          utils.papers.listManualPapers.invalidate(),
+          utils.papers.listAllManualPapers.invalidate(),
+          utils.papers.getManualPaperDetail.invalidate({ paperId: editingPaperMeta.paperId }),
+        ]);
+        autosavePausedRef.current = true;
+        clearPaperBuilderDraft(draftStorageKey);
+        setCurrentPublished(published);
+        setSaveFeedback(published ? "Published paper updated." : "Draft updated.");
+        toast.success(published ? "Paper published successfully." : "Draft saved successfully.");
+        setTimeout(() => navigate(managerHref), 1200);
+        return;
+      }
+
+      const paperId = `manual-${paperSeed}`;
+      await saveManualPaperMutation.mutateAsync({
+        paperId,
+        title: trimmedTitle,
+        description: trimmedDescription,
+        subject: paperSubject,
+        published,
+        blueprintJson: JSON.stringify(preparedBlueprint),
+      });
+      await Promise.all([
+        utils.papers.listManualPapers.invalidate(),
+        utils.papers.listAllManualPapers.invalidate(),
+      ]);
+      autosavePausedRef.current = true;
+      clearPaperBuilderDraft(draftStorageKey);
+      setCurrentPublished(published);
+      setSaveFeedback(published ? "Paper published successfully." : "Draft saved successfully.");
+      toast.success(published ? "Paper published successfully." : "Draft saved successfully.");
+      setTimeout(() => navigate(managerHref), 1200);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save paper. Please try again.");
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    await persistPaper(false);
+  };
+
+  const handlePublishPaper = async () => {
+    await persistPaper(true);
+  };
+
+  const handleSaveAsCopy = async () => {
+    const validationError = validateManualPaperBuilder(title, sections);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    const copyTitle = createCopyTitle(title);
+    const copySeed = createLocalId();
+    const copyCreatedAt = new Date().toISOString();
+    const copyBlueprint = prepareBlueprintForSave(
+      buildBlueprint(copySeed, copyCreatedAt, copyTitle, description, sections),
+    );
+
+    try {
+      await saveManualPaperMutation.mutateAsync({
+        paperId: `manual-${copySeed}`,
+        title: copyTitle,
+        description: description.trim() || undefined,
+        subject: paperSubject,
+        published: false,
+        blueprintJson: JSON.stringify(copyBlueprint),
+      });
+      await Promise.all([
+        utils.papers.listManualPapers.invalidate(),
+        utils.papers.listAllManualPapers.invalidate(),
+      ]);
+      toast.success("Draft copy created.");
+      setTimeout(() => navigate(managerHref), 1200);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create a copy. Please try again.");
+    }
+  };
+
+  if (isEditing && editPaperQuery.isLoading && !hasHydratedEditState) {
+    return (
+      <div className="min-h-screen bg-[#F6F8FB]">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="flex items-center justify-center gap-3 py-10 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading saved paper…
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <Link
-              href="/"
+              href={isEditing ? managerHref : "/"}
               className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Assessments
+              {isEditing ? "Back to Paper Manager" : "Back to Assessments"}
             </Link>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Manual Paper Builder</h1>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
+              {isEditing ? `Edit ${PAPER_SUBJECT_LABELS[paperSubject]} Paper` : `${PAPER_SUBJECT_LABELS[paperSubject]} Paper Builder`}
+            </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Build a paper manually by section, big question, and question type. Multiple-choice, word-bank
-              fill-blank, and passage word-bank blocks all preview in a student-facing layout on the right.
+              {isEditing
+                ? "Update a saved paper. The builder is prefilled with the current content so you can fix mistakes and save changes."
+                : isMathPaper
+                  ? "Build a math paper by part, question block, and multiple-choice items. The right side shows a student-facing preview while you work."
+                  : "Build a paper manually by section, big question, and question type. The right side shows a student-facing preview while you work."}
             </p>
+            {isEditing && editingPaperMeta ? (
+              <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                Editing paper ID: {editingPaperMeta.paperId}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -1392,12 +3667,18 @@ export default function PaperIntake() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                    {PAPER_SUBJECT_LABELS[paperSubject]}
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="paper-title">Paper Name</Label>
                   <Input
                     id="paper-title"
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
-                    placeholder="e.g. PET English Assessment"
+                    placeholder={isMathPaper ? "e.g. Grade 5 Math Practice" : "e.g. PET English Assessment"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1420,7 +3701,9 @@ export default function PaperIntake() {
                     <div>
                       <CardTitle>{`Part ${sectionIndex + 1}`}</CardTitle>
                       <CardDescription>
-                        Choose the section type, then add one or more big questions below.
+                        {isMathPaper
+                          ? "Choose the part type, then add one or more question blocks below."
+                          : "Choose the section type, then add one or more big questions below."}
                       </CardDescription>
                     </div>
                     <Button
@@ -1440,16 +3723,38 @@ export default function PaperIntake() {
                     <select
                       value={section.sectionType}
                       onChange={(event) =>
-                        updateSection(section.id, (currentSection) => ({
-                          ...currentSection,
-                          sectionType: event.target.value as ManualSectionType,
-                        }))
+                        updateSection(section.id, (currentSection) => {
+                          const nextSectionType = event.target.value as ManualSectionType;
+                          if (!isMathPaper) {
+                            return {
+                              ...currentSection,
+                              sectionType: nextSectionType,
+                            };
+                          }
+
+                          const nextQuestionType = getLockedMathQuestionType(nextSectionType);
+                          return {
+                            ...currentSection,
+                            sectionType: nextSectionType,
+                            subsections: currentSection.subsections.map((subsection) => {
+                              const nextSubsection = createSubsection(nextQuestionType);
+                              return {
+                                ...subsection,
+                                questionType: nextQuestionType,
+                                wordBank: nextSubsection.wordBank,
+                                questions: nextSubsection.questions,
+                                passageText: nextSubsection.passageText,
+                                matchingDescriptions: nextSubsection.matchingDescriptions,
+                              };
+                            }),
+                          };
+                        })
                       }
                       className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                     >
-                      {Object.entries(MANUAL_SECTION_TYPE_LABELS).map(([value, label]) => (
+                      {availableSectionTypes.map((value) => (
                         <option key={value} value={value}>
-                          {label}
+                          {MANUAL_SECTION_TYPE_LABELS[value]}
                         </option>
                       ))}
                     </select>
@@ -1458,11 +3763,15 @@ export default function PaperIntake() {
                   <div className="space-y-4">
                     {section.subsections.map((subsection, subsectionIndex) => (
                       <div key={subsection.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        {(() => {
+                          const isImageBlockExpanded = expandedImageBlocks[subsection.id] ?? Boolean(subsection.sceneImage);
+                          return (
+                            <>
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-slate-800">{`Main Question ${subsectionIndex + 1}`}</p>
+                            <p className="text-sm font-semibold text-slate-800">{`Question ${subsectionIndex + 1}`}</p>
                             <p className="text-xs text-slate-500">
-                              Add the title, instructions, and the questions in this block.
+                              Add the instructions and the questions in this block.
                             </p>
                           </div>
                           <Button
@@ -1477,44 +3786,62 @@ export default function PaperIntake() {
                         </div>
 
                         <div className="space-y-4">
-                          <div className="grid gap-4 lg:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label>Main Question Title</Label>
-                              <Input
-                                value={subsection.title}
-                                onChange={(event) =>
-                                  updateSubsection(section.id, subsection.id, (currentSubsection) => ({
-                                    ...currentSubsection,
-                                    title: event.target.value,
-                                  }))
-                                }
-                                placeholder="e.g. Choose the correct word to fill each blank"
-                              />
-                            </div>
+                          <div className="space-y-2">
+                            <Label>Question Type</Label>
+                            {isMathPaper ? (
+                              (() => {
+                                const lockedQuestionType = getLockedMathQuestionType(section.sectionType);
+                                const lockedLabel = MANUAL_QUESTION_TYPE_LABELS[lockedQuestionType];
+                                const helperText = section.sectionType === "math-short-answer"
+                                  ? "Students read the question and type the answer in a small box at the bottom-right."
+                                  : section.sectionType === "math-application"
+                                    ? "Students solve the problem and type the answer in a small box at the bottom-right."
+                                    : "Students choose the correct answer from the listed options.";
 
-                            <div className="space-y-2">
-                              <Label>Question Type</Label>
-                              <select
-                                value={subsection.questionType}
-                                onChange={(event) =>
-                                  changeSubsectionQuestionType(
-                                    section.id,
-                                    subsection.id,
-                                    event.target.value as ManualQuestionType,
-                                  )
-                                }
-                                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                              >
-                                {MANUAL_QUESTION_TYPE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <p className="text-xs text-slate-500">
-                                {MANUAL_QUESTION_TYPE_OPTIONS.find((o) => o.value === subsection.questionType)?.description}
-                              </p>
-                            </div>
+                                return (
+                                  <>
+                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                                      {lockedLabel}
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                      {helperText}
+                                    </p>
+                                  </>
+                                );
+                              })()
+                            ) : (
+                              <>
+                                <select
+                                  value={getDisplayedQuestionType(subsection.questionType)}
+                                  onChange={(event) =>
+                                    changeSubsectionQuestionType(
+                                      section.id,
+                                      subsection.id,
+                                      event.target.value as ManualQuestionType,
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                >
+                                  {questionTypeGroups.map((group) => (
+                                    <optgroup key={group.label} label={group.label}>
+                                      {group.values.map((value) => {
+                                        const option = manualQuestionTypeOptionMap.get(value);
+                                        if (!option) return null;
+
+                                        return (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        );
+                                      })}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-slate-500">
+                                  {manualQuestionTypeOptionMap.get(getDisplayedQuestionType(subsection.questionType))?.description}
+                                </p>
+                              </>
+                            )}
                           </div>
 
                           <div className="space-y-2">
@@ -1533,67 +3860,83 @@ export default function PaperIntake() {
                           </div>
 
                           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                              <div className="space-y-2">
-                                <Label>Question Block Image</Label>
-                                <p className="text-xs text-slate-500">
-                                  Optional. This image will appear above all questions in this big question block.
+                            <button
+                              type="button"
+                              onClick={() => toggleImageBlock(subsection.id, isImageBlockExpanded)}
+                              className="flex w-full items-center justify-between gap-3 text-left"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800">Question Block Image</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {subsection.sceneImage
+                                    ? `${subsection.sceneImage.fileName} · ${formatFileSize(subsection.sceneImage.size)}`
+                                    : "Optional. This image will appear above all questions in this big question block."}
                                 </p>
-                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
-                                  <ImagePlus className="h-4 w-4" />
-                                  {subsection.sceneImage ? "Replace Image" : "Add Image"}
-                                  <input
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp,image/gif"
-                                    className="hidden"
-                                    onChange={(event) =>
-                                      handleSubsectionImageUpload(
-                                        section.id,
-                                        subsection.id,
-                                        event.target.files?.[0],
-                                      )
-                                    }
-                                  />
-                                </label>
-                                {subsection.sceneImage && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
-                                    onClick={() =>
-                                      updateSubsection(section.id, subsection.id, (currentSubsection) => ({
-                                        ...currentSubsection,
-                                        sceneImage: undefined,
-                                      }))
-                                    }
-                                  >
-                                    Remove Image
-                                  </Button>
-                                )}
                               </div>
+                              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                                {isImageBlockExpanded ? "Collapse" : "Expand"}
+                                <ChevronDown className={`h-4 w-4 transition-transform ${isImageBlockExpanded ? "rotate-180" : ""}`} />
+                              </span>
+                            </button>
 
-                              <div className="space-y-2">
-                                <Label>Preview</Label>
-                                <div className="flex min-h-[132px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-2">
-                                  {subsection.sceneImage ? (
-                                    <img
-                                      src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
-                                      alt="Question block preview"
-                                      className="max-h-32 w-full object-contain"
+                            {isImageBlockExpanded && (
+                              <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                                <div className="space-y-2">
+                                  <Label>Question Block Image</Label>
+                                  <p className="text-xs text-slate-500">
+                                    Optional. This image will appear above all questions in this big question block.
+                                  </p>
+                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                    <ImagePlus className="h-4 w-4" />
+                                    {subsection.sceneImage ? "Replace Image" : "Add Image"}
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp,image/gif"
+                                      className="hidden"
+                                      onChange={(event) =>
+                                        handleSubsectionImageUpload(
+                                          section.id,
+                                          subsection.id,
+                                          event.target.files?.[0],
+                                        )
+                                      }
                                     />
-                                  ) : (
-                                    <span className="px-4 text-center text-xs text-slate-400">
-                                      No image uploaded
-                                    </span>
+                                  </label>
+                                  {subsection.sceneImage && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                      onClick={() =>
+                                        updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                          ...currentSubsection,
+                                          sceneImage: undefined,
+                                        }))
+                                      }
+                                    >
+                                      Remove Image
+                                    </Button>
                                   )}
                                 </div>
-                                {subsection.sceneImage && (
-                                  <p className="text-xs text-slate-500">
-                                    {subsection.sceneImage.fileName} · {formatFileSize(subsection.sceneImage.size)}
-                                  </p>
-                                )}
+
+                                <div className="space-y-2">
+                                  <Label>Preview</Label>
+                                  <div className="flex min-h-[108px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-2">
+                                    {subsection.sceneImage ? (
+                                      <img
+                                        src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
+                                        alt="Question block preview"
+                                        className="max-h-24 w-full object-contain"
+                                      />
+                                    ) : (
+                                      <span className="px-3 text-center text-[11px] leading-tight text-slate-400">
+                                        No image uploaded
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
 
                           {/* Audio upload — shown only when section type is listening */}
@@ -1667,22 +4010,13 @@ export default function PaperIntake() {
                           {/* Word Bank editor — shared by fill-blank and passage-fill-blank */}
                           {isWordBankSubsectionType(subsection.questionType) && (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                              <div className="mb-4">
                                 <div>
                                   <p className="text-sm font-semibold text-amber-800">Word Bank</p>
                                   <p className="text-xs text-amber-700/80">
                                     Letters are assigned automatically and shown in preview just like the live paper.
                                   </p>
                                 </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => addWordBankItem(section.id, subsection.id)}
-                                  className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
-                                >
-                                  <Plus className="mr-2 h-4 w-4" />
-                                  Add Word
-                                </Button>
                               </div>
 
                               <div className="grid gap-3 md:grid-cols-2">
@@ -1718,16 +4052,28 @@ export default function PaperIntake() {
                                   </div>
                                 ))}
                               </div>
+
+                              <div className="mt-4 flex justify-end">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => addWordBankItem(section.id, subsection.id)}
+                                  className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add Word
+                                </Button>
+                              </div>
                             </div>
                           )}
 
-                          {/* Matching descriptions editor — for passage-matching */}
-                          {subsection.questionType === "passage-matching" && (
+                          {/* Matching descriptions editor — for matching-style sections */}
+                          {(subsection.questionType === "passage-matching" || subsection.questionType === "heading-match") && (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
                               <div className="mb-3">
-                                <p className="text-sm font-semibold text-amber-800">Descriptions</p>
+                                <p className="text-sm font-semibold text-amber-800">Matching Bank</p>
                                 <p className="text-xs text-amber-700/80">
-                                  Add labeled descriptions (A, B, C...) that students will match to the questions below. Each description has a name/title and a detailed text.
+                                  Add labeled options students will match to each prompt below. You can use them as people/needs options or as heading choices for paragraph matching.
                                 </p>
                               </div>
 
@@ -1747,7 +4093,7 @@ export default function PaperIntake() {
                                               name: event.target.value,
                                             }))
                                           }
-                                          placeholder={`Name / Title (e.g. "Marina")`}
+                                          placeholder='Option title (e.g. "Marina" or "The Benefits of Exercise")'
                                           className="h-8 text-sm font-medium"
                                         />
                                         <Textarea
@@ -1759,7 +4105,7 @@ export default function PaperIntake() {
                                               text: event.target.value,
                                             }))
                                           }
-                                          placeholder="Description text — what makes this option unique..."
+                                          placeholder="Optional note / explanation for this option..."
                                           className="text-sm"
                                         />
                                       </div>
@@ -1785,13 +4131,13 @@ export default function PaperIntake() {
                                 className="mt-3 text-xs"
                               >
                                 <Plus className="mr-1 h-3 w-3" />
-                                Add Description
+                                Add Option
                               </Button>
                             </div>
                           )}
 
                           {/* Passage text editor — for passage-open-ended */}
-                          {subsection.questionType === "passage-open-ended" && (
+                          {subsection.questionType === "passage-open-ended" && section.sectionType !== "math-application" && (
                             <div className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
                               <div className="mb-3">
                                 <p className="text-sm font-semibold text-teal-800">Passage Text</p>
@@ -1811,6 +4157,29 @@ export default function PaperIntake() {
                                 placeholder={`Example:\n\nOnce upon a time, there was a little girl who loved to read. Every day after school, she would go to the library and spend hours reading books about faraway lands and magical creatures...`}
                                 className="font-mono text-sm"
                               />
+                            </div>
+                          )}
+
+                          {subsection.questionType === "passage-inline-word-choice" && (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-emerald-800">Passage Text</p>
+                                <p className="text-xs text-emerald-700/80">
+                                  Type or paste the full passage. Use <code className="rounded bg-emerald-100 px-1 py-0.5 text-emerald-900">___</code> to mark each click-choice blank. Students will click the correct word directly inside the passage.
+                                </p>
+                              </div>
+                              <Textarea
+                                rows={8}
+                                value={subsection.passageText ?? ""}
+                                onChange={(event) =>
+                                  syncPassageInlineWordChoiceBlanksToQuestions(section.id, subsection.id, event.target.value)
+                                }
+                                placeholder={`Example:\n\n___ is my favourite activity because I love being in the water.\nYou’ll find the potatoes in the ___ in the kitchen.`}
+                                className="font-mono text-sm"
+                              />
+                              <p className="mt-2 text-xs text-emerald-700">
+                                {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
+                              </p>
                             </div>
                           )}
 
@@ -1900,7 +4269,13 @@ export default function PaperIntake() {
                                     </div>
 
                                     <div className="grid gap-3 md:grid-cols-3">
-                                      {question.options.map((option) => (
+                                      {question.options.map((option) => {
+                                        const isCorrect = (question.correctAnswers && question.correctAnswers.length > 0
+                                          ? question.correctAnswers
+                                          : [question.correctAnswer]
+                                        ).includes(option.label);
+
+                                        return (
                                         <div key={option.id} className="rounded-xl border border-slate-200 p-4">
                                           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                             <p className="text-sm font-semibold text-slate-700">{`Option ${option.label}`}</p>
@@ -1917,7 +4292,7 @@ export default function PaperIntake() {
                                             </Button>
                                           </div>
 
-                                          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_156px]">
+                                          <div className="space-y-3">
                                             <div className="space-y-2">
                                               <Label>{`Option ${option.label} Text`}</Label>
                                               <Input
@@ -1936,50 +4311,90 @@ export default function PaperIntake() {
                                                 }
                                                 placeholder="Optional text for this option"
                                               />
-                                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
-                                                <ImagePlus className="h-4 w-4" />
-                                                {option.image ? "Replace Image" : "Add Image"}
-                                                <input
-                                                  type="file"
-                                                  accept="image/png,image/jpeg,image/webp,image/gif"
-                                                  className="hidden"
-                                                  onChange={(event) =>
-                                                    handleOptionImageUpload(
-                                                      section.id,
-                                                      subsection.id,
-                                                      question.id,
-                                                      option.id,
-                                                      event.target.files?.[0],
-                                                    )
-                                                  }
-                                                />
-                                              </label>
                                             </div>
 
-                                            <div className="space-y-2">
-                                              <Label>{`Option ${option.label} Preview`}</Label>
-                                              <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-28 sm:w-28">
-                                                {option.image ? (
-                                                  <img
-                                                    src={option.image.previewUrl || option.image.dataUrl}
-                                                    alt={`Option ${option.label}`}
-                                                    className="h-full w-full object-contain"
+                                            <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                                              <input
+                                                type="checkbox"
+                                                checked={isCorrect}
+                                                onChange={(event) =>
+                                                  updateMCQQuestion(section.id, subsection.id, question.id, (currentQuestion) => {
+                                                    const nextCorrectAnswers = event.target.checked
+                                                      ? Array.from(new Set([
+                                                          ...((currentQuestion.correctAnswers && currentQuestion.correctAnswers.length > 0
+                                                            ? currentQuestion.correctAnswers
+                                                            : [currentQuestion.correctAnswer])),
+                                                          option.label,
+                                                        ]))
+                                                      : ((currentQuestion.correctAnswers && currentQuestion.correctAnswers.length > 0
+                                                          ? currentQuestion.correctAnswers
+                                                          : [currentQuestion.correctAnswer])
+                                                        .filter((answer) => answer !== option.label));
+                                                    const normalizedCorrectAnswers = nextCorrectAnswers.length > 0
+                                                      ? nextCorrectAnswers
+                                                      : [currentQuestion.options[0]?.label || "A"];
+
+                                                    return {
+                                                      ...currentQuestion,
+                                                      correctAnswer: normalizedCorrectAnswers[0],
+                                                      correctAnswers: normalizedCorrectAnswers,
+                                                      selectionLimit: Math.max(1, normalizedCorrectAnswers.length),
+                                                    };
+                                                  })
+                                                }
+                                                className="h-4 w-4 rounded border-slate-300 text-[#1E3A5F] focus:ring-[#1E3A5F]"
+                                              />
+                                              Mark as correct
+                                            </label>
+
+                                            <div className="flex flex-wrap items-start gap-3">
+                                              <div className="space-y-2">
+                                                <Label className="text-xs text-slate-500">{`Option ${option.label} Image`}</Label>
+                                                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                                                  {option.image ? (
+                                                    <img
+                                                      src={option.image.previewUrl || option.image.dataUrl}
+                                                      alt={`Option ${option.label}`}
+                                                      className="h-full w-full object-contain"
+                                                    />
+                                                  ) : (
+                                                    <span className="px-2 text-center text-[10px] leading-tight text-slate-400">
+                                                      No image
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              <div className="min-w-[140px] flex-1 space-y-2">
+                                                <Label className="text-xs text-slate-500">Upload</Label>
+                                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                                  <ImagePlus className="h-4 w-4" />
+                                                  {option.image ? "Replace Image" : "Add Image"}
+                                                  <input
+                                                    type="file"
+                                                    accept="image/png,image/jpeg,image/webp,image/gif"
+                                                    className="hidden"
+                                                    onChange={(event) =>
+                                                      handleOptionImageUpload(
+                                                        section.id,
+                                                        subsection.id,
+                                                        question.id,
+                                                        option.id,
+                                                        event.target.files?.[0],
+                                                      )
+                                                    }
                                                   />
-                                                ) : (
-                                                  <span className="px-4 text-center text-xs text-slate-400">
-                                                    No image uploaded
-                                                  </span>
+                                                </label>
+                                                {option.image && (
+                                                  <p className="break-all text-xs text-slate-500">
+                                                    {option.image.fileName} · {formatFileSize(option.image.size)}
+                                                  </p>
                                                 )}
                                               </div>
-                                              {option.image && (
-                                                <p className="text-xs text-slate-500">
-                                                  {option.image.fileName} · {formatFileSize(option.image.size)}
-                                                </p>
-                                              )}
                                             </div>
                                           </div>
                                         </div>
-                                      ))}
+                                      )})}
                                     </div>
 
                                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1992,30 +4407,15 @@ export default function PaperIntake() {
                                         Add Option
                                       </Button>
 
-                                      <div className="min-w-[180px] space-y-2">
-                                        <Label>Correct Answer</Label>
-                                        <select
-                                          value={question.correctAnswer}
-                                          onChange={(event) =>
-                                            updateMCQQuestion(
-                                              section.id,
-                                              subsection.id,
-                                              question.id,
-                                              (currentQuestion) => ({
-                                                ...currentQuestion,
-                                                correctAnswer: event.target.value,
-                                              }),
-                                            )
-                                          }
-                                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                                        >
-                                          {question.options.map((option, optionIndex) => (
-                                            <option key={option.id} value={getOptionLabel(optionIndex)}>
-                                              {getOptionLabel(optionIndex)}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
+                                      <p className="text-sm text-slate-500">
+                                        Correct option{(question.correctAnswers?.length || 1) > 1 ? "s" : ""}:{" "}
+                                        <span className="font-semibold text-emerald-700">
+                                          {(question.correctAnswers && question.correctAnswers.length > 0
+                                            ? question.correctAnswers
+                                            : [question.correctAnswer]
+                                          ).join(", ")}
+                                        </span>
+                                      </p>
                                     </div>
                                   </div>
                                 </div>
@@ -2118,7 +4518,7 @@ export default function PaperIntake() {
 
                                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
                                     <div className="space-y-2">
-                                      <Label>Sentence / Prompt</Label>
+                                      <Label>{section.sectionType === "math-short-answer" || section.sectionType === "math-application" ? "Question Prompt" : "Sentence / Prompt"}</Label>
                                       <Textarea
                                         rows={3}
                                         value={question.prompt}
@@ -2133,10 +4533,16 @@ export default function PaperIntake() {
                                             }),
                                           )
                                         }
-                                        placeholder="Type the sentence and use ___ where the blank should appear."
+                                        placeholder={
+                                          section.sectionType === "math-short-answer" || section.sectionType === "math-application"
+                                            ? "Type the math question students should answer."
+                                            : "Type the sentence and use ___ where the blank should appear."
+                                        }
                                       />
                                       <p className="text-xs text-slate-500">
-                                        Example: The capital of France is ___.
+                                        {section.sectionType === "math-short-answer" || section.sectionType === "math-application"
+                                          ? "Students will answer in a small box shown at the lower-right of the question card."
+                                          : "Example: The capital of France is ___."}
                                       </p>
                                     </div>
 
@@ -2159,6 +4565,231 @@ export default function PaperIntake() {
                                       />
                                       <p className="text-xs text-slate-500">
                                         The answer students should type in the blank.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "picture-spelling" &&
+                              subsection.questions.filter(isManualPictureSpellingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Question type: Picture Spelling</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+                                    <div className="space-y-3">
+                                      <Label>Picture</Label>
+                                      <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                        {question.image ? (
+                                          <img
+                                            src={question.image.previewUrl || question.image.dataUrl}
+                                            alt="Picture spelling prompt"
+                                            className="h-full max-h-[160px] w-full object-contain"
+                                          />
+                                        ) : (
+                                          <span className="px-4 text-center text-xs text-slate-400">No image uploaded</span>
+                                        )}
+                                      </div>
+                                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                        <ImagePlus className="h-4 w-4" />
+                                        {question.image ? "Replace Image" : "Upload Image"}
+                                        <input
+                                          type="file"
+                                          accept="image/png,image/jpeg,image/webp,image/gif"
+                                          className="hidden"
+                                          onChange={(event) =>
+                                            handlePictureSpellingImageUpload(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              event.target.files?.[0],
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                      {question.image && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                          onClick={() =>
+                                            updatePictureSpellingQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              image: undefined,
+                                            }))
+                                          }
+                                        >
+                                          Remove Image
+                                        </Button>
+                                      )}
+                                    </div>
+
+                                    <div className="space-y-4">
+                                      <div className="space-y-2">
+                                        <Label>Prompt <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                        <Textarea
+                                          rows={2}
+                                          value={question.prompt}
+                                          onChange={(event) =>
+                                            updatePictureSpellingQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="Optional clue or instruction for this word."
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label>Correct Word</Label>
+                                        <Input
+                                          value={question.correctAnswer}
+                                          onChange={(event) =>
+                                            updatePictureSpellingQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              correctAnswer: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. butterfly"
+                                        />
+                                        <p className="text-xs text-slate-500">
+                                          Students will spell this word one letter per box.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "word-completion" &&
+                              subsection.questions.filter(isManualWordCompletionQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Question type: Word Completion</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_220px]">
+                                    <div className="space-y-3">
+                                      <Label>Picture <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                      <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                        {question.image ? (
+                                          <img
+                                            src={question.image.previewUrl || question.image.dataUrl}
+                                            alt="Word completion prompt"
+                                            className="h-full max-h-[160px] w-full object-contain"
+                                          />
+                                        ) : (
+                                          <span className="px-4 text-center text-xs text-slate-400">No image uploaded</span>
+                                        )}
+                                      </div>
+                                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1E3A5F]/30 bg-white px-3 py-2 text-sm font-medium text-[#1E3A5F] transition-colors hover:border-[#D4A84B] hover:text-[#A97C21]">
+                                        <ImagePlus className="h-4 w-4" />
+                                        {question.image ? "Replace Image" : "Upload Image"}
+                                        <input
+                                          type="file"
+                                          accept="image/png,image/jpeg,image/webp,image/gif"
+                                          className="hidden"
+                                          onChange={(event) =>
+                                            handleWordCompletionImageUpload(
+                                              section.id,
+                                              subsection.id,
+                                              question.id,
+                                              event.target.files?.[0],
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                      {question.image && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                          onClick={() =>
+                                            updateWordCompletionQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              image: undefined,
+                                            }))
+                                          }
+                                        >
+                                          Remove Image
+                                        </Button>
+                                      )}
+                                    </div>
+
+                                    <div className="space-y-4">
+                                      <div className="space-y-2">
+                                        <Label>Prompt <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                        <Textarea
+                                          rows={2}
+                                          value={question.prompt}
+                                          onChange={(event) =>
+                                            updateWordCompletionQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="Optional clue or instruction for this word."
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label>Word Pattern</Label>
+                                        <Input
+                                          value={question.wordPattern}
+                                          onChange={(event) =>
+                                            updateWordCompletionQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              wordPattern: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. b__k or b _ _ k"
+                                        />
+                                        <p className="text-xs text-slate-500">
+                                          Use _ for each missing letter students need to fill.
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Correct Word</Label>
+                                      <Input
+                                        value={question.correctAnswer}
+                                        onChange={(event) =>
+                                          updateWordCompletionQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            correctAnswer: event.target.value,
+                                          }))
+                                        }
+                                        placeholder="e.g. book"
+                                      />
+                                      <p className="text-xs text-slate-500">
+                                        Enter the full completed word.
                                       </p>
                                     </div>
                                   </div>
@@ -2235,8 +4866,8 @@ export default function PaperIntake() {
                                 <div key={question.id} className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                      <p className="text-sm font-semibold text-amber-800">{`Person ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Describe the person and their criteria — students match to the best description above.</p>
+                                      <p className="text-sm font-semibold text-amber-800">{`Match Prompt ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Add a prompt students will match to the best option above.</p>
                                     </div>
                                     <Button
                                       type="button"
@@ -2251,7 +4882,7 @@ export default function PaperIntake() {
 
                                   <div className="space-y-4">
                                     <div className="space-y-2">
-                                      <Label>Person Description</Label>
+                                      <Label>Match Prompt</Label>
                                       <Textarea
                                         rows={2}
                                         value={question.prompt}
@@ -2266,12 +4897,12 @@ export default function PaperIntake() {
                                             }),
                                           )
                                         }
-                                        placeholder="e.g. Thomas and his sister enjoy eating French food. They want a restaurant that also has live music."
+                                        placeholder="e.g. Thomas and his sister enjoy eating French food. They want a restaurant that also has live music. / Paragraph A"
                                       />
                                     </div>
 
                                     <div className="min-w-[180px] space-y-1">
-                                      <Label className="text-xs">Correct Match</Label>
+                                      <Label className="text-xs">Correct Option</Label>
                                       <select
                                         value={question.correctAnswer}
                                         onChange={(event) =>
@@ -2288,6 +4919,690 @@ export default function PaperIntake() {
                                           </option>
                                         ))}
                                       </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "true-false" &&
+                              subsection.questions.filter(isManualTrueFalseQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-cyan-800">{`Statement Block ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students will choose True, False, or Not Given for each statement below.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(question.requiresReason)}
+                                        onChange={(event) =>
+                                          updateTrueFalseQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            requiresReason: event.target.checked,
+                                          }))
+                                        }
+                                      />
+                                      Require students to explain each answer
+                                    </label>
+
+                                    <div className="space-y-3">
+                                      {question.statements.map((statement) => (
+                                        <div key={statement.id} className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-4">
+                                          <div className="mb-3 flex items-center justify-between gap-3">
+                                            <p className="text-sm font-semibold text-cyan-800">{`Statement ${statement.label}`}</p>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => removeTrueFalseStatement(section.id, subsection.id, question.id, statement.id)}
+                                              className="text-slate-500 hover:text-red-500"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+
+                                          <div className="space-y-3">
+                                            <Textarea
+                                              rows={2}
+                                              value={statement.statement}
+                                              onChange={(event) =>
+                                                updateTrueFalseStatement(section.id, subsection.id, question.id, statement.id, (currentStatement) => ({
+                                                  ...currentStatement,
+                                                  statement: event.target.value,
+                                                }))
+                                              }
+                                              placeholder="Type the statement students will judge."
+                                            />
+
+                                            <div className="grid gap-4 sm:grid-cols-[180px_minmax(0,1fr)]">
+                                              <div className="space-y-2">
+                                                <Label>Correct Answer</Label>
+                                                <select
+                                                  value={statement.correctAnswer}
+                                                  onChange={(event) =>
+                                                    updateTrueFalseStatement(section.id, subsection.id, question.id, statement.id, (currentStatement) => ({
+                                                      ...currentStatement,
+                                                      correctAnswer: event.target.value as ManualTruthValue,
+                                                    }))
+                                                  }
+                                                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                                >
+                                                  <option value="true">True</option>
+                                                  <option value="false">False</option>
+                                                  <option value="not-given">Not Given</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="space-y-2">
+                                                <Label>Explanation <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                                <Textarea
+                                                  rows={2}
+                                                  value={statement.explanation ?? ""}
+                                                  onChange={(event) =>
+                                                    updateTrueFalseStatement(section.id, subsection.id, question.id, statement.id, (currentStatement) => ({
+                                                      ...currentStatement,
+                                                      explanation: event.target.value || undefined,
+                                                    }))
+                                                  }
+                                                  placeholder="Reference explanation or marking note."
+                                                />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => addTrueFalseStatement(section.id, subsection.id, question.id)}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Statement
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "heading-match" &&
+                              subsection.questions.filter(isManualHeadingMatchQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-indigo-800">{`Paragraph Match ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students will choose the best heading from the heading bank above.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                                    <div className="space-y-2">
+                                      <Label>Paragraph / Match Prompt</Label>
+                                      <Textarea
+                                        rows={2}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateHeadingMatchQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            prompt: event.target.value,
+                                          }))
+                                        }
+                                        placeholder="e.g. Paragraph A / Match heading for paragraph 1"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Correct Heading</Label>
+                                      <select
+                                        value={question.correctAnswer}
+                                        onChange={(event) =>
+                                          updateHeadingMatchQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            correctAnswer: event.target.value,
+                                          }))
+                                        }
+                                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                      >
+                                        {(subsection.matchingDescriptions ?? []).map((desc) => (
+                                          <option key={desc.id} value={desc.label}>
+                                            {desc.label}. {desc.name || desc.text || "Untitled heading"}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "checkbox" &&
+                              subsection.questions.filter(isManualCheckboxQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-emerald-800">{`Checkbox Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students can select multiple correct options.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                                      <div className="space-y-2">
+                                        <Label>Question Prompt</Label>
+                                        <Textarea
+                                          rows={2}
+                                          value={question.prompt}
+                                          onChange={(event) =>
+                                            updateCheckboxQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. Choose the two statements that are correct."
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label>Selection Limit</Label>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          max={question.options.length}
+                                          value={question.selectionLimit ?? ""}
+                                          onChange={(event) =>
+                                            updateCheckboxQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              selectionLimit: event.target.value
+                                                ? Math.max(1, Math.min(Number(event.target.value), currentQuestion.options.length))
+                                                : undefined,
+                                            }))
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      {question.options.map((option) => {
+                                        const isCorrect = question.correctAnswers.includes(option.label);
+                                        return (
+                                          <div key={option.id} className="rounded-xl border border-slate-200 p-4">
+                                            <div className="mb-3 flex items-center justify-between gap-3">
+                                              <p className="text-sm font-semibold text-slate-700">{`Option ${option.label}`}</p>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeCheckboxOption(section.id, subsection.id, question.id, option.id)}
+                                                className="text-slate-500 hover:text-red-500"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                            <div className="space-y-3">
+                                              <Input
+                                                value={option.text}
+                                                onChange={(event) =>
+                                                  updateCheckboxOption(section.id, subsection.id, question.id, option.id, (currentOption) => ({
+                                                    ...currentOption,
+                                                    text: event.target.value,
+                                                  }))
+                                                }
+                                                placeholder={`Type option ${option.label}`}
+                                              />
+                                              <label className="flex items-center gap-2 text-sm text-slate-600">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isCorrect}
+                                                  onChange={(event) =>
+                                                    updateCheckboxQuestion(section.id, subsection.id, question.id, (currentQuestion) => {
+                                                      const nextCorrectAnswers = event.target.checked
+                                                        ? Array.from(new Set([...currentQuestion.correctAnswers, option.label]))
+                                                        : currentQuestion.correctAnswers.filter((answer) => answer !== option.label);
+                                                      return {
+                                                        ...currentQuestion,
+                                                        correctAnswers: nextCorrectAnswers,
+                                                        selectionLimit: Math.max(
+                                                          currentQuestion.selectionLimit ?? 2,
+                                                          nextCorrectAnswers.length,
+                                                        ),
+                                                      };
+                                                    })
+                                                  }
+                                                />
+                                                Mark as correct
+                                              </label>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => addCheckboxOption(section.id, subsection.id, question.id)}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Option
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "ordering" &&
+                              subsection.questions.filter(isManualOrderingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-fuchsia-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-fuchsia-800">{`Ordering Question ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students will arrange these items into the correct sequence.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Question Prompt</Label>
+                                      <Textarea
+                                        rows={2}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateOrderingQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                            ...currentQuestion,
+                                            prompt: event.target.value,
+                                          }))
+                                        }
+                                        placeholder="e.g. Put the events in the correct order."
+                                      />
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      {question.items.map((item) => (
+                                        <div key={item.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_140px_auto]">
+                                          <Input
+                                            value={item.text}
+                                            onChange={(event) =>
+                                              updateOrderingItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                ...currentItem,
+                                                text: event.target.value,
+                                              }))
+                                            }
+                                            placeholder="Type the event / step"
+                                          />
+                                          <select
+                                            value={String(item.correctPosition)}
+                                            onChange={(event) =>
+                                              updateOrderingItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                ...currentItem,
+                                                correctPosition: Number(event.target.value),
+                                              }))
+                                            }
+                                            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                          >
+                                            {question.items.map((_, itemIndex) => (
+                                              <option key={itemIndex} value={itemIndex + 1}>
+                                                Position {itemIndex + 1}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removeOrderingItem(section.id, subsection.id, question.id, item.id)}
+                                            className="text-slate-500 hover:text-red-500"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => addOrderingItem(section.id, subsection.id, question.id)}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Item
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "sentence-reorder" &&
+                              subsection.questions.filter(isManualSentenceReorderQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-lime-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-lime-800">{`Sentence Reordering ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students rewrite each set of scrambled words as a correct sentence.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-3">
+                                      {question.items.map((item) => (
+                                        <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                          <div className="mb-3 flex items-center justify-between gap-3">
+                                            <p className="text-sm font-semibold text-slate-700">{`Sentence ${item.label}`}</p>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => removeSentenceReorderItem(section.id, subsection.id, question.id, item.id)}
+                                              className="text-slate-500 hover:text-red-500"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+
+                                          <div className="space-y-3">
+                                            <div className="space-y-2">
+                                              <Label>Scrambled Words</Label>
+                                              <Input
+                                                value={item.scrambledWords}
+                                                onChange={(event) =>
+                                                  updateSentenceReorderItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                    ...currentItem,
+                                                    scrambledWords: event.target.value,
+                                                  }))
+                                                }
+                                                placeholder="e.g. He / walks / to school / usually / with me"
+                                              />
+                                              <p className="text-xs text-slate-500">
+                                                Use `/` between words or chunks, just like the worksheet.
+                                              </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              <Label>Correct Sentence</Label>
+                                              <Input
+                                                value={item.correctAnswer}
+                                                onChange={(event) =>
+                                                  updateSentenceReorderItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                    ...currentItem,
+                                                    correctAnswer: event.target.value,
+                                                  }))
+                                                }
+                                                placeholder="e.g. He usually walks to school with me."
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => addSentenceReorderItem(section.id, subsection.id, question.id)}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Sentence
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "inline-word-choice" &&
+                              subsection.questions.filter(isManualInlineWordChoiceQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-emerald-800">{`Click Correct Word ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students click the correct word directly inside each sentence.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-3">
+                                      {question.items.map((item) => (
+                                        <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                          <div className="mb-3 flex items-center justify-between gap-3">
+                                            <p className="text-sm font-semibold text-slate-700">{`Sentence ${item.label}`}</p>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => removeInlineWordChoiceItem(section.id, subsection.id, question.id, item.id)}
+                                              className="text-slate-500 hover:text-red-500"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+
+                                          <div className="space-y-3">
+                                            <div className="space-y-2">
+                                              <Label>Sentence Text</Label>
+                                              <Input
+                                                value={buildInlineWordChoiceSentence(item)}
+                                                onChange={(event) =>
+                                                  updateInlineWordChoiceItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                    ...currentItem,
+                                                    ...splitInlineWordChoiceSentence(event.target.value),
+                                                  }))
+                                                }
+                                                placeholder="e.g. ___ is my favourite activity because I love being in the water."
+                                              />
+                                              <p className="text-xs text-slate-500">
+                                                Use <code className="rounded bg-slate-100 px-1 py-0.5">___</code> to mark the clickable blank.
+                                              </p>
+                                            </div>
+
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                              {item.options.map((option) => (
+                                                <div key={option.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                                                  <div className="mb-2 flex items-center justify-between gap-2">
+                                                    <Label>{`Option ${option.label}`}</Label>
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      onClick={() => removeInlineWordChoiceOption(section.id, subsection.id, question.id, item.id, option.id)}
+                                                      className="h-8 w-8 text-slate-500 hover:text-red-500"
+                                                    >
+                                                      <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                  </div>
+                                                  <Input
+                                                    value={option.text}
+                                                    onChange={(event) =>
+                                                      updateInlineWordChoiceOption(section.id, subsection.id, question.id, item.id, option.id, (currentOption) => ({
+                                                        ...currentOption,
+                                                        text: event.target.value,
+                                                      }))
+                                                    }
+                                                    placeholder={`Type option ${option.label}`}
+                                                  />
+                                                </div>
+                                              ))}
+                                            </div>
+
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              onClick={() => addInlineWordChoiceOption(section.id, subsection.id, question.id, item.id)}
+                                            >
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Add Option
+                                            </Button>
+
+                                            <div className="space-y-2">
+                                              <Label>Correct Answer</Label>
+                                              <select
+                                                value={item.correctAnswer}
+                                                onChange={(event) =>
+                                                  updateInlineWordChoiceItem(section.id, subsection.id, question.id, item.id, (currentItem) => ({
+                                                    ...currentItem,
+                                                    correctAnswer: event.target.value,
+                                                  }))
+                                                }
+                                                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                              >
+                                                {item.options.map((option) => (
+                                                  <option key={option.id} value={option.label}>
+                                                    {option.label}: {option.text || `Option ${option.label}`}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => addInlineWordChoiceItem(section.id, subsection.id, question.id)}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Sentence
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "passage-inline-word-choice" &&
+                              subsection.questions.filter(isManualPassageInlineWordChoiceQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-emerald-800">{`Passage Click Correct Word ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Each passage blank gets its own set of clickable word choices.</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-3">
+                                      {question.items.map((item) => (
+                                        <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                          <div className="mb-3 flex items-center justify-between gap-3">
+                                            <p className="text-sm font-semibold text-slate-700">{`Blank ${item.label}`}</p>
+                                          </div>
+
+                                          <div className="space-y-3">
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                              {item.options.map((option) => (
+                                                <div key={option.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                                                  <div className="mb-2 flex items-center justify-between gap-2">
+                                                    <Label>{`Option ${option.label}`}</Label>
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      onClick={() => removePassageInlineWordChoiceOption(section.id, subsection.id, question.id, item.id, option.id)}
+                                                      className="h-8 w-8 text-slate-500 hover:text-red-500"
+                                                    >
+                                                      <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                  </div>
+                                                  <Input
+                                                    value={option.text}
+                                                    onChange={(event) =>
+                                                      updatePassageInlineWordChoiceOption(section.id, subsection.id, question.id, item.id, option.id, (currentOption) => ({
+                                                        ...currentOption,
+                                                        text: event.target.value,
+                                                      }))
+                                                    }
+                                                    placeholder={`Type option ${option.label}`}
+                                                  />
+                                                </div>
+                                              ))}
+                                            </div>
+
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              onClick={() => addPassageInlineWordChoiceOption(section.id, subsection.id, question.id, item.id)}
+                                            >
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Add Option
+                                            </Button>
+
+                                            <div className="space-y-2">
+                                              <Label>Correct Answer</Label>
+                                              <select
+                                                value={item.correctAnswer}
+                                                onChange={(event) =>
+                                                  updatePassageInlineWordChoiceQuestion(section.id, subsection.id, question.id, (currentQuestion) => ({
+                                                    ...currentQuestion,
+                                                    items: currentQuestion.items.map((currentItem) => (
+                                                      currentItem.id === item.id
+                                                        ? { ...currentItem, correctAnswer: event.target.value }
+                                                        : currentItem
+                                                    )),
+                                                  }))
+                                                }
+                                                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                                              >
+                                                {item.options.map((option) => (
+                                                  <option key={option.id} value={option.label}>
+                                                    {option.label}: {option.text || `Option ${option.label}`}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
                                 </div>
@@ -2460,6 +5775,133 @@ export default function PaperIntake() {
                                 </div>
                               ))}
 
+                            {/* Speaking questions editor */}
+                            {subsection.questionType === "speaking" && (
+                              <div className="space-y-4">
+                                <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
+                                  <div className="space-y-2">
+                                    <Label>Main Task Description <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                    <Textarea
+                                      rows={3}
+                                      value={subsection.taskDescription ?? ""}
+                                      onChange={(event) =>
+                                        updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                          ...currentSubsection,
+                                          taskDescription: event.target.value || undefined,
+                                        }))
+                                      }
+                                      placeholder="e.g. Look at the situation below. Think about what you want to say before you record your answer."
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                      This is the overall speaking task description shown above all prompts in this big question.
+                                    </p>
+                                  </div>
+                                </div>
+
+                              {subsection.questions.filter(isManualSpeakingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+                                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-sky-800">{`Speaking Task ${questionIndex + 1}`}</p>
+                                      <p className="text-xs text-slate-500">Students will see the prompt, review the optional image, and record their answer.</p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeQuestion(section.id, subsection.id, question.id)}
+                                      className="text-slate-500 hover:text-red-500"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Speaking Prompt</Label>
+                                      <Textarea
+                                        rows={4}
+                                        value={question.prompt}
+                                        onChange={(event) =>
+                                          updateSpeakingQuestion(
+                                            section.id,
+                                            subsection.id,
+                                            question.id,
+                                            (currentQuestion) => ({
+                                              ...currentQuestion,
+                                              prompt: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="e.g. Look at the picture and describe what the people are doing. Then say whether you would enjoy this activity."
+                                      />
+                                    </div>
+
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                                        <div className="space-y-2">
+                                          <Label>Prompt Image <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                          <p className="text-xs text-slate-500">
+                                            Upload a picture students should look at before they record their answer.
+                                          </p>
+                                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-sky-300/60 bg-white px-3 py-2 text-sm font-medium text-sky-700 transition-colors hover:border-sky-400 hover:text-sky-800">
+                                            <ImagePlus className="h-4 w-4" />
+                                            {question.image ? "Replace Image" : "Add Image"}
+                                            <input
+                                              type="file"
+                                              accept="image/png,image/jpeg,image/webp,image/gif"
+                                              className="hidden"
+                                              onChange={(event) =>
+                                                handleSpeakingImageUpload(
+                                                  section.id,
+                                                  subsection.id,
+                                                  question.id,
+                                                  event.target.files?.[0],
+                                                )
+                                              }
+                                            />
+                                          </label>
+                                          {question.image && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                              onClick={() =>
+                                                updateSpeakingQuestion(section.id, subsection.id, question.id, (q) => ({
+                                                  ...q,
+                                                  image: undefined,
+                                                }))
+                                              }
+                                            >
+                                              Remove Image
+                                            </Button>
+                                          )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          <Label>Preview</Label>
+                                          <div className="flex min-h-[100px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white p-2">
+                                            {question.image ? (
+                                              <img
+                                                src={question.image.previewUrl || question.image.dataUrl}
+                                                alt="Speaking prompt"
+                                                className="max-h-28 w-full object-contain"
+                                              />
+                                            ) : (
+                                              <span className="px-4 text-center text-xs text-slate-400">
+                                                No image
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              </div>
+                            )}
+
                             {/* Passage MCQ — per-blank options editor */}
                             {subsection.questionType === "passage-mcq" && (() => {
                               const passageMCQQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
@@ -2600,21 +6042,44 @@ export default function PaperIntake() {
                             })()}
                           </div>
 
-                          {/* Add question/blank button — not shown for passage-fill-blank and passage-mcq (blanks auto-sync from passage) */}
-                          {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq") && (
+                          {/* Add question/blank button — not shown for passage-based auto-synced types */}
+                          {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq" && subsection.questionType !== "passage-inline-word-choice") && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
-                              {subsection.questionType === "fill-blank" ? "Add Blank" : subsection.questionType === "writing" ? "Add Writing Task" : subsection.questionType === "passage-matching" ? "Add Person" : "Add Question"}
+                              {subsection.questionType === "fill-blank"
+                                ? "Add Blank"
+                                : subsection.questionType === "writing"
+                                  ? "Add Writing Task"
+                                  : subsection.questionType === "speaking"
+                                    ? "Add Speaking Task"
+                                    : subsection.questionType === "passage-matching"
+                                      ? "Add Match Prompt"
+                                      : subsection.questionType === "sentence-reorder"
+                                        ? "Add Sentence Set"
+                                      : subsection.questionType === "inline-word-choice"
+                                        ? "Add Click-Word Set"
+                                      : subsection.questionType === "heading-match"
+                                        ? "Add Paragraph Match"
+                                      : subsection.questionType === "true-false"
+                                          ? "Add Statement Block"
+                                          : subsection.questionType === "ordering"
+                                            ? "Add Ordering Block"
+                                            : subsection.questionType === "checkbox"
+                                              ? "Add Checkbox Question"
+                                              : "Add Question"}
                             </Button>
                           )}
                         </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
 
                   <Button type="button" variant="outline" onClick={() => addSubsection(section.id)}>
                     <SquarePen className="mr-2 h-4 w-4" />
-                    Add Main Question
+                    Add Question
                   </Button>
                 </CardContent>
               </Card>
@@ -2655,7 +6120,7 @@ export default function PaperIntake() {
                         <div key={subsection.id} className="rounded-xl bg-slate-50 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-slate-800">
-                              {subsection.title || `Main Question ${subsectionIndex + 1}`}
+                              {`Question ${subsectionIndex + 1}`}
                             </p>
                             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                               {MANUAL_QUESTION_TYPE_LABELS[subsection.questionType]}
@@ -2669,7 +6134,7 @@ export default function PaperIntake() {
                             <div className="mt-4 flex justify-center rounded-2xl border border-slate-200 bg-white p-3">
                               <img
                                 src={subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl}
-                                alt={subsection.title || `Main Question ${subsectionIndex + 1}`}
+                                alt={`Question ${subsectionIndex + 1}`}
                                 className="max-h-60 w-full object-contain"
                               />
                             </div>
@@ -2696,29 +6161,53 @@ export default function PaperIntake() {
                                   <p className="text-sm font-medium text-slate-800">
                                     {`${questionIndex + 1}. ${question.prompt || "Question prompt goes here."}`}
                                   </p>
-                                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                                    {question.options.map((option) => (
-                                      <div key={option.id} className="rounded-xl border border-slate-200 p-3">
-                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                          {option.label}
-                                        </p>
-                                        <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-28">
-                                          {option.image ? (
-                                            <img
-                                              src={option.image.previewUrl || option.image.dataUrl}
-                                              alt={`Preview ${option.label}`}
-                                              className="h-full w-full object-contain"
-                                            />
-                                          ) : (
-                                            <span className="px-3 text-center text-xs text-slate-400">No image</span>
-                                          )}
+                                  {question.options.some((option) => option.image) ? (
+                                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                      {question.options.map((option) => (
+                                        <div key={option.id} className="rounded-xl border border-slate-200 p-3">
+                                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            {option.label}
+                                          </p>
+                                          <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-24 sm:w-24">
+                                            {option.image ? (
+                                              <img
+                                                src={option.image.previewUrl || option.image.dataUrl}
+                                                alt={`Preview ${option.label}`}
+                                                className="h-full w-full object-contain"
+                                              />
+                                            ) : (
+                                              <span className="px-2 text-center text-[10px] text-slate-400">No image</span>
+                                            )}
+                                          </div>
+                                          <p className="mt-2 text-xs text-slate-600">
+                                            {option.text || `Option ${option.label}`}
+                                          </p>
                                         </div>
-                                        {option.text && <p className="mt-2 text-xs text-slate-600">{option.text}</p>}
-                                      </div>
-                                    ))}
-                                  </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-3 grid gap-2">
+                                      {question.options.map((option) => (
+                                        <div
+                                          key={option.id}
+                                          className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2"
+                                        >
+                                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                                            {option.label}
+                                          </span>
+                                          <span className="text-sm text-slate-700">
+                                            {option.text || `Option ${option.label}`}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                   <p className="mt-3 text-xs font-medium text-emerald-700">
-                                    Correct answer: {question.correctAnswer}
+                                    Correct answer{(question.correctAnswers?.length || 1) > 1 ? "s" : ""}:{" "}
+                                    {(question.correctAnswers && question.correctAnswers.length > 0
+                                      ? question.correctAnswers
+                                      : [question.correctAnswer]
+                                    ).join(", ")}
                                   </p>
                                 </div>
                               ))}
@@ -2742,29 +6231,52 @@ export default function PaperIntake() {
                             {subsection.questionType === "typed-fill-blank" &&
                               subsection.questions.filter(isManualTypedFillBlankQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-xl border border-white bg-white p-4">
-                                  <p className="text-sm font-medium text-slate-800">
-                                    {`${questionIndex + 1}. `}
-                                    {(() => {
-                                      const prompt = question.prompt.trim() || "Question prompt goes here.";
-                                      if (!prompt.includes("___")) {
-                                        return <>{prompt} <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span></>;
-                                      }
-                                      const parts = prompt.split("___");
-                                      return parts.map((part, partIndex) => (
-                                        <span key={partIndex}>
-                                          {part}
-                                          {partIndex < parts.length - 1 && (
-                                            <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span>
-                                          )}
-                                        </span>
-                                      ));
-                                    })()}
-                                  </p>
+                                  {section.sectionType === "math-short-answer" || section.sectionType === "math-application" ? (
+                                    <div className="min-h-[170px] rounded-2xl border border-emerald-200 bg-emerald-50/30 p-5">
+                                      <p className="text-sm font-medium text-slate-800">
+                                        {`${questionIndex + 1}. `}
+                                        {renderTextWithFractions(
+                                          (question.prompt.trim() || "Question prompt goes here.").replace(/\s*___\s*/g, " ").trim(),
+                                          `math-short-answer-preview-${question.id}`,
+                                        )}
+                                      </p>
+                                      <div className="mt-14 flex justify-end">
+                                        <span className="inline-flex h-12 w-36 rounded-md border-2 border-slate-400 bg-white" />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm font-medium text-slate-800">
+                                      {`${questionIndex + 1}. `}
+                                      {(() => {
+                                        const prompt = question.prompt.trim() || "Question prompt goes here.";
+                                        if (!prompt.includes("___")) {
+                                          return <>{prompt} <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span></>;
+                                        }
+                                        const parts = prompt.split("___");
+                                        return parts.map((part, partIndex) => (
+                                          <span key={partIndex}>
+                                            {part}
+                                            {partIndex < parts.length - 1 && (
+                                              <span className="inline-block min-w-[80px] border-b-2 border-slate-400 align-bottom">&nbsp;</span>
+                                            )}
+                                          </span>
+                                        ));
+                                      })()}
+                                    </p>
+                                  )}
                                   <p className="mt-2 text-xs font-medium text-emerald-700">
                                     Correct answer: {question.correctAnswer || "(not set)"}
                                   </p>
                                 </div>
                               ))}
+
+                            {subsection.questionType === "picture-spelling" && (
+                              <PictureSpellingSubsectionPreview subsection={subsection} />
+                            )}
+
+                            {subsection.questionType === "word-completion" && (
+                              <WordCompletionSubsectionPreview subsection={subsection} />
+                            )}
 
                             {subsection.questionType === "passage-open-ended" && (
                               <div className="space-y-4">
@@ -2775,11 +6287,11 @@ export default function PaperIntake() {
                                       {subsection.passageText}
                                     </p>
                                   </div>
-                                ) : (
+                                ) : section.sectionType !== "math-application" ? (
                                   <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
                                     Add a passage above to preview.
                                   </div>
-                                )}
+                                ) : null}
 
                                 {subsection.questions.filter(isManualPassageOpenEndedQuestion).map((question, questionIndex) => (
                                   <div key={question.id} className="rounded-xl border border-white bg-white p-4">
@@ -2806,7 +6318,7 @@ export default function PaperIntake() {
                                 <div className="space-y-4">
                                   {descriptions.length > 0 ? (
                                     <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
-                                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-amber-700">Descriptions</p>
+                                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-amber-700">Matching Bank</p>
                                       <div className="space-y-3">
                                         {descriptions.map((desc) => (
                                           <div key={desc.id} className="flex gap-3">
@@ -2831,10 +6343,10 @@ export default function PaperIntake() {
                                     <div key={question.id} className="rounded-xl border border-white bg-white p-4">
                                       <div className="flex items-center gap-2 mb-2">
                                         <Link2 className="h-4 w-4 text-amber-600" />
-                                        <p className="text-sm font-semibold text-slate-800">{`Person ${questionIndex + 1}`}</p>
+                                        <p className="text-sm font-semibold text-slate-800">{`Match Prompt ${questionIndex + 1}`}</p>
                                       </div>
                                       <p className="text-sm leading-relaxed text-slate-700">
-                                        {question.prompt || "Person description goes here."}
+                                        {question.prompt || "Match prompt goes here."}
                                       </p>
                                       <div className="mt-3 flex flex-wrap gap-2">
                                         {descriptions.map((desc) => (
@@ -2851,13 +6363,246 @@ export default function PaperIntake() {
                                         ))}
                                       </div>
                                       <p className="mt-2 text-xs font-medium text-emerald-700">
-                                        Correct match: {question.correctAnswer}
+                                        Correct option: {question.correctAnswer}
                                       </p>
                                     </div>
                                   ))}
                                 </div>
                               );
                             })()}
+
+                            {subsection.questionType === "true-false" &&
+                              subsection.questions.filter(isManualTrueFalseQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <div className="mb-3 flex items-center gap-2">
+                                    <SquarePen className="h-4 w-4 text-cyan-600" />
+                                    <p className="text-sm font-semibold text-slate-800">{`Statement Block ${questionIndex + 1}`}</p>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {question.statements.map((statement) => (
+                                      <div key={statement.id} className="rounded-xl border border-cyan-100 bg-cyan-50/40 p-4">
+                                        <p className="text-sm font-medium text-slate-800">
+                                          {statement.label}. {statement.statement || "Statement goes here."}
+                                        </p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                          {["True", "False", "Not Given"].map((choice) => {
+                                            const isCorrect =
+                                              (statement.correctAnswer === "true" && choice === "True")
+                                              || (statement.correctAnswer === "false" && choice === "False")
+                                              || (statement.correctAnswer === "not-given" && choice === "Not Given");
+                                            return (
+                                              <span
+                                                key={choice}
+                                                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                                                  isCorrect
+                                                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                                    : "border-slate-200 bg-white text-slate-500"
+                                                }`}
+                                              >
+                                                {choice}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "heading-match" && (() => {
+                              const descriptions = subsection.matchingDescriptions ?? [];
+                              const headingQuestions = subsection.questions.filter(isManualHeadingMatchQuestion);
+                              return (
+                                <div className="space-y-4">
+                                  {descriptions.length > 0 ? (
+                                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-indigo-700">Heading Bank</p>
+                                      <div className="space-y-3">
+                                        {descriptions.map((desc) => (
+                                          <div key={desc.id} className="flex gap-3">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-200 text-xs font-bold text-indigo-900">
+                                              {desc.label}
+                                            </span>
+                                            <div>
+                                              <p className="text-sm font-semibold text-slate-800">{desc.name || "Untitled heading"}</p>
+                                              {desc.text && (
+                                                <p className="text-sm leading-relaxed text-slate-600">{desc.text}</p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+
+                                  {headingQuestions.map((question, questionIndex) => (
+                                    <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Link2 className="h-4 w-4 text-indigo-600" />
+                                        <p className="text-sm font-semibold text-slate-800">{`Prompt ${questionIndex + 1}`}</p>
+                                      </div>
+                                      <p className="text-sm leading-relaxed text-slate-700">
+                                        {question.prompt || "Paragraph prompt goes here."}
+                                      </p>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {descriptions.map((desc) => (
+                                          <span
+                                            key={desc.id}
+                                            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                                              desc.label === question.correctAnswer
+                                                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                                : "border-slate-200 bg-white text-slate-500"
+                                            }`}
+                                          >
+                                            {desc.label}. {desc.name || "Untitled heading"}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+                            {subsection.questionType === "checkbox" &&
+                              subsection.questions.filter(isManualCheckboxQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {`${questionIndex + 1}. ${question.prompt || "Checkbox question goes here."}`}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    Select up to {question.selectionLimit ?? Math.max(question.correctAnswers.length, 2)} option(s)
+                                  </p>
+                                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    {question.options.map((option) => (
+                                      <div
+                                        key={option.id}
+                                        className={`rounded-xl border px-3 py-2 text-sm ${
+                                          question.correctAnswers.includes(option.label)
+                                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                            : "border-slate-200 bg-white text-slate-600"
+                                        }`}
+                                      >
+                                        {option.label}. {option.text || `Option ${option.label}`}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "ordering" &&
+                              subsection.questions.filter(isManualOrderingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {`${questionIndex + 1}. ${question.prompt || "Ordering prompt goes here."}`}
+                                  </p>
+                                  <div className="mt-3 space-y-2">
+                                    {[...question.items]
+                                      .sort((a, b) => a.correctPosition - b.correctPosition)
+                                      .map((item) => (
+                                        <div key={item.id} className="flex items-center gap-3 rounded-xl border border-fuchsia-100 bg-fuchsia-50/40 px-3 py-2">
+                                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-fuchsia-200 text-xs font-bold text-fuchsia-900">
+                                            {item.correctPosition}
+                                          </span>
+                                          <span className="text-sm text-slate-700">{item.text || "Sequence item goes here."}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "sentence-reorder" &&
+                              subsection.questions.filter(isManualSentenceReorderQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <div className="mt-4 space-y-4">
+                                    {question.items.map((item) => (
+                                      <div key={item.id} className="rounded-xl border border-lime-100 bg-lime-50/30 p-4">
+                                        <p className="text-sm font-medium text-slate-800">
+                                          {item.label}. {item.scrambledWords || "Scrambled words go here."}
+                                        </p>
+                                        <div className="mt-3 rounded-lg border-b-2 border-dotted border-slate-300 pb-2 text-sm text-slate-400">
+                                          {item.correctAnswer || "Student types the correct sentence here."}
+                                        </div>
+                                        {item.correctAnswer && (
+                                          <p className="mt-2 text-xs font-medium text-emerald-700">
+                                            Correct answer: {item.correctAnswer}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "inline-word-choice" &&
+                              subsection.questions.filter(isManualInlineWordChoiceQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <div className="space-y-4">
+                                    {question.items.map((item) => (
+                                      <div key={item.id} className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
+                                        <p className="text-sm leading-relaxed text-slate-800">
+                                          <span className="mr-2 font-semibold text-slate-600">{item.label}</span>
+                                          {(() => {
+                                            const sentenceText = buildInlineWordChoiceSentence(item);
+                                            if (sentenceText.includes("___")) {
+                                              const parts = sentenceText.split(/___/g);
+                                              return parts.map((part, partIndex) => (
+                                                <span key={`${item.id}-${partIndex}`}>
+                                                  {part}
+                                                  {partIndex < parts.length - 1 && (
+                                                    <>
+                                                      {" "}
+                                                      {item.options.map((option) => (
+                                                        <span
+                                                          key={option.id}
+                                                          className={`mx-1 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${
+                                                            option.label === item.correctAnswer
+                                                              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                                              : "border-slate-200 bg-white text-slate-500"
+                                                          }`}
+                                                        >
+                                                          {option.text || `Option ${option.label}`}
+                                                        </span>
+                                                      ))}
+                                                      {" "}
+                                                    </>
+                                                  )}
+                                                </span>
+                                              ));
+                                            }
+
+                                            return (
+                                              <>
+                                                {sentenceText || "Sentence goes here."}{" "}
+                                                {item.options.map((option) => (
+                                                  <span
+                                                    key={option.id}
+                                                    className={`mx-1 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${
+                                                      option.label === item.correctAnswer
+                                                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                                        : "border-slate-200 bg-white text-slate-500"
+                                                    }`}
+                                                  >
+                                                    {option.text || `Option ${option.label}`}
+                                                  </span>
+                                                ))}
+                                              </>
+                                            );
+                                          })()}
+                                        </p>
+                                        <p className="mt-2 text-xs font-medium text-emerald-700">
+                                          Correct answer: {item.options.find((option) => option.label === item.correctAnswer)?.text || item.correctAnswer}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {subsection.questionType === "passage-inline-word-choice" && (
+                              <PassageInlineWordChoiceSubsectionPreview subsection={subsection} />
+                            )}
 
                             {subsection.questionType === "writing" &&
                               subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
@@ -2902,6 +6647,48 @@ export default function PaperIntake() {
                                   )}
                                 </div>
                               ))}
+
+                            {subsection.questionType === "speaking" && (
+                              <div className="space-y-4">
+                              {subsection.taskDescription && (
+                                <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-4">
+                                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700">Main Task Description</p>
+                                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                                    {subsection.taskDescription}
+                                  </p>
+                                </div>
+                              )}
+                              {subsection.questions.filter(isManualSpeakingQuestion).map((question, questionIndex) => (
+                                <div key={question.id} className="rounded-xl border border-white bg-white p-4">
+                                  <div className="mb-3 flex items-center gap-2">
+                                    <Mic className="h-4 w-4 text-sky-600" />
+                                    <p className="text-sm font-semibold text-slate-800">{`Speaking Task ${questionIndex + 1}`}</p>
+                                  </div>
+
+                                  {question.image && (
+                                    <div className="mb-4 flex justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                      <img
+                                        src={question.image.previewUrl || question.image.dataUrl}
+                                        alt="Speaking prompt"
+                                        className="max-h-48 w-full object-contain"
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-4 mb-4">
+                                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700">Speaking Prompt</p>
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                                      {question.prompt || "Speaking prompt goes here."}
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">
+                                    Student recording area
+                                  </div>
+                                </div>
+                              ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -2914,48 +6701,73 @@ export default function PaperIntake() {
         </div>
 
         {/* ── Confirm / Save Button ── */}
-        <div className="mt-8 flex items-center justify-end gap-4">
-          {isSaved ? (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-6 py-3 text-emerald-700">
-              <Check className="h-5 w-5" />
-              <span className="text-sm font-semibold">Paper saved successfully!</span>
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+              {currentPublished ? "Status: Published" : "Status: Draft"}
             </div>
-          ) : (
+            {saveFeedback ? (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+                <Check className="h-4 w-4" />
+                <span className="font-medium">{saveFeedback}</span>
+              </div>
+            ) : (
+              <span className="text-slate-500">Drafts stay hidden until you publish the paper.</span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {isEditing ? (
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                disabled={isPersisting || !editingPaperMeta}
+                onClick={handleSaveAsCopy}
+                className="gap-2 border-slate-200"
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Save as Copy
+              </Button>
+            ) : null}
+
             <Button
+              type="button"
               size="lg"
-              disabled={!title.trim() || sections.every(s => s.subsections.every(sub => sub.questions.length === 0)) || saveManualPaperMutation.isPending}
-              onClick={async () => {
-                try {
-                  const paperId = `manual-${paperSeed}`;
-                  await saveManualPaperMutation.mutateAsync({
-                    paperId,
-                    title: title.trim(),
-                    description: description.trim() || undefined,
-                    blueprintJson: JSON.stringify(prepareBlueprintForSave(blueprint)),
-                  });
-                  await utils.papers.listManualPapers.invalidate();
-                  setIsSaved(true);
-                  toast.success("Paper saved! It will now appear on the home page.");
-                  setTimeout(() => navigate("/"), 1500);
-                } catch (err: any) {
-                  toast.error(err?.message || "Failed to save paper. Please try again.");
-                }
-              }}
+              variant="outline"
+              disabled={
+                !title.trim()
+                || sections.every((s) => s.subsections.every((sub) => sub.questions.length === 0))
+                || isPersisting
+                || (isEditing && !editingPaperMeta)
+              }
+              onClick={handleSaveDraft}
+              className="gap-2 border-slate-200"
+            >
+              {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
+              {isEditing ? "Save Draft Changes" : "Save Draft"}
+            </Button>
+
+            <Button
+              type="button"
+              size="lg"
+              disabled={
+                !title.trim()
+                || sections.every((s) => s.subsections.every((sub) => sub.questions.length === 0))
+                || isPersisting
+                || (isEditing && !editingPaperMeta)
+              }
+              onClick={handlePublishPaper}
               className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
             >
-              {saveManualPaperMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving…
-                </>
+              {isPersisting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <>
-                  <Check className="h-4 w-4" />
-                  Confirm & Save Paper
-                </>
+                <Check className="h-4 w-4" />
               )}
+              {isEditing && currentPublished ? "Update Published Paper" : "Publish Paper"}
             </Button>
-          )}
+          </div>
         </div>
       </div>
     </div>
