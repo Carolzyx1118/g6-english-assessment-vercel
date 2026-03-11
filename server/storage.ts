@@ -6,14 +6,16 @@ import fs from "fs/promises";
 import path from "path";
 import { ENV } from './_core/env';
 import { getForgeConfigStatus } from "./_core/env";
+import { moduleDir } from "./_core/paths";
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
 export const LOCAL_STORAGE_ROUTE = "/local-paper-assets";
+const CURRENT_DIR = moduleDir(import.meta.url);
 export const LOCAL_STORAGE_DIR = isVercelRuntime()
   ? getWritableDataPath("local-paper-assets")
-  : path.resolve(import.meta.dirname, "..", "local-paper-assets");
+  : path.resolve(CURRENT_DIR, "..", "local-paper-assets");
 
 function getStorageConfig(): StorageConfig {
   const baseUrl = ENV.forgeApiUrl;
