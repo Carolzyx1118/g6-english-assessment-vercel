@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import { PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 
 const LOCAL_AUTH_TOKEN_KEY = "local_auth_token";
+const SAFE_AUTH_TOKEN_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 export type LocalUser = {
   id: number;
@@ -34,7 +35,16 @@ export function saveAuthToken(token: string) {
 /** Get the auth token from localStorage */
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem(LOCAL_AUTH_TOKEN_KEY);
+    const raw = localStorage.getItem(LOCAL_AUTH_TOKEN_KEY);
+    if (!raw) return null;
+
+    const token = raw.trim().replace(/^"|"$/g, "");
+    if (!token || !SAFE_AUTH_TOKEN_PATTERN.test(token)) {
+      localStorage.removeItem(LOCAL_AUTH_TOKEN_KEY);
+      return null;
+    }
+
+    return token;
   } catch {
     return null;
   }
