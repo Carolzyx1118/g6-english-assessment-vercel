@@ -10,6 +10,10 @@ import { getAuthToken } from "./hooks/useLocalAuth";
 import "./index.css";
 
 const queryClient = new QueryClient();
+const trpcUrl =
+  typeof window === "undefined"
+    ? "/api/trpc"
+    : new URL("/api/trpc", window.location.origin).toString();
 
 const injectAnalytics = () => {
   if (typeof document === "undefined") return;
@@ -61,7 +65,7 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: trpcUrl,
       transformer: superjson,
       headers() {
         const token = getAuthToken();
