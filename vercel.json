@@ -2,17 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build:vercel",
   "outputDirectory": "public",
-  "routes": [
+  "rewrites": [
     {
-      "handle": "filesystem"
+      "source": "/api/trpc/:trpc*",
+      "destination": "/api/trpc"
     },
     {
-      "src": "/api/trpc/(.+)",
-      "dest": "/api/trpc?trpc=$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/:path*",
+      "destination": "/index.html"
     }
   ]
 }
