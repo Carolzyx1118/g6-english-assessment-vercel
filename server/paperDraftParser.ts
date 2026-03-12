@@ -2,8 +2,8 @@ import { nanoid } from "nanoid";
 import type {
   GeneratePaperDraftInput,
   PaperDraft,
-} from "@shared/paperDraft";
-import { createPaperDraft } from "@shared/paperDraftBuilder";
+} from "../shared/paperDraft";
+import { createPaperDraft } from "../shared/paperDraftBuilder";
 import { preparePaperSources } from "./paperSourceIngest";
 
 export async function buildPaperDraft(input: GeneratePaperDraftInput): Promise<PaperDraft> {

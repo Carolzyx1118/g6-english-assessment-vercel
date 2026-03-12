@@ -2,8 +2,8 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
   PaperDraftSourceFile,
   PaperDraftUploadFile,
-} from "@shared/paperDraft";
-import { normalizeExtractedText } from "@shared/paperDraftBuilder";
+} from "../shared/paperDraft";
+import { normalizeExtractedText } from "../shared/paperDraftBuilder";
 import { storagePut } from "./storage";
 
 export type PreparedPaperSources = {

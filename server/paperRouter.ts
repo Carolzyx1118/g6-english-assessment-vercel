@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { generatePaperDraftInputSchema } from "@shared/paperDraft";
+import { generatePaperDraftInputSchema } from "../shared/paperDraft";
 
 import { router, publicProcedure } from "./_core/trpc";
 import { buildPaperDraft } from "./paperDraftParser";
@@ -13,7 +13,11 @@ import {
   deleteManualPaper,
   updateManualPaper as persistManualPaperUpdate,
 } from "./db";
-import { countBlueprintQuestions, blueprintHasListening, blueprintHasWriting } from "@shared/blueprintToPaper";
+import {
+  countBlueprintQuestions,
+  blueprintHasListening,
+  blueprintHasWriting,
+} from "../shared/blueprintToPaper";
 import { z } from "zod";
 
 export const paperRouter = router({
