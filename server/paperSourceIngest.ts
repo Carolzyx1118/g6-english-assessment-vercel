@@ -1,4 +1,3 @@
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
   PaperDraftSourceFile,
   PaperDraftUploadFile,
@@ -18,6 +17,7 @@ function sanitizeFileName(fileName: string): string {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const document = await getDocument({ data: new Uint8Array(buffer) }).promise;
   const pages: string[] = [];
 
