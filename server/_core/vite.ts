@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express from "express";
 import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
@@ -9,7 +9,10 @@ import { moduleDir } from "./paths";
 
 const CURRENT_DIR = moduleDir(import.meta.url);
 
-export async function setupVite(app: Express, server: Server) {
+export async function setupVite(
+  app: { use: (...args: any[]) => void },
+  server: Server
+) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -24,7 +27,7 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
+  app.use("*", async (req: any, res: any, next: any) => {
     const url = req.originalUrl;
 
     try {
@@ -50,7 +53,7 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
-export function serveStatic(app: Express) {
+export function serveStatic(app: { use: (...args: any[]) => void }) {
   const distPath =
     process.env.NODE_ENV === "development"
       ? path.resolve(CURRENT_DIR, "../..", "dist", "public")
@@ -64,7 +67,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  app.use("*", (_req: any, res: any) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
