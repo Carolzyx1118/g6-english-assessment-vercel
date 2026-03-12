@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createApp } from "../server/_core/app";
 
 let appPromise: Promise<{
   (req: IncomingMessage, res: ServerResponse): unknown;
@@ -24,9 +25,7 @@ function rewriteTrpcPath(req: IncomingMessage) {
 
 async function getApp() {
   if (!appPromise) {
-    appPromise = import("../server/_core/app").then(({ createApp }) =>
-      createApp()
-    ) as Promise<{
+    appPromise = createApp() as Promise<{
       (req: IncomingMessage, res: ServerResponse): unknown;
     }>;
   }
