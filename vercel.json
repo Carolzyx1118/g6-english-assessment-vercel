@@ -4,8 +4,12 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/api/trpc",
+      "destination": "/api/rpc"
+    },
+    {
       "source": "/api/trpc/:trpc*",
-      "destination": "/api/trpc"
+      "destination": "/api/rpc"
     },
     {
       "source": "/:path*",
