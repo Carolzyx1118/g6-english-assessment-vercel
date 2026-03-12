@@ -7,6 +7,10 @@
       "handle": "filesystem"
     },
     {
+      "src": "/api/trpc/(.+)",
+      "dest": "/api/trpc?trpc=$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
