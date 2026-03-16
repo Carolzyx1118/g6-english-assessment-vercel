@@ -1,0 +1,67 @@
+<svg width="1200" height="860" viewBox="0 0 1200 860" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="860" rx="48" fill="#F8FBFF"/>
+  <rect x="86" y="86" width="1028" height="688" rx="36" fill="white"/>
+  <rect x="86" y="86" width="1028" height="688" rx="36" stroke="#D8E6F6" stroke-width="4"/>
+
+  <circle cx="930" cy="230" r="116" fill="#E7F7EF"/>
+  <circle cx="930" cy="230" r="78" fill="#C7ECD7"/>
+  <path d="M930 144L952.335 211.665H1023.5L965.582 253.47L987.917 321.135L930 279.329L872.083 321.135L894.418 253.47L836.5 211.665H907.665L930 144Z" fill="#38B26C"/>
+
+  <rect x="176" y="172" width="318" height="218" rx="26" fill="#F4FAF6"/>
+  <rect x="176" y="172" width="318" height="218" rx="26" stroke="#C9E8D3" stroke-width="4"/>
+  <text x="212" y="242" fill="#1F7A43" font-family="Arial, sans-serif" font-size="48" font-weight="700">1/2</text>
+  <path d="M208 261H292" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
+  <text x="212" y="324" fill="#1F7A43" font-family="Arial, sans-serif" font-size="48" font-weight="700">3/4</text>
+  <path d="M208 342H292" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
+  <text x="332" y="258" fill="#5D7895" font-family="Arial, sans-serif" font-size="40" font-weight="700">+</text>
+  <text x="404" y="258" fill="#D3A63B" font-family="Arial, sans-serif" font-size="40" font-weight="700">8</text>
+  <text x="332" y="340" fill="#5D7895" font-family="Arial, sans-serif" font-size="40" font-weight="700">=</text>
+  <text x="404" y="340" fill="#2D63E2" font-family="Arial, sans-serif" font-size="40" font-weight="700">?</text>
+
+  <g transform="translate(584 170)">
+    <rect width="244" height="344" rx="28" fill="#EDF5FF"/>
+    <rect x="0" y="0" width="244" height="344" rx="28" stroke="#CFE0F7" stroke-width="4"/>
+    <rect x="26" y="28" width="192" height="72" rx="16" fill="white"/>
+    <text x="48" y="75" fill="#284B73" font-family="Arial, sans-serif" font-size="36" font-weight="700">24 ÷ 6</text>
+    <rect x="26" y="126" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <rect x="97" y="126" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <rect x="168" y="126" width="50" height="46" rx="12" fill="#FFDCA6"/>
+    <rect x="26" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <rect x="97" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <rect x="168" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <rect x="26" y="256" width="121" height="46" rx="12" fill="#CFEEDB"/>
+    <rect x="168" y="256" width="50" height="46" rx="12" fill="#DDEAFF"/>
+    <text x="44" y="157" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">7</text>
+    <text x="115" y="157" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">8</text>
+    <text x="183" y="157" fill="#8E6403" font-family="Arial, sans-serif" font-size="22" font-weight="700">÷</text>
+    <text x="42" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">4</text>
+    <text x="113" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">5</text>
+    <text x="183" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">9</text>
+    <text x="58" y="287" fill="#1F7A43" font-family="Arial, sans-serif" font-size="22" font-weight="700">ENTER</text>
+    <text x="183" y="287" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">0</text>
+  </g>
+
+  <g transform="translate(224 456)">
+    <rect width="286" height="194" rx="24" fill="#FFF8E7"/>
+    <rect x="0" y="0" width="286" height="194" rx="24" stroke="#F0D391" stroke-width="4"/>
+    <path d="M44 146L114 56L182 120L242 72" stroke="#D6A63C" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="44" cy="146" r="12" fill="#2D63E2"/>
+    <circle cx="114" cy="56" r="12" fill="#2D63E2"/>
+    <circle cx="182" cy="120" r="12" fill="#2D63E2"/>
+    <circle cx="242" cy="72" r="12" fill="#2D63E2"/>
+    <path d="M46 28V164" stroke="#A9BFD7" stroke-width="4"/>
+    <path d="M30 148H254" stroke="#A9BFD7" stroke-width="4"/>
+  </g>
+
+  <g transform="translate(536 560)">
+    <rect width="384" height="112" rx="26" fill="#F3F8FE"/>
+    <rect x="0" y="0" width="384" height="112" rx="26" stroke="#D5E3F4" stroke-width="4"/>
+    <text x="34" y="48" fill="#2D63E2" font-family="Arial, sans-serif" font-size="36" font-weight="700">x</text>
+    <text x="88" y="48" fill="#1F7A43" font-family="Arial, sans-serif" font-size="36" font-weight="700">y</text>
+    <text x="140" y="48" fill="#D6A63C" font-family="Arial, sans-serif" font-size="36" font-weight="700">π</text>
+    <text x="192" y="48" fill="#5D7895" font-family="Arial, sans-serif" font-size="36" font-weight="700">√</text>
+    <text x="246" y="48" fill="#2D63E2" font-family="Arial, sans-serif" font-size="36" font-weight="700">%</text>
+    <text x="300" y="48" fill="#1F7A43" font-family="Arial, sans-serif" font-size="36" font-weight="700">÷</text>
+    <rect x="34" y="68" width="314" height="12" rx="6" fill="#DFE9F5"/>
+  </g>
+</svg>
