@@ -200,7 +200,7 @@ export default function Register() {
                     className="tracking-wider"
                   />
                   <p className="text-xs text-muted-foreground">
-                    请联系管理员获取邀请码。不同邀请码可限制 English、Math 或 Vocabulary 页面访问权限。
+                    请联系管理员获取邀请码。不同邀请码可对应英语+词汇、数学，或教师全科权限。
                   </p>
                 </div>
               </CardContent>

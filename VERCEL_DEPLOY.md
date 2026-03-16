@@ -16,6 +16,10 @@ Required:
 - `JWT_SECRET`
 - `INVITE_CODE`
 
+Example `INVITE_CODE` value:
+
+- `ENGVOC2026=english+vocabulary,MATH2026=math,TEACHER2026=english+math+vocabulary`
+
 Recommended for production persistence:
 
 - `DATABASE_URL`

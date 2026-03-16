@@ -13,13 +13,15 @@ import {
 
 const SALT_ROUNDS = 10;
 const PAPER_SUBJECTS = ["english", "math", "vocabulary"] as const;
+const DEFAULT_INVITE_CODE_CONFIG =
+  "ENGVOC2026=english+vocabulary,MATH2026=math,TEACHER2026=english+math+vocabulary";
 type PaperSubject = (typeof PAPER_SUBJECTS)[number];
 type InviteAccess = {
   code: string;
   allowedSubjects: PaperSubject[];
 };
 
-// The invite code is read from env. Fallback to a default for development.
+// Invite codes are read from env. Fallback to a sensible development default.
 function normalizeInviteCode(code: string): string {
   return code.trim().toUpperCase();
 }
@@ -60,7 +62,7 @@ function parseStoredInviteAccess(inviteCode: string): InviteAccess | null {
 }
 
 function getInviteAccessList(): InviteAccess[] {
-  const raw = process.env.INVITE_CODE || "PUREONE2025";
+  const raw = process.env.INVITE_CODE || DEFAULT_INVITE_CODE_CONFIG;
   return raw
     .split(",")
     .map((entry) => entry.trim())
