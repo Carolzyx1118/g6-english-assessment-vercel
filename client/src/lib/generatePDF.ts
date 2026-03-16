@@ -5,6 +5,10 @@
  */
 import jsPDF from 'jspdf';
 import { getPaperById, type Paper, type Section, type Question } from '@/data/papers';
+import type {
+  AssessmentReportResult,
+  SpeakingEvaluationResult,
+} from '@shared/assessmentReport';
 
 // ── Type definitions matching the JSON stored in the database ──
 
@@ -37,20 +41,6 @@ type ExplanationResult = {
   explanation_cn: string;
   tip_en: string;
   tip_cn: string;
-};
-
-type ReportResult = {
-  languageLevel: string;
-  summary_en: string;
-  summary_cn: string;
-  strengths_en: string[];
-  strengths_cn: string[];
-  weaknesses_en: string[];
-  weaknesses_cn: string[];
-  recommendations_en: string[];
-  recommendations_cn: string[];
-  timeAnalysis_en: string;
-  timeAnalysis_cn: string;
 };
 
 export interface PDFData {
@@ -137,6 +127,13 @@ function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
+function titleCaseSectionId(sectionId: string) {
+  return sectionId
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function safeParseJSON<T>(json: string | null, fallback: T): T {
@@ -263,6 +260,17 @@ function buildAutoGradableDetails(
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
+      });
+    } else if (q.type === 'open-ended') {
+      const rawText = typeof userAns === 'string' ? userAns : '';
+      const isAudioAnswer = rawText.startsWith('http') || rawText.startsWith('blob');
+      details.push({
+        questionNum: `Q${q.id}`,
+        questionText: q.question,
+        userAnswer: isAnswered ? (isAudioAnswer ? 'Audio response submitted' : rawText) : 'Not Answered',
+        correctAnswer: q.correctAnswer || 'See AI speaking evaluation / manual review',
+        isCorrect: false,
+        isAnswered,
       });
     } else if (q.type === 'passage-inline-word-choice') {
       const parsed = parsePDFChoiceMap(userAns);
@@ -520,7 +528,7 @@ export function generateReportPDF(data: PDFData): void {
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     pdf.setTextColor(...C.textMuted);
-    pdf.text(`${data.paperTitle} - Assessment Report`, mL, pageH - 8);
+    pdf.text(`Assessment Feedback Report - ${data.paperTitle}`, mL, pageH - 8);
     pdf.text(`Page ${pageNum}`, pageW - mR, pageH - 8, { align: 'right' });
   };
 
@@ -577,7 +585,8 @@ export function generateReportPDF(data: PDFData): void {
   const readingResults = safeParseJSON<ReadingGradingResult[] | null>(data.readingResultsJson, null);
   const writingResult = safeParseJSON<WritingEvalResult | null>(data.writingResultJson, null);
   const explanations = safeParseJSON<ExplanationResult[] | null>(data.explanationsJson, null);
-  const report = safeParseJSON<ReportResult | null>(data.reportJson, null);
+  const report = safeParseJSON<AssessmentReportResult | null>(data.reportJson, null);
+  const speakingEvaluation: SpeakingEvaluationResult | null = report?.speakingEvaluation || null;
 
   // Build explanations lookup map
   const explanationsMap = new Map<number, ExplanationResult>();
@@ -587,14 +596,23 @@ export function generateReportPDF(data: PDFData): void {
 
   // Get paper data for question details
   const paper = getPaperById(data.paperId);
+  const writingSection = paper?.sections.find((section) => section.questions.some((question) => question.type === 'writing'));
+  const writingQuestion = writingSection?.questions.find((question): question is Extract<Question, { type: 'writing' }> => question.type === 'writing');
+  const writingAnswerKey = writingSection && writingQuestion ? `${writingSection.id}:${writingQuestion.id}` : null;
+  const writingEssay =
+    writingAnswerKey && typeof answers[writingAnswerKey] === 'string'
+      ? String(answers[writingAnswerKey])
+      : '';
 
   // Calculate total score including AI-graded sections
   const readingAIScore = readingResults ? readingResults.reduce((sum, r) => sum + r.score, 0) : 0;
   const readingAITotal = readingResults ? readingResults.length : 0;
   const writingAIScore = writingResult ? writingResult.score : 0;
   const writingAITotal = writingResult ? writingResult.maxScore : 0;
-  const totalScore = data.totalCorrect + readingAIScore + writingAIScore;
-  const totalPossible = data.totalQuestions + readingAITotal + writingAITotal;
+  const speakingAIScore = speakingEvaluation ? speakingEvaluation.totalScore : 0;
+  const speakingAITotal = speakingEvaluation ? speakingEvaluation.totalPossible : 0;
+  const totalScore = data.totalCorrect + readingAIScore + writingAIScore + speakingAIScore;
+  const totalPossible = data.totalQuestions + readingAITotal + writingAITotal + speakingAITotal;
   const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
 
   const getGrade = () => {
@@ -615,16 +633,16 @@ export function generateReportPDF(data: PDFData): void {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(16);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(data.paperTitle, pageW / 2, 14, { align: 'center' });
+  pdf.text(report?.reportTitle_en || 'Assessment Feedback Report', pageW / 2, 14, { align: 'center' });
   pdf.setFontSize(9);
   pdf.setTextColor(200, 210, 255);
   const reportDate = new Date(data.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  pdf.text(`Report generated on ${reportDate}`, pageW / 2, 22, { align: 'center' });
+  pdf.text(`${data.paperTitle} · Generated on ${reportDate}`, pageW / 2, 22, { align: 'center' });
   y = 38;
 
   // ── STUDENT INFO ──
-  drawRect(mL, y - 2, contentW, 14, C.bgLight, 3);
-  drawRect(mL, y - 2, 3, 14, C.primary, 1);
+  drawRect(mL, y - 2, contentW, 20, C.bgLight, 3);
+  drawRect(mL, y - 2, 3, 20, C.primary, 1);
   pdf.setFontSize(10);
   pdf.setTextColor(...C.text);
   const namePrefix = 'Student: ';
@@ -638,7 +656,11 @@ export function generateReportPDF(data: PDFData): void {
     setFont(false, gradeText);
     pdf.text(gradeText, mL + 90, y + 5);
   }
-  y += 18;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Assessment:', mL + 7, y + 11);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(data.paperTitle, mL + 28, y + 11);
+  y += 24;
 
   // ── SCORE SUMMARY ──
   const cardW = (contentW - 8) / 3;
@@ -682,6 +704,11 @@ export function generateReportPDF(data: PDFData): void {
   const allSectionIds = [...sectionKeys];
   if (readingResults && !allSectionIds.includes('reading')) allSectionIds.push('reading');
   if (writingResult && !allSectionIds.includes('writing')) allSectionIds.push('writing');
+  if (speakingEvaluation) {
+    for (const item of speakingEvaluation.evaluations) {
+      if (!allSectionIds.includes(item.sectionId)) allSectionIds.push(item.sectionId);
+    }
+  }
 
   const sectionOrder = ['vocabulary', 'grammar', 'listening', 'reading', 'writing'];
   const orderedSections = sectionOrder.filter(s => allSectionIds.includes(s));
@@ -696,6 +723,10 @@ export function generateReportPDF(data: PDFData): void {
     } else if (sectionId === 'writing' && writingResult) {
       sCorrect = writingResult.score;
       sTotal = writingResult.maxScore;
+    } else if (speakingEvaluation && speakingEvaluation.evaluations.some((item) => item.sectionId === sectionId)) {
+      const evaluations = speakingEvaluation.evaluations.filter((item) => item.sectionId === sectionId);
+      sCorrect = evaluations.reduce((sum, item) => sum + item.score, 0);
+      sTotal = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
     } else if (bySection[sectionId]) {
       sCorrect = bySection[sectionId].correct;
       sTotal = bySection[sectionId].total;
@@ -710,7 +741,7 @@ export function generateReportPDF(data: PDFData): void {
     const sc = sectionColors[sectionId] || C.text;
     pdf.setFillColor(...sc);
     pdf.circle(mL + 4, y + 3.5, 1.5, 'F');
-    const sectionTitle = sectionId.charAt(0).toUpperCase() + sectionId.slice(1);
+    const sectionTitle = paper?.sections.find((section) => section.id === sectionId)?.title || titleCaseSectionId(sectionId);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8.5);
     pdf.setTextColor(...C.text);
@@ -725,7 +756,7 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── PROFICIENCY REPORT ──
   if (report) {
-    addSectionBanner('Proficiency Report', C.accent, [237, 233, 254]);
+    addSectionBanner('Overall Summary', C.accent, [237, 233, 254]);
     checkPage(14);
     drawRect(mL, y - 2, 28, 10, C.accent, 2);
     setFont(true, report.languageLevel);
@@ -738,11 +769,20 @@ export function generateReportPDF(data: PDFData): void {
     pdf.text('CEFR Level', mL + 32, y + 4.5);
     y += 14;
 
-    addText(report.summary_en, mL + 2, 9, false, C.text, contentW - 6);
+    addText(report.overallSummary_en || report.summary_en, mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
     addText('Time Management', mL, 9.5, true, C.text);
     addText(report.timeAnalysis_en, mL + 2, 9, false, C.textMuted, contentW - 6);
     addGap(3);
+
+    if ((report.abilitySnapshot_en || []).length > 0) {
+      checkPage(10);
+      drawRect(mL, y - 1, contentW, 1, C.primary);
+      y += 3;
+      addText('Ability Snapshot', mL, 10, true, C.primary);
+      (report.abilitySnapshot_en || []).forEach((item) => { addText(`-  ${item}`, mL + 4, 9, false, C.text); });
+      addGap(3);
+    }
 
     checkPage(10);
     drawRect(mL, y - 1, contentW, 1, C.success);
@@ -764,6 +804,36 @@ export function generateReportPDF(data: PDFData): void {
     addText('Recommendations', mL, 10, true, C.primary);
     (report.recommendations_en || []).forEach((r, i) => { addText(`${i + 1}.  ${r}`, mL + 4, 9, false, C.text); });
     addGap(4);
+
+    if ((report.sectionInsights || []).length > 0) {
+      addSectionBanner('Section Insights', C.primary, [239, 246, 255]);
+      report.sectionInsights.forEach((item) => {
+        addText(item.sectionTitle, mL, 9.5, true, C.text);
+        addText(item.summary_en, mL + 2, 8.8, false, C.textMuted, contentW - 6);
+        addGap(2);
+      });
+      addGap(2);
+    }
+
+    if ((report.studyPlan || []).length > 0) {
+      addSectionBanner('Three-Stage Study Plan', C.amber, [255, 247, 237]);
+      report.studyPlan.forEach((stage) => {
+        checkPage(16);
+        drawRect(mL, y - 1, contentW, 8, C.bgLight, 2);
+        addText(`${stage.stage_en} - ${stage.focus_en}`, mL + 2, 9.5, true, C.text);
+        (stage.actions_en || []).forEach((action, index) => {
+          addText(`${index + 1}.  ${action}`, mL + 4, 8.8, false, C.textMuted, contentW - 8);
+        });
+        addGap(2);
+      });
+    }
+
+    if (report.parentFeedback_en) {
+      addSectionBanner('Parent Feedback', C.rose, [255, 241, 242]);
+      addText(report.parentFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
+      addGap(3);
+    }
+
     addDivider();
   }
 
@@ -892,6 +962,25 @@ export function generateReportPDF(data: PDFData): void {
   if (writingResult) {
     addSectionBanner('Writing Evaluation', C.rose, C.roseLight);
     addGap(3);
+    if (writingQuestion) {
+      addText('Writing Prompt', mL, 10, true, C.text);
+      addText(writingQuestion.topic, mL + 2, 9, false, C.text, contentW - 6);
+      addGap(1);
+      if (writingQuestion.instructions) {
+        addText(writingQuestion.instructions, mL + 2, 8.8, false, C.textMuted, contentW - 6);
+        addGap(2);
+      }
+    }
+
+    if (writingEssay) {
+      addText('Student Essay', mL, 10, true, C.text);
+      addGap(1);
+      drawRect(mL, y - 1, contentW, 1, C.border);
+      y += 3;
+      addText(writingEssay, mL + 2, 9, false, C.text, contentW - 6);
+      addGap(4);
+    }
+
     checkPage(14);
     drawRect(mL, y - 2, 32, 10, C.rose, 2);
     pdf.setFont('helvetica', 'bold');
@@ -944,11 +1033,53 @@ export function generateReportPDF(data: PDFData): void {
     addGap(4);
   }
 
+  if (speakingEvaluation && speakingEvaluation.evaluations.length > 0) {
+    addSectionBanner('Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
+    addText(speakingEvaluation.overallFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
+    addGap(3);
+
+    speakingEvaluation.evaluations.forEach((item) => {
+      checkPage(34);
+      drawRect(mL, y - 1, contentW, 6, C.bgLight, 2);
+      setFont(true);
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(...C.text);
+      pdf.text(`${item.sectionTitle} - Q${item.questionId}`, mL + 4, y + 3);
+      drawRect(mL + contentW - 22, y - 0.5, 20, 5, [224, 242, 254], 2);
+      pdf.setFontSize(7);
+      pdf.setTextColor(3, 105, 161);
+      pdf.text(`${item.score}/${item.maxScore}`, mL + contentW - 12, y + 2.8, { align: 'center' });
+      y += 8;
+
+      addText(`Prompt: ${item.prompt}`, mL + 6, 8.5, false, C.text, contentW - 14);
+      addText(`Transcript: ${item.transcript || 'No transcript available.'}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+      addText(`Overall Comment: ${item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
+      addText(`Task Completion: ${item.taskCompletion_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      addText(`Fluency: ${item.fluency_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      addText(`Vocabulary: ${item.vocabulary_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      addText(`Grammar: ${item.grammar_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      addText(`Pronunciation: ${item.pronunciation_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+
+      if (item.suggestions_en.length > 0) {
+        addText('Suggestions', mL + 6, 8.6, true, C.primary);
+        item.suggestions_en.forEach((suggestion, index) => {
+          addText(`${index + 1}.  ${suggestion}`, mL + 8, 8.1, false, C.textMuted, contentW - 16);
+        });
+      }
+
+      addGap(3);
+      pdf.setDrawColor(...C.border);
+      pdf.setLineWidth(0.15);
+      pdf.line(mL + 4, y, pageW - mR - 4, y);
+      addGap(3);
+    });
+  }
+
   // ── FOOTER ──
   addPageFooter();
 
   // ── Download ──
   const nameSlug = data.studentName ? `_${data.studentName.replace(/\s+/g, '_')}` : '';
-  const fileName = `${data.paperTitle}_Report${nameSlug}_${new Date(data.createdAt).toISOString().slice(0, 10)}.pdf`;
+  const fileName = `Assessment_Feedback_Report${nameSlug}_${new Date(data.createdAt).toISOString().slice(0, 10)}.pdf`;
   pdf.save(fileName);
 }

@@ -223,7 +223,7 @@ function HistoryContent() {
                               return (
                                 <div>
                                   <h4 className="text-sm font-semibold text-slate-700 mb-3">
-                                    {lang === 'en' ? '🤖 AI Proficiency Report' : '🤖 AI能力报告'}
+                                    {lang === 'en' ? (rpt.reportTitle_en || '🤖 AI Proficiency Report') : (rpt.reportTitle_cn || '🤖 AI能力报告')}
                                   </h4>
                                   <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-4 border border-violet-100">
                                     <div className="flex items-center gap-3 mb-3">
@@ -232,8 +232,17 @@ function HistoryContent() {
                                       </span>
                                     </div>
                                     <p className="text-sm text-slate-700 leading-relaxed">
-                                      {lang === 'en' ? rpt.summary_en : rpt.summary_cn}
+                                      {lang === 'en' ? (rpt.overallSummary_en || rpt.summary_en) : (rpt.overallSummary_cn || rpt.summary_cn)}
                                     </p>
+                                    {((lang === 'en' ? rpt.abilitySnapshot_en : rpt.abilitySnapshot_cn) || []).length > 0 && (
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {((lang === 'en' ? rpt.abilitySnapshot_en : rpt.abilitySnapshot_cn) || []).map((item: string, i: number) => (
+                                          <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-white/80 text-blue-700 border border-blue-100">
+                                            {item}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                     {((lang === 'en' ? rpt.strengths_en : rpt.strengths_cn) || []).length > 0 && (
                                       <div className="mt-3">
                                         <p className="text-xs font-semibold text-emerald-700 mb-1">
@@ -260,6 +269,16 @@ function HistoryContent() {
                                             </li>
                                           ))}
                                         </ul>
+                                      </div>
+                                    )}
+                                    {(lang === 'en' ? rpt.parentFeedback_en : rpt.parentFeedback_cn) && (
+                                      <div className="mt-3 pt-3 border-t border-violet-100">
+                                        <p className="text-xs font-semibold text-slate-700 mb-1">
+                                          {lang === 'en' ? 'Parent Note:' : '家长反馈：'}
+                                        </p>
+                                        <p className="text-sm text-slate-600 leading-relaxed">
+                                          {lang === 'en' ? rpt.parentFeedback_en : rpt.parentFeedback_cn}
+                                        </p>
                                       </div>
                                     )}
                                   </div>

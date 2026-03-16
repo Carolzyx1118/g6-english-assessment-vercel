@@ -1,5 +1,4 @@
-import { ENV } from "./env";
-import { getForgeConfigErrorMessage } from "./env";
+import { ENV, getLLMConfigErrorMessage } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -211,16 +210,58 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+type LLMProviderConfig = {
+  apiKey: string;
+  apiUrl: string;
+  defaultModel: string;
+  defaultMaxTokens: number;
+  provider: "forge" | "openai";
+};
+
+const buildApiUrl = (baseUrl: string, path: string) => {
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+
+  if (normalizedBase.endsWith("/v1") && normalizedPath.startsWith("v1/")) {
+    return `${normalizedBase}/${normalizedPath.slice(3)}`;
+  }
+
+  return `${normalizedBase}/${normalizedPath}`;
+};
+
+const resolveProviderConfig = (): LLMProviderConfig => {
+  if (ENV.openaiApiKey) {
+    return {
+      provider: "openai",
+      apiKey: ENV.openaiApiKey,
+      apiUrl: buildApiUrl(
+        ENV.openaiApiBaseUrl || "https://api.openai.com",
+        "v1/chat/completions"
+      ),
+      defaultModel: ENV.openaiChatModel || "gpt-4o-mini",
+      defaultMaxTokens: 4096,
+    };
+  }
+
+  return {
+    provider: "forge",
+    apiKey: ENV.forgeApiKey,
+    apiUrl: buildApiUrl(
+      ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+        ? ENV.forgeApiUrl
+        : "https://forge.manus.im",
+      "v1/chat/completions"
+    ),
+    defaultModel: "gemini-2.5-flash",
+    defaultMaxTokens: 32768,
+  };
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
+  if (!ENV.openaiApiKey && !ENV.forgeApiKey) {
     throw new Error(
-      getForgeConfigErrorMessage("AI requests") ||
-        "AI requests are unavailable because BUILT_IN_FORGE_API_KEY is not configured."
+      getLLMConfigErrorMessage("AI requests") ||
+        "AI requests are unavailable because neither OPENAI_API_KEY nor BUILT_IN_FORGE_API_KEY is configured."
     );
   }
 };
@@ -272,6 +313,7 @@ const normalizeResponseFormat = ({
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
+  const provider = resolveProviderConfig();
 
   const {
     messages,
@@ -285,7 +327,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: params.model ?? "gemini-2.5-flash",
+    model: params.model ?? provider.defaultModel,
     messages: messages.map(normalizeMessage),
   };
 
@@ -301,9 +343,13 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  payload.max_tokens =
+    params.maxTokens ?? params.max_tokens ?? provider.defaultMaxTokens;
+
+  if (provider.provider === "forge") {
+    payload.thinking = {
+      budget_tokens: 128,
+    };
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -317,11 +363,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(provider.apiUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify(payload),
   });

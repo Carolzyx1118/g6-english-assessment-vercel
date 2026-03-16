@@ -2,6 +2,11 @@ export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
+  openaiApiBaseUrl:
+    process.env.OPENAI_BASE_URL ?? process.env.OPENAI_API_URL ?? "",
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openaiChatModel: process.env.OPENAI_CHAT_MODEL ?? "",
+  openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
@@ -9,6 +14,64 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   blobReadWriteToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
 };
+
+export function getOpenAIConfigStatus() {
+  return {
+    isConfigured: Boolean(ENV.openaiApiKey),
+    missingVariables: ENV.openaiApiKey ? [] : ["OPENAI_API_KEY"],
+  };
+}
+
+export function getLLMConfigStatus() {
+  const openai = getOpenAIConfigStatus();
+  if (openai.isConfigured) {
+    return {
+      isConfigured: true,
+      provider: "openai" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  if (ENV.forgeApiKey) {
+    return {
+      isConfigured: true,
+      provider: "forge" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  return {
+    isConfigured: false,
+    provider: null,
+    missingVariables: ["OPENAI_API_KEY", "BUILT_IN_FORGE_API_KEY"],
+  };
+}
+
+export function getSpeechConfigStatus() {
+  const openai = getOpenAIConfigStatus();
+  if (openai.isConfigured) {
+    return {
+      isConfigured: true,
+      provider: "openai" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  const forge = getForgeConfigStatus();
+  if (forge.isConfigured) {
+    return {
+      isConfigured: true,
+      provider: "forge" as const,
+      missingVariables: [] as string[],
+    };
+  }
+
+  return {
+    isConfigured: false,
+    provider: null,
+    missingVariables: ["OPENAI_API_KEY", ...forge.missingVariables],
+  };
+}
 
 export function getForgeConfigStatus() {
   const missingVariables: string[] = [];
@@ -70,4 +133,22 @@ export function getForgeConfigErrorMessage(feature: string): string {
 
   const verb = missingVariables.length === 1 ? "is" : "are";
   return `${feature} is unavailable because ${missingVariables.join(", ")} ${verb} not configured on the server.`;
+}
+
+export function getLLMConfigErrorMessage(feature: string): string {
+  const config = getLLMConfigStatus();
+  if (config.isConfigured) {
+    return "";
+  }
+
+  return `${feature} is unavailable because neither OPENAI_API_KEY nor BUILT_IN_FORGE_API_KEY is configured on the server.`;
+}
+
+export function getSpeechConfigErrorMessage(feature: string): string {
+  const config = getSpeechConfigStatus();
+  if (config.isConfigured) {
+    return "";
+  }
+
+  return `${feature} is unavailable because neither OPENAI_API_KEY nor BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY is configured on the server.`;
 }

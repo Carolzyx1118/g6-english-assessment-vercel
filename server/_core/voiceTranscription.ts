@@ -25,7 +25,7 @@
  * });
  * ```
  */
-import { ENV } from "./env";
+import { ENV, getSpeechConfigErrorMessage } from "./env";
 
 export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
@@ -47,22 +47,70 @@ export type WhisperSegment = {
   no_speech_prob: number;
 };
 
-// Native Whisper API response format
-export type WhisperResponse = {
-  task: "transcribe";
-  language: string;
-  duration: number;
+export type TranscriptionResponse = {
+  task?: "transcribe";
+  language?: string;
+  duration?: number;
   text: string;
-  segments: WhisperSegment[];
-};
-
-export type TranscriptionResponse = WhisperResponse; // Return native Whisper API response directly
+  segments?: WhisperSegment[];
+}; // OpenAI gpt-4o transcription models return JSON text without Whisper-style segments.
 
 export type TranscriptionError = {
   error: string;
   code: "FILE_TOO_LARGE" | "INVALID_FORMAT" | "TRANSCRIPTION_FAILED" | "UPLOAD_FAILED" | "SERVICE_ERROR";
   details?: string;
 };
+
+type SpeechProviderConfig = {
+  apiKey: string;
+  apiUrl: string;
+  model: string;
+  provider: "forge" | "openai";
+};
+
+function buildApiUrl(baseUrl: string, path: string): string {
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+
+  if (normalizedBase.endsWith("/v1") && normalizedPath.startsWith("v1/")) {
+    return `${normalizedBase}/${normalizedPath.slice(3)}`;
+  }
+
+  return `${normalizedBase}/${normalizedPath}`;
+}
+
+function resolveSpeechProvider(): SpeechProviderConfig | null {
+  if (ENV.openaiApiKey) {
+    return {
+      provider: "openai",
+      apiKey: ENV.openaiApiKey,
+      apiUrl: buildApiUrl(
+        ENV.openaiApiBaseUrl || "https://api.openai.com",
+        "v1/audio/transcriptions"
+      ),
+      model: ENV.openaiTranscriptionModel || "gpt-4o-mini-transcribe",
+    };
+  }
+
+  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
+    return null;
+  }
+
+  return {
+    provider: "forge",
+    apiKey: ENV.forgeApiKey,
+    apiUrl: buildApiUrl(ENV.forgeApiUrl, "v1/audio/transcriptions"),
+    model: "whisper-1",
+  };
+}
+
+function getResponseFormat(provider: SpeechProviderConfig): "json" | "verbose_json" {
+  if (provider.provider === "forge" || provider.model === "whisper-1") {
+    return "verbose_json";
+  }
+
+  return "json";
+}
 
 /**
  * Transcribe audio to text using the internal Speech-to-Text service
@@ -75,18 +123,14 @@ export async function transcribeAudio(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   try {
     // Step 1: Validate environment configuration
-    if (!ENV.forgeApiUrl) {
-      return {
-        error: "Voice transcription service is not configured",
-        code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_URL is not set"
-      };
-    }
-    if (!ENV.forgeApiKey) {
+    const provider = resolveSpeechProvider();
+    if (!provider) {
       return {
         error: "Voice transcription service authentication is missing",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_KEY is not set"
+        details:
+          getSpeechConfigErrorMessage("Voice transcription service") ||
+          "Neither OPENAI_API_KEY nor BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY is configured."
       };
     }
 
@@ -131,8 +175,11 @@ export async function transcribeAudio(
     const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
     formData.append("file", audioBlob, filename);
     
-    formData.append("model", "whisper-1");
-    formData.append("response_format", "verbose_json");
+    formData.append("model", provider.model);
+    formData.append("response_format", getResponseFormat(provider));
+    if (options.language) {
+      formData.append("language", options.language);
+    }
     
     // Add prompt - use custom prompt if provided, otherwise generate based on language
     const prompt = options.prompt || (
@@ -143,19 +190,10 @@ export async function transcribeAudio(
     formData.append("prompt", prompt);
 
     // Step 4: Call the transcription service
-    const baseUrl = ENV.forgeApiUrl.endsWith("/")
-      ? ENV.forgeApiUrl
-      : `${ENV.forgeApiUrl}/`;
-    
-    const fullUrl = new URL(
-      "v1/audio/transcriptions",
-      baseUrl
-    ).toString();
-
-    const response = await fetch(fullUrl, {
+    const response = await fetch(provider.apiUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
+        authorization: `Bearer ${provider.apiKey}`,
         "Accept-Encoding": "identity",
       },
       body: formData,
@@ -171,7 +209,7 @@ export async function transcribeAudio(
     }
 
     // Step 5: Parse and return the transcription result
-    const whisperResponse = await response.json() as WhisperResponse;
+    const whisperResponse = await response.json() as TranscriptionResponse;
     
     // Validate response structure
     if (!whisperResponse.text || typeof whisperResponse.text !== 'string') {

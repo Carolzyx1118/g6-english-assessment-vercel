@@ -12,6 +12,10 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
+import type {
+  AssessmentReportResult,
+  SpeakingEvaluationResult,
+} from '@shared/assessmentReport';
 
 const sectionMetaMap: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
@@ -48,6 +52,13 @@ type WritingEvalResult = {
   suggestions_en: string[]; suggestions_cn: string[];
 };
 type ExplanationResult = { questionId: number; explanation_en: string; explanation_cn: string; tip_en: string; tip_cn: string };
+type SpeakingResponseInput = {
+  sectionId: string;
+  sectionTitle: string;
+  questionId: number;
+  prompt: string;
+  audioUrl: string;
+};
 
 function normalizeTrueFalseChoice(value: unknown): 'True' | 'False' | 'Not Given' | undefined {
   if (value === true) return 'True';
@@ -243,23 +254,37 @@ export default function ResultsPage() {
 
   // Detect if current paper has a writing section
   const hasWritingSection = sections.some(isWritingLikeSection);
+  const isSpeakingLikeSection = (section: Section) =>
+    section.id === 'speaking' ||
+    section.id.startsWith('speaking') ||
+    section.sectionType === 'speaking' ||
+    section.questions.some((q) => q.type === 'open-ended' && 'responseMode' in q && q.responseMode === 'audio');
 
   // AI Grading states
   const [readingResults, setReadingResults] = useState<ReadingGradingResult[] | null>(null);
   const [writingResult, setWritingResult] = useState<WritingEvalResult | null>(null);
+  const [speakingResult, setSpeakingResult] = useState<SpeakingEvaluationResult | null>(null);
+  const [reportResult, setReportResult] = useState<AssessmentReportResult | null>(null);
   const [explanations, setExplanations] = useState<ExplanationResult[] | null>(null);
   const [isGradingReading, setIsGradingReading] = useState(false);
   const [isGradingWriting, setIsGradingWriting] = useState(false);
+  const [isGradingSpeaking, setIsGradingSpeaking] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isLoadingExplanations, setIsLoadingExplanations] = useState(false);
   const [readingError, setReadingError] = useState<string | null>(null);
   const [writingError, setWritingError] = useState<string | null>(null);
+  const [speakingError, setSpeakingError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const hasStartedGrading = useRef(false);
+  const hasRequestedReport = useRef(false);
 
   const [writingTab, setWritingTab] = useState<'annotated' | 'corrected' | 'errors'>('annotated');
 
   const checkReadingMutation = trpc.grading.checkReadingAnswers.useMutation();
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
+  const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const explainMutation = trpc.grading.explainWrongAnswers.useMutation();
+  const generateReportMutation = trpc.grading.generateReport.useMutation();
 
   // Auto-save to database
   const saveResultMutation = trpc.results.save.useMutation();
@@ -399,6 +424,49 @@ export default function ResultsPage() {
       }
     }
     return items;
+  }, [getAnswer, sections]);
+
+  const writingSubmission = useMemo(() => {
+    const writingSection = sections.find(isWritingLikeSection);
+    if (!writingSection) return null;
+
+    const writingQ = writingSection.questions.find((q): q is Extract<Question, { type: 'writing' }> => q.type === 'writing');
+    if (!writingQ) return null;
+
+    const essay = getAnswer('writing', writingQ.id);
+    return {
+      sectionId: writingSection.id,
+      sectionTitle: writingSection.title,
+      question: writingQ,
+      essay: typeof essay === 'string' ? essay : '',
+    };
+  }, [getAnswer, sections]);
+
+  const speakingResponses = useMemo((): SpeakingResponseInput[] => {
+    const responses: SpeakingResponseInput[] = [];
+
+    for (const section of sections) {
+      if (!isSpeakingLikeSection(section)) continue;
+
+      for (const question of section.questions) {
+        const answer = getAnswer(section.id, question.id);
+        if (typeof answer === 'string' && answer.startsWith('http')) {
+          const prompt =
+            question.type === 'open-ended'
+              ? question.question
+              : section.taskDescription || section.description || section.title;
+          responses.push({
+            sectionId: section.id,
+            sectionTitle: section.title,
+            questionId: question.id,
+            prompt,
+            audioUrl: answer,
+          });
+        }
+      }
+    }
+
+    return responses;
   }, [getAnswer, sections]);
 
   // Detailed answer review for auto-gradable sections (vocabulary, grammar, listening)
@@ -628,10 +696,11 @@ export default function ResultsPage() {
     if (readingResults) updates.readingResultsJson = JSON.stringify(readingResults);
     if (writingResult) updates.writingResultJson = JSON.stringify(writingResult);
     if (explanations) updates.explanationsJson = JSON.stringify(explanations);
+    if (reportResult) updates.reportJson = JSON.stringify(reportResult);
     if (Object.keys(updates).length > 0) {
       updateAIMutation.mutate({ id: savedResultId.current, ...updates });
     }
-  }, [readingResults, writingResult, explanations]);
+  }, [readingResults, writingResult, explanations, reportResult, updateAIMutation]);
 
   useEffect(() => {
     if (hasStartedGrading.current) return;
@@ -647,22 +716,32 @@ export default function ResultsPage() {
         onError: () => { setReadingError('Failed to grade reading answers.'); setIsGradingReading(false); },
       });
     }
-    // Writing evaluation (HuaZhong paper only)
-    const writingSection = sections.find(isWritingLikeSection);
-    if (writingSection) {
-      const writingQ = writingSection.questions.find((q: any) => q.type === 'writing');
-      if (writingQ && writingQ.type === 'writing') {
-        const essay = getAnswer('writing', writingQ.id);
-        if (essay && typeof essay === 'string' && essay.trim().length > 10) {
-          setIsGradingWriting(true);
-          evaluateWritingMutation.mutate({ essay, topic: writingQ.topic, wordCountTarget: writingQ.wordCount }, {
-            onSuccess: (data) => { setWritingResult(data); setIsGradingWriting(false); },
-            onError: () => { setWritingError('Failed to evaluate writing.'); setIsGradingWriting(false); },
-          });
+    if (writingSubmission && writingSubmission.essay.trim().length > 10) {
+      setIsGradingWriting(true);
+      evaluateWritingMutation.mutate(
+        {
+          essay: writingSubmission.essay,
+          topic: writingSubmission.question.topic,
+          wordCountTarget: writingSubmission.question.wordCount,
+        },
+        {
+          onSuccess: (data) => { setWritingResult(data); setIsGradingWriting(false); },
+          onError: () => { setWritingError('Failed to evaluate writing.'); setIsGradingWriting(false); },
         }
-      }
+      );
     }
-  }, []);
+
+    if (speakingResponses.length > 0) {
+      setIsGradingSpeaking(true);
+      evaluateSpeakingMutation.mutate(
+        { responses: speakingResponses },
+        {
+          onSuccess: (data) => { setSpeakingResult(data); setIsGradingSpeaking(false); },
+          onError: () => { setSpeakingError('Failed to evaluate speaking.'); setIsGradingSpeaking(false); },
+        }
+      );
+    }
+  }, [checkReadingMutation, evaluateSpeakingMutation, evaluateWritingMutation, getAnswer, readingSubItems, sections, speakingResponses, writingSubmission]);
 
   // Trigger explanations for wrong answers
   useEffect(() => {
@@ -691,8 +770,10 @@ export default function ResultsPage() {
   const readingAITotal = readingResults ? readingResults.length : 0;
   const writingAIScore = writingResult ? writingResult.score : 0;
   const writingAITotal = writingResult ? writingResult.maxScore : (hasWritingSection ? 20 : 0);
-  const totalScore = correct + readingAIScore + writingAIScore;
-  const totalPossible = total + readingAITotal + writingAITotal;
+  const speakingAIScore = speakingResult ? speakingResult.totalScore : 0;
+  const speakingAITotal = speakingResult ? speakingResult.totalPossible : 0;
+  const totalScore = correct + readingAIScore + writingAIScore + speakingAIScore;
+  const totalPossible = total + readingAITotal + writingAITotal + speakingAITotal;
   const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
 
   const getGrade = () => {
@@ -702,7 +783,117 @@ export default function ResultsPage() {
     return { grade: 'D', color: 'text-red-500', label: 'Needs Improvement', label_cn: '需要提高' };
   };
   const gradeInfo = getGrade();
-  const isStillGrading = isGradingReading || isGradingWriting;
+  const isStillGrading = isGradingReading || isGradingWriting || isGradingSpeaking || isGeneratingReport;
+
+  useEffect(() => {
+    if (hasRequestedReport.current) return;
+
+    const shouldGradeReading = readingSubItems.length > 0;
+    const shouldGradeWriting = Boolean(writingSubmission && writingSubmission.essay.trim().length > 10);
+    const shouldGradeSpeaking = speakingResponses.length > 0;
+
+    const readingReady = !shouldGradeReading || readingResults !== null || readingError !== null;
+    const writingReady = !shouldGradeWriting || writingResult !== null || writingError !== null;
+    const speakingReady = !shouldGradeSpeaking || speakingResult !== null || speakingError !== null;
+
+    if (!readingReady || !writingReady || !speakingReady) return;
+
+    hasRequestedReport.current = true;
+    setIsGeneratingReport(true);
+
+    const sectionResults = sections.map((section) => {
+      if (section.id === 'reading') {
+        return {
+          sectionId: section.id,
+          sectionTitle: section.title,
+          correct: readingResults ? readingResults.reduce((sum, item) => sum + item.score, 0) : 0,
+          total: readingResults ? readingResults.length : readingSubItems.length,
+          timeSeconds: sectionTimings[section.id] || 0,
+        };
+      }
+
+      if (isWritingLikeSection(section)) {
+        return {
+          sectionId: section.id,
+          sectionTitle: section.title,
+          correct: writingResult?.score || 0,
+          total: writingResult?.maxScore || 0,
+          timeSeconds: sectionTimings[section.id] || 0,
+        };
+      }
+
+      if (isSpeakingLikeSection(section)) {
+        const evaluations = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
+        return {
+          sectionId: section.id,
+          sectionTitle: section.title,
+          correct: evaluations.reduce((sum, item) => sum + item.score, 0),
+          total: evaluations.reduce((sum, item) => sum + item.maxScore, 0),
+          timeSeconds: sectionTimings[section.id] || 0,
+        };
+      }
+
+      return {
+        sectionId: section.id,
+        sectionTitle: section.title,
+        correct: bySection[section.id]?.correct || 0,
+        total: bySection[section.id]?.total || 0,
+        timeSeconds: sectionTimings[section.id] || 0,
+      };
+    });
+
+    generateReportMutation.mutate(
+      {
+        paperTitle: selectedPaper?.title || 'Assessment',
+        studentName: recordedStudentName,
+        studentGrade: recordedStudentGrade,
+        totalScore,
+        totalPossible,
+        percentage,
+        grade: gradeInfo.grade,
+        totalTimeSeconds: totalTime,
+        sectionResults,
+        writingSummary: writingResult
+          ? {
+              score: writingResult.score,
+              maxScore: writingResult.maxScore,
+              grade: writingResult.grade,
+              overallFeedback_en: writingResult.overallFeedback_en,
+              overallFeedback_cn: writingResult.overallFeedback_cn,
+              suggestions_en: writingResult.suggestions_en,
+              suggestions_cn: writingResult.suggestions_cn,
+            }
+          : undefined,
+        speakingSummary: speakingResult || undefined,
+      },
+      {
+        onSuccess: (data) => { setReportResult(data); setIsGeneratingReport(false); },
+        onError: () => { setReportError('Failed to generate report.'); setIsGeneratingReport(false); },
+      }
+    );
+  }, [
+    bySection,
+    generateReportMutation,
+    gradeInfo.grade,
+    percentage,
+    readingError,
+    readingResults,
+    readingSubItems.length,
+    recordedStudentGrade,
+    recordedStudentName,
+    sections,
+    sectionTimings,
+    selectedPaper?.title,
+    speakingError,
+    speakingResponses.length,
+    speakingResult,
+    totalScore,
+    totalPossible,
+    totalTime,
+    writingError,
+    writingResult,
+    writingSubmission,
+  ]);
 
   const getExplanation = (questionId: number): ExplanationResult | undefined => explanations?.find(e => e.questionId === questionId);
   const getReadingResult = (subItemId: string): ReadingGradingResult | undefined => readingResults?.find(r => r.questionId === subItemId);
@@ -737,6 +928,7 @@ export default function ResultsPage() {
           ) : (
             <p className="text-slate-500 text-base">{lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}</p>
           )}
+          <p className="text-sm text-slate-400 mt-2">{paperName}</p>
         </motion.div>
 
         {/* Student Info */}
@@ -744,6 +936,7 @@ export default function ResultsPage() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }} className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-6 text-sm text-slate-500">
             <span className="font-semibold text-slate-700">{recordedStudentName}</span>
             {recordedStudentGrade && <span>{lang === 'en' ? 'Grade' : '年级'}: {recordedStudentGrade}</span>}
+            <span>{lang === 'en' ? 'Paper' : '测评'}: {paperName}</span>
           </motion.div>
         )}
 
@@ -873,15 +1066,50 @@ export default function ResultsPage() {
                 );
               }
 
-              // Speaking section - show as manual grading required
-              if (section.id === 'speaking' || section.id.startsWith('speaking')) {
+              if (isSpeakingLikeSection(section)) {
+                if (isGradingSpeaking) {
+                  return (
+                    <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
+                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
+                      <div className="flex-1">
+                        <div className="font-semibold text-base text-slate-700">{section.title}</div>
+                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'AI evaluating speaking...' : 'AI 正在评估口语...'}</div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const evaluations = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
+                if (evaluations.length > 0) {
+                  const sectionScore = evaluations.reduce((sum, item) => sum + item.score, 0);
+                  const sectionTotal = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
+                  const pct = sectionTotal > 0 ? Math.round((sectionScore / sectionTotal) * 100) : 0;
+                  return (
+                    <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
+                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-base text-slate-700 flex items-center gap-1">{section.title}<Sparkles className="w-3.5 h-3.5 text-sky-500" /></span>
+                          <div className="flex items-center gap-3">
+                            {timeStr && <span className="text-sm text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeStr}</span>}
+                            <span className="text-base font-bold text-slate-600">{sectionScore}/{sectionTotal}</span>
+                          </div>
+                        </div>
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: 0.5 }} className={`h-full rounded-full bg-gradient-to-r ${sectionMeta[section.id]?.gradient}`} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-base text-slate-700">{section.title}</span>
-                        <span className="text-sm text-sky-600 font-medium">{lang === 'en' ? 'Manual grading' : '需人工评分'}</span>
+                        <span className="text-sm text-red-400 font-medium">{speakingError || (lang === 'en' ? 'No speaking response submitted' : '未提交口语作答')}</span>
                       </div>
                     </div>
                   </div>
@@ -1141,6 +1369,183 @@ export default function ResultsPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {(speakingResult || isGradingSpeaking) && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.65 }} className="mb-8">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+              <div className="px-5 py-3 bg-sky-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Speaking Evaluation' : '口语评估'}</h3>
+                  <Sparkles className="w-4 h-4 text-sky-500" />
+                  <span className="text-sm text-sky-500 font-medium">{lang === 'en' ? 'AI Evaluated' : 'AI 评估'}</span>
+                </div>
+                {speakingResult && (
+                  <span className="text-base font-bold text-slate-600">{speakingResult.totalScore} out of {speakingResult.totalPossible}</span>
+                )}
+              </div>
+
+              {isGradingSpeaking ? (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-sky-500 mx-auto mb-3" />
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'AI is evaluating the speaking recordings...' : 'AI 正在分析口语录音...'}</p>
+                </div>
+              ) : speakingResult ? (
+                <div className="p-6 space-y-6">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Feedback' : '总体反馈'}</h4>
+                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? speakingResult.overallFeedback_en : speakingResult.overallFeedback_cn}</p>
+                  </div>
+
+                  {speakingResult.evaluations.map((item) => (
+                    <div key={`${item.sectionId}:${item.questionId}`} className="rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="px-5 py-3 bg-sky-50/80 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-slate-700">{item.sectionTitle} · Q{item.questionId}</h4>
+                          <p className="text-sm text-slate-500 mt-1">{item.prompt}</p>
+                        </div>
+                        <span className="text-base font-bold text-slate-700">{item.score}/{item.maxScore}</span>
+                      </div>
+
+                      <div className="p-5 space-y-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-600 mb-1">{lang === 'en' ? 'Transcript' : '转写内容'}</p>
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 whitespace-pre-wrap">{item.transcript || (lang === 'en' ? 'No transcript available.' : '暂无转写内容。')}</div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-3">
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Task Completion' : '任务完成度'}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.taskCompletion_en : item.taskCompletion_cn}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Fluency' : '流利度'}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.fluency_en : item.fluency_cn}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Vocabulary' : '词汇'}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.vocabulary_en : item.vocabulary_cn}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Grammar' : '语法'}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.grammar_en : item.grammar_cn}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-2">
+                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Pronunciation / Clarity' : '发音 / 清晰度'}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.pronunciation_en : item.pronunciation_cn}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                          <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Overall Comment' : '整体点评'}</p>
+                          <p className="text-sm text-slate-600">{lang === 'en' ? item.feedback_en : item.feedback_cn}</p>
+                        </div>
+
+                        {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Suggestions' : '改进建议'}</p>
+                            <ul className="space-y-1.5">
+                              {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
+                                <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                                  <span className="text-sky-500 font-bold mt-0.5">{index + 1}.</span>
+                                  <span>{suggestion}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-5 text-center text-base text-red-400">{speakingError || (lang === 'en' ? 'Speaking evaluation unavailable' : '口语评估不可用')}</div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {(reportResult || isGeneratingReport || reportError) && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="mb-8">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+              <div className="px-5 py-3 bg-blue-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-slate-700">{reportResult?.reportTitle_en || 'Assessment Feedback Report'}</h3>
+                  <Sparkles className="w-4 h-4 text-blue-500" />
+                </div>
+                {reportResult && <span className="text-sm font-semibold text-blue-700">{reportResult.languageLevel}</span>}
+              </div>
+
+              {isGeneratingReport ? (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-3" />
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'AI is generating the final report...' : 'AI 正在生成最终报告...'}</p>
+                </div>
+              ) : reportResult ? (
+                <div className="p-6 space-y-6">
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Summary' : '整体情况总结'}</h4>
+                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.overallSummary_en : reportResult.overallSummary_cn}</p>
+                  </div>
+
+                  {((lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn) || []).length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Ability Snapshot' : '能力概括'}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {(lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn).map((item, index) => (
+                          <span key={index} className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm border border-blue-100">{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {reportResult.sectionInsights.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Section Insights' : '分项能力分析'}</h4>
+                      <div className="space-y-3">
+                        {reportResult.sectionInsights.map((item) => (
+                          <div key={item.sectionId} className="rounded-lg bg-slate-50 border border-slate-200 p-4">
+                            <p className="font-medium text-slate-700 mb-1">{item.sectionTitle}</p>
+                            <p className="text-sm text-slate-600">{lang === 'en' ? item.summary_en : item.summary_cn}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {reportResult.studyPlan.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Suggested Study Plan' : '后续学习规划'}</h4>
+                      <div className="space-y-3">
+                        {reportResult.studyPlan.map((stage, index) => (
+                          <div key={index} className="rounded-lg border border-slate-200 overflow-hidden">
+                            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                              <p className="font-medium text-slate-700">{lang === 'en' ? stage.stage_en : stage.stage_cn} · {lang === 'en' ? stage.focus_en : stage.focus_cn}</p>
+                            </div>
+                            <ul className="p-4 space-y-2">
+                              {(lang === 'en' ? stage.actions_en : stage.actions_cn).map((action, actionIndex) => (
+                                <li key={actionIndex} className="text-sm text-slate-600 flex items-start gap-2">
+                                  <span className="text-blue-500 font-bold mt-0.5">{actionIndex + 1}.</span>
+                                  <span>{action}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Parent Feedback' : '给家长的反馈'}</h4>
+                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.parentFeedback_en : reportResult.parentFeedback_cn}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-5 text-center text-base text-red-400">{reportError || (lang === 'en' ? 'Report generation failed' : '报告生成失败')}</div>
+              )}
             </div>
           </motion.div>
         )}

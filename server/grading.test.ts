@@ -7,8 +7,14 @@ vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn(),
 }));
 
+vi.mock("./_core/voiceTranscription", () => ({
+  transcribeAudio: vi.fn(),
+}));
+
 import { invokeLLM } from "./_core/llm";
+import { transcribeAudio } from "./_core/voiceTranscription";
 const mockInvokeLLM = vi.mocked(invokeLLM);
+const mockTranscribeAudio = vi.mocked(transcribeAudio);
 
 function createPublicContext(): TrpcContext {
   return {
@@ -153,6 +159,49 @@ describe("grading.generateReport", () => {
       weaknesses_en: ["Grammar needs work"], weaknesses_cn: ["语法需要加强"],
       recommendations_en: ["Practice daily"], recommendations_cn: ["每天练习"],
       timeAnalysis_en: "Good pace.", timeAnalysis_cn: "节奏不错。",
+      reportTitle_en: "Assessment Feedback Report",
+      reportTitle_cn: "测评反馈报告",
+      overallSummary_en: "The student has a workable base but still needs stronger grammar and output control.",
+      overallSummary_cn: "学生目前有一定基础，但语法和输出能力还需要继续加强。",
+      abilitySnapshot_en: ["Input is stronger than output"],
+      abilitySnapshot_cn: ["输入能力强于输出能力"],
+      sectionInsights: [
+        {
+          sectionId: "vocabulary",
+          sectionTitle: "Part 1: Vocabulary",
+          summary_en: "Vocabulary recognition is relatively stable.",
+          summary_cn: "词汇识别相对稳定。",
+        },
+      ],
+      studyPlan: [
+        {
+          stage_en: "Stage 1",
+          stage_cn: "第一阶段",
+          focus_en: "Build the basics",
+          focus_cn: "补基础",
+          actions_en: ["Review core grammar."],
+          actions_cn: ["复习核心语法。"],
+        },
+        {
+          stage_en: "Stage 2",
+          stage_cn: "第二阶段",
+          focus_en: "Target weak sections",
+          focus_cn: "做专项",
+          actions_en: ["Practice reading weekly."],
+          actions_cn: ["每周练阅读专项。"],
+        },
+        {
+          stage_en: "Stage 3",
+          stage_cn: "第三阶段",
+          focus_en: "Return to full papers",
+          focus_cn: "整套题训练",
+          actions_en: ["Complete timed papers."],
+          actions_cn: ["完成限时整套题。"],
+        },
+      ],
+      parentFeedback_en: "There is clear room for improvement with steady practice.",
+      parentFeedback_cn: "只要训练方向清晰，后续还有明显提升空间。",
+      speakingEvaluation: null,
     };
     mockInvokeLLM.mockResolvedValueOnce({
       choices: [{ message: { content: JSON.stringify(mockResponse) } }],
@@ -160,6 +209,9 @@ describe("grading.generateReport", () => {
 
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
+      paperTitle: "PET English Assessment",
+      studentName: "Test Student",
+      studentGrade: "Grade 6",
       totalScore: 30, totalPossible: 46, percentage: 65, grade: "C", totalTimeSeconds: 1800,
       sectionResults: [
         { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 10, total: 12, timeSeconds: 300 },
@@ -180,6 +232,12 @@ describe("grading.generateReport", () => {
     expect(result.recommendations_cn).toHaveLength(1);
     expect(result.timeAnalysis_en).toBeTruthy();
     expect(result.timeAnalysis_cn).toBeTruthy();
+    expect(result.reportTitle_cn).toBe("测评反馈报告");
+    expect(result.overallSummary_cn).toBeTruthy();
+    expect(result.abilitySnapshot_cn).toHaveLength(1);
+    expect(result.sectionInsights).toHaveLength(1);
+    expect(result.studyPlan).toHaveLength(3);
+    expect(result.parentFeedback_cn).toBeTruthy();
   });
 
   it("returns fallback bilingual report on LLM error", async () => {
@@ -187,6 +245,7 @@ describe("grading.generateReport", () => {
 
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
+      paperTitle: "PET English Assessment",
       totalScore: 20, totalPossible: 46, percentage: 43, grade: "D", totalTimeSeconds: 600,
       sectionResults: [
         { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 12, timeSeconds: 120 },
@@ -199,5 +258,66 @@ describe("grading.generateReport", () => {
     expect(result.languageLevel).toBe("N/A");
     expect(result.summary_en).toBeTruthy();
     expect(result.summary_cn).toBeTruthy();
+    expect(result.reportTitle_en).toBe("Assessment Feedback Report");
+    expect(result.studyPlan).toHaveLength(3);
+  });
+});
+
+describe("grading.evaluateSpeaking", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("transcribes and evaluates speaking responses", async () => {
+    mockTranscribeAudio.mockResolvedValueOnce({
+      task: "transcribe",
+      language: "en",
+      duration: 12,
+      text: "I would have the meal in a restaurant because it is easier for a big group.",
+      segments: [],
+    });
+
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            score: 8,
+            maxScore: 10,
+            grade: "B",
+            feedback_en: "The response is relevant and reasonably clear.",
+            feedback_cn: "回答切题，表达也比较清楚。",
+            taskCompletion_en: "The student answers the main task.",
+            taskCompletion_cn: "学生完成了主要任务。",
+            fluency_en: "The response flows fairly smoothly.",
+            fluency_cn: "表达整体比较流畅。",
+            vocabulary_en: "Vocabulary is simple but appropriate.",
+            vocabulary_cn: "词汇比较基础，但使用恰当。",
+            grammar_en: "Grammar is mostly controlled.",
+            grammar_cn: "语法整体比较稳定。",
+            pronunciation_en: "Pronunciation seems understandable, but transcript-only evidence is limited.",
+            pronunciation_cn: "表达大体可理解，但仅凭转写无法充分判断发音。",
+            suggestions_en: ["Add more detail.", "Use a wider range of vocabulary."],
+            suggestions_cn: ["补充更多细节。", "尝试使用更丰富的词汇。"],
+          }),
+        },
+      }],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-4",
+          sectionTitle: "Speaking Part 4",
+          questionId: 104,
+          prompt: "Talk about the special meal in more detail.",
+          audioUrl: "https://example.com/audio.webm",
+        },
+      ],
+    });
+
+    expect(result.totalScore).toBe(8);
+    expect(result.totalPossible).toBe(10);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0].transcript).toContain("restaurant");
+    expect(result.evaluations[0].feedback_cn).toContain("切题");
   });
 });
