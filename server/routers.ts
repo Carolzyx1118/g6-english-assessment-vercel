@@ -26,6 +26,58 @@ function clampScore(value: number, maxScore: number) {
   return Math.max(0, Math.min(maxScore, Math.round(value)));
 }
 
+function buildManualWritingEvaluation(input: {
+  essay: string;
+  topic: string;
+  wordCountTarget: string;
+}) {
+  const hasEssay = input.essay.trim().length > 0;
+
+  if (!hasEssay) {
+    return {
+      score: 0,
+      maxScore: 0,
+      grade: "No Submission",
+      overallFeedback_en:
+        "No writing response was submitted. This section is left for teacher review and is not included in the automatic score.",
+      overallFeedback_cn:
+        "本次未提交作文作答。该部分将留给老师人工批改，且不会计入自动分数。",
+      grammarErrors: [],
+      suggestions_en: [],
+      suggestions_cn: [],
+      correctedEssay: "",
+      annotatedEssay: "",
+      reviewMode: "manual" as const,
+      manualReviewRequired: false,
+    };
+  }
+
+  return {
+    score: 0,
+    maxScore: 0,
+    grade: "Manual Review",
+    overallFeedback_en:
+      "Automatic writing scoring has been turned off for this site. A teacher should review this essay manually for content, language accuracy, organization, and vocabulary. This section is not included in the automatic score.",
+    overallFeedback_cn:
+      "本网站已关闭作文自动评分。该作文需要老师从内容完成度、语言准确性、结构组织和词汇使用等方面进行人工批改。本部分不会计入自动分数。",
+    grammarErrors: [],
+    suggestions_en: [
+      `Review whether the response fully addresses the prompt: ${input.topic}.`,
+      `Check organization, sentence accuracy, and vocabulary against the target length (${input.wordCountTarget}).`,
+      "Add a teacher score and comments after manual review.",
+    ],
+    suggestions_cn: [
+      `先检查学生是否完整回应了题目要求：${input.topic}。`,
+      `再对照目标字数（${input.wordCountTarget}）检查结构、语法准确性和词汇使用。`,
+      "老师人工批改后补充分数和评语。",
+    ],
+    correctedEssay: "",
+    annotatedEssay: "",
+    reviewMode: "manual" as const,
+    manualReviewRequired: true,
+  };
+}
+
 function buildFallbackSpeakingQuestionEvaluation(input: {
   sectionId: string;
   sectionTitle: string;
@@ -281,104 +333,7 @@ Respond in JSON format:
         wordCountTarget: z.string(),
       }))
       .mutation(async ({ input }) => {
-        if (!input.essay || input.essay.trim().length < 10) {
-          return {
-            score: 0, maxScore: 20, grade: 'N/A',
-            overallFeedback_en: 'No essay submitted or essay too short to evaluate.',
-            overallFeedback_cn: '未提交作文或作文太短，无法评估。',
-            grammarErrors: [],
-            suggestions_en: [], suggestions_cn: [],
-            correctedEssay: '', annotatedEssay: '',
-          };
-        }
-
-        const prompt = `You are an experienced English teacher evaluating a Grade 6 student's composition.
-
-Topic: ${input.topic}
-Target word count: ${input.wordCountTarget}
-
-Student's Essay:
-"""
-${input.essay}
-"""
-
-Please evaluate this essay and provide ALL feedback in BOTH English and Chinese:
-1. A score out of 20 (considering content, language, organization, and vocabulary)
-2. A letter grade (A/B/C/D/F)
-3. overallFeedback_en: Overall feedback in English (2-3 sentences)
-4. overallFeedback_cn: Overall feedback in Chinese (2-3 sentences)
-5. grammarErrors: A list of grammar/spelling errors found (with original text, correction, explanation_en in English, explanation_cn in Chinese)
-6. suggestions_en: 2-3 specific suggestions in English
-7. suggestions_cn: 2-3 specific suggestions in Chinese
-8. correctedEssay: A corrected version of the essay
-9. annotatedEssay: The ORIGINAL essay with [[ERROR:original text||corrected text||explanation]] markers. Keep all non-error text exactly as the student wrote it.
-
-Example annotated format:
-"I [[ERROR:goed||went||'Goed' is not a word. The past tense of 'go' is 'went'.]] to the park."
-
-Respond in JSON format.`;
-
-        try {
-          const response = await invokeLLM({
-            messages: [
-              { role: "system", content: "You are a supportive English teacher who provides constructive feedback in both English and Chinese. Mark errors inline using the [[ERROR:original||correction||explanation]] format. Always respond with valid JSON." },
-              { role: "user", content: prompt },
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "writing_evaluation",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    score: { type: "number" },
-                    maxScore: { type: "number" },
-                    grade: { type: "string" },
-                    overallFeedback_en: { type: "string" },
-                    overallFeedback_cn: { type: "string" },
-                    grammarErrors: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          original: { type: "string" },
-                          correction: { type: "string" },
-                          explanation_en: { type: "string" },
-                          explanation_cn: { type: "string" },
-                        },
-                        required: ["original", "correction", "explanation_en", "explanation_cn"],
-                        additionalProperties: false,
-                      },
-                    },
-                    suggestions_en: { type: "array", items: { type: "string" } },
-                    suggestions_cn: { type: "array", items: { type: "string" } },
-                    correctedEssay: { type: "string" },
-                    annotatedEssay: { type: "string" },
-                  },
-                  required: ["score", "maxScore", "grade", "overallFeedback_en", "overallFeedback_cn", "grammarErrors", "suggestions_en", "suggestions_cn", "correctedEssay", "annotatedEssay"],
-                  additionalProperties: false,
-                },
-              },
-            },
-          });
-
-          const content = response.choices[0]?.message?.content;
-          if (typeof content === 'string') {
-            return JSON.parse(content);
-          }
-        } catch (err) {
-          console.error("AI writing evaluation error:", err);
-        }
-
-        return {
-          score: 0, maxScore: 20, grade: 'N/A',
-          overallFeedback_en: 'Unable to evaluate automatically.',
-          overallFeedback_cn: '无法自动评估，请手动检查。',
-          grammarErrors: [],
-          suggestions_en: [], suggestions_cn: [],
-          correctedEssay: '', annotatedEssay: '',
-        };
+        return buildManualWritingEvaluation(input);
       }),
 
     evaluateSpeaking: publicProcedure
@@ -709,6 +664,7 @@ Respond in JSON format:
           overallFeedback_cn: z.string().optional(),
           suggestions_en: z.array(z.string()).optional(),
           suggestions_cn: z.array(z.string()).optional(),
+          manualReviewRequired: z.boolean().optional(),
         }).optional(),
         speakingSummary: z.object({
           totalScore: z.number(),
@@ -767,6 +723,7 @@ ${input.sectionResults.map(s => `- ${s.sectionTitle}: ${s.correct}/${s.total} ($
 ${input.writingSummary ? `Writing Summary:
 - Score: ${input.writingSummary.score}/${input.writingSummary.maxScore}
 - Grade: ${input.writingSummary.grade}
+- Manual review required: ${input.writingSummary.manualReviewRequired ? "Yes" : "No"}
 - Feedback EN: ${input.writingSummary.overallFeedback_en || "N/A"}
 - Feedback CN: ${input.writingSummary.overallFeedback_cn || "N/A"}
 - Suggestions EN: ${(input.writingSummary.suggestions_en || []).join("; ") || "N/A"}
@@ -796,6 +753,9 @@ Return ALL fields in BOTH English and Chinese:
 11. studyPlan: exactly 3 stages, each containing stage_en, stage_cn, focus_en, focus_cn, actions_en, actions_cn
 12. parentFeedback_en / parentFeedback_cn: a warm but professional concluding note for parents
 13. speakingEvaluation: repeat the speakingSummary in structured form if speaking data exists; otherwise return null
+
+Important:
+- If the writing summary says manual review is required, do not invent a writing score analysis. State clearly that teacher scoring is still pending and that writing is excluded from the automatic score.
 
 Respond in JSON format.`;
 

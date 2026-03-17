@@ -33,6 +33,8 @@ type WritingEvalResult = {
   annotatedEssay: string;
   suggestions_en: string[];
   suggestions_cn: string[];
+  reviewMode?: 'ai' | 'manual';
+  manualReviewRequired?: boolean;
 };
 
 type ExplanationResult = {
@@ -139,6 +141,13 @@ function titleCaseSectionId(sectionId: string) {
 function safeParseJSON<T>(json: string | null, fallback: T): T {
   if (!json) return fallback;
   try { return JSON.parse(json) as T; } catch { return fallback; }
+}
+
+function isManualWritingReview(result: WritingEvalResult | null | undefined) {
+  return Boolean(
+    result &&
+    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.maxScore === 0 && result.grade === 'Manual Review'))
+  );
 }
 
 /**
@@ -607,8 +616,9 @@ export function generateReportPDF(data: PDFData): void {
   // Calculate total score including AI-graded sections
   const readingAIScore = readingResults ? readingResults.reduce((sum, r) => sum + r.score, 0) : 0;
   const readingAITotal = readingResults ? readingResults.length : 0;
-  const writingAIScore = writingResult ? writingResult.score : 0;
-  const writingAITotal = writingResult ? writingResult.maxScore : 0;
+  const writingIsManual = isManualWritingReview(writingResult);
+  const writingAIScore = writingResult && !writingIsManual ? writingResult.score : 0;
+  const writingAITotal = writingResult && !writingIsManual ? writingResult.maxScore : 0;
   const speakingAIScore = speakingEvaluation ? speakingEvaluation.totalScore : 0;
   const speakingAITotal = speakingEvaluation ? speakingEvaluation.totalPossible : 0;
   const totalScore = data.totalCorrect + readingAIScore + writingAIScore + speakingAIScore;
@@ -721,8 +731,8 @@ export function generateReportPDF(data: PDFData): void {
       sCorrect = readingResults.filter(r => r.isCorrect).length;
       sTotal = readingResults.length;
     } else if (sectionId === 'writing' && writingResult) {
-      sCorrect = writingResult.score;
-      sTotal = writingResult.maxScore;
+      sCorrect = writingIsManual ? 0 : writingResult.score;
+      sTotal = writingIsManual ? 0 : writingResult.maxScore;
     } else if (speakingEvaluation && speakingEvaluation.evaluations.some((item) => item.sectionId === sectionId)) {
       const evaluations = speakingEvaluation.evaluations.filter((item) => item.sectionId === sectionId);
       sCorrect = evaluations.reduce((sum, item) => sum + item.score, 0);
@@ -746,7 +756,12 @@ export function generateReportPDF(data: PDFData): void {
     pdf.setFontSize(8.5);
     pdf.setTextColor(...C.text);
     pdf.text(sectionTitle, mL + 9, y + 5);
-    const scoreStr = sTotal > 0 ? `${sCorrect}/${sTotal} (${pct}%)` : 'N/A';
+    const scoreStr =
+      sectionId === 'writing' && writingIsManual
+        ? 'Manual Review'
+        : sTotal > 0
+          ? `${sCorrect}/${sTotal} (${pct}%)`
+          : 'N/A';
     pdf.text(scoreStr, mL + contentW - 40, y + 5, { align: 'center' });
     pdf.text(sTime > 0 ? formatTime(sTime) : '-', mL + contentW - 12, y + 5, { align: 'center' });
     y += 7;
@@ -960,7 +975,7 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── WRITING EVALUATION ──
   if (writingResult) {
-    addSectionBanner('Writing Evaluation', C.rose, C.roseLight);
+    addSectionBanner(writingIsManual ? 'Writing Review' : 'Writing Evaluation', C.rose, C.roseLight);
     addGap(3);
     if (writingQuestion) {
       addText('Writing Prompt', mL, 10, true, C.text);
@@ -982,22 +997,35 @@ export function generateReportPDF(data: PDFData): void {
     }
 
     checkPage(14);
-    drawRect(mL, y - 2, 32, 10, C.rose, 2);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(`${writingResult.score} / ${writingResult.maxScore}`, mL + 16, y + 4.5, { align: 'center' });
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(...C.textMuted);
-    pdf.text('Writing Score', mL + 36, y + 4.5);
-    y += 14;
+    if (writingIsManual) {
+      drawRect(mL, y - 2, 40, 10, C.amber, 2);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('Manual Review', mL + 20, y + 4.5, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text('Teacher Score Pending', mL + 44, y + 4.5);
+      y += 14;
+    } else {
+      drawRect(mL, y - 2, 32, 10, C.rose, 2);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`${writingResult.score} / ${writingResult.maxScore}`, mL + 16, y + 4.5, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...C.textMuted);
+      pdf.text('Writing Score', mL + 36, y + 4.5);
+      y += 14;
+    }
 
     addText('Overall Feedback', mL, 10, true, C.text);
     addText(writingResult.overallFeedback_en, mL + 2, 9.5, false, C.textMuted);
     addGap(4);
 
-    if (writingResult.grammarErrors.length > 0) {
+    if (!writingIsManual && writingResult.grammarErrors.length > 0) {
       addText('Errors Found', mL, 10, true, C.danger);
       addGap(2);
       writingResult.grammarErrors.forEach((err, i) => {
@@ -1012,7 +1040,7 @@ export function generateReportPDF(data: PDFData): void {
       addGap(2);
     }
 
-    if (writingResult.correctedEssay) {
+    if (!writingIsManual && writingResult.correctedEssay) {
       addText('Corrected Essay', mL, 10, true, C.text);
       addGap(1);
       checkPage(8);

@@ -263,6 +263,28 @@ describe("grading.generateReport", () => {
   });
 });
 
+describe("grading.evaluateWriting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns a manual-review placeholder without calling the LLM", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateWriting({
+      essay: "I went to the park with my sister and we played on the swings after lunch.",
+      topic: "A day at the park",
+      wordCountTarget: "80-100 words",
+    });
+
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
+    expect(result.grade).toBe("Manual Review");
+    expect(result.maxScore).toBe(0);
+    expect(result.reviewMode).toBe("manual");
+    expect(result.manualReviewRequired).toBe(true);
+    expect(result.overallFeedback_en).toContain("Automatic writing scoring has been turned off");
+  });
+});
+
 describe("grading.evaluateSpeaking", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
