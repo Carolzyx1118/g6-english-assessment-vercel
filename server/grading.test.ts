@@ -288,41 +288,7 @@ describe("grading.evaluateWriting", () => {
 describe("grading.evaluateSpeaking", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("transcribes and evaluates speaking responses", async () => {
-    mockTranscribeAudio.mockResolvedValueOnce({
-      task: "transcribe",
-      language: "en",
-      duration: 12,
-      text: "I would have the meal in a restaurant because it is easier for a big group.",
-      segments: [],
-    });
-
-    mockInvokeLLM.mockResolvedValueOnce({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            score: 8,
-            maxScore: 10,
-            grade: "B",
-            feedback_en: "The response is relevant and reasonably clear.",
-            feedback_cn: "回答切题，表达也比较清楚。",
-            taskCompletion_en: "The student answers the main task.",
-            taskCompletion_cn: "学生完成了主要任务。",
-            fluency_en: "The response flows fairly smoothly.",
-            fluency_cn: "表达整体比较流畅。",
-            vocabulary_en: "Vocabulary is simple but appropriate.",
-            vocabulary_cn: "词汇比较基础，但使用恰当。",
-            grammar_en: "Grammar is mostly controlled.",
-            grammar_cn: "语法整体比较稳定。",
-            pronunciation_en: "Pronunciation seems understandable, but transcript-only evidence is limited.",
-            pronunciation_cn: "表达大体可理解，但仅凭转写无法充分判断发音。",
-            suggestions_en: ["Add more detail.", "Use a wider range of vocabulary."],
-            suggestions_cn: ["补充更多细节。", "尝试使用更丰富的词汇。"],
-          }),
-        },
-      }],
-    } as any);
-
+  it("returns a manual-review placeholder without calling transcription or the LLM", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.evaluateSpeaking({
       responses: [
@@ -336,10 +302,16 @@ describe("grading.evaluateSpeaking", () => {
       ],
     });
 
-    expect(result.totalScore).toBe(8);
-    expect(result.totalPossible).toBe(10);
+    expect(mockTranscribeAudio).not.toHaveBeenCalled();
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
+    expect(result.totalScore).toBe(0);
+    expect(result.totalPossible).toBe(0);
+    expect(result.grade).toBe("Manual Review");
+    expect(result.reviewMode).toBe("manual");
+    expect(result.manualReviewRequired).toBe(true);
     expect(result.evaluations).toHaveLength(1);
-    expect(result.evaluations[0].transcript).toContain("restaurant");
-    expect(result.evaluations[0].feedback_cn).toContain("切题");
+    expect(result.evaluations[0].reviewMode).toBe("manual");
+    expect(result.evaluations[0].manualReviewRequired).toBe(true);
+    expect(result.evaluations[0].feedback_en).toContain("Automatic speaking scoring has been turned off");
   });
 });

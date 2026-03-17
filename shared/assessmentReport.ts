@@ -22,6 +22,8 @@ export interface SpeakingQuestionEvaluation {
   pronunciation_cn: string;
   suggestions_en: string[];
   suggestions_cn: string[];
+  reviewMode?: "ai" | "manual";
+  manualReviewRequired?: boolean;
 }
 
 export interface SpeakingEvaluationResult {
@@ -31,6 +33,8 @@ export interface SpeakingEvaluationResult {
   overallFeedback_en: string;
   overallFeedback_cn: string;
   evaluations: SpeakingQuestionEvaluation[];
+  reviewMode?: "ai" | "manual";
+  manualReviewRequired?: boolean;
 }
 
 export interface AssessmentSectionInsight {

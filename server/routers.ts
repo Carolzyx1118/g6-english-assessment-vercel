@@ -3,7 +3,6 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
-import { transcribeAudio } from "./_core/voiceTranscription";
 import { z } from "zod";
 import { saveTestResult, getAllTestResults, getTestResultById, updateTestResultAI, deleteTestResult } from "./db";
 import { paperRouter } from "./paperRouter";
@@ -13,18 +12,6 @@ import type {
   SpeakingEvaluationResult,
   SpeakingQuestionEvaluation,
 } from "../shared/assessmentReport";
-
-function getLetterGradeFromPercentage(percentage: number) {
-  if (percentage >= 90) return "A";
-  if (percentage >= 75) return "B";
-  if (percentage >= 60) return "C";
-  if (percentage >= 40) return "D";
-  return "F";
-}
-
-function clampScore(value: number, maxScore: number) {
-  return Math.max(0, Math.min(maxScore, Math.round(value)));
-}
 
 function buildManualWritingEvaluation(input: {
   essay: string;
@@ -78,63 +65,66 @@ function buildManualWritingEvaluation(input: {
   };
 }
 
-function buildFallbackSpeakingQuestionEvaluation(input: {
-  sectionId: string;
-  sectionTitle: string;
-  questionId: number;
-  prompt: string;
-  audioUrl: string;
-  transcript: string;
-  reason_en: string;
-  reason_cn: string;
-}): SpeakingQuestionEvaluation {
-  return {
-    sectionId: input.sectionId,
-    sectionTitle: input.sectionTitle,
-    questionId: input.questionId,
-    prompt: input.prompt,
-    audioUrl: input.audioUrl,
-    transcript: input.transcript,
-    score: 0,
-    maxScore: 10,
-    grade: "N/A",
-    feedback_en: input.reason_en,
-    feedback_cn: input.reason_cn,
-    taskCompletion_en: input.reason_en,
-    taskCompletion_cn: input.reason_cn,
-    fluency_en: "Fluency could not be evaluated automatically.",
-    fluency_cn: "流利度暂时无法自动评估。",
-    vocabulary_en: "Vocabulary use could not be evaluated automatically.",
-    vocabulary_cn: "词汇使用暂时无法自动评估。",
-    grammar_en: "Grammar use could not be evaluated automatically.",
-    grammar_cn: "语法使用暂时无法自动评估。",
-    pronunciation_en: "Pronunciation could not be judged reliably from the available transcript.",
-    pronunciation_cn: "现有转写信息不足，无法可靠判断发音情况。",
-    suggestions_en: ["Please review this speaking response manually."],
-    suggestions_cn: ["请对这道口语题进行人工复核。"],
-  };
-}
-
-function buildFallbackSpeakingEvaluation(
-  evaluations: SpeakingQuestionEvaluation[]
+function buildManualSpeakingEvaluation(
+  responses: Array<{
+    sectionId: string;
+    sectionTitle: string;
+    questionId: number;
+    prompt: string;
+    audioUrl: string;
+  }>
 ): SpeakingEvaluationResult {
-  const totalPossible = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
-  const totalScore = evaluations.reduce((sum, item) => sum + item.score, 0);
-  const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+  const evaluations: SpeakingQuestionEvaluation[] = responses.map((response) => ({
+    sectionId: response.sectionId,
+    sectionTitle: response.sectionTitle,
+    questionId: response.questionId,
+    prompt: response.prompt,
+    audioUrl: response.audioUrl,
+    transcript: "",
+    score: 0,
+    maxScore: 0,
+    grade: "Manual Review",
+    feedback_en:
+      "Automatic speaking scoring has been turned off for this site. The teacher should review the original recording manually for task completion, fluency, vocabulary, grammar, and pronunciation.",
+    feedback_cn:
+      "本网站已关闭口语自动评分。老师需要结合原始录音，从任务完成度、流利度、词汇、语法和发音等方面进行人工批改。",
+    taskCompletion_en: "Teacher review is required for this speaking response.",
+    taskCompletion_cn: "这道口语题需要老师人工批改。",
+    fluency_en: "Please judge fluency from the original recording.",
+    fluency_cn: "请结合原始录音判断流利度。",
+    vocabulary_en: "Please review vocabulary use manually.",
+    vocabulary_cn: "请人工判断词汇使用情况。",
+    grammar_en: "Please review grammar control manually.",
+    grammar_cn: "请人工判断语法使用情况。",
+    pronunciation_en: "Please review pronunciation from the original audio.",
+    pronunciation_cn: "请结合原始录音判断发音情况。",
+    suggestions_en: [
+      "Listen to the original recording before scoring.",
+      "Add a teacher score and comments after manual review.",
+    ],
+    suggestions_cn: [
+      "评分前请先听原始录音。",
+      "老师人工批改后补充分数和评语。",
+    ],
+    reviewMode: "manual",
+    manualReviewRequired: true,
+  }));
 
   return {
-    totalScore,
-    totalPossible,
-    grade: getLetterGradeFromPercentage(percentage),
+    totalScore: 0,
+    totalPossible: 0,
+    grade: "Manual Review",
     overallFeedback_en:
       evaluations.length > 0
-        ? "Speaking responses were processed with limited automatic evidence. Please review the transcript and audio manually."
+        ? "Automatic speaking scoring has been turned off for this site. Teacher review is required for all submitted speaking recordings, and speaking is excluded from the automatic score."
         : "No speaking responses were submitted.",
     overallFeedback_cn:
       evaluations.length > 0
-        ? "口语作答的自动分析证据有限，请结合转写内容和录音进行人工复核。"
+        ? "本网站已关闭口语自动评分。所有已提交的口语录音都需要老师人工批改，且口语部分不会计入自动总分。"
         : "未提交口语作答。",
     evaluations,
+    reviewMode: "manual",
+    manualReviewRequired: evaluations.length > 0,
   };
 }
 
@@ -163,7 +153,7 @@ function buildFallbackAssessmentReport(input: {
     reportTitle_cn: "测评反馈报告",
     overallSummary_en: `${input.paperTitle} has been completed. The student scored ${input.totalScore}/${input.totalPossible} (${input.percentage}%), with an overall grade of ${input.grade}.`,
     overallSummary_cn: `本次 ${input.paperTitle} 已完成。学生总分为 ${input.totalScore}/${input.totalPossible}（${input.percentage}%），综合等级为 ${input.grade}。`,
-    abilitySnapshot_en: ["More evidence is needed to generate a reliable AI profile."],
+    abilitySnapshot_en: ["More evidence is needed to generate a reliable profile."],
     abilitySnapshot_cn: ["当前自动分析证据不足，建议结合人工判断进一步解读。"],
     sectionInsights: input.sectionResults.map((section) => ({
       sectionId: section.sectionId,
@@ -198,12 +188,16 @@ function buildFallbackAssessmentReport(input: {
       },
     ],
     parentFeedback_en:
-      input.speakingSummary && input.speakingSummary.evaluations.length > 0
-        ? "The report includes speaking transcripts and AI comments, but important speaking judgments should still be reviewed together with the original audio."
+      input.speakingSummary?.manualReviewRequired
+        ? "Speaking and writing should be finalized together with the teacher's manual scoring notes before sharing a complete parent conclusion."
+        : input.speakingSummary && input.speakingSummary.evaluations.length > 0
+        ? "The report includes speaking transcripts and comments, but important speaking judgments should still be reviewed together with the original audio."
         : "Use the question-level review together with the overall section scores to plan the next teaching steps.",
     parentFeedback_cn:
-      input.speakingSummary && input.speakingSummary.evaluations.length > 0
-        ? "本报告已附上口语转写和 AI 反馈，但口语能力判断仍建议结合原始录音做人工复核。"
+      input.speakingSummary?.manualReviewRequired
+        ? "建议先结合老师对口语和写作的人工评分与评语，再形成更完整的家长反馈。"
+        : input.speakingSummary && input.speakingSummary.evaluations.length > 0
+        ? "本报告已附上口语转写和点评，但口语能力判断仍建议结合原始录音做人工复核。"
         : "建议把逐题记录和各部分成绩结合起来，制定下一阶段的教学重点。",
     speakingEvaluation: input.speakingSummary ?? null,
   };
@@ -347,202 +341,7 @@ Respond in JSON format:
         })).min(1),
       }))
       .mutation(async ({ input }) => {
-        const evaluations: SpeakingQuestionEvaluation[] = [];
-
-        for (const response of input.responses) {
-          const transcription = await transcribeAudio({
-            audioUrl: response.audioUrl,
-            language: "en",
-            prompt: `Transcribe a student's English speaking assessment response. Prompt: ${response.prompt}`,
-          });
-
-          if ("error" in transcription) {
-            evaluations.push(
-              buildFallbackSpeakingQuestionEvaluation({
-                ...response,
-                transcript: "",
-                reason_en: `Automatic speaking evaluation is unavailable because transcription failed: ${transcription.error}.`,
-                reason_cn: `由于转写失败，当前无法自动评估口语：${transcription.error}。`,
-              })
-            );
-            continue;
-          }
-
-          const transcript = transcription.text.trim();
-          if (!transcript) {
-            evaluations.push(
-              buildFallbackSpeakingQuestionEvaluation({
-                ...response,
-                transcript: "",
-                reason_en: "No usable speech was transcribed from the recording.",
-                reason_cn: "录音中没有成功转写出可用的作答内容。",
-              })
-            );
-            continue;
-          }
-
-          try {
-            const evaluationPrompt = `You are an experienced PET/KET-style speaking examiner reviewing a student's spoken response.
-
-Important constraints:
-- You ONLY have the transcript, not the raw audio.
-- Be cautious with pronunciation judgments. If the transcript does not provide enough evidence, state that clearly instead of over-claiming.
-- Give concise, constructive feedback in BOTH English and Chinese.
-
-Section: ${response.sectionTitle}
-Question ID: ${response.questionId}
-Prompt:
-${response.prompt}
-
-Transcript:
-"""
-${transcript}
-"""
-
-Score this response out of 10.
-Evaluate:
-1. taskCompletion_en / taskCompletion_cn
-2. fluency_en / fluency_cn
-3. vocabulary_en / vocabulary_cn
-4. grammar_en / grammar_cn
-5. pronunciation_en / pronunciation_cn
-6. feedback_en / feedback_cn
-7. suggestions_en / suggestions_cn (2-3 items each)
-
-Respond in JSON only.`;
-
-            const evaluationResponse = await invokeLLM({
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a fair English speaking examiner. Base your judgment on the transcript only, state uncertainty clearly, and always return valid JSON.",
-                },
-                { role: "user", content: evaluationPrompt },
-              ],
-              response_format: {
-                type: "json_schema",
-                json_schema: {
-                  name: "speaking_evaluation",
-                  strict: true,
-                  schema: {
-                    type: "object",
-                    properties: {
-                      score: { type: "number" },
-                      maxScore: { type: "number" },
-                      grade: { type: "string" },
-                      feedback_en: { type: "string" },
-                      feedback_cn: { type: "string" },
-                      taskCompletion_en: { type: "string" },
-                      taskCompletion_cn: { type: "string" },
-                      fluency_en: { type: "string" },
-                      fluency_cn: { type: "string" },
-                      vocabulary_en: { type: "string" },
-                      vocabulary_cn: { type: "string" },
-                      grammar_en: { type: "string" },
-                      grammar_cn: { type: "string" },
-                      pronunciation_en: { type: "string" },
-                      pronunciation_cn: { type: "string" },
-                      suggestions_en: { type: "array", items: { type: "string" } },
-                      suggestions_cn: { type: "array", items: { type: "string" } },
-                    },
-                    required: [
-                      "score",
-                      "maxScore",
-                      "grade",
-                      "feedback_en",
-                      "feedback_cn",
-                      "taskCompletion_en",
-                      "taskCompletion_cn",
-                      "fluency_en",
-                      "fluency_cn",
-                      "vocabulary_en",
-                      "vocabulary_cn",
-                      "grammar_en",
-                      "grammar_cn",
-                      "pronunciation_en",
-                      "pronunciation_cn",
-                      "suggestions_en",
-                      "suggestions_cn",
-                    ],
-                    additionalProperties: false,
-                  },
-                },
-              },
-            });
-
-            const content = evaluationResponse.choices[0]?.message?.content;
-            if (typeof content === "string") {
-              const parsed = JSON.parse(content) as Omit<
-                SpeakingQuestionEvaluation,
-                "sectionId" | "sectionTitle" | "questionId" | "prompt" | "audioUrl" | "transcript"
-              >;
-
-              const maxScore = clampScore(parsed.maxScore || 10, 10) || 10;
-              const score = clampScore(parsed.score, maxScore);
-              const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-
-              evaluations.push({
-                sectionId: response.sectionId,
-                sectionTitle: response.sectionTitle,
-                questionId: response.questionId,
-                prompt: response.prompt,
-                audioUrl: response.audioUrl,
-                transcript,
-                score,
-                maxScore,
-                grade: parsed.grade || getLetterGradeFromPercentage(percentage),
-                feedback_en: parsed.feedback_en,
-                feedback_cn: parsed.feedback_cn,
-                taskCompletion_en: parsed.taskCompletion_en,
-                taskCompletion_cn: parsed.taskCompletion_cn,
-                fluency_en: parsed.fluency_en,
-                fluency_cn: parsed.fluency_cn,
-                vocabulary_en: parsed.vocabulary_en,
-                vocabulary_cn: parsed.vocabulary_cn,
-                grammar_en: parsed.grammar_en,
-                grammar_cn: parsed.grammar_cn,
-                pronunciation_en: parsed.pronunciation_en,
-                pronunciation_cn: parsed.pronunciation_cn,
-                suggestions_en: parsed.suggestions_en,
-                suggestions_cn: parsed.suggestions_cn,
-              });
-              continue;
-            }
-          } catch (err) {
-            console.error("AI speaking evaluation error:", err);
-          }
-
-          evaluations.push(
-            buildFallbackSpeakingQuestionEvaluation({
-              ...response,
-              transcript,
-              reason_en: "Automatic speaking analysis could not be completed for this response.",
-              reason_cn: "这道口语题当前无法完成自动分析。",
-            })
-          );
-        }
-
-        const totalPossible = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
-        const totalScore = evaluations.reduce((sum, item) => sum + item.score, 0);
-        const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
-
-        if (evaluations.length === 0) {
-          return buildFallbackSpeakingEvaluation([]);
-        }
-
-        return {
-          totalScore,
-          totalPossible,
-          grade: getLetterGradeFromPercentage(percentage),
-          overallFeedback_en: evaluations
-            .map((item) => `${item.sectionTitle} Q${item.questionId}: ${item.feedback_en}`)
-            .join(" "),
-          overallFeedback_cn: evaluations
-            .map((item) => `${item.sectionTitle} 第${item.questionId}题：${item.feedback_cn}`)
-            .join(" "),
-          evaluations,
-        } satisfies SpeakingEvaluationResult;
+        return buildManualSpeakingEvaluation(input.responses);
       }),
 
     // Generate bilingual explanations for wrong answers
@@ -672,6 +471,8 @@ Respond in JSON format:
           grade: z.string(),
           overallFeedback_en: z.string(),
           overallFeedback_cn: z.string(),
+          reviewMode: z.enum(["ai", "manual"]).optional(),
+          manualReviewRequired: z.boolean().optional(),
           evaluations: z.array(z.object({
             sectionId: z.string(),
             sectionTitle: z.string(),
@@ -696,6 +497,8 @@ Respond in JSON format:
             pronunciation_cn: z.string(),
             suggestions_en: z.array(z.string()),
             suggestions_cn: z.array(z.string()),
+            reviewMode: z.enum(["ai", "manual"]).optional(),
+            manualReviewRequired: z.boolean().optional(),
           })),
         }).optional(),
       }))
@@ -733,6 +536,7 @@ ${input.writingSummary ? `Writing Summary:
 ${input.speakingSummary ? `Speaking Summary:
 - Score: ${input.speakingSummary.totalScore}/${input.speakingSummary.totalPossible}
 - Grade: ${input.speakingSummary.grade}
+- Manual review required: ${input.speakingSummary.manualReviewRequired ? "Yes" : "No"}
 - Overall EN: ${input.speakingSummary.overallFeedback_en}
 - Overall CN: ${input.speakingSummary.overallFeedback_cn}
 - Question details:
@@ -752,10 +556,11 @@ Return ALL fields in BOTH English and Chinese:
 10. sectionInsights: an array with one item per section, each containing sectionId, sectionTitle, summary_en, summary_cn
 11. studyPlan: exactly 3 stages, each containing stage_en, stage_cn, focus_en, focus_cn, actions_en, actions_cn
 12. parentFeedback_en / parentFeedback_cn: a warm but professional concluding note for parents
-13. speakingEvaluation: repeat the speakingSummary in structured form if speaking data exists; otherwise return null
+13. speakingEvaluation: repeat the speakingSummary in structured form, including reviewMode and manualReviewRequired, if speaking data exists; otherwise return null
 
 Important:
 - If the writing summary says manual review is required, do not invent a writing score analysis. State clearly that teacher scoring is still pending and that writing is excluded from the automatic score.
+- If the speaking summary says manual review is required, do not invent speaking performance analysis, transcript-based judgments, or teacher scores. State clearly that speaking teacher review is still pending and that speaking is excluded from the automatic score.
 
 Respond in JSON format.`;
 
@@ -833,6 +638,8 @@ Respond in JSON format.`;
                             grade: { type: "string" },
                             overallFeedback_en: { type: "string" },
                             overallFeedback_cn: { type: "string" },
+                            reviewMode: { type: "string" },
+                            manualReviewRequired: { type: "boolean" },
                             evaluations: {
                               type: "array",
                               items: {
@@ -861,6 +668,8 @@ Respond in JSON format.`;
                                   pronunciation_cn: { type: "string" },
                                   suggestions_en: { type: "array", items: { type: "string" } },
                                   suggestions_cn: { type: "array", items: { type: "string" } },
+                                  reviewMode: { type: "string" },
+                                  manualReviewRequired: { type: "boolean" },
                                 },
                                 required: [
                                   "sectionId",
@@ -885,13 +694,24 @@ Respond in JSON format.`;
                                   "pronunciation_en",
                                   "pronunciation_cn",
                                   "suggestions_en",
-                                  "suggestions_cn"
+                                  "suggestions_cn",
+                                  "reviewMode",
+                                  "manualReviewRequired"
                                 ],
                                 additionalProperties: false,
                               },
                             },
                           },
-                          required: ["totalScore", "totalPossible", "grade", "overallFeedback_en", "overallFeedback_cn", "evaluations"],
+                          required: [
+                            "totalScore",
+                            "totalPossible",
+                            "grade",
+                            "overallFeedback_en",
+                            "overallFeedback_cn",
+                            "reviewMode",
+                            "manualReviewRequired",
+                            "evaluations",
+                          ],
                           additionalProperties: false,
                         },
                       ],

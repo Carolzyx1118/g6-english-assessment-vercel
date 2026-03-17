@@ -154,7 +154,7 @@ function HistoryContent() {
                           <h3 className="font-semibold text-slate-800 truncate">{r.paperTitle}</h3>
                           {r.hasReport && (
                             <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
-                              {lang === 'en' ? 'AI Report' : 'AI报告'}
+                              {lang === 'en' ? 'Report Ready' : '报告已生成'}
                             </span>
                           )}
                         </div>
@@ -216,14 +216,14 @@ function HistoryContent() {
                             </div>
                           )}
 
-                          {/* AI Report summary */}
+                          {/* Report summary */}
                           {detail.reportJson && (() => {
                             try {
                               const rpt = JSON.parse(detail.reportJson);
                               return (
                                 <div>
                                   <h4 className="text-sm font-semibold text-slate-700 mb-3">
-                                    {lang === 'en' ? (rpt.reportTitle_en || '🤖 AI Proficiency Report') : (rpt.reportTitle_cn || '🤖 AI能力报告')}
+                                    {lang === 'en' ? (rpt.reportTitle_en || 'Assessment Feedback Report') : (rpt.reportTitle_cn || '测评反馈报告')}
                                   </h4>
                                   <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-4 border border-violet-100">
                                     <div className="flex items-center gap-3 mb-3">

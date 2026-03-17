@@ -150,6 +150,13 @@ function isManualWritingReview(result: WritingEvalResult | null | undefined) {
   );
 }
 
+function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
+  return Boolean(
+    result &&
+    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.totalPossible === 0 && result.grade === 'Manual Review'))
+  );
+}
+
 /**
  * Build detailed question info for auto-gradable sections (vocabulary, grammar, listening).
  * This reconstructs the same logic as ResultsPage's detailedResults.
@@ -277,7 +284,7 @@ function buildAutoGradableDetails(
         questionNum: `Q${q.id}`,
         questionText: q.question,
         userAnswer: isAnswered ? (isAudioAnswer ? 'Audio response submitted' : rawText) : 'Not Answered',
-        correctAnswer: q.correctAnswer || 'See AI speaking evaluation / manual review',
+        correctAnswer: q.correctAnswer || 'Teacher review required',
         isCorrect: false,
         isAnswered,
       });
@@ -613,14 +620,15 @@ export function generateReportPDF(data: PDFData): void {
       ? String(answers[writingAnswerKey])
       : '';
 
-  // Calculate total score including AI-graded sections
+  // Calculate total score including automated sections only.
   const readingAIScore = readingResults ? readingResults.reduce((sum, r) => sum + r.score, 0) : 0;
   const readingAITotal = readingResults ? readingResults.length : 0;
   const writingIsManual = isManualWritingReview(writingResult);
   const writingAIScore = writingResult && !writingIsManual ? writingResult.score : 0;
   const writingAITotal = writingResult && !writingIsManual ? writingResult.maxScore : 0;
-  const speakingAIScore = speakingEvaluation ? speakingEvaluation.totalScore : 0;
-  const speakingAITotal = speakingEvaluation ? speakingEvaluation.totalPossible : 0;
+  const speakingIsManual = isManualSpeakingReview(speakingEvaluation);
+  const speakingAIScore = speakingEvaluation && !speakingIsManual ? speakingEvaluation.totalScore : 0;
+  const speakingAITotal = speakingEvaluation && !speakingIsManual ? speakingEvaluation.totalPossible : 0;
   const totalScore = data.totalCorrect + readingAIScore + writingAIScore + speakingAIScore;
   const totalPossible = data.totalQuestions + readingAITotal + writingAITotal + speakingAITotal;
   const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
@@ -693,6 +701,13 @@ export function generateReportPDF(data: PDFData): void {
     pdf.text(card.label, cx + cardW / 2, y + 16, { align: 'center' });
   });
   y += 24;
+  const manualScoreNotes = [
+    writingIsManual ? 'Writing is pending teacher review and is not included in the automatic score.' : null,
+    speakingIsManual ? 'Speaking is pending teacher review and is not included in the automatic score.' : null,
+  ].filter(Boolean) as string[];
+  manualScoreNotes.forEach((note) => {
+    addText(note, mL + 2, 8.3, false, C.amber, contentW - 6);
+  });
   addDivider();
 
   // ── SECTION BREAKDOWN ──
@@ -735,8 +750,8 @@ export function generateReportPDF(data: PDFData): void {
       sTotal = writingIsManual ? 0 : writingResult.maxScore;
     } else if (speakingEvaluation && speakingEvaluation.evaluations.some((item) => item.sectionId === sectionId)) {
       const evaluations = speakingEvaluation.evaluations.filter((item) => item.sectionId === sectionId);
-      sCorrect = evaluations.reduce((sum, item) => sum + item.score, 0);
-      sTotal = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
+      sCorrect = speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.score, 0);
+      sTotal = speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.maxScore, 0);
     } else if (bySection[sectionId]) {
       sCorrect = bySection[sectionId].correct;
       sTotal = bySection[sectionId].total;
@@ -757,7 +772,7 @@ export function generateReportPDF(data: PDFData): void {
     pdf.setTextColor(...C.text);
     pdf.text(sectionTitle, mL + 9, y + 5);
     const scoreStr =
-      sectionId === 'writing' && writingIsManual
+      (sectionId === 'writing' && writingIsManual) || (speakingIsManual && speakingEvaluation?.evaluations.some((item) => item.sectionId === sectionId))
         ? 'Manual Review'
         : sTotal > 0
           ? `${sCorrect}/${sTotal} (${pct}%)`
@@ -1062,7 +1077,7 @@ export function generateReportPDF(data: PDFData): void {
   }
 
   if (speakingEvaluation && speakingEvaluation.evaluations.length > 0) {
-    addSectionBanner('Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
+    addSectionBanner(speakingIsManual ? 'Speaking Review' : 'Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
     addText(speakingEvaluation.overallFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
 
@@ -1073,23 +1088,34 @@ export function generateReportPDF(data: PDFData): void {
       pdf.setFontSize(9.5);
       pdf.setTextColor(...C.text);
       pdf.text(`${item.sectionTitle} - Q${item.questionId}`, mL + 4, y + 3);
-      drawRect(mL + contentW - 22, y - 0.5, 20, 5, [224, 242, 254], 2);
-      pdf.setFontSize(7);
-      pdf.setTextColor(3, 105, 161);
-      pdf.text(`${item.score}/${item.maxScore}`, mL + contentW - 12, y + 2.8, { align: 'center' });
+      if (speakingIsManual) {
+        drawRect(mL + contentW - 32, y - 0.5, 30, 5, [254, 243, 199], 2);
+        pdf.setFontSize(7);
+        pdf.setTextColor(180, 83, 9);
+        pdf.text('Manual Review', mL + contentW - 17, y + 2.8, { align: 'center' });
+      } else {
+        drawRect(mL + contentW - 22, y - 0.5, 20, 5, [224, 242, 254], 2);
+        pdf.setFontSize(7);
+        pdf.setTextColor(3, 105, 161);
+        pdf.text(`${item.score}/${item.maxScore}`, mL + contentW - 12, y + 2.8, { align: 'center' });
+      }
       y += 8;
 
       addText(`Prompt: ${item.prompt}`, mL + 6, 8.5, false, C.text, contentW - 14);
-      addText(`Transcript: ${item.transcript || 'No transcript available.'}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-      addText(`Overall Comment: ${item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
-      addText(`Task Completion: ${item.taskCompletion_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-      addText(`Fluency: ${item.fluency_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-      addText(`Vocabulary: ${item.vocabulary_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-      addText(`Grammar: ${item.grammar_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-      addText(`Pronunciation: ${item.pronunciation_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      if (speakingIsManual) {
+        addText('Teacher review status: Recording submitted. Please listen to the original audio and add a score and comments manually.', mL + 6, 8.3, false, C.textMuted, contentW - 14);
+      } else {
+        addText(`Transcript: ${item.transcript || 'No transcript available.'}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+        addText(`Overall Comment: ${item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
+        addText(`Task Completion: ${item.taskCompletion_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`Fluency: ${item.fluency_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`Vocabulary: ${item.vocabulary_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`Grammar: ${item.grammar_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`Pronunciation: ${item.pronunciation_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+      }
 
       if (item.suggestions_en.length > 0) {
-        addText('Suggestions', mL + 6, 8.6, true, C.primary);
+        addText(speakingIsManual ? 'Teacher Checklist' : 'Suggestions', mL + 6, 8.6, true, C.primary);
         item.suggestions_en.forEach((suggestion, index) => {
           addText(`${index + 1}.  ${suggestion}`, mL + 8, 8.1, false, C.textMuted, contentW - 16);
         });

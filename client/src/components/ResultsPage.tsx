@@ -239,6 +239,13 @@ function isManualWritingReview(result: WritingEvalResult | null | undefined) {
   );
 }
 
+function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
+  return Boolean(
+    result &&
+    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.totalPossible === 0 && result.grade === 'Manual Review'))
+  );
+}
+
 interface ReadingSubItem {
   id: string; parentId: number; label: string;
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
@@ -261,15 +268,13 @@ export default function ResultsPage() {
     section.sectionType === 'writing' ||
     section.questions.some((q) => q.type === 'writing');
 
-  // Detect if current paper has a writing section
-  const hasWritingSection = sections.some(isWritingLikeSection);
   const isSpeakingLikeSection = (section: Section) =>
     section.id === 'speaking' ||
     section.id.startsWith('speaking') ||
     section.sectionType === 'speaking' ||
     section.questions.some((q) => q.type === 'open-ended' && 'responseMode' in q && q.responseMode === 'audio');
 
-  // AI Grading states
+  // Review states
   const [readingResults, setReadingResults] = useState<ReadingGradingResult[] | null>(null);
   const [writingResult, setWritingResult] = useState<WritingEvalResult | null>(null);
   const [speakingResult, setSpeakingResult] = useState<SpeakingEvaluationResult | null>(null);
@@ -482,7 +487,7 @@ export default function ResultsPage() {
   const detailedResults = useMemo(() => {
     const results: { sectionId: string; sectionTitle: string; questions: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] }[] = [];
     for (const section of sections) {
-      if (section.id === 'reading' || isWritingLikeSection(section)) continue;
+      if (section.id === 'reading' || isWritingLikeSection(section) || isSpeakingLikeSection(section)) continue;
       const sectionResults: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] = [];
       for (const q of section.questions) {
         if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
@@ -780,11 +785,16 @@ export default function ResultsPage() {
   const writingIsManual = isManualWritingReview(writingResult);
   const writingAIScore = writingResult && !writingIsManual ? writingResult.score : 0;
   const writingAITotal = writingResult && !writingIsManual ? writingResult.maxScore : 0;
-  const speakingAIScore = speakingResult ? speakingResult.totalScore : 0;
-  const speakingAITotal = speakingResult ? speakingResult.totalPossible : 0;
+  const speakingIsManual = isManualSpeakingReview(speakingResult);
+  const speakingAIScore = speakingResult && !speakingIsManual ? speakingResult.totalScore : 0;
+  const speakingAITotal = speakingResult && !speakingIsManual ? speakingResult.totalPossible : 0;
   const totalScore = correct + readingAIScore + writingAIScore + speakingAIScore;
   const totalPossible = total + readingAITotal + writingAITotal + speakingAITotal;
   const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+  const manualScoreNotes = [
+    writingIsManual ? (lang === 'en' ? 'Writing is pending teacher review and is not included in the automatic score.' : '作文正在等待老师人工批改，当前未计入自动总分。') : null,
+    speakingIsManual ? (lang === 'en' ? 'Speaking is pending teacher review and is not included in the automatic score.' : '口语正在等待老师人工批改，当前未计入自动总分。') : null,
+  ].filter(Boolean) as string[];
 
   const getGrade = () => {
     if (percentage >= 90) return { grade: 'A', color: 'text-emerald-600', label: 'Excellent!', label_cn: '优秀！' };
@@ -837,8 +847,8 @@ export default function ResultsPage() {
         return {
           sectionId: section.id,
           sectionTitle: section.title,
-          correct: evaluations.reduce((sum, item) => sum + item.score, 0),
-          total: evaluations.reduce((sum, item) => sum + item.maxScore, 0),
+          correct: speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.score, 0),
+          total: speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.maxScore, 0),
           timeSeconds: sectionTimings[section.id] || 0,
         };
       }
@@ -875,7 +885,12 @@ export default function ResultsPage() {
               manualReviewRequired: writingIsManual,
             }
           : undefined,
-        speakingSummary: speakingResult || undefined,
+        speakingSummary: speakingResult
+          ? {
+              ...speakingResult,
+              manualReviewRequired: speakingIsManual,
+            }
+          : undefined,
       },
       {
         onSuccess: (data) => { setReportResult(data); setIsGeneratingReport(false); },
@@ -896,6 +911,7 @@ export default function ResultsPage() {
     sectionTimings,
     selectedPaper?.title,
     speakingError,
+    speakingIsManual,
     speakingResponses.length,
     speakingResult,
     totalScore,
@@ -935,18 +951,16 @@ export default function ResultsPage() {
           {isStillGrading ? (
             <div className="flex items-center justify-center gap-2 text-blue-600">
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span className="text-base">{lang === 'en' ? 'AI is grading your answers...' : 'AI 正在批改你的答案...'}</span>
+              <span className="text-base">{lang === 'en' ? 'Finalizing your results...' : '正在整理你的测评结果...'}</span>
             </div>
           ) : (
             <div className="space-y-1">
               <p className="text-slate-500 text-base">{lang === 'en' ? gradeInfo.label : gradeInfo.label_cn}</p>
-              {writingIsManual && (
-                <p className="text-sm text-amber-600">
-                  {lang === 'en'
-                    ? 'Writing is pending teacher review and is not included in the automatic score.'
-                    : '作文正在等待老师人工批改，当前未计入自动总分。'}
+              {manualScoreNotes.map((note) => (
+                <p key={note} className="text-sm text-amber-600">
+                  {note}
                 </p>
-              )}
+              ))}
             </div>
           )}
           <p className="text-sm text-slate-400 mt-2">{paperName}</p>
@@ -1120,13 +1134,39 @@ export default function ResultsPage() {
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                       <div className="flex-1">
                         <div className="font-semibold text-base text-slate-700">{section.title}</div>
-                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'AI evaluating speaking...' : 'AI 正在评估口语...'}</div>
+                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Preparing teacher review...' : '正在准备人工批改...'}</div>
                       </div>
                     </div>
                   );
                 }
 
                 const evaluations = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
+                if (speakingIsManual && evaluations.length > 0) {
+                  return (
+                    <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
+                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-base text-slate-700 flex items-center gap-2">
+                            {section.title}
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                          </span>
+                          <div className="flex items-center gap-3">
+                            {timeStr && <span className="text-sm text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeStr}</span>}
+                            <span className="text-sm font-semibold text-amber-600">
+                              {lang === 'en' ? 'Manual Review' : '人工批改'}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-500 leading-relaxed">
+                          {lang === 'en'
+                            ? 'Teacher scoring is required for this speaking section.'
+                            : '本口语部分需要老师人工评分。'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
                 if (evaluations.length > 0) {
                   const sectionScore = evaluations.reduce((sum, item) => sum + item.score, 0);
                   const sectionTotal = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
@@ -1323,7 +1363,7 @@ export default function ResultsPage() {
                   <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Writing Review' : '写作批改'}</h3>
                   {writingIsManual ? <AlertCircle className="w-4 h-4 text-amber-500" /> : <Sparkles className="w-4 h-4 text-rose-500" />}
                   <span className={`text-sm font-medium ${writingIsManual ? 'text-amber-600' : 'text-rose-500'}`}>
-                    {writingIsManual ? (lang === 'en' ? 'Teacher Review Required' : '需要老师人工批改') : (lang === 'en' ? 'AI Evaluated' : 'AI 评估')}
+                    {writingIsManual ? (lang === 'en' ? 'Teacher Review Required' : '需要老师人工批改') : (lang === 'en' ? 'Automated Review' : '自动评估')}
                   </span>
                 </div>
                 {!writingIsManual && (
@@ -1445,11 +1485,13 @@ export default function ResultsPage() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
               <div className="px-5 py-3 bg-sky-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Speaking Evaluation' : '口语评估'}</h3>
-                  <Sparkles className="w-4 h-4 text-sky-500" />
-                  <span className="text-sm text-sky-500 font-medium">{lang === 'en' ? 'AI Evaluated' : 'AI 评估'}</span>
+                  <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Speaking Review' : '口语批改'}</h3>
+                  {speakingIsManual ? <AlertCircle className="w-4 h-4 text-amber-500" /> : <Sparkles className="w-4 h-4 text-sky-500" />}
+                  <span className={`text-sm font-medium ${speakingIsManual ? 'text-amber-600' : 'text-sky-500'}`}>
+                    {speakingIsManual ? (lang === 'en' ? 'Teacher Review Required' : '需要老师人工批改') : (lang === 'en' ? 'Automated Review' : '自动评估')}
+                  </span>
                 </div>
-                {speakingResult && (
+                {speakingResult && !speakingIsManual && (
                   <span className="text-base font-bold text-slate-600">{speakingResult.totalScore} out of {speakingResult.totalPossible}</span>
                 )}
               </div>
@@ -1457,7 +1499,7 @@ export default function ResultsPage() {
               {isGradingSpeaking ? (
                 <div className="p-8 text-center">
                   <Loader2 className="w-6 h-6 animate-spin text-sky-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'AI is evaluating the speaking recordings...' : 'AI 正在分析口语录音...'}</p>
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'Preparing speaking for teacher review...' : '正在整理口语作答，准备人工批改...'}</p>
                 </div>
               ) : speakingResult ? (
                 <div className="p-6 space-y-6">
@@ -1473,62 +1515,95 @@ export default function ResultsPage() {
                           <h4 className="font-semibold text-slate-700">{item.sectionTitle} · Q{item.questionId}</h4>
                           <p className="text-sm text-slate-500 mt-1">{item.prompt}</p>
                         </div>
-                        <span className="text-base font-bold text-slate-700">{item.score}/{item.maxScore}</span>
+                        {speakingIsManual ? (
+                          <span className="text-sm font-semibold text-amber-600">{lang === 'en' ? 'Manual Review' : '人工批改'}</span>
+                        ) : (
+                          <span className="text-base font-bold text-slate-700">{item.score}/{item.maxScore}</span>
+                        )}
                       </div>
 
                       <div className="p-5 space-y-4">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-600 mb-1">{lang === 'en' ? 'Transcript' : '转写内容'}</p>
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 whitespace-pre-wrap">{item.transcript || (lang === 'en' ? 'No transcript available.' : '暂无转写内容。')}</div>
-                        </div>
+                        {speakingIsManual ? (
+                          <>
+                            <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-4">
+                              <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Teacher Review Status' : '人工批改状态'}</p>
+                              <p className="text-sm text-slate-600">
+                                {lang === 'en'
+                                  ? 'The recording has been submitted. A teacher should listen to the original audio and add a score and comments manually.'
+                                  : '录音已提交。老师需要收听原始音频，并人工补充分数和评语。'}
+                              </p>
+                            </div>
 
-                        <div className="grid md:grid-cols-2 gap-3">
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Task Completion' : '任务完成度'}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.taskCompletion_en : item.taskCompletion_cn}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Fluency' : '流利度'}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.fluency_en : item.fluency_cn}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Vocabulary' : '词汇'}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.vocabulary_en : item.vocabulary_cn}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Grammar' : '语法'}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.grammar_en : item.grammar_cn}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-2">
-                            <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Pronunciation / Clarity' : '发音 / 清晰度'}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.pronunciation_en : item.pronunciation_cn}</p>
-                          </div>
-                        </div>
+                            {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
+                              <div>
+                                <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Teacher Checklist' : '老师批改提示'}</p>
+                                <ul className="space-y-1.5">
+                                  {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
+                                    <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                                      <span className="text-sky-500 font-bold mt-0.5">{index + 1}.</span>
+                                      <span>{suggestion}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-600 mb-1">{lang === 'en' ? 'Transcript' : '转写内容'}</p>
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 whitespace-pre-wrap">{item.transcript || (lang === 'en' ? 'No transcript available.' : '暂无转写内容。')}</div>
+                            </div>
 
-                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                          <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Overall Comment' : '整体点评'}</p>
-                          <p className="text-sm text-slate-600">{lang === 'en' ? item.feedback_en : item.feedback_cn}</p>
-                        </div>
+                            <div className="grid md:grid-cols-2 gap-3">
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Task Completion' : '任务完成度'}</p>
+                                <p className="text-sm text-slate-600">{lang === 'en' ? item.taskCompletion_en : item.taskCompletion_cn}</p>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Fluency' : '流利度'}</p>
+                                <p className="text-sm text-slate-600">{lang === 'en' ? item.fluency_en : item.fluency_cn}</p>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Vocabulary' : '词汇'}</p>
+                                <p className="text-sm text-slate-600">{lang === 'en' ? item.vocabulary_en : item.vocabulary_cn}</p>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Grammar' : '语法'}</p>
+                                <p className="text-sm text-slate-600">{lang === 'en' ? item.grammar_en : item.grammar_cn}</p>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 md:col-span-2">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Pronunciation / Clarity' : '发音 / 清晰度'}</p>
+                                <p className="text-sm text-slate-600">{lang === 'en' ? item.pronunciation_en : item.pronunciation_cn}</p>
+                              </div>
+                            </div>
 
-                        {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
-                          <div>
-                            <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Suggestions' : '改进建议'}</p>
-                            <ul className="space-y-1.5">
-                              {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
-                                <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
-                                  <span className="text-sky-500 font-bold mt-0.5">{index + 1}.</span>
-                                  <span>{suggestion}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                              <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Overall Comment' : '整体点评'}</p>
+                              <p className="text-sm text-slate-600">{lang === 'en' ? item.feedback_en : item.feedback_cn}</p>
+                            </div>
+
+                            {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
+                              <div>
+                                <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Suggestions' : '改进建议'}</p>
+                                <ul className="space-y-1.5">
+                                  {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
+                                    <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                                      <span className="text-sky-500 font-bold mt-0.5">{index + 1}.</span>
+                                      <span>{suggestion}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="p-5 text-center text-base text-red-400">{speakingError || (lang === 'en' ? 'Speaking evaluation unavailable' : '口语评估不可用')}</div>
+                <div className="p-5 text-center text-base text-red-400">{speakingError || (lang === 'en' ? 'Speaking review unavailable' : '口语批改信息不可用')}</div>
               )}
             </div>
           </motion.div>
@@ -1548,7 +1623,7 @@ export default function ResultsPage() {
               {isGeneratingReport ? (
                 <div className="p-8 text-center">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'AI is generating the final report...' : 'AI 正在生成最终报告...'}</p>
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'Generating the final report...' : '正在生成最终报告...'}</p>
                 </div>
               ) : reportResult ? (
                 <div className="p-6 space-y-6">
