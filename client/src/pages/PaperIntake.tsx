@@ -7175,7 +7175,7 @@ export default function PaperIntake() {
 
             {isQuestionBankMode ? (
               <Card className="border-slate-200 shadow-sm">
-                <CardContent className="space-y-4 pt-6">
+                <CardContent className="space-y-3 px-6 py-5">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                       {currentPublished ? "Status: Published" : "Status: Draft"}
@@ -7185,22 +7185,17 @@ export default function PaperIntake() {
                         <Check className="h-4 w-4" />
                         <span className="font-medium">{saveFeedback}</span>
                       </div>
-                    ) : (
-                      <span className="text-slate-500">
-                        Question bank items stay hidden until you publish the bank.
-                      </span>
-                    )}
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-3">
+                  <div className="flex flex-wrap items-center justify-end gap-2.5">
                     {isEditing ? (
                       <Button
                         type="button"
-                        size="lg"
                         variant="outline"
                         disabled={isPersisting || !editingPaperMeta}
                         onClick={handleSaveAsCopy}
-                        className="gap-2 border-slate-200"
+                        className="gap-2 border-slate-200 px-5"
                       >
                         <FilePlus2 className="h-4 w-4" />
                         Save as Copy
@@ -7209,11 +7204,10 @@ export default function PaperIntake() {
 
                     <Button
                       type="button"
-                      size="lg"
                       variant="outline"
                       disabled={saveDisabled}
                       onClick={handleSaveDraft}
-                      className="gap-2 border-slate-200"
+                      className="gap-2 border-slate-200 px-5"
                     >
                       {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
                       {isEditing ? "Save Question Draft Changes" : "Save Question Draft"}
@@ -7221,10 +7215,9 @@ export default function PaperIntake() {
 
                     <Button
                       type="button"
-                      size="lg"
                       disabled={saveDisabled}
                       onClick={handlePublishPaper}
-                      className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+                      className="gap-2 bg-[#1E3A5F] px-6 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
                     >
                       {isPersisting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
