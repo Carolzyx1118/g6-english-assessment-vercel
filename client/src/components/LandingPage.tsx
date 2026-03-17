@@ -470,7 +470,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.5 + filteredPapers.length * 0.15 }}
-                  onClick={() => navigate('/paper-intake?subject=english&mode=generated&quickCreate=1')}
+                  onClick={() => navigate('/paper-composer?subject=english')}
                   className="group relative text-left rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-[#D4A84B]/60 hover:bg-white hover:shadow-xl"
                 >
                   <div className="flex h-full min-h-[260px] flex-col justify-between">

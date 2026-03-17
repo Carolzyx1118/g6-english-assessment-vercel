@@ -113,3 +113,37 @@ export function getEnglishQuickGeneratedDescription(track: EnglishExamTagTrack) 
   const trackLabel = ENGLISH_EXAM_TAG_SCHEMAS[track].label;
   return `Auto-generated from tagged ${trackLabel} question bank parts.`;
 }
+
+export function inferTrackFromEnglishQuickGeneratedConfig(config: ManualPaperGenerationConfig | undefined): EnglishExamTagTrack {
+  for (const section of config?.sections ?? []) {
+    for (const rule of section.rules) {
+      if (rule.filters.track === "ket" || rule.filters.track === "pet") {
+        return rule.filters.track;
+      }
+    }
+  }
+
+  return "ket";
+}
+
+export function restoreEnglishQuickGeneratedPartSelections(
+  track: EnglishExamTagTrack,
+  config: ManualPaperGenerationConfig | undefined,
+) {
+  const baseSelections = createEnglishQuickGeneratedPartSelections(track);
+
+  for (const section of config?.sections ?? []) {
+    const firstRule = section.rules[0];
+    const examPart = firstRule?.filters.examPart || section.title;
+    if (!examPart) continue;
+
+    const match = baseSelections.find((part) => part.examPart === examPart);
+    if (!match) continue;
+
+    match.sectionType = section.sectionType;
+    match.totalQuestions = Math.max(0, Number(section.totalQuestions) || 0);
+    match.questionType = firstRule?.filters.questionTypes?.[0] || match.questionType;
+  }
+
+  return baseSelections;
+}

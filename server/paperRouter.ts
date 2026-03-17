@@ -18,6 +18,7 @@ import {
   blueprintHasListening,
   blueprintHasWriting,
 } from "../shared/blueprintToPaper";
+import { getBlueprintBuildMode, getBlueprintVisibilityMode } from "../shared/taggedPaperGenerator";
 import { z } from "zod";
 
 export const paperRouter = router({
@@ -142,6 +143,20 @@ export const paperRouter = router({
   listAllManualPapers: publicProcedure.query(async () => {
     const papers = await getAllManualPapers();
     return papers.map((p) => ({
+      ...(() => {
+        try {
+          const parsedBlueprint = JSON.parse(p.blueprintJson);
+          return {
+            buildMode: getBlueprintBuildMode(parsedBlueprint),
+            visibilityMode: getBlueprintVisibilityMode(parsedBlueprint),
+          };
+        } catch {
+          return {
+            buildMode: "fixed" as const,
+            visibilityMode: "student" as const,
+          };
+        }
+      })(),
       id: p.id,
       paperId: p.paperId,
       title: p.title,

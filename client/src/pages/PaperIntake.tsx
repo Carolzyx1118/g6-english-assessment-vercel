@@ -84,15 +84,6 @@ import {
 } from "@shared/taggedPaperGenerator";
 import { toast } from "sonner";
 import PassageMCQPreview from "@/components/PassageMCQPreview";
-import EnglishQuickGeneratedBuilder from "@/components/EnglishQuickGeneratedBuilder";
-import {
-  buildEnglishQuickGeneratedConfig,
-  createEnglishQuickGeneratedPartSelections,
-  getEnglishQuickGeneratedDescription,
-  getEnglishQuickGeneratedTitle,
-} from "@/lib/englishQuickPaperPreset";
-import type { EnglishQuickGeneratedPartSelection } from "@/lib/englishQuickPaperPreset";
-import type { EnglishExamTagTrack } from "@shared/englishQuestionTags";
 
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
@@ -2061,14 +2052,6 @@ export default function PaperIntake() {
     const value = new URLSearchParams(search).get("subject");
     return isPaperSubjectValue(value) ? value : "english";
   }, [search]);
-  const requestedMode = useMemo(
-    () => new URLSearchParams(search).get("mode")?.trim() || "",
-    [search],
-  );
-  const requestedQuickCreate = useMemo(
-    () => new URLSearchParams(search).get("quickCreate")?.trim() || "",
-    [search],
-  );
   const editPaperId = useMemo(
     () => new URLSearchParams(search).get("edit")?.trim() || "",
     [search],
@@ -2092,11 +2075,6 @@ export default function PaperIntake() {
   const [expandedImageBlocks, setExpandedImageBlocks] = useState<Record<string, boolean>>({});
   const [editingPaperMeta, setEditingPaperMeta] = useState<{ id: number; paperId: string; published: boolean } | null>(null);
   const [hasHydratedEditState, setHasHydratedEditState] = useState(false);
-  const [hasAppliedEntryPreset, setHasAppliedEntryPreset] = useState(false);
-  const [quickGeneratedTrack, setQuickGeneratedTrack] = useState<EnglishExamTagTrack>("ket");
-  const [quickGeneratedParts, setQuickGeneratedParts] = useState<EnglishQuickGeneratedPartSelection[]>(() =>
-    createEnglishQuickGeneratedPartSelections("ket"),
-  );
   const [hasRestoredLocalDraft, setHasRestoredLocalDraft] = useState(false);
   const [activePreviewSubsectionId, setActivePreviewSubsectionId] = useState<string | null>(null);
   const autosavePausedRef = useRef(false);
@@ -2110,7 +2088,6 @@ export default function PaperIntake() {
   });
   const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
   const isLegacyGeneratedMode = isEditing && paperSubject === "english" && buildMode === "generated";
-  const isQuickGeneratedMode = !isEditing && paperSubject === "english" && buildMode === "generated" && requestedQuickCreate === "1";
   const showPreviewActionCard = buildMode === "fixed";
   const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
   const effectiveDescription = isQuestionBankMode ? "" : description;
@@ -2185,36 +2162,6 @@ export default function PaperIntake() {
   }, [isEditing, requestedSubject]);
 
   useEffect(() => {
-    if (isEditing || hasAppliedEntryPreset) return;
-
-    if (requestedSubject === "english" && requestedMode === "generated" && requestedQuickCreate === "1") {
-      const defaultTrack: EnglishExamTagTrack = "ket";
-      const defaultParts = createEnglishQuickGeneratedPartSelections(defaultTrack);
-      setPaperSubject("english");
-      setBuildMode("generated");
-      setVisibilityMode("student");
-      setQuickGeneratedTrack(defaultTrack);
-      setQuickGeneratedParts(defaultParts);
-      setGenerationConfig(buildEnglishQuickGeneratedConfig(defaultTrack, defaultParts));
-      setTitle(getEnglishQuickGeneratedTitle(defaultTrack));
-      setDescription(getEnglishQuickGeneratedDescription(defaultTrack));
-      setHasRestoredLocalDraft(true);
-      setHasAppliedEntryPreset(true);
-      return;
-    }
-
-    setHasAppliedEntryPreset(true);
-  }, [hasAppliedEntryPreset, isEditing, requestedMode, requestedQuickCreate, requestedSubject]);
-
-  useEffect(() => {
-    if (!isQuickGeneratedMode) return;
-
-    setGenerationConfig(buildEnglishQuickGeneratedConfig(quickGeneratedTrack, quickGeneratedParts));
-    setTitle(getEnglishQuickGeneratedTitle(quickGeneratedTrack));
-    setDescription(getEnglishQuickGeneratedDescription(quickGeneratedTrack));
-  }, [isQuickGeneratedMode, quickGeneratedParts, quickGeneratedTrack]);
-
-  useEffect(() => {
     if (!isEditing || !editPaperQuery.data || hasHydratedEditState) return;
 
     try {
@@ -2253,7 +2200,6 @@ export default function PaperIntake() {
   }, [editPaperQuery.error, navigate]);
 
   useEffect(() => {
-    if (!hasAppliedEntryPreset) return;
     if (hasRestoredLocalDraft) return;
     if (isEditing && !hasHydratedEditState) return;
 
@@ -2274,7 +2220,7 @@ export default function PaperIntake() {
     }
 
     setHasRestoredLocalDraft(true);
-  }, [draftStorageKey, hasAppliedEntryPreset, hasHydratedEditState, hasRestoredLocalDraft, isEditing, paperSubject]);
+  }, [draftStorageKey, hasHydratedEditState, hasRestoredLocalDraft, isEditing, paperSubject]);
 
   useEffect(() => {
     if (!hasRestoredLocalDraft) return;
@@ -4086,12 +4032,6 @@ export default function PaperIntake() {
                     </div>
                   </div>
 
-                  {isQuickGeneratedMode ? (
-                    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                      这是“添加试卷”的完整创建页。先在下面配置考试体系和各个 Part，再直接保存或发布。
-                    </div>
-                  ) : null}
-
                   {isLegacyGeneratedMode ? (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                       当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
@@ -4101,7 +4041,7 @@ export default function PaperIntake() {
               </Card>
             ) : null}
 
-            {paperSubject !== "english" || (!isQuestionBankMode && !isQuickGeneratedMode) ? (
+            {paperSubject !== "english" || !isQuestionBankMode ? (
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader>
                   <CardTitle>Paper Info</CardTitle>
@@ -4139,22 +4079,7 @@ export default function PaperIntake() {
               </Card>
             ) : null}
 
-            {paperSubject === "english" && buildMode === "generated" && isQuickGeneratedMode ? (
-              <EnglishQuickGeneratedBuilder
-                track={quickGeneratedTrack}
-                parts={quickGeneratedParts}
-                previewWarnings={generatedPreview?.warnings ?? []}
-                onTrackChange={(track) => {
-                  setQuickGeneratedTrack(track);
-                  setQuickGeneratedParts(createEnglishQuickGeneratedPartSelections(track));
-                }}
-                onPartChange={(partId, updater) => {
-                  setQuickGeneratedParts((current) => current.map((part) => (part.id === partId ? updater(part) : part)));
-                }}
-              />
-            ) : null}
-
-            {paperSubject === "english" && buildMode === "generated" && !isQuickGeneratedMode ? (
+            {paperSubject === "english" && buildMode === "generated" ? (
               <GeneratedPaperConfigEditor
                 value={generationConfig}
                 sourcePapers={publishedEnglishSourcePapers}

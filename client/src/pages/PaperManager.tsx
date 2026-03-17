@@ -183,6 +183,14 @@ export default function PaperManager() {
                 New Paper
               </Button>
             </Link>
+            {(subjectFilter === "english" || subjectFilter === null) && (
+              <Link href="/paper-composer?subject=english">
+                <Button variant="outline" className="border-slate-200">
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Add Generated Paper
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -263,7 +271,13 @@ export default function PaperManager() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-4">
-                        <Link href={`/paper-intake?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`}>
+                        <Link
+                          href={
+                            paper.buildMode === "generated"
+                              ? `/paper-composer?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`
+                              : `/paper-intake?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`
+                          }
+                        >
                           <Button
                             type="button"
                             variant="outline"
