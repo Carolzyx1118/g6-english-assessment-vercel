@@ -6561,9 +6561,9 @@ export default function PaperIntake() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!title.trim() && !description.trim() && previewBlueprint.sections.length === 0 && (
+                {!effectiveTitle.trim() && !effectiveDescription.trim() && previewBlueprint.sections.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-                    Start building the paper on the left.
+                    {isQuestionBankMode ? "Start recording questions on the left." : "Start building the paper on the left."}
                   </div>
                 )}
 
@@ -6573,10 +6573,12 @@ export default function PaperIntake() {
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-lg font-semibold text-slate-800">{title || "Untitled Paper"}</p>
-                  <p className="mt-2 text-sm text-slate-500">{description || "No description yet."}</p>
-                </div>
+                {!isQuestionBankMode ? (
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-lg font-semibold text-slate-800">{effectiveTitle || "Untitled Paper"}</p>
+                    <p className="mt-2 text-sm text-slate-500">{effectiveDescription || "No description yet."}</p>
+                  </div>
+                ) : null}
 
                 {previewBlueprint.sections.map((section) => (
                   <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
