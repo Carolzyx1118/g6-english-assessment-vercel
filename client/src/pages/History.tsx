@@ -111,6 +111,52 @@ function answerKey(sectionId: string, questionId: number) {
   return `${sectionId}:${questionId}`;
 }
 
+function isUrlLike(value: string) {
+  return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('blob:');
+}
+
+function isLikelyAudioUrl(value: string) {
+  return (
+    isUrlLike(value) &&
+    (/(\.webm|\.mp3|\.mpeg|\.mp4|\.m4a|\.wav|\.ogg|\.aac)(\?|$)/i.test(value) ||
+      /(?:^|\/)(speaking|audio)[-_./]/i.test(value) ||
+      /[?&](?:filename|fileName)=.*(\.webm|\.mp3|\.mpeg|\.mp4|\.m4a|\.wav|\.ogg|\.aac)/i.test(value))
+  );
+}
+
+function extractAudioUrls(value: unknown): string[] {
+  if (typeof value === 'string') {
+    if (isLikelyAudioUrl(value)) return [value];
+    if ((value.startsWith('{') || value.startsWith('[')) && value.length > 1) {
+      try {
+        return extractAudioUrls(JSON.parse(value));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractAudioUrls(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => extractAudioUrls(entry));
+  }
+
+  return [];
+}
+
+function getAudioSourceType(audioUrl: string) {
+  const normalized = audioUrl.toLowerCase();
+  if (normalized.includes('.mp3') || normalized.includes('.mpeg')) return 'audio/mpeg';
+  if (normalized.includes('.wav')) return 'audio/wav';
+  if (normalized.includes('.ogg')) return 'audio/ogg';
+  if (normalized.includes('.m4a') || normalized.includes('.aac') || normalized.includes('.mp4')) return 'audio/mp4';
+  return 'audio/webm';
+}
+
 function formatSectionLabel(sectionId: string) {
   return sectionId
     .split('-')
@@ -210,6 +256,13 @@ function extractWritingSubmission(paper: Paper | undefined, answers: Record<stri
 
 function extractSpeakingResponses(paper: Paper | undefined, answers: Record<string, unknown>): HistorySpeakingResponse[] {
   const responses: HistorySpeakingResponse[] = [];
+  const seen = new Set<string>();
+
+  const addResponse = (response: HistorySpeakingResponse) => {
+    if (seen.has(response.audioUrl)) return;
+    seen.add(response.audioUrl);
+    responses.push(response);
+  };
 
   if (paper) {
     for (const section of paper.sections) {
@@ -217,19 +270,22 @@ function extractSpeakingResponses(paper: Paper | undefined, answers: Record<stri
 
       for (const question of section.questions) {
         const answer = answers[answerKey(section.id, question.id)];
-        if (typeof answer !== 'string' || !answer.startsWith('http')) continue;
+        const audioUrls = extractAudioUrls(answer);
+        if (audioUrls.length === 0) continue;
         const prompt =
           'question' in question && typeof question.question === 'string'
             ? question.question
             : section.taskDescription || section.description || section.title;
 
-        responses.push({
-          label: `Q${question.id}`,
-          sectionId: section.id,
-          sectionTitle: section.title,
-          questionId: question.id,
-          prompt,
-          audioUrl: answer,
+        audioUrls.forEach((audioUrl, audioIndex) => {
+          addResponse({
+            label: audioUrls.length > 1 ? `Q${question.id} (${audioIndex + 1})` : `Q${question.id}`,
+            sectionId: section.id,
+            sectionTitle: section.title,
+            questionId: question.id,
+            prompt,
+            audioUrl,
+          });
         });
       }
     }
@@ -238,40 +294,24 @@ function extractSpeakingResponses(paper: Paper | undefined, answers: Record<stri
   if (responses.length > 0) return responses;
 
   const fallback: HistorySpeakingResponse[] = [];
+  const fallbackSeen = new Set<string>();
   for (const [key, value] of Object.entries(answers)) {
-    if (typeof value === 'string' && value.startsWith('http') && (value.includes('speaking') || value.includes('.webm') || value.includes('.mp3') || value.includes('.mp4'))) {
-      const numericId = Number(key.replace(/\D/g, '')) || 0;
+    const audioUrls = extractAudioUrls(value);
+    if (audioUrls.length === 0) continue;
+
+    const numericId = Number(key.replace(/\D/g, '')) || 0;
+    audioUrls.forEach((audioUrl, audioIndex) => {
+      if (fallbackSeen.has(audioUrl)) return;
+      fallbackSeen.add(audioUrl);
       fallback.push({
-        label: `Q${numericId || key}`,
+        label: audioUrls.length > 1 ? `Q${numericId || key} (${audioIndex + 1})` : `Q${numericId || key}`,
         sectionId: 'speaking',
         sectionTitle: 'Speaking',
         questionId: numericId,
-        prompt: `Speaking response ${numericId || key}`,
-        audioUrl: value,
+        prompt: audioUrls.length > 1 ? `Speaking response ${numericId || key} (${audioIndex + 1})` : `Speaking response ${numericId || key}`,
+        audioUrl,
       });
-      continue;
-    }
-
-    if (typeof value === 'string' && value.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(value) as Record<string, unknown>;
-        for (const [subKey, subValue] of Object.entries(parsed)) {
-          if (typeof subValue !== 'string' || !subValue.startsWith('http')) continue;
-          if (!(subValue.includes('speaking') || subValue.includes('.webm') || subValue.includes('.mp3') || subValue.includes('.mp4'))) continue;
-          const numericId = Number(key.replace(/\D/g, '')) || 0;
-          fallback.push({
-            label: `Q${numericId || key} (${subKey})`,
-            sectionId: 'speaking',
-            sectionTitle: 'Speaking',
-            questionId: numericId,
-            prompt: `Speaking response ${numericId || key} (${subKey})`,
-            audioUrl: subValue,
-          });
-        }
-      } catch {
-        // Ignore malformed JSON-like answers.
-      }
-    }
+    });
   }
 
   return fallback;
@@ -481,6 +521,10 @@ function HistoryContent() {
   const speakingResponses = useMemo(
     () => extractSpeakingResponses(paper, answers),
     [answers, paper],
+  );
+  const hasSpeakingSection = useMemo(
+    () => paper?.sections.some(isSpeakingLikeSection) ?? false,
+    [paper],
   );
 
   const writingResetKey = `${detail?.id ?? 'none'}:${detail?.writingResultJson ?? 'none'}:${writingSubmission?.essay ?? 'none'}`;
@@ -986,7 +1030,7 @@ function HistoryContent() {
                                             <p className="text-sm text-slate-500">{item.prompt}</p>
                                           </div>
                                           <audio controls preload="none" className="h-10 max-w-full">
-                                            <source src={item.audioUrl} type={item.audioUrl.includes('.mp4') ? 'audio/mp4' : 'audio/webm'} />
+                                            <source src={item.audioUrl} type={getAudioSourceType(item.audioUrl)} />
                                             Your browser does not support audio playback.
                                           </audio>
                                         </div>
@@ -1088,6 +1132,14 @@ function HistoryContent() {
                                       </div>
                                     ))}
                                   </div>
+                                </div>
+                              )}
+
+                              {hasSpeakingSection && (!speakingDraft || speakingDraft.items.length === 0) && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                                  {lang === 'en'
+                                    ? 'This record includes a speaking section, but no saved speaking recording was detected yet.'
+                                    : '这条考试记录包含口语部分，但目前还没有识别到已保存的口语录音。'}
                                 </div>
                               )}
                             </div>
