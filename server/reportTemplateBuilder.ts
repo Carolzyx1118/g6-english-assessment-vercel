@@ -51,6 +51,10 @@ type SectionDescriptor = ReportSectionInput & {
   kind: SectionKind;
   percentage: number | null;
   performance: SectionPerformance;
+  teacherFeedback_en?: string;
+  teacherFeedback_cn?: string;
+  teacherSuggestions_en: string[];
+  teacherSuggestions_cn: string[];
 };
 
 type GradeTemplate = {
@@ -164,6 +168,19 @@ const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
 
 function normalizeGrade(grade: string) {
   return GRADE_TEMPLATES[grade] ? grade : "D";
+}
+
+function uniqueNonEmpty(items: Array<string | undefined>) {
+  return Array.from(new Set(items.map((item) => (item || "").trim()).filter(Boolean)));
+}
+
+function formatSectionList(items: string[], locale: "en" | "cn") {
+  if (items.length === 0) return locale === "en" ? "the current paper" : "本次测评";
+  if (items.length === 1) return items[0];
+  if (locale === "en") {
+    return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+  }
+  return items.join("、");
 }
 
 function getSectionKind(sectionId: string, sectionTitle: string): SectionKind {
@@ -303,9 +320,139 @@ function describeSectionPerformance(section: SectionDescriptor) {
     },
   };
 
+  const nextSteps: Record<SectionKind, Record<Exclude<SectionPerformance, "manual">, { en: string; cn: string }>> = {
+    vocabulary: {
+      strong: {
+        en: "The next step is to move from knowing the word to using it more precisely inside sentence context and common collocations.",
+        cn: "下一步应从“认识单词”继续走向“在句子和固定搭配中把词用准”。",
+      },
+      developing: {
+        en: "The next step should focus on repeated review of high-frequency collocations and common meaning distinctions, so that accuracy stops dropping when contexts become slightly harder.",
+        cn: "下一步建议围绕高频搭配和常见词义辨析反复巩固，避免语境一变复杂就明显失分。",
+      },
+      weak: {
+        en: "The current priority is to rebuild high-frequency word meaning, collocations, and the habit of checking whether a word really fits the sentence.",
+        cn: "当前优先任务是重新补强高频词义、固定搭配，以及“这个词放进句子里是否真的合适”的判断习惯。",
+      },
+    },
+    grammar: {
+      strong: {
+        en: "The next step is to keep grammar accurate in longer sentences, transformations, and more integrated task settings.",
+        cn: "下一步要把这种稳定性继续延伸到更长句、改写题和更综合的任务里。",
+      },
+      developing: {
+        en: "The next step should focus on repeated correction of tense, sentence pattern, and transformation mistakes until the correct form becomes more automatic.",
+        cn: "下一步应把时态、句型和改写类错误反复纠正，直到正确表达逐渐变成更自动化的反应。",
+      },
+      weak: {
+        en: "The current goal is not to cover more grammar points quickly, but to rebuild a smaller group of high-frequency structures until they are stable.",
+        cn: "当前重点不是一下子铺更多语法点，而是先把一小批高频结构真正练稳。",
+      },
+    },
+    reading: {
+      strong: {
+        en: "The next step is to make this section faster and more reliable by reducing unnecessary hesitation and double-checking.",
+        cn: "下一步应继续减少无效犹豫和重复检查，让这一板块既保持正确率，也提升速度。",
+      },
+      developing: {
+        en: "The next step should focus on locating key evidence more directly and checking every condition in the question before finalizing an answer.",
+        cn: "下一步应重点训练更直接地定位证据，并在作答前完整核对题干里的每一个条件。",
+      },
+      weak: {
+        en: "The immediate priority is to rebuild reading location skills, condition matching, and the habit of proving the answer from the text instead of relying on guesses.",
+        cn: "当前最需要先补的是阅读定位、条件匹配，以及“答案必须能从原文找到依据”的做题习惯。",
+      },
+    },
+    listening: {
+      strong: {
+        en: "The next step is to maintain listening stability while improving response speed to detail and distractors.",
+        cn: "下一步要在保持听力稳定性的同时，继续提升对细节和干扰项的反应速度。",
+      },
+      developing: {
+        en: "The next step should focus on keywords, signal words, and quick note-taking habits so that details are not lost once the audio moves faster.",
+        cn: "下一步应围绕关键词、信号词和快速抓点习惯训练，避免语速一快就漏掉细节。",
+      },
+      weak: {
+        en: "The current goal is to reduce panic during listening by building shorter, highly guided drills around key information and distractor control.",
+        cn: "当前应先通过更短、更有引导性的训练，帮助孩子在听力中建立抓关键信息和排除干扰的基本控制力。",
+      },
+    },
+    writing: {
+      strong: {
+        en: "The next step is to keep ideas better supported and make sentence control more consistent across the whole response.",
+        cn: "下一步要继续把观点支撑写得更充分，并让整篇表达的句子控制更稳定。",
+      },
+      developing: {
+        en: "The next step should focus on clearer paragraphing, fuller support details, and reducing avoidable sentence-level errors.",
+        cn: "下一步建议重点加强段落组织、细节展开，以及减少本可避免的句子层面错误。",
+      },
+      weak: {
+        en: "The current priority is to move from short disconnected ideas toward basic sentence control and clearer paragraph structure.",
+        cn: "当前优先任务是先从零散短句逐步过渡到基本句子控制和更清楚的段落结构。",
+      },
+    },
+    speaking: {
+      strong: {
+        en: "The next step is to keep fluency while making answers more fully developed and more flexible in expression.",
+        cn: "下一步要在保持流利度的同时，让回答展开得更充分、表达更灵活。",
+      },
+      developing: {
+        en: "The next step should focus on steadier fluency, clearer response logic, and using a more reusable set of spoken expressions.",
+        cn: "下一步建议继续提升流利度稳定性、回应逻辑，以及一批可反复使用的常用口语表达。",
+      },
+      weak: {
+        en: "The current priority is to build short but complete spoken responses first, rather than aiming for long answers too early.",
+        cn: "当前更重要的是先建立“短但完整”的口头回应能力，而不是过早追求很长的回答。",
+      },
+    },
+    general: {
+      strong: {
+        en: "The next step is to protect this section as a stable scoring area while other parts are being improved.",
+        cn: "下一步要把这一部分继续守成稳定得分点，同时为其他板块补弱争取空间。",
+      },
+      developing: {
+        en: "The next step is to turn a workable performance into a more repeatable and dependable one.",
+        cn: "下一步就是把“基本可用”的表现继续拉到更可重复、更可靠的水平。",
+      },
+      weak: {
+        en: "The current priority is to reduce avoidable basic errors before raising the task difficulty again.",
+        cn: "当前最重要的是先减少基础性失误，再逐步重新提高任务难度。",
+      },
+    },
+  };
+
+  const teacherFeedbackEn = section.teacherFeedback_en
+    ? `Teacher feedback noted: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`
+    : "";
+  const teacherFeedbackCn = section.teacherFeedback_cn
+    ? `老师本次批改中提到：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`
+    : "";
+  const suggestionEn = section.teacherSuggestions_en.length > 0
+    ? `Follow-up practice can focus on: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`
+    : "";
+  const suggestionCn = section.teacherSuggestions_cn.length > 0
+    ? `后续练习可优先围绕：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`
+    : "";
+
   return {
-    en: `${scorePrefixEn}${templates[section.kind][section.performance].en}`,
-    cn: `${scorePrefixCn}${templates[section.kind][section.performance].cn}`,
+    en: [
+      scorePrefixEn,
+      templates[section.kind][section.performance].en,
+      nextSteps[section.kind][section.performance].en,
+      teacherFeedbackEn,
+      suggestionEn,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    cn: [
+      scorePrefixCn,
+      templates[section.kind][section.performance].cn,
+      nextSteps[section.kind][section.performance].cn,
+      teacherFeedbackCn,
+      suggestionCn,
+    ]
+      .filter(Boolean)
+      .join(""),
   };
 }
 
@@ -326,11 +473,55 @@ function buildSectionDescriptors(input: TemplateReportInput) {
       ? "developing"
       : "weak";
 
+    const writingSuggestionsEn = input.writingSummary?.suggestions_en ?? [];
+    const writingSuggestionsCn = input.writingSummary?.suggestions_cn ?? [];
+    const speakingEvaluations = input.speakingSummary?.evaluations.filter(
+      (item) => item.sectionId === section.sectionId,
+    ) ?? [];
+    const speakingFeedbackEn = uniqueNonEmpty([
+      speakingEvaluations.length > 0 ? input.speakingSummary?.overallFeedback_en : undefined,
+      ...speakingEvaluations.map((item) => item.feedback_en),
+    ]).join(" ");
+    const speakingFeedbackCn = uniqueNonEmpty([
+      speakingEvaluations.length > 0 ? input.speakingSummary?.overallFeedback_cn : undefined,
+      ...speakingEvaluations.map((item) => item.feedback_cn),
+    ]).join("");
+    const speakingSuggestionsEn = uniqueNonEmpty(
+      speakingEvaluations.flatMap((item) => item.suggestions_en ?? []),
+    );
+    const speakingSuggestionsCn = uniqueNonEmpty(
+      speakingEvaluations.flatMap((item) => item.suggestions_cn ?? []),
+    );
+
     return {
       ...section,
       kind,
       percentage,
       performance,
+      teacherFeedback_en:
+        kind === "writing"
+          ? input.writingSummary?.overallFeedback_en
+          : kind === "speaking"
+          ? speakingFeedbackEn
+          : undefined,
+      teacherFeedback_cn:
+        kind === "writing"
+          ? input.writingSummary?.overallFeedback_cn
+          : kind === "speaking"
+          ? speakingFeedbackCn
+          : undefined,
+      teacherSuggestions_en:
+        kind === "writing"
+          ? writingSuggestionsEn
+          : kind === "speaking"
+          ? speakingSuggestionsEn
+          : [],
+      teacherSuggestions_cn:
+        kind === "writing"
+          ? writingSuggestionsCn
+          : kind === "speaking"
+          ? speakingSuggestionsCn
+          : [],
     } satisfies SectionDescriptor;
   });
 }
@@ -341,7 +532,9 @@ function pickStrongWeakSections(sections: SectionDescriptor[]) {
   return {
     strongest: sorted[0],
     weakest: sorted[sorted.length - 1],
-    weakSections: scoredSections.filter((section) => section.performance === "weak"),
+    weakSections: scoredSections
+      .filter((section) => section.performance === "weak")
+      .sort((a, b) => (a.percentage || 0) - (b.percentage || 0)),
   };
 }
 
@@ -392,14 +585,76 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
   const weaknessesEn: string[] = [];
   const weaknessesCn: string[] = [];
 
+  const strengthTemplates: Record<SectionKind, { en: string; cn: string }> = {
+    vocabulary: {
+      en: "Vocabulary is currently giving the student a relatively dependable scoring base, which suggests that core word recognition is becoming more stable.",
+      cn: "词汇目前能够提供相对稳定的得分基础，说明孩子在核心词义识别上已经开始形成较明确的把握。",
+    },
+    grammar: {
+      en: "Grammar is showing a comparatively clearer structure sense, which helps the student control basic sentence forms more reliably.",
+      cn: "语法部分已经表现出相对更清楚的结构感，这说明孩子在基础句型控制上开始变得更可靠。",
+    },
+    reading: {
+      en: "Reading is currently one of the more usable sections, showing that the student can already find and connect some key evidence from the text.",
+      cn: "阅读目前是相对更可用的板块之一，说明孩子已经能够从文本中找到并连接一部分关键信息。",
+    },
+    listening: {
+      en: "Listening is helping support the total profile, which means the student can still catch a useful amount of main information and direct detail.",
+      cn: "听力目前能为整体成绩提供支撑，说明孩子仍能抓住相当一部分主信息和较直接的细节。",
+    },
+    writing: {
+      en: "Writing has started to show some workable output control, which is a useful sign for later improvement in organization and expression.",
+      cn: "写作已经开始表现出一定可用的输出控制力，这对后续继续提升结构和表达是一个积极信号。",
+    },
+    speaking: {
+      en: "Speaking shows some workable oral response ability, which means the student is not starting from zero in output tasks.",
+      cn: "口语已经表现出一定可用的口头回应能力，说明孩子在输出任务上并不是完全从零开始。",
+    },
+    general: {
+      en: "One or more sections are already beginning to function as dependable scoring areas.",
+      cn: "当前已经有部分板块开始具备较稳定的得分能力。",
+    },
+  };
+
+  const weaknessTemplates: Record<SectionKind, { en: string; cn: string }> = {
+    vocabulary: {
+      en: "Vocabulary accuracy is still unstable once the task moves beyond direct word meaning and asks for collocation or context-sensitive choice.",
+      cn: "词汇一旦从直接词义判断走向搭配或语境辨析，准确性就会明显下降，说明这一板块仍需继续补稳。",
+    },
+    grammar: {
+      en: "Grammar mistakes are still affecting overall control, especially when the task requires sentence transformation or more precise structure use.",
+      cn: "语法错误仍在明显影响整体控制力，尤其是改写和更精确的句型使用时，失分会更集中地暴露出来。",
+    },
+    reading: {
+      en: "Reading is still losing points through incomplete evidence checking, which suggests that question conditions are not yet being tracked carefully enough.",
+      cn: "阅读目前仍会因为证据核对不完整而失分，说明孩子对题干条件的追踪还不够细致稳定。",
+    },
+    listening: {
+      en: "Listening is still vulnerable to distractors and missed details, so this section cannot yet be treated as a stable scoring area.",
+      cn: "听力目前仍容易被干扰项和细节遗漏拉低成绩，因此还不能算真正稳定的得分板块。",
+    },
+    writing: {
+      en: "Writing still needs clearer structure, more controlled sentence building, and better idea support before it can become a reliable output section.",
+      cn: "写作要想变成稳定得分板块，还需要继续加强结构组织、句子控制和观点支撑这三个方面。",
+    },
+    speaking: {
+      en: "Speaking still needs more stable response logic and more controlled oral output before the student can handle this section confidently.",
+      cn: "口语要想更有把握地完成任务，仍需要先把回应逻辑和较稳定的口头输出能力补起来。",
+    },
+    general: {
+      en: "The weaker sections are still reducing the overall profile and therefore need more direct correction than the stronger parts.",
+      cn: "薄弱板块仍在明显拉低整体画像，因此需要比优势部分更直接、更聚焦的纠正训练。",
+    },
+  };
+
   sections.forEach((section) => {
     if (section.performance === "strong") {
-      strengthsEn.push(`${section.sectionTitle} is currently one of the stronger-performing sections.`);
-      strengthsCn.push(`${section.sectionTitle} 是当前表现相对较好的板块之一。`);
+      strengthsEn.push(`${section.sectionTitle}: ${strengthTemplates[section.kind].en}`);
+      strengthsCn.push(`${section.sectionTitle}：${strengthTemplates[section.kind].cn}`);
     }
     if (section.performance === "weak") {
-      weaknessesEn.push(`${section.sectionTitle} still needs direct reinforcement.`);
-      weaknessesCn.push(`${section.sectionTitle} 仍需要更直接的强化训练。`);
+      weaknessesEn.push(`${section.sectionTitle}: ${weaknessTemplates[section.kind].en}`);
+      weaknessesCn.push(`${section.sectionTitle}：${weaknessTemplates[section.kind].cn}`);
     }
   });
 
@@ -424,6 +679,9 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
 function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   const { weakSections } = pickStrongWeakSections(sections);
   const weakTitles = weakSections.slice(0, 2).map((section) => section.sectionTitle);
+  const manualTitles = sections
+    .filter((section) => section.performance === "manual")
+    .map((section) => section.sectionTitle);
 
   const gradeDefaults: Record<string, { en: string[]; cn: string[] }> = {
     A: {
@@ -481,10 +739,57 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
     defaults.en[0] = `Start with focused work on ${weakTitles.join(" and ")} before expanding practice volume again.`;
     defaults.cn[0] = `建议先围绕 ${weakTitles.join(" 和 ")} 做针对性训练，再逐步扩大练习量。`;
   }
+  if (manualTitles.length > 0) {
+    defaults.en[2] = `Use teacher-reviewed work from ${formatSectionList(manualTitles, "en")} to connect input practice with clearer output routines.`;
+    defaults.cn[2] = `把 ${formatSectionList(manualTitles, "cn")} 的老师批改结果真正用起来，帮助孩子把输入训练逐步转化为更清楚的输出套路。`;
+  }
 
   return {
     recommendations_en: defaults.en,
     recommendations_cn: defaults.cn,
+  };
+}
+
+function buildParentFeedback(grade: string, sections: SectionDescriptor[]) {
+  const template = GRADE_TEMPLATES[grade];
+  const { strongest, weakest, weakSections } = pickStrongWeakSections(sections);
+  const weakTitles = weakSections.slice(0, 2).map((section) => section.sectionTitle);
+  const longest = [...sections].sort((a, b) => b.timeSeconds - a.timeSeconds)[0];
+  const manualTitles = sections
+    .filter((section) => section.performance === "manual")
+    .map((section) => section.sectionTitle);
+
+  const followUpEn = weakTitles.length > 0
+    ? `In the short term, home support should stay centered on ${formatSectionList(weakTitles, "en")} instead of spreading practice too widely at once.`
+    : "In the short term, practice should stay focused and consistent instead of becoming too broad or random.";
+  const followUpCn = weakTitles.length > 0
+    ? `短期内，家庭配合的重点应继续放在 ${formatSectionList(weakTitles, "cn")} 上，而不是把练习面一下子铺得过宽。`
+    : "短期内，家庭配合更适合保持聚焦和持续，而不是把练习内容一下子铺得太散。";
+
+  const balanceEn = strongest
+    ? `${strongest.sectionTitle} can currently serve as a confidence-supporting area, so it should be maintained while weaker sections are being repaired.`
+    : "It will be important to protect whichever section is currently more stable, so that confidence is not lost during the rebuilding process.";
+  const balanceCn = strongest
+    ? `${strongest.sectionTitle} 目前可以作为帮助孩子建立信心的支撑板块，因此在补弱过程中也要继续维持。`
+    : "在补弱过程中，也要继续维持相对更稳的部分，避免孩子在重建阶段失去信心。";
+
+  const timingEn = longest && longest.timeSeconds > 0
+    ? `Because ${longest.sectionTitle} took the longest time in this paper, parents can also watch whether hesitation, repeated checking, or output pressure is slowing the student down there.`
+    : "Parents can also pay attention to whether hesitation and repeated checking are affecting the student’s pace during practice.";
+  const timingCn = longest && longest.timeSeconds > 0
+    ? `另外，本次 ${longest.sectionTitle} 耗时相对更长，家长也可以关注孩子在这一部分是否存在犹豫、反复检查或表达压力偏大的情况。`
+    : "另外，家长也可以关注孩子在练习时是否存在犹豫过多、反复检查等影响节奏的问题。";
+
+  const manualEn = manualTitles.length > 0
+    ? `For ${formatSectionList(manualTitles, "en")}, teacher scoring comments should be treated as core follow-up guidance rather than as one-off remarks.`
+    : "";
+  const manualCn = manualTitles.length > 0
+    ? `${formatSectionList(manualTitles, "cn")} 这部分的老师评分和评语，建议当作后续训练的重要依据，而不是只看一次就结束。`
+    : "";
+
+  return {
+    en: [template.parent_en, followUpEn, balanceEn, manualEn, timingEn].filter(Boolean).join(" "),
+    cn: [template.parent_cn, followUpCn, balanceCn, manualCn, timingCn].filter(Boolean).join(""),
   };
 }
 
@@ -714,6 +1019,7 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
   const template = GRADE_TEMPLATES[grade];
   const sections = buildSectionDescriptors(input);
   const abilitySnapshot = buildAbilitySnapshot(grade, sections);
+  const { strongest, weakest } = pickStrongWeakSections(sections);
   const sectionInsights = sections.map((section) => {
     const summary = describeSectionPerformance(section);
     return {
@@ -726,11 +1032,15 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
   const strengthsWeaknesses = buildStrengthsWeaknesses(sections);
   const recommendations = buildRecommendations(grade, sections);
   const timeAnalysis = buildTimeAnalysis(input.totalTimeSeconds, sections);
+  const parentFeedback = buildParentFeedback(grade, sections);
 
   const overallSummaryEn = [
     `${input.paperTitle} has been completed for ${input.studentName || "the student"}${input.studentGrade ? ` (${input.studentGrade})` : ""}.`,
     `The student scored ${input.totalScore}/${input.totalPossible} (${input.percentage}%), with an overall grade of ${grade}.`,
+    template.summary_en,
     template.overview_en,
+    strongest ? `At the moment, ${strongest.sectionTitle} is functioning as the clearest relative strength in the paper.` : "",
+    weakest ? `${weakest.sectionTitle} is currently the section that needs the earliest and most focused correction.` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "Writing and speaking should be finalized together with teacher scoring notes, so the current automatic total should be read as a partial academic profile rather than the final full-skill judgment."
       : "",
@@ -741,7 +1051,10 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
   const overallSummaryCn = [
     `${input.paperTitle} 已完成测评。${input.studentName ? `学生为 ${input.studentName}` : "本次结果对应的学生"}${input.studentGrade ? `，年级为 ${input.studentGrade}` : ""}。`,
     `本次总分为 ${input.totalScore}/${input.totalPossible}（${input.percentage}%），综合等级为 ${grade}。`,
+    template.summary_cn,
     template.overview_cn,
+    strongest ? `从分项结果看，${strongest.sectionTitle} 是目前相对更能支撑成绩的板块。` : "",
+    weakest ? `${weakest.sectionTitle} 则是接下来最需要优先处理的薄弱点。` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "由于写作和口语仍需老师人工评分，当前自动总分应理解为阶段性学业画像，而不是最终完整能力结论。"
       : "",
@@ -765,8 +1078,8 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     abilitySnapshot_cn: abilitySnapshot.cn,
     sectionInsights,
     studyPlan: buildStudyPlan(grade, sections),
-    parentFeedback_en: template.parent_en,
-    parentFeedback_cn: template.parent_cn,
+    parentFeedback_en: parentFeedback.en,
+    parentFeedback_cn: parentFeedback.cn,
     speakingEvaluation: input.speakingSummary ?? null,
   };
 }
