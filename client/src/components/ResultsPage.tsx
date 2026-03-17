@@ -787,6 +787,7 @@ export default function ResultsPage() {
   const writingAIScore = writingResult && !writingIsManual ? writingResult.score : 0;
   const writingAITotal = writingResult && !writingIsManual ? writingResult.maxScore : 0;
   const speakingIsManual = isManualSpeakingReview(speakingResult);
+  const speakingUsesTeacherReview = Boolean(speakingResult?.reviewMode === 'manual');
   const speakingAIScore = speakingResult && !speakingIsManual ? speakingResult.totalScore : 0;
   const speakingAITotal = speakingResult && !speakingIsManual ? speakingResult.totalPossible : 0;
   const totalScore = correct + readingAIScore + writingAIScore + speakingAIScore;
@@ -1489,13 +1490,17 @@ export default function ResultsPage() {
               <div className="px-5 py-3 bg-sky-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Speaking Review' : '口语批改'}</h3>
-                  {speakingIsManual ? <AlertCircle className="w-4 h-4 text-amber-500" /> : <Sparkles className="w-4 h-4 text-sky-500" />}
-                  <span className={`text-sm font-medium ${speakingIsManual ? 'text-amber-600' : 'text-sky-500'}`}>
-                    {speakingIsManual ? (lang === 'en' ? 'Teacher Review Required' : '需要老师人工批改') : (lang === 'en' ? 'Automated Review' : '自动评估')}
+                  {speakingUsesTeacherReview ? <AlertCircle className="w-4 h-4 text-amber-500" /> : <Sparkles className="w-4 h-4 text-sky-500" />}
+                  <span className={`text-sm font-medium ${speakingUsesTeacherReview ? 'text-amber-600' : 'text-sky-500'}`}>
+                    {speakingIsManual
+                      ? (lang === 'en' ? 'Teacher Review Required' : '需要老师人工批改')
+                      : speakingUsesTeacherReview
+                        ? (lang === 'en' ? 'Teacher Review' : '老师评分')
+                        : (lang === 'en' ? 'Automated Review' : '自动评估')}
                   </span>
                 </div>
                 {speakingResult && !speakingIsManual && (
-                  <span className="text-base font-bold text-slate-600">{speakingResult.totalScore} out of {speakingResult.totalPossible}</span>
+                  <span className="text-base font-bold text-slate-600">{speakingResult.totalScore} {lang === 'en' ? 'out of' : '/'} {speakingResult.totalPossible}</span>
                 )}
               </div>
 
@@ -1540,6 +1545,29 @@ export default function ResultsPage() {
                             {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
                               <div>
                                 <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Teacher Checklist' : '老师批改提示'}</p>
+                                <ul className="space-y-1.5">
+                                  {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
+                                    <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                                      <span className="text-sky-500 font-bold mt-0.5">{index + 1}.</span>
+                                      <span>{suggestion}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : speakingUsesTeacherReview ? (
+                          <>
+                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                              <p className="text-sm font-semibold text-slate-700 mb-1">{lang === 'en' ? 'Teacher Comment' : '老师评语'}</p>
+                              <p className="text-sm text-slate-600">
+                                {lang === 'en' ? item.feedback_en : item.feedback_cn}
+                              </p>
+                            </div>
+
+                            {((lang === 'en' ? item.suggestions_en : item.suggestions_cn) || []).length > 0 && (
+                              <div>
+                                <p className="text-sm font-semibold text-slate-700 mb-2">{lang === 'en' ? 'Improvement Suggestions' : '改进建议'}</p>
                                 <ul className="space-y-1.5">
                                   {(lang === 'en' ? item.suggestions_en : item.suggestions_cn).map((suggestion, index) => (
                                     <li key={index} className="text-sm text-slate-600 flex items-start gap-2">

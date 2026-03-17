@@ -333,7 +333,9 @@ function buildTeacherSpeakingEvaluation(draft: TeacherSpeakingDraft): SpeakingEv
   const evaluations: SpeakingQuestionEvaluation[] = draft.items.map((item) => {
     const score = Number(item.score);
     const maxScore = Number(item.maxScore);
-    const feedback = item.feedback.trim() || 'Teacher reviewed this speaking response manually.';
+    const feedback = item.feedback.trim();
+    const feedbackEn = feedback || 'Teacher reviewed this speaking response manually.';
+    const feedbackCn = feedback || '老师已完成这道口语题的人工评分。';
     const suggestions = splitSuggestions(item.suggestions);
 
     return {
@@ -346,18 +348,18 @@ function buildTeacherSpeakingEvaluation(draft: TeacherSpeakingDraft): SpeakingEv
       score,
       maxScore,
       grade: getGradeLetter(score, maxScore),
-      feedback_en: feedback,
-      feedback_cn: feedback,
-      taskCompletion_en: feedback,
-      taskCompletion_cn: feedback,
-      fluency_en: feedback,
-      fluency_cn: feedback,
-      vocabulary_en: feedback,
-      vocabulary_cn: feedback,
-      grammar_en: feedback,
-      grammar_cn: feedback,
-      pronunciation_en: feedback,
-      pronunciation_cn: feedback,
+      feedback_en: feedbackEn,
+      feedback_cn: feedbackCn,
+      taskCompletion_en: feedbackEn,
+      taskCompletion_cn: feedbackCn,
+      fluency_en: feedbackEn,
+      fluency_cn: feedbackCn,
+      vocabulary_en: feedbackEn,
+      vocabulary_cn: feedbackCn,
+      grammar_en: feedbackEn,
+      grammar_cn: feedbackCn,
+      pronunciation_en: feedbackEn,
+      pronunciation_cn: feedbackCn,
       suggestions_en: suggestions,
       suggestions_cn: suggestions,
       reviewMode: 'manual',
@@ -367,14 +369,16 @@ function buildTeacherSpeakingEvaluation(draft: TeacherSpeakingDraft): SpeakingEv
 
   const totalScore = evaluations.reduce((sum, item) => sum + item.score, 0);
   const totalPossible = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
-  const overallFeedback = draft.overallFeedback.trim() || `Teacher completed a manual speaking review for ${evaluations.length} response(s).`;
+  const overallFeedback = draft.overallFeedback.trim();
+  const overallFeedbackEn = overallFeedback || `Teacher completed a manual speaking review for ${evaluations.length} response(s).`;
+  const overallFeedbackCn = overallFeedback || `老师已完成 ${evaluations.length} 道口语作答的人工评分。`;
 
   return {
     totalScore,
     totalPossible,
     grade: getGradeLetter(totalScore, totalPossible),
-    overallFeedback_en: overallFeedback,
-    overallFeedback_cn: overallFeedback,
+    overallFeedback_en: overallFeedbackEn,
+    overallFeedback_cn: overallFeedbackCn,
     evaluations,
     reviewMode: 'manual',
     manualReviewRequired: false,

@@ -1267,6 +1267,8 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
           C.textMuted,
           contentW - 14,
         );
+      } else if (speakingUsesTeacherReview) {
+        addText(`${t('老师评语：', 'Teacher Comment: ')}${isCn ? item.feedback_cn : item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
       } else {
         addText(`${t('转写：', 'Transcript: ')}${isCn ? (item.transcript || localizeStoredText('No transcript available.')) : (item.transcript || 'No transcript available.')}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
         addText(`${t('总体评语：', 'Overall Comment: ')}${isCn ? item.feedback_cn : item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
@@ -1279,7 +1281,17 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
 
       const speakingSuggestions = isCn ? item.suggestions_cn : item.suggestions_en;
       if (speakingSuggestions.length > 0) {
-        addText(speakingIsManual ? t('老师批改要点', 'Teacher Checklist') : t('提升建议', 'Suggestions'), mL + 6, 8.6, true, C.primary);
+        addText(
+          speakingIsManual
+            ? t('老师批改要点', 'Teacher Checklist')
+            : speakingUsesTeacherReview
+              ? t('改进建议', 'Improvement Suggestions')
+              : t('提升建议', 'Suggestions'),
+          mL + 6,
+          8.6,
+          true,
+          C.primary,
+        );
         speakingSuggestions.forEach((suggestion, index) => {
           addText(`${index + 1}.  ${suggestion}`, mL + 8, 8.1, false, C.textMuted, contentW - 16);
         });
