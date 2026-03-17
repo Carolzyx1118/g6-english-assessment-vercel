@@ -1151,11 +1151,6 @@ function HistoryContent() {
                                 {lang === 'en' ? (report.reportTitle_en || 'Assessment Feedback Report') : (report.reportTitle_cn || '测评反馈报告')}
                               </h4>
                               <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-4 border border-violet-100">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <span className="px-3 py-1 rounded-full bg-violet-200 text-violet-800 font-bold text-sm">
-                                    {report.languageLevel}
-                                  </span>
-                                </div>
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {lang === 'en' ? (report.overallSummary_en || report.summary_en) : (report.overallSummary_cn || report.summary_cn)}
                                 </p>

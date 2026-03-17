@@ -984,18 +984,6 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
   // ── PROFICIENCY REPORT ──
   if (report) {
     addSectionBanner(t('整体概览', 'Overall Summary'), C.accent, [237, 233, 254]);
-    checkPage(14);
-    drawRect(mL, y - 2, 28, 10, C.accent, 2);
-    setFont(true, report.languageLevel);
-    pdf.setFontSize(11);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(report.languageLevel, mL + 14, y + 4.5, { align: 'center' });
-    setFont(false);
-    pdf.setFontSize(9);
-    pdf.setTextColor(...C.textMuted);
-    pdf.text(t('能力等级', 'CEFR Level'), mL + 32, y + 4.5);
-    y += 14;
-
     addText(isCn ? (report.overallSummary_cn || report.summary_cn) : (report.overallSummary_en || report.summary_en), mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
     addText(t('时间表现', 'Time Management'), mL, 9.5, true, C.text);

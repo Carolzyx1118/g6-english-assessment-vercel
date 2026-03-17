@@ -1765,12 +1765,11 @@ export default function ResultsPage() {
                 </div>
               </div>
               <div className="relative z-10">
-                <div className="px-5 py-3 bg-blue-50/95 border-b border-slate-200 flex items-center justify-between gap-4">
+                <div className="px-5 py-3 bg-blue-50/95 border-b border-slate-200">
                   <div>
                     <h3 className="font-bold text-base text-slate-700">{reportResult?.reportTitle_en || 'Assessment Feedback Report'}</h3>
                     <p className="text-xs text-slate-500 mt-0.5">{APP_BRAND_TITLE} · {APP_BRAND_SUBTITLE}</p>
                   </div>
-                  {reportResult && <span className="text-sm font-semibold text-blue-700">{reportResult.languageLevel}</span>}
                 </div>
 
                 {isGeneratingReport ? (
