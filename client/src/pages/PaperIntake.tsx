@@ -2088,8 +2088,15 @@ export default function PaperIntake() {
   });
   const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
   const isLegacyGeneratedMode = paperSubject === "english" && buildMode === "generated";
+  const showPreviewActionCard = buildMode === "fixed";
   const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
   const effectiveDescription = isQuestionBankMode ? "" : description;
+  const draftActionLabel = isQuestionBankMode
+    ? (isEditing ? "Save Question Draft Changes" : "Save Question Draft")
+    : (isEditing ? "Save Draft Changes" : "Save Draft");
+  const publishActionLabel = isQuestionBankMode
+    ? (isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank")
+    : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper");
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: editPaperId },
@@ -7228,7 +7235,7 @@ export default function PaperIntake() {
               </CardContent>
             </Card>
 
-            {isQuestionBankMode ? (
+            {showPreviewActionCard ? (
               <Card className="border-slate-200 shadow-sm">
                 <CardContent className="space-y-3 px-6 py-5">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -7243,14 +7250,14 @@ export default function PaperIntake() {
                     ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-2.5">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {isEditing ? (
                       <Button
                         type="button"
                         variant="outline"
                         disabled={isPersisting || !editingPaperMeta}
                         onClick={handleSaveAsCopy}
-                        className="gap-2 border-slate-200 px-5"
+                        className="gap-2 border-slate-200 px-4"
                       >
                         <FilePlus2 className="h-4 w-4" />
                         Save as Copy
@@ -7262,24 +7269,24 @@ export default function PaperIntake() {
                       variant="outline"
                       disabled={saveDisabled}
                       onClick={handleSaveDraft}
-                      className="gap-2 border-slate-200 px-5"
+                      className="gap-2 border-slate-200 px-4"
                     >
                       {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-                      {isEditing ? "Save Question Draft Changes" : "Save Question Draft"}
+                      {draftActionLabel}
                     </Button>
 
                     <Button
                       type="button"
                       disabled={saveDisabled}
                       onClick={handlePublishPaper}
-                      className="gap-2 bg-[#1E3A5F] px-6 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+                      className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
                     >
                       {isPersisting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Check className="h-4 w-4" />
                       )}
-                      {isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank"}
+                      {publishActionLabel}
                     </Button>
                   </div>
                 </CardContent>
@@ -7289,7 +7296,7 @@ export default function PaperIntake() {
         </div>
 
         {/* ── Confirm / Save Button ── */}
-        {!isQuestionBankMode ? (
+        {buildMode !== "fixed" ? (
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -7333,9 +7340,7 @@ export default function PaperIntake() {
               className="gap-2 border-slate-200"
             >
               {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-              {isQuestionBankMode
-                ? (isEditing ? "Save Question Draft Changes" : "Save Question Draft")
-                : (isEditing ? "Save Draft Changes" : "Save Draft")}
+              {draftActionLabel}
             </Button>
 
             <Button
@@ -7350,9 +7355,7 @@ export default function PaperIntake() {
               ) : (
                 <Check className="h-4 w-4" />
               )}
-              {isQuestionBankMode
-                ? (isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank")
-                : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper")}
+              {publishActionLabel}
             </Button>
           </div>
         </div>
