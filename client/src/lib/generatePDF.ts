@@ -1,10 +1,10 @@
 /**
  * Shared PDF generation utility for admin history page.
- * Generates English-only assessment reports from database records.
+ * Generates assessment reports from database records and supports Chinese output.
  * Shows EVERY question with full details including unanswered ones.
  */
 import jsPDF from 'jspdf';
-import { getPaperById, type Paper, type Section, type Question } from '@/data/papers';
+import { getPaperById, type Section, type Question } from '@/data/papers';
 import { APP_BRAND_TITLE } from '@/lib/branding';
 import type {
   AssessmentReportResult,
@@ -74,9 +74,46 @@ interface QuestionDetail {
   isAnswered: boolean;       // Whether the student answered at all
   explanation?: string;      // AI explanation if available
   tip?: string;              // AI tip if available
+  explanationCn?: string;
+  tipCn?: string;
 }
 
 type PDFAnswerValue = string | number | number[];
+
+type PDFLocale = 'en' | 'cn';
+
+const CJK_FONT_NAME = 'DroidSansCJK';
+const CJK_FONT_FILE = 'DroidSansCJK.ttf';
+let cjkFontBase64Promise: Promise<string> | null = null;
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    for (let offset = 0; offset < chunk.length; offset += 1) {
+      binary += String.fromCharCode(chunk[offset]);
+    }
+  }
+
+  return btoa(binary);
+}
+
+async function loadCJKFontBase64() {
+  if (!cjkFontBase64Promise) {
+    cjkFontBase64Promise = fetch('/DroidSansCJK.ttf')
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to load CJK font: ${response.status}`);
+        }
+        return arrayBufferToBase64(await response.arrayBuffer());
+      });
+  }
+
+  return cjkFontBase64Promise;
+}
 
 function getPDFMCQCorrectIndexes(question: Question & { type: 'mcq' | 'picture-mcq' | 'listening-mcq' }) {
   if (question.correctAnswers && question.correctAnswers.length > 0) {
@@ -124,12 +161,6 @@ function getPDFChoiceIndex(record: Record<string, unknown>, label: string) {
 function formatPDFPassageInlinePrompt(prompt: string, item: { label: string; options: string[] }) {
   const blankPrompt = `Blank ${item.label}: ${item.options.join(' / ')}`;
   return prompt ? `${prompt} — ${blankPrompt}` : blankPrompt;
-}
-
-function formatTime(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}m ${s.toString().padStart(2, '0')}s`;
 }
 
 function titleCaseSectionId(sectionId: string) {
@@ -184,16 +215,18 @@ function buildAutoGradableDetails(
         : (q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label || `Option ${q.correctAnswer + 1}`);
       const isCorrect = JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b));
       const expl = explanationsMap.get(q.id);
-      details.push({
-        questionNum: `Q${q.id}`,
-        questionText: q.question,
-        userAnswer: userText,
-        correctAnswer: correctText,
-        isCorrect: isAnswered && isCorrect,
-        isAnswered,
-        explanation: expl?.explanation_en,
-        tip: expl?.tip_en,
-      });
+        details.push({
+          questionNum: `Q${q.id}`,
+          questionText: q.question,
+          userAnswer: userText,
+          correctAnswer: correctText,
+          isCorrect: isAnswered && isCorrect,
+          isAnswered,
+          explanation: expl?.explanation_en,
+          tip: expl?.tip_en,
+          explanationCn: expl?.explanation_cn,
+          tipCn: expl?.tip_cn,
+        });
     } else if (q.type === 'mcq') {
       const expl = explanationsMap.get(q.id);
       const correctIndexes = getPDFMCQCorrectIndexes(q);
@@ -213,6 +246,8 @@ function buildAutoGradableDetails(
           isAnswered,
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
+          explanationCn: expl?.explanation_cn,
+          tipCn: expl?.tip_cn,
         });
       } else if (typeof q.correctAnswer === 'number') {
         const userIdx = isAnswered ? Number(userAns) : -1;
@@ -227,6 +262,8 @@ function buildAutoGradableDetails(
           isAnswered,
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
+          explanationCn: expl?.explanation_cn,
+          tipCn: expl?.tip_cn,
         });
       } else {
         // MCQ with string correctAnswer (e.g., yes/no)
@@ -242,6 +279,8 @@ function buildAutoGradableDetails(
           isAnswered,
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
+          explanationCn: expl?.explanation_cn,
+          tipCn: expl?.tip_cn,
         });
       }
     } else if (q.type === 'fill-blank') {
@@ -259,6 +298,8 @@ function buildAutoGradableDetails(
         isAnswered,
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
+        explanationCn: expl?.explanation_cn,
+        tipCn: expl?.tip_cn,
       });
     } else if (q.type === 'checkbox') {
       const userArr = isAnswered ? (userAns as unknown as number[]) : [];
@@ -277,6 +318,8 @@ function buildAutoGradableDetails(
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
+        explanationCn: expl?.explanation_cn,
+        tipCn: expl?.tip_cn,
       });
     } else if (q.type === 'open-ended') {
       const rawText = typeof userAns === 'string' ? userAns : '';
@@ -304,6 +347,8 @@ function buildAutoGradableDetails(
           isAnswered: hasAnswer,
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
+          explanationCn: expl?.explanation_cn,
+          tipCn: expl?.tip_cn,
         });
       });
     }
@@ -345,6 +390,8 @@ function buildReadingDetails(
         isAnswered,
         explanation: rr?.explanation_en || expl?.explanation_en,
         tip: expl?.tip_en,
+        explanationCn: rr?.explanation_cn || expl?.explanation_cn,
+        tipCn: expl?.tip_cn,
       });
     } else if (q.type === 'true-false') {
       const parsed: Record<string, boolean> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
@@ -360,6 +407,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : (subAnswered && parsed[stmt.label] === stmt.isTrue),
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       }
     } else if (q.type === 'open-ended' && q.subQuestions) {
@@ -376,6 +424,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : false,
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       }
     } else if (q.type === 'open-ended' && !q.subQuestions) {
@@ -388,6 +437,7 @@ function buildReadingDetails(
         isCorrect: rr ? rr.isCorrect : false,
         isAnswered,
         explanation: rr?.explanation_en,
+        explanationCn: rr?.explanation_cn,
       });
     } else if (q.type === 'table') {
       const parsed: Record<string, string> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
@@ -405,6 +455,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : false,
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       });
     } else if (q.type === 'reference') {
@@ -423,6 +474,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : false,
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       });
     } else if (q.type === 'order') {
@@ -441,6 +493,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : false,
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       });
     } else if (q.type === 'phrase') {
@@ -459,6 +512,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : false,
           isAnswered: subAnswered,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       });
     } else if (q.type === 'checkbox') {
@@ -474,6 +528,7 @@ function buildReadingDetails(
         isCorrect: rr ? rr.isCorrect : false,
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
         explanation: rr?.explanation_en,
+        explanationCn: rr?.explanation_cn,
       });
     } else if (q.type === 'passage-inline-word-choice') {
       const parsed = parsePDFChoiceMap(userAns);
@@ -489,6 +544,7 @@ function buildReadingDetails(
           isCorrect: rr ? rr.isCorrect : (hasAnswer && selectedIndex === item.correctAnswer),
           isAnswered: hasAnswer,
           explanation: rr?.explanation_en,
+          explanationCn: rr?.explanation_cn,
         });
       });
     }
@@ -496,8 +552,13 @@ function buildReadingDetails(
   return details;
 }
 
-export function generateReportPDF(data: PDFData): void {
+export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn'): Promise<void> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const fontBase64 = await loadCJKFontBase64();
+  pdf.addFileToVFS(CJK_FONT_FILE, fontBase64);
+  pdf.addFont(CJK_FONT_FILE, CJK_FONT_NAME, 'normal');
+  pdf.addFont(CJK_FONT_FILE, CJK_FONT_NAME, 'bold');
+
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const mL = 18;
@@ -505,10 +566,55 @@ export function generateReportPDF(data: PDFData): void {
   const contentW = pageW - mL - mR;
   let y = 0;
   let pageNum = 1;
+  const isCn = locale === 'cn';
 
-  // English-only report — use built-in helvetica font
   const setFont = (bold: boolean, _txt?: string) => {
-    pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+    pdf.setFont(CJK_FONT_NAME, bold ? 'bold' : 'normal');
+  };
+
+  const t = (cn: string, en: string) => (isCn ? cn : en);
+  const sectionLabelMap: Record<string, { cn: string; en: string }> = {
+    vocabulary: { cn: '词汇', en: 'Vocabulary' },
+    grammar: { cn: '语法', en: 'Grammar' },
+    listening: { cn: '听力', en: 'Listening' },
+    reading: { cn: '阅读理解', en: 'Reading' },
+    writing: { cn: '写作', en: 'Writing' },
+    speaking: { cn: '口语', en: 'Speaking' },
+  };
+  const localizedTextMap: Record<string, { cn: string; en: string }> = {
+    'Not Answered': { cn: '未作答', en: 'Not Answered' },
+    'Audio response submitted': { cn: '已提交录音作答', en: 'Audio response submitted' },
+    'Teacher review required': { cn: '需要老师人工判断', en: 'Teacher review required' },
+    'Manual Review': { cn: '老师评分', en: 'Manual Review' },
+    'No transcript available.': { cn: '暂无转写内容。', en: 'No transcript available.' },
+    'Teacher reviewed this speaking response manually.': { cn: '老师已对这道口语题完成人工批改。', en: 'Teacher reviewed this speaking response manually.' },
+  };
+
+  const localizeStoredText = (value: string) => {
+    const mapped = localizedTextMap[value];
+    return mapped ? (isCn ? mapped.cn : mapped.en) : value;
+  };
+
+  const getSectionDisplayName = (sectionId: string, fallback?: string) => {
+    const normalized = sectionLabelMap[sectionId];
+    if (normalized) return isCn ? normalized.cn : normalized.en;
+    return fallback || titleCaseSectionId(sectionId);
+  };
+
+  const localizeLooseSectionTitle = (title: string) => {
+    const normalizedKey = title.trim().toLowerCase();
+    if (sectionLabelMap[normalizedKey]) return isCn ? sectionLabelMap[normalizedKey].cn : sectionLabelMap[normalizedKey].en;
+    if (!isCn) return title;
+    const looseMatch = Object.entries(sectionLabelMap).find(([, labels]) => labels.en.toLowerCase() === normalizedKey);
+    return looseMatch ? looseMatch[1].cn : title;
+  };
+
+  const formatTimeForLocale = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return isCn
+      ? `${m}分${s.toString().padStart(2, '0')}秒`
+      : `${m}m ${s.toString().padStart(2, '0')}s`;
   };
 
   // ── Color palette ──
@@ -536,21 +642,22 @@ export function generateReportPDF(data: PDFData): void {
     reading: [99, 102, 241],
     writing: [225, 29, 72],
   };
-  const watermarkText = 'PUREON EDUCATION';
+  const watermarkText = isCn ? '璞源教育' : 'PUREON EDUCATION';
+  const watermarkSubtext = isCn ? 'PUREON EDUCATION' : APP_BRAND_TITLE;
 
   // ── Helper functions ──
   const addWatermark = () => {
-    pdf.setFont('helvetica', 'bold');
+    setFont(true);
     pdf.setFontSize(30);
     pdf.setTextColor(238, 242, 247);
     pdf.text(watermarkText, pageW / 2, pageH / 2, {
       align: 'center',
       angle: -32,
     });
-    pdf.setFont('helvetica', 'normal');
+    setFont(false);
     pdf.setFontSize(11);
     pdf.setTextColor(226, 232, 240);
-    pdf.text(APP_BRAND_TITLE, pageW / 2, pageH / 2 + 10, {
+    pdf.text(watermarkSubtext, pageW / 2, pageH / 2 + 10, {
       align: 'center',
       angle: -32,
     });
@@ -560,11 +667,11 @@ export function generateReportPDF(data: PDFData): void {
     pdf.setDrawColor(...C.border);
     pdf.setLineWidth(0.3);
     pdf.line(mL, pageH - 12, pageW - mR, pageH - 12);
-    pdf.setFont('helvetica', 'normal');
+    setFont(false);
     pdf.setFontSize(7.5);
     pdf.setTextColor(...C.textMuted);
-    pdf.text(`Assessment Feedback Report - ${data.paperTitle}`, mL, pageH - 8);
-    pdf.text(`Page ${pageNum}`, pageW - mR, pageH - 8, { align: 'right' });
+    pdf.text(`${t('测评反馈报告', 'Assessment Feedback Report')} - ${data.paperTitle}`, mL, pageH - 8);
+    pdf.text(`${t('第', 'Page ')}${pageNum}${t('页', '')}`, pageW - mR, pageH - 8, { align: 'right' });
   };
 
   const checkPage = (need: number) => {
@@ -623,6 +730,9 @@ export function generateReportPDF(data: PDFData): void {
   const explanations = safeParseJSON<ExplanationResult[] | null>(data.explanationsJson, null);
   const report = safeParseJSON<AssessmentReportResult | null>(data.reportJson, null);
   const speakingEvaluation: SpeakingEvaluationResult | null = report?.speakingEvaluation || null;
+  const reportTitle = isCn
+    ? (report?.reportTitle_cn || '测评反馈报告')
+    : (report?.reportTitle_en || 'Assessment Feedback Report');
 
   // Build explanations lookup map
   const explanationsMap = new Map<number, ExplanationResult>();
@@ -664,20 +774,25 @@ export function generateReportPDF(data: PDFData): void {
   const gradeInfo = getGrade();
 
   const totalTime = data.totalTimeSeconds || 0;
-  const minutes = Math.floor(totalTime / 60);
-  const seconds = totalTime % 60;
 
   // ── TITLE BANNER ──
   drawRect(0, 0, pageW, 28, C.primary);
   drawRect(0, 24, pageW, 8, C.accent);
-  pdf.setFont('helvetica', 'bold');
+  setFont(true);
   pdf.setFontSize(16);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(report?.reportTitle_en || 'Assessment Feedback Report', pageW / 2, 14, { align: 'center' });
+  pdf.text(reportTitle, pageW / 2, 14, { align: 'center' });
   pdf.setFontSize(9);
   pdf.setTextColor(200, 210, 255);
-  const reportDate = new Date(data.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  pdf.text(`${data.paperTitle} · Generated on ${reportDate}`, pageW / 2, 22, { align: 'center' });
+  const reportDate = new Date(data.createdAt).toLocaleDateString(isCn ? 'zh-CN' : 'en-US', isCn
+    ? { year: 'numeric', month: '2-digit', day: '2-digit' }
+    : { year: 'numeric', month: 'long', day: 'numeric' });
+  pdf.text(
+    isCn ? `${data.paperTitle} · 生成日期 ${reportDate}` : `${data.paperTitle} · Generated on ${reportDate}`,
+    pageW / 2,
+    22,
+    { align: 'center' },
+  );
   addWatermark();
   y = 38;
 
@@ -686,47 +801,47 @@ export function generateReportPDF(data: PDFData): void {
   drawRect(mL, y - 2, 3, 20, C.primary, 1);
   pdf.setFontSize(10);
   pdf.setTextColor(...C.text);
-  const namePrefix = 'Student: ';
-  pdf.setFont('helvetica', 'bold');
+  const namePrefix = t('学生：', 'Student: ');
+  setFont(true);
   pdf.text(namePrefix, mL + 7, y + 5);
   const prefixWidth = pdf.getTextWidth(namePrefix);
-  pdf.setFont('helvetica', 'normal');
+  setFont(false);
   pdf.text(data.studentName, mL + 7 + prefixWidth, y + 5);
   if (data.studentGrade) {
-    const gradeText = `Grade: ${data.studentGrade}`;
+    const gradeText = isCn ? `年级：${data.studentGrade}` : `Grade: ${data.studentGrade}`;
     setFont(false, gradeText);
     pdf.text(gradeText, mL + 90, y + 5);
   }
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Assessment:', mL + 7, y + 11);
-  pdf.setFont('helvetica', 'normal');
+  setFont(true);
+  pdf.text(t('测评：', 'Assessment:'), mL + 7, y + 11);
+  setFont(false);
   pdf.text(data.paperTitle, mL + 28, y + 11);
   y += 24;
 
   // ── SCORE SUMMARY ──
   const cardW = (contentW - 8) / 3;
   const cards = [
-    { label: 'Grade', value: gradeInfo.grade, color: C.accent },
-    { label: 'Score', value: `${totalScore}/${totalPossible} (${percentage}%)`, color: C.primary },
-    { label: 'Time', value: totalTime > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : 'N/A', color: C.text },
+    { label: t('等级', 'Grade'), value: gradeInfo.grade, color: C.accent },
+    { label: t('分数', 'Score'), value: `${totalScore}/${totalPossible} (${percentage}%)`, color: C.primary },
+    { label: t('用时', 'Time'), value: totalTime > 0 ? formatTimeForLocale(totalTime) : t('暂无', 'N/A'), color: C.text },
   ];
   cards.forEach((card, i) => {
     const cx = mL + i * (cardW + 4);
     drawRect(cx, y, cardW, 18, C.bgLight, 3);
     drawRect(cx, y, cardW, 4, card.color, 2);
-    pdf.setFont('helvetica', 'bold');
+    setFont(true);
     pdf.setFontSize(12);
     pdf.setTextColor(...card.color);
     pdf.text(card.value, cx + cardW / 2, y + 11, { align: 'center' });
-    pdf.setFont('helvetica', 'normal');
+    setFont(false);
     pdf.setFontSize(7);
     pdf.setTextColor(...C.textMuted);
     pdf.text(card.label, cx + cardW / 2, y + 16, { align: 'center' });
   });
   y += 24;
   const manualScoreNotes = [
-    writingIsManual ? 'Writing is pending teacher review and is not included in the automatic score.' : null,
-    speakingIsManual ? 'Speaking is pending teacher review and is not included in the automatic score.' : null,
+    writingIsManual ? t('写作为老师人工评分项，当前不计入自动总分。', 'Writing is pending teacher review and is not included in the automatic score.') : null,
+    speakingIsManual ? t('口语为老师人工评分项，当前不计入自动总分。', 'Speaking is pending teacher review and is not included in the automatic score.') : null,
   ].filter(Boolean) as string[];
   manualScoreNotes.forEach((note) => {
     addText(note, mL + 2, 8.3, false, C.amber, contentW - 6);
@@ -734,17 +849,17 @@ export function generateReportPDF(data: PDFData): void {
   addDivider();
 
   // ── SECTION BREAKDOWN ──
-  addText('Section Breakdown', mL, 11, true, C.text);
+  addText(t('分项成绩', 'Section Breakdown'), mL, 11, true, C.text);
   addGap(2);
   const tableY = y;
   pdf.setFillColor(...C.primary);
   pdf.rect(mL, tableY, contentW, 8, 'F');
-  pdf.setFont('helvetica', 'bold');
+  setFont(true);
   pdf.setFontSize(8.5);
   pdf.setTextColor(255, 255, 255);
-  pdf.text('Section', mL + 4, tableY + 5.5);
-  pdf.text('Score', mL + contentW - 40, tableY + 5.5, { align: 'center' });
-  pdf.text('Time', mL + contentW - 12, tableY + 5.5, { align: 'center' });
+  pdf.text(t('模块', 'Section'), mL + 4, tableY + 5.5);
+  pdf.text(t('得分', 'Score'), mL + contentW - 40, tableY + 5.5, { align: 'center' });
+  pdf.text(t('用时', 'Time'), mL + contentW - 12, tableY + 5.5, { align: 'center' });
   y = tableY + 8;
 
   // Build section list from bySection + reading + writing
@@ -789,19 +904,19 @@ export function generateReportPDF(data: PDFData): void {
     const sc = sectionColors[sectionId] || C.text;
     pdf.setFillColor(...sc);
     pdf.circle(mL + 4, y + 3.5, 1.5, 'F');
-    const sectionTitle = paper?.sections.find((section) => section.id === sectionId)?.title || titleCaseSectionId(sectionId);
-    pdf.setFont('helvetica', 'normal');
+    const sectionTitle = getSectionDisplayName(sectionId, paper?.sections.find((section) => section.id === sectionId)?.title || titleCaseSectionId(sectionId));
+    setFont(false);
     pdf.setFontSize(8.5);
     pdf.setTextColor(...C.text);
     pdf.text(sectionTitle, mL + 9, y + 5);
     const scoreStr =
       (sectionId === 'writing' && writingIsManual) || (speakingIsManual && speakingEvaluation?.evaluations.some((item) => item.sectionId === sectionId))
-        ? 'Manual Review'
+        ? t('老师评分', 'Manual Review')
         : sTotal > 0
           ? `${sCorrect}/${sTotal} (${pct}%)`
-          : 'N/A';
+          : t('暂无', 'N/A');
     pdf.text(scoreStr, mL + contentW - 40, y + 5, { align: 'center' });
-    pdf.text(sTime > 0 ? formatTime(sTime) : '-', mL + contentW - 12, y + 5, { align: 'center' });
+    pdf.text(sTime > 0 ? formatTimeForLocale(sTime) : '-', mL + contentW - 12, y + 5, { align: 'center' });
     y += 7;
   });
   addGap(4);
@@ -809,81 +924,82 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── PROFICIENCY REPORT ──
   if (report) {
-    addSectionBanner('Overall Summary', C.accent, [237, 233, 254]);
+    addSectionBanner(t('整体概览', 'Overall Summary'), C.accent, [237, 233, 254]);
     checkPage(14);
     drawRect(mL, y - 2, 28, 10, C.accent, 2);
     setFont(true, report.languageLevel);
     pdf.setFontSize(11);
     pdf.setTextColor(255, 255, 255);
     pdf.text(report.languageLevel, mL + 14, y + 4.5, { align: 'center' });
-    pdf.setFont('helvetica', 'normal');
+    setFont(false);
     pdf.setFontSize(9);
     pdf.setTextColor(...C.textMuted);
-    pdf.text('CEFR Level', mL + 32, y + 4.5);
+    pdf.text(t('能力等级', 'CEFR Level'), mL + 32, y + 4.5);
     y += 14;
 
-    addText(report.overallSummary_en || report.summary_en, mL + 2, 9, false, C.text, contentW - 6);
+    addText(isCn ? (report.overallSummary_cn || report.summary_cn) : (report.overallSummary_en || report.summary_en), mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
-    addText('Time Management', mL, 9.5, true, C.text);
-    addText(report.timeAnalysis_en, mL + 2, 9, false, C.textMuted, contentW - 6);
+    addText(t('时间表现', 'Time Management'), mL, 9.5, true, C.text);
+    addText(isCn ? report.timeAnalysis_cn : report.timeAnalysis_en, mL + 2, 9, false, C.textMuted, contentW - 6);
     addGap(3);
 
-    if ((report.abilitySnapshot_en || []).length > 0) {
+    const abilitySnapshot = isCn ? (report.abilitySnapshot_cn || []) : (report.abilitySnapshot_en || []);
+    if (abilitySnapshot.length > 0) {
       checkPage(10);
       drawRect(mL, y - 1, contentW, 1, C.primary);
       y += 3;
-      addText('Ability Snapshot', mL, 10, true, C.primary);
-      (report.abilitySnapshot_en || []).forEach((item) => { addText(`-  ${item}`, mL + 4, 9, false, C.text); });
+      addText(t('能力画像', 'Ability Snapshot'), mL, 10, true, C.primary);
+      abilitySnapshot.forEach((item) => { addText(`-  ${item}`, mL + 4, 9, false, C.text); });
       addGap(3);
     }
 
     checkPage(10);
     drawRect(mL, y - 1, contentW, 1, C.success);
     y += 3;
-    addText('Strengths', mL, 10, true, C.success);
-    (report.strengths_en || []).forEach(s => { addText(`+  ${s}`, mL + 4, 9, false, C.text); });
+    addText(t('当前优势', 'Strengths'), mL, 10, true, C.success);
+    (isCn ? (report.strengths_cn || []) : (report.strengths_en || [])).forEach(s => { addText(`+  ${s}`, mL + 4, 9, false, C.text); });
     addGap(3);
 
     checkPage(10);
     drawRect(mL, y - 1, contentW, 1, C.amber);
     y += 3;
-    addText('Areas for Improvement', mL, 10, true, C.amber);
-    (report.weaknesses_en || []).forEach(w => { addText(`-  ${w}`, mL + 4, 9, false, C.text); });
+    addText(t('优先提升方向', 'Areas for Improvement'), mL, 10, true, C.amber);
+    (isCn ? (report.weaknesses_cn || []) : (report.weaknesses_en || [])).forEach(w => { addText(`-  ${w}`, mL + 4, 9, false, C.text); });
     addGap(3);
 
     checkPage(10);
     drawRect(mL, y - 1, contentW, 1, C.primary);
     y += 3;
-    addText('Recommendations', mL, 10, true, C.primary);
-    (report.recommendations_en || []).forEach((r, i) => { addText(`${i + 1}.  ${r}`, mL + 4, 9, false, C.text); });
+    addText(t('核心提升建议', 'Recommendations'), mL, 10, true, C.primary);
+    (isCn ? (report.recommendations_cn || []) : (report.recommendations_en || [])).forEach((r, i) => { addText(`${i + 1}.  ${r}`, mL + 4, 9, false, C.text); });
     addGap(4);
 
     if ((report.sectionInsights || []).length > 0) {
-      addSectionBanner('Section Insights', C.primary, [239, 246, 255]);
+      addSectionBanner(t('模块表现分析', 'Section Insights'), C.primary, [239, 246, 255]);
       report.sectionInsights.forEach((item) => {
-        addText(item.sectionTitle, mL, 9.5, true, C.text);
-        addText(item.summary_en, mL + 2, 8.8, false, C.textMuted, contentW - 6);
+        addText(localizeLooseSectionTitle(item.sectionTitle), mL, 9.5, true, C.text);
+        addText(isCn ? item.summary_cn : item.summary_en, mL + 2, 8.8, false, C.textMuted, contentW - 6);
         addGap(2);
       });
       addGap(2);
     }
 
     if ((report.studyPlan || []).length > 0) {
-      addSectionBanner('Three-Stage Study Plan', C.amber, [255, 247, 237]);
+      addSectionBanner(t('三阶段学习规划', 'Three-Stage Study Plan'), C.amber, [255, 247, 237]);
       report.studyPlan.forEach((stage) => {
         checkPage(16);
         drawRect(mL, y - 1, contentW, 8, C.bgLight, 2);
-        addText(`${stage.stage_en} - ${stage.focus_en}`, mL + 2, 9.5, true, C.text);
-        (stage.actions_en || []).forEach((action, index) => {
+        addText(isCn ? `${stage.stage_cn} - ${stage.focus_cn}` : `${stage.stage_en} - ${stage.focus_en}`, mL + 2, 9.5, true, C.text);
+        (isCn ? (stage.actions_cn || []) : (stage.actions_en || [])).forEach((action, index) => {
           addText(`${index + 1}.  ${action}`, mL + 4, 8.8, false, C.textMuted, contentW - 8);
         });
         addGap(2);
       });
     }
 
-    if (report.parentFeedback_en) {
-      addSectionBanner('Parent Feedback', C.rose, [255, 241, 242]);
-      addText(report.parentFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
+    if ((isCn ? report.parentFeedback_cn : report.parentFeedback_en)) {
+      addSectionBanner(t('家长沟通建议', 'Parent Feedback'), C.rose, [255, 241, 242]);
+      addText(isCn ? report.parentFeedback_cn : report.parentFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
       addGap(3);
     }
 
@@ -898,8 +1014,8 @@ export function generateReportPDF(data: PDFData): void {
       if (section.id === 'writing') continue; // Writing handled separately below
 
       const sc = sectionColors[section.id] || C.primary;
-      const sectionTitle = section.id.charAt(0).toUpperCase() + section.id.slice(1);
-      addSectionBanner(`${sectionTitle} — Question Details`, sc, [
+      const sectionTitle = getSectionDisplayName(section.id, section.title);
+      addSectionBanner(`${sectionTitle}${t('逐题记录', ' — Question Details')}`, sc, [
         Math.min(255, sc[0] + 200),
         Math.min(255, sc[1] + 200),
         Math.min(255, sc[2] + 200),
@@ -913,7 +1029,7 @@ export function generateReportPDF(data: PDFData): void {
       }
 
       if (details.length === 0) {
-        addText('No questions found for this section.', mL + 4, 9, false, C.textMuted);
+        addText(t('该模块暂无题目记录。', 'No questions found for this section.'), mL + 4, 9, false, C.textMuted);
         addGap(4);
         continue;
       }
@@ -925,7 +1041,7 @@ export function generateReportPDF(data: PDFData): void {
         // Question number badge + status indicator
         const statusColor = !detail.isAnswered ? C.notAnswered : detail.isCorrect ? C.success : C.danger;
         const statusBg = !detail.isAnswered ? C.notAnsweredBg : detail.isCorrect ? C.successLight : C.dangerLight;
-        const statusLabel = !detail.isAnswered ? 'NOT ANSWERED' : detail.isCorrect ? 'CORRECT' : 'WRONG';
+        const statusLabel = !detail.isAnswered ? t('未作答', 'NOT ANSWERED') : detail.isCorrect ? t('正确', 'CORRECT') : t('错误', 'WRONG');
 
         // Background card for the question
         drawRect(mL, y - 1, contentW, 6, C.bgLight, 2);
@@ -956,22 +1072,25 @@ export function generateReportPDF(data: PDFData): void {
           setFont(true);
           pdf.setFontSize(8);
           pdf.setTextColor(...C.textMuted);
-          pdf.text('Student Answer:', mL + 6, y);
-          const labelW = pdf.getTextWidth('Student Answer: ');
-          setFont(false, detail.userAnswer);
+          const studentAnswerLabel = t('学生答案：', 'Student Answer: ');
+          pdf.text(studentAnswerLabel, mL + 6, y);
+          const labelW = pdf.getTextWidth(studentAnswerLabel);
+          const localizedUserAnswer = localizeStoredText(detail.userAnswer);
+          setFont(false, localizedUserAnswer);
           pdf.setTextColor(...ansColor);
-          const ansLines = pdf.splitTextToSize(detail.userAnswer, contentW - 14 - labelW);
+          const ansLines = pdf.splitTextToSize(localizedUserAnswer, contentW - 14 - labelW);
           pdf.text(ansLines, mL + 6 + labelW, y);
           y += ansLines.length * 3.6 + 1;
         } else {
           setFont(true);
           pdf.setFontSize(8);
           pdf.setTextColor(...C.textMuted);
-          pdf.text('Student Answer:', mL + 6, y);
-          const labelW = pdf.getTextWidth('Student Answer: ');
+          const studentAnswerLabel = t('学生答案：', 'Student Answer: ');
+          pdf.text(studentAnswerLabel, mL + 6, y);
+          const labelW = pdf.getTextWidth(studentAnswerLabel);
           setFont(false);
           pdf.setTextColor(...C.notAnswered);
-          pdf.text('Not Answered', mL + 6 + labelW, y);
+          pdf.text(t('未作答', 'Not Answered'), mL + 6 + labelW, y);
           y += 4;
         }
 
@@ -979,23 +1098,27 @@ export function generateReportPDF(data: PDFData): void {
         setFont(true);
         pdf.setFontSize(8);
         pdf.setTextColor(...C.textMuted);
-        pdf.text('Correct Answer:', mL + 6, y);
-        const correctLabelW = pdf.getTextWidth('Correct Answer: ');
-        setFont(false, detail.correctAnswer);
+        const correctAnswerLabel = t('参考答案：', 'Correct Answer: ');
+        pdf.text(correctAnswerLabel, mL + 6, y);
+        const correctLabelW = pdf.getTextWidth(correctAnswerLabel);
+        const localizedCorrectAnswer = localizeStoredText(detail.correctAnswer);
+        setFont(false, localizedCorrectAnswer);
         pdf.setTextColor(...C.success);
-        const correctLines = pdf.splitTextToSize(detail.correctAnswer, contentW - 14 - correctLabelW);
+        const correctLines = pdf.splitTextToSize(localizedCorrectAnswer, contentW - 14 - correctLabelW);
         pdf.text(correctLines, mL + 6 + correctLabelW, y);
         y += correctLines.length * 3.6 + 1;
 
         // Explanation (if available and question was answered wrong — not for unanswered questions)
-        if (detail.explanation && detail.isAnswered && !detail.isCorrect) {
+        const explanationText = isCn ? (detail.explanationCn || detail.explanation) : detail.explanation;
+        if (explanationText && detail.isAnswered && !detail.isCorrect) {
           addGap(1);
-          addText(`Explanation: ${detail.explanation}`, mL + 6, 8, false, C.textMuted, contentW - 14);
+          addText(`${t('解析：', 'Explanation: ')}${explanationText}`, mL + 6, 8, false, C.textMuted, contentW - 14);
         }
 
         // Tip (if available, only for answered-wrong questions)
-        if (detail.tip && detail.isAnswered && !detail.isCorrect) {
-          addText(`Tip: ${detail.tip}`, mL + 6, 8, false, C.amber, contentW - 14);
+        const tipText = isCn ? (detail.tipCn || detail.tip) : detail.tip;
+        if (tipText && detail.isAnswered && !detail.isCorrect) {
+          addText(`${t('建议：', 'Tip: ')}${tipText}`, mL + 6, 8, false, C.amber, contentW - 14);
         }
 
         addGap(4);
@@ -1013,10 +1136,14 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── WRITING EVALUATION ──
   if (writingResult) {
-    addSectionBanner(writingUsesTeacherReview ? 'Writing Review' : 'Writing Evaluation', C.rose, C.roseLight);
+    addSectionBanner(
+      writingUsesTeacherReview ? t('写作老师评分', 'Writing Review') : t('写作评分', 'Writing Evaluation'),
+      C.rose,
+      C.roseLight,
+    );
     addGap(3);
     if (writingQuestion) {
-      addText('Writing Prompt', mL, 10, true, C.text);
+      addText(t('写作题目', 'Writing Prompt'), mL, 10, true, C.text);
       addText(writingQuestion.topic, mL + 2, 9, false, C.text, contentW - 6);
       addGap(1);
       if (writingQuestion.instructions) {
@@ -1026,7 +1153,7 @@ export function generateReportPDF(data: PDFData): void {
     }
 
     if (writingEssay) {
-      addText('Student Essay', mL, 10, true, C.text);
+      addText(t('学生作文', 'Student Essay'), mL, 10, true, C.text);
       addGap(1);
       drawRect(mL, y - 1, contentW, 1, C.border);
       y += 3;
@@ -1037,36 +1164,36 @@ export function generateReportPDF(data: PDFData): void {
     checkPage(14);
     if (writingIsManual) {
       drawRect(mL, y - 2, 40, 10, C.amber, 2);
-      pdf.setFont('helvetica', 'bold');
+      setFont(true);
       pdf.setFontSize(10);
       pdf.setTextColor(255, 255, 255);
-      pdf.text('Manual Review', mL + 20, y + 4.5, { align: 'center' });
-      pdf.setFont('helvetica', 'normal');
+      pdf.text(t('老师评分', 'Manual Review'), mL + 20, y + 4.5, { align: 'center' });
+      setFont(false);
       pdf.setFontSize(9);
       pdf.setTextColor(...C.textMuted);
-      pdf.text('Teacher Score Pending', mL + 44, y + 4.5);
+      pdf.text(t('已保存老师评分', 'Teacher Score Saved'), mL + 44, y + 4.5);
       y += 14;
     } else {
       drawRect(mL, y - 2, 32, 10, C.rose, 2);
-      pdf.setFont('helvetica', 'bold');
+      setFont(true);
       pdf.setFontSize(11);
       pdf.setTextColor(255, 255, 255);
       pdf.text(`${writingResult.score} / ${writingResult.maxScore}`, mL + 16, y + 4.5, { align: 'center' });
-      pdf.setFont('helvetica', 'normal');
+      setFont(false);
       pdf.setFontSize(9);
       pdf.setTextColor(...C.textMuted);
-      pdf.text('Writing Score', mL + 36, y + 4.5);
+      pdf.text(t('写作得分', 'Writing Score'), mL + 36, y + 4.5);
       y += 14;
     }
 
     if (!writingIsManual) {
-      addText('Overall Feedback', mL, 10, true, C.text);
-      addText(writingResult.overallFeedback_en, mL + 2, 9.5, false, C.textMuted);
+      addText(t('总体评语', 'Overall Feedback'), mL, 10, true, C.text);
+      addText(isCn ? writingResult.overallFeedback_cn : writingResult.overallFeedback_en, mL + 2, 9.5, false, C.textMuted);
       addGap(4);
     }
 
     if (!writingIsManual && writingResult.grammarErrors.length > 0) {
-      addText('Errors Found', mL, 10, true, C.danger);
+      addText(t('错误与修正', 'Errors Found'), mL, 10, true, C.danger);
       addGap(2);
       writingResult.grammarErrors.forEach((err, i) => {
         checkPage(16);
@@ -1074,14 +1201,14 @@ export function generateReportPDF(data: PDFData): void {
         y += 2;
         addText(`${i + 1}. "${err.original}"`, mL + 4, 9, false, C.danger);
         addText(`   -> "${err.correction}"`, mL + 4, 9, true, C.success);
-        addText(`   ${err.explanation_en}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+        addText(`   ${isCn ? err.explanation_cn : err.explanation_en}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
         addGap(2);
       });
       addGap(2);
     }
 
     if (!writingIsManual && writingResult.correctedEssay) {
-      addText('Corrected Essay', mL, 10, true, C.text);
+      addText(t('修订示例', 'Corrected Essay'), mL, 10, true, C.text);
       addGap(1);
       checkPage(8);
       drawRect(mL, y - 1, contentW, 1, C.accent);
@@ -1090,20 +1217,24 @@ export function generateReportPDF(data: PDFData): void {
       addGap(4);
     }
 
-    const suggestions = writingResult.suggestions_en;
+    const suggestions = isCn ? writingResult.suggestions_cn : writingResult.suggestions_en;
     if (!writingIsManual && suggestions && suggestions.length > 0) {
       checkPage(10);
       drawRect(mL, y - 1, contentW, 1, C.primary);
       y += 3;
-      addText('Suggestions for Improvement', mL, 10, true, C.primary);
+      addText(t('提升建议', 'Suggestions for Improvement'), mL, 10, true, C.primary);
       suggestions.forEach((s, i) => { addText(`${i + 1}.  ${s}`, mL + 4, 9, false, C.text); });
     }
     addGap(4);
   }
 
   if (speakingEvaluation && speakingEvaluation.evaluations.length > 0) {
-    addSectionBanner(speakingUsesTeacherReview ? 'Speaking Review' : 'Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
-    addText(speakingEvaluation.overallFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
+    addSectionBanner(
+      speakingUsesTeacherReview ? t('口语老师评分', 'Speaking Review') : t('口语评分', 'Speaking Evaluation'),
+      [14, 165, 233],
+      [240, 249, 255],
+    );
+    addText(isCn ? speakingEvaluation.overallFeedback_cn : speakingEvaluation.overallFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
 
     speakingEvaluation.evaluations.forEach((item) => {
@@ -1112,12 +1243,12 @@ export function generateReportPDF(data: PDFData): void {
       setFont(true);
       pdf.setFontSize(9.5);
       pdf.setTextColor(...C.text);
-      pdf.text(`${item.sectionTitle} - Q${item.questionId}`, mL + 4, y + 3);
+      pdf.text(`${localizeLooseSectionTitle(item.sectionTitle)} - Q${item.questionId}`, mL + 4, y + 3);
       if (speakingIsManual) {
         drawRect(mL + contentW - 32, y - 0.5, 30, 5, [254, 243, 199], 2);
         pdf.setFontSize(7);
         pdf.setTextColor(180, 83, 9);
-        pdf.text('Manual Review', mL + contentW - 17, y + 2.8, { align: 'center' });
+        pdf.text(t('老师评分', 'Manual Review'), mL + contentW - 17, y + 2.8, { align: 'center' });
       } else {
         drawRect(mL + contentW - 22, y - 0.5, 20, 5, [224, 242, 254], 2);
         pdf.setFontSize(7);
@@ -1126,22 +1257,30 @@ export function generateReportPDF(data: PDFData): void {
       }
       y += 8;
 
-      addText(`Prompt: ${item.prompt}`, mL + 6, 8.5, false, C.text, contentW - 14);
+      addText(`${t('题目：', 'Prompt: ')}${item.prompt}`, mL + 6, 8.5, false, C.text, contentW - 14);
       if (speakingIsManual) {
-        addText('Teacher review status: Recording submitted. Please listen to the original audio and add a score and comments manually.', mL + 6, 8.3, false, C.textMuted, contentW - 14);
+        addText(
+          t('老师评分状态：已提交录音，请老师结合原始录音补充得分与评语。', 'Teacher review status: Recording submitted. Please listen to the original audio and add a score and comments manually.'),
+          mL + 6,
+          8.3,
+          false,
+          C.textMuted,
+          contentW - 14,
+        );
       } else {
-        addText(`Transcript: ${item.transcript || 'No transcript available.'}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
-        addText(`Overall Comment: ${item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
-        addText(`Task Completion: ${item.taskCompletion_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-        addText(`Fluency: ${item.fluency_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-        addText(`Vocabulary: ${item.vocabulary_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-        addText(`Grammar: ${item.grammar_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
-        addText(`Pronunciation: ${item.pronunciation_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`${t('转写：', 'Transcript: ')}${isCn ? (item.transcript || localizeStoredText('No transcript available.')) : (item.transcript || 'No transcript available.')}`, mL + 6, 8.5, false, C.textMuted, contentW - 14);
+        addText(`${t('总体评语：', 'Overall Comment: ')}${isCn ? item.feedback_cn : item.feedback_en}`, mL + 6, 8.3, false, C.text, contentW - 14);
+        addText(`${t('任务完成：', 'Task Completion: ')}${isCn ? item.taskCompletion_cn : item.taskCompletion_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`${t('表达流利度：', 'Fluency: ')}${isCn ? item.fluency_cn : item.fluency_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`${t('词汇运用：', 'Vocabulary: ')}${isCn ? item.vocabulary_cn : item.vocabulary_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`${t('语法表现：', 'Grammar: ')}${isCn ? item.grammar_cn : item.grammar_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
+        addText(`${t('发音表现：', 'Pronunciation: ')}${isCn ? item.pronunciation_cn : item.pronunciation_en}`, mL + 6, 8.1, false, C.textMuted, contentW - 14);
       }
 
-      if (item.suggestions_en.length > 0) {
-        addText(speakingIsManual ? 'Teacher Checklist' : 'Suggestions', mL + 6, 8.6, true, C.primary);
-        item.suggestions_en.forEach((suggestion, index) => {
+      const speakingSuggestions = isCn ? item.suggestions_cn : item.suggestions_en;
+      if (speakingSuggestions.length > 0) {
+        addText(speakingIsManual ? t('老师批改要点', 'Teacher Checklist') : t('提升建议', 'Suggestions'), mL + 6, 8.6, true, C.primary);
+        speakingSuggestions.forEach((suggestion, index) => {
           addText(`${index + 1}.  ${suggestion}`, mL + 8, 8.1, false, C.textMuted, contentW - 16);
         });
       }
@@ -1159,6 +1298,6 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── Download ──
   const nameSlug = data.studentName ? `_${data.studentName.replace(/\s+/g, '_')}` : '';
-  const fileName = `Assessment_Feedback_Report${nameSlug}_${new Date(data.createdAt).toISOString().slice(0, 10)}.pdf`;
+  const fileName = `${isCn ? '测评反馈报告' : 'Assessment_Feedback_Report'}${nameSlug}_${new Date(data.createdAt).toISOString().slice(0, 10)}.pdf`;
   pdf.save(fileName);
 }

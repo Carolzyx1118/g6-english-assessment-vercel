@@ -502,7 +502,7 @@ function HistoryContent() {
     setSpeakingDraft(speakingResponses.length > 0 ? buildSpeakingDraft(speakingResponses, speakingEvaluation) : null);
   }, [speakingResetKey, speakingEvaluation, speakingResponses]);
 
-  const handleDownloadPDF = (fullRecord: NonNullable<typeof detail>) => {
+  const handleDownloadPDF = async (fullRecord: NonNullable<typeof detail>) => {
     setDownloadingId(fullRecord.id);
     try {
       const pdfData: PDFData = {
@@ -523,7 +523,7 @@ function HistoryContent() {
         createdAt: fullRecord.createdAt,
       };
 
-      generateReportPDF(pdfData);
+      await generateReportPDF(pdfData, 'cn');
     } catch (err) {
       console.error('[History] PDF download failed:', err);
     } finally {
