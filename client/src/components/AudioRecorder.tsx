@@ -180,7 +180,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       onRecorded(result.url);
     } catch (err: any) {
       console.error('Upload error:', err);
-      setError('Failed to upload recording. Please try again.');
+      setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to upload recording. Please try again.');
       setStatus('recorded');
     }
   }, [sectionId, questionId, onRecorded, uploadMutation]);

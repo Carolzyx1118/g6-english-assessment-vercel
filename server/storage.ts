@@ -145,6 +145,10 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (hasBlobStorageConfig()) {
+    return storagePutBlob(relKey, data, contentType);
+  }
+
   const forge = getForgeConfigStatus();
   if (forge.isConfigured) {
     const { baseUrl, apiKey } = getStorageConfig();
@@ -165,10 +169,6 @@ export async function storagePut(
     }
     const url = (await response.json()).url;
     return { key, url };
-  }
-
-  if (hasBlobStorageConfig()) {
-    return storagePutBlob(relKey, data, contentType);
   }
 
   if (isVercelRuntime()) {

@@ -8,6 +8,47 @@ afterEach(() => {
 });
 
 describe("storage on Vercel", () => {
+  it("prefers Vercel Blob uploads when both Blob and Forge credentials are configured", async () => {
+    const put = vi.fn().mockResolvedValue({
+      url: "https://blob.vercel-storage.com/paper-assets/test-audio.webm",
+    });
+
+    vi.doMock("@vercel/blob", () => ({
+      put,
+      head: vi.fn(),
+    }));
+
+    vi.doMock("./_core/env", () => ({
+      ENV: {
+        appId: "",
+        cookieSecret: "",
+        databaseUrl: "",
+        oAuthServerUrl: "",
+        ownerOpenId: "",
+        isProduction: true,
+        forgeApiUrl: "https://forge.manus.im",
+        forgeApiKey: "forge-token",
+        blobReadWriteToken: "blob-token",
+      },
+      getForgeConfigStatus: () => ({
+        isConfigured: true,
+        missingVariables: [],
+      }),
+    }));
+
+    vi.doMock("./_core/runtime", () => ({
+      isVercelRuntime: () => true,
+      getWritableDataPath: (...segments: string[]) => `/tmp/${segments.join("/")}`,
+    }));
+
+    const { storagePut } = await import("./storage");
+
+    const result = await storagePut("paper-assets/test-audio.webm", "hello", "audio/webm");
+
+    expect(result.url).toBe("https://blob.vercel-storage.com/paper-assets/test-audio.webm");
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
   it("uses Vercel Blob when Forge storage is not configured", async () => {
     const put = vi.fn().mockResolvedValue({
       url: "https://blob.vercel-storage.com/paper-assets/test.txt",
