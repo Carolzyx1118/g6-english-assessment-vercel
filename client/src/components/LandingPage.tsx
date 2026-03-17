@@ -570,75 +570,83 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       </div>
 
       <Dialog open={quickCreateOpen} onOpenChange={setQuickCreateOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>添加试卷</DialogTitle>
-            <DialogDescription>
-              先选考试体系，再为每个 Part 指定题型和题数。完成后会进入随机组卷编辑页继续设置和保存。
+        <DialogContent className="max-w-6xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
+            <DialogTitle className="text-2xl text-[#1E3A5F]">添加试卷</DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              先选考试体系，再按 Part 设置题型和题数。题数填 0 就表示这次不抽这个 Part。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <Label>考试体系</Label>
-              <div className="grid gap-3 md:grid-cols-2">
-                {(['ket', 'pet'] as EnglishExamTagTrack[]).map((track) => (
-                  <button
-                    key={track}
-                    type="button"
-                    onClick={() => handleQuickTrackChange(track)}
-                    className={`rounded-2xl border p-4 text-left transition-colors ${
-                      quickTrack === track
-                        ? 'border-sky-300 bg-sky-50'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">{ENGLISH_EXAM_TAG_SCHEMAS[track].label}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {track === 'ket' ? '阅读 1-5，听力 1-5，写作 6-7' : '阅读 1-6，听力 1-4，写作 1-2'}
-                        </p>
-                      </div>
-                      <div className={`h-3.5 w-3.5 rounded-full border ${quickTrack === track ? 'border-sky-500 bg-sky-500' : 'border-slate-300 bg-white'}`} />
-                    </div>
-                  </button>
-                ))}
+          <div className="space-y-5 px-6 py-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <Label className="mr-1 text-sm font-semibold text-slate-700">考试体系</Label>
+              {(['ket', 'pet'] as EnglishExamTagTrack[]).map((track) => (
+                <button
+                  key={track}
+                  type="button"
+                  onClick={() => handleQuickTrackChange(track)}
+                  className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                    quickTrack === track
+                      ? 'border-[#1E3A5F] bg-[#1E3A5F] text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-[#1E3A5F]'
+                  }`}
+                >
+                  {ENGLISH_EXAM_TAG_SCHEMAS[track].label}
+                </button>
+              ))}
+              <div className="ml-auto flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                  已选 {configuredQuickParts.length} 个 Part
+                </span>
+                <span className="rounded-full bg-[#D4A84B]/10 px-3 py-1 font-medium text-[#A97C21]">
+                  共 {totalQuickQuestions} 题
+                </span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-base font-semibold text-slate-900">Part 配置</h4>
-                  <p className="text-sm text-slate-500">把题数设为 0 就表示这次试卷不抽这个 Part。</p>
-                </div>
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-                  已选 {configuredQuickParts.length} 个 Part / 共 {totalQuickQuestions} 题
-                </div>
+            <div className="rounded-2xl border border-slate-200 bg-white">
+              <div className="hidden grid-cols-[1.3fr,160px,1fr,96px] gap-3 border-b border-slate-200 bg-slate-50/80 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                <span>Part</span>
+                <span>分区</span>
+                <span>题型</span>
+                <span>道数</span>
               </div>
 
-              <div className="mt-4 max-h-[52vh] space-y-3 overflow-y-auto pr-1">
+              <div className="max-h-[58vh] divide-y divide-slate-100 overflow-y-auto">
                 {quickPartSelections.map((part) => {
                   const availableQuestionTypes = getQuestionTypesForEnglishExamPart(part.examPart);
+                  const isEnabled = part.totalQuestions > 0;
+
                   return (
-                    <div key={part.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1.4fr,1fr,120px]">
-                      <div>
+                    <div
+                      key={part.id}
+                      className={`grid gap-3 px-5 py-4 transition-colors md:grid-cols-[1.3fr,160px,1fr,96px] md:items-center ${
+                        isEnabled ? 'bg-sky-50/30' : 'bg-white'
+                      }`}
+                    >
+                      <div className="min-w-0">
                         <p className="font-semibold text-slate-900">{part.examPart}</p>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p className="mt-1 text-xs text-slate-400 md:hidden">
                           对应分区：{MANUAL_SECTION_TYPE_LABELS[part.sectionType]}
                         </p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-xs text-slate-500">题型</Label>
+                      <div className="hidden md:block">
+                        <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                          {MANUAL_SECTION_TYPE_LABELS[part.sectionType]}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 md:space-y-0">
+                        <Label className="text-[11px] font-medium text-slate-400 md:hidden">题型</Label>
                         <select
                           value={part.questionType}
                           onChange={(event) => handleQuickPartChange(part.id, (current) => ({
                             ...current,
                             questionType: event.target.value as EnglishQuickGeneratedPartSelection['questionType'],
                           }))}
-                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"
                         >
                           {availableQuestionTypes.map((questionType) => (
                             <option key={questionType} value={questionType}>
@@ -648,8 +656,8 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                         </select>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-xs text-slate-500">道数</Label>
+                      <div className="space-y-1.5 md:space-y-0">
+                        <Label className="text-[11px] font-medium text-slate-400 md:hidden">道数</Label>
                         <Input
                           type="number"
                           min={0}
@@ -658,6 +666,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                             ...current,
                             totalQuestions: Math.max(0, Number(event.target.value) || 0),
                           }))}
+                          className="h-10 rounded-xl border-slate-200 text-center shadow-sm"
                         />
                       </div>
                     </div>
@@ -667,7 +676,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="border-t border-slate-200 bg-white px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setQuickCreateOpen(false)}>
               取消
             </Button>
