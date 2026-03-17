@@ -569,6 +569,16 @@ export async function getLocalUserById(id: number): Promise<LocalUser | undefine
   return rows[0];
 }
 
+export async function listLocalUsers(): Promise<LocalUser[]> {
+  const db = await getDb();
+  if (!db) {
+    logLocalAuthFileFallback();
+    const data = await readLocalAuthUsersFile();
+    return [...data.users].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  }
+  return db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
+}
+
 export async function createLocalUser(data: InsertLocalUser): Promise<number | null> {
   const db = await getDb();
   if (!db) {
@@ -597,6 +607,23 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
   return result?.id ?? null;
 }
 
+export async function updateLocalUser(
+  id: number,
+  data: Partial<Pick<LocalUser, "displayName" | "inviteCode" | "role">>,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    logLocalAuthFileFallback();
+    const current = await readLocalAuthUsersFile();
+    const user = current.users.find((item) => item.id === id);
+    if (!user) return;
+    Object.assign(user, data);
+    await writeLocalAuthUsersFile(current);
+    return;
+  }
+  await db.update(localUsers).set(data).where(eq(localUsers.id, id));
+}
+
 export async function updateLocalUserLastLogin(id: number): Promise<void> {
   const db = await getDb();
   if (!db) {
@@ -609,4 +636,16 @@ export async function updateLocalUserLastLogin(id: number): Promise<void> {
     return;
   }
   await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+}
+
+export async function deleteLocalUser(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    logLocalAuthFileFallback();
+    const current = await readLocalAuthUsersFile();
+    current.users = current.users.filter((user) => user.id !== id);
+    await writeLocalAuthUsersFile(current);
+    return;
+  }
+  await db.delete(localUsers).where(eq(localUsers.id, id));
 }

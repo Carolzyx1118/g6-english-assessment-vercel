@@ -11,8 +11,11 @@ vi.mock("./db", async (importOriginal) => {
     ...original,
     getLocalUserByUsername: vi.fn(),
     getLocalUserById: vi.fn(),
+    listLocalUsers: vi.fn(),
     createLocalUser: vi.fn(),
+    updateLocalUser: vi.fn(),
     updateLocalUserLastLogin: vi.fn(),
+    deleteLocalUser: vi.fn(),
     // Keep original implementations for other functions
     getUserByOpenId: vi.fn().mockResolvedValue(undefined),
     upsertUser: vi.fn(),
@@ -114,7 +117,7 @@ describe("localAuth.register", () => {
     expect(createCall.username).toBe("newuser");
     expect(createCall.passwordHash).toBeTruthy();
     expect(createCall.passwordHash).not.toBe("password123"); // should be hashed
-    expect(createCall.inviteCode).toBe("ENGVOC2026::english|vocabulary");
+    expect(createCall.inviteCode).toBe("ENGVOC2026::english|vocabulary::active");
   });
 
   it("invite code is case-insensitive", async () => {
@@ -278,6 +281,32 @@ describe("localAuth.login", () => {
     // Should update last login
     expect(db.updateLocalUserLastLogin).toHaveBeenCalledWith(5);
   });
+
+  it("rejects login for an inactive account", async () => {
+    const { ctx } = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.hash("mypassword", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 6,
+      username: "inactive-user",
+      passwordHash: hash,
+      inviteCode: "ENGVOC2026::english|vocabulary::inactive",
+      displayName: "Inactive User",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    await expect(
+      caller.localAuth.login({
+        username: "inactive-user",
+        password: "mypassword",
+      }),
+    ).rejects.toThrow("该账号已停用");
+  });
 });
 
 describe("localAuth.me", () => {
@@ -356,5 +385,179 @@ describe("localAuth.logout", () => {
 
     const result = await caller.localAuth.logout();
     expect(result).toEqual({ success: true });
+  });
+});
+
+describe("localAuth user management", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("lists local users for a teacher account", async () => {
+    const { ctx: loginCtx } = createPublicContext();
+    const loginCaller = appRouter.createCaller(loginCtx);
+
+    const bcrypt = await import("bcryptjs");
+    const teacherHash = await bcrypt.hash("teacherpass", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 20,
+      username: "teacher",
+      passwordHash: teacherHash,
+      inviteCode: "TEACHER2026::english|math|vocabulary",
+      displayName: "Teacher",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const loginResult = await loginCaller.localAuth.login({
+      username: "teacher",
+      password: "teacherpass",
+    });
+
+    const { ctx } = createPublicContext(`Bearer ${loginResult.token}`);
+    const caller = appRouter.createCaller(ctx);
+
+    vi.mocked(db.getLocalUserById).mockResolvedValueOnce({
+      id: 20,
+      username: "teacher",
+      passwordHash: teacherHash,
+      inviteCode: "TEACHER2026::english|math|vocabulary",
+      displayName: "Teacher",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+    vi.mocked(db.listLocalUsers).mockResolvedValueOnce([
+      {
+        id: 21,
+        username: "student",
+        passwordHash: "hash",
+        inviteCode: "ENGVOC2026::english|vocabulary",
+        displayName: "Student",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      },
+    ]);
+
+    const result = await caller.localAuth.listUsers();
+    expect(result).toHaveLength(1);
+    expect(result[0]?.username).toBe("student");
+    expect(result[0]?.allowedSubjects).toEqual(["english", "vocabulary"]);
+    expect(result[0]?.isActive).toBe(true);
+  });
+
+  it("updates subject permissions and active status", async () => {
+    const { ctx: loginCtx } = createPublicContext();
+    const loginCaller = appRouter.createCaller(loginCtx);
+
+    const bcrypt = await import("bcryptjs");
+    const teacherHash = await bcrypt.hash("teacherpass", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 30,
+      username: "teacher",
+      passwordHash: teacherHash,
+      inviteCode: "TEACHER2026::english|math|vocabulary",
+      displayName: "Teacher",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const loginResult = await loginCaller.localAuth.login({
+      username: "teacher",
+      password: "teacherpass",
+    });
+
+    const { ctx } = createPublicContext(`Bearer ${loginResult.token}`);
+    const caller = appRouter.createCaller(ctx);
+
+    vi.mocked(db.getLocalUserById)
+      .mockResolvedValueOnce({
+        id: 30,
+        username: "teacher",
+        passwordHash: teacherHash,
+        inviteCode: "TEACHER2026::english|math|vocabulary",
+        displayName: "Teacher",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        id: 31,
+        username: "student",
+        passwordHash: "hash",
+        inviteCode: "ENGVOC2026::english|vocabulary",
+        displayName: "Student",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      });
+
+    await caller.localAuth.updateUser({
+      id: 31,
+      allowedSubjects: ["math"],
+      isActive: false,
+    });
+
+    expect(db.updateLocalUser).toHaveBeenCalledWith(31, {
+      inviteCode: "ENGVOC2026::math::inactive",
+    });
+  });
+
+  it("deletes a target user", async () => {
+    const { ctx: loginCtx } = createPublicContext();
+    const loginCaller = appRouter.createCaller(loginCtx);
+
+    const bcrypt = await import("bcryptjs");
+    const teacherHash = await bcrypt.hash("teacherpass", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 40,
+      username: "teacher",
+      passwordHash: teacherHash,
+      inviteCode: "TEACHER2026::english|math|vocabulary",
+      displayName: "Teacher",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const loginResult = await loginCaller.localAuth.login({
+      username: "teacher",
+      password: "teacherpass",
+    });
+
+    const { ctx } = createPublicContext(`Bearer ${loginResult.token}`);
+    const caller = appRouter.createCaller(ctx);
+
+    vi.mocked(db.getLocalUserById)
+      .mockResolvedValueOnce({
+        id: 40,
+        username: "teacher",
+        passwordHash: teacherHash,
+        inviteCode: "TEACHER2026::english|math|vocabulary",
+        displayName: "Teacher",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        id: 41,
+        username: "student",
+        passwordHash: "hash",
+        inviteCode: "MATH2026::math",
+        displayName: "Student",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      });
+
+    const result = await caller.localAuth.deleteUser({ id: 41 });
+    expect(result).toEqual({ success: true });
+    expect(db.deleteLocalUser).toHaveBeenCalledWith(41);
   });
 });

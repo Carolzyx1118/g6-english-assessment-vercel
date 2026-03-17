@@ -11,10 +11,12 @@ export type LocalUser = {
   displayName: string;
   role: 'user' | 'admin';
   allowedSubjects: string[];
+  isActive: boolean;
 };
 
 export function isTeacherAccount(user: LocalUser | null | undefined) {
   if (!user) return false;
+  if (user.role === 'admin') return true;
 
   const allowedSubjects = user.allowedSubjects.filter((subject): subject is PaperSubject =>
     PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),

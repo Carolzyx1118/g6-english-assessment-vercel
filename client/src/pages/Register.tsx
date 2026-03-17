@@ -31,6 +31,7 @@ export default function Register() {
         displayName: data.user.displayName,
         role: data.user.role as 'user' | 'admin',
         allowedSubjects: data.user.allowedSubjects,
+        isActive: data.user.isActive,
       });
       toast.success("注册成功！正在进入系统...");
       navigate("/");

@@ -14,6 +14,7 @@ import PaperComposer from "./pages/PaperComposer";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
 import Register from "./pages/Register";
+import UserManager from "./pages/UserManager";
 
 function Router() {
   return (
@@ -53,6 +54,13 @@ function Router() {
         <AuthGuard>
           <TeacherGuard>
             <PaperManager />
+          </TeacherGuard>
+        </AuthGuard>
+      </Route>
+      <Route path={"/user-manager"}>
+        <AuthGuard>
+          <TeacherGuard>
+            <UserManager />
           </TeacherGuard>
         </AuthGuard>
       </Route>

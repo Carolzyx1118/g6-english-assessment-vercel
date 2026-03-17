@@ -8,11 +8,18 @@ import {
   FilePlus2,
   Home,
   Layers3,
+  Users,
 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 
-type TeacherToolKey = "home" | "history" | "paper-intake" | "paper-manager" | "paper-composer";
+type TeacherToolKey =
+  | "home"
+  | "history"
+  | "paper-intake"
+  | "paper-manager"
+  | "paper-composer"
+  | "user-manager";
 
 interface TeacherToolsLayoutProps {
   activeTool: TeacherToolKey;
@@ -159,9 +166,6 @@ export default function TeacherToolsLayout({
             />
             {!collapsed ? (
               <div className="space-y-1 pl-10">
-                {allowedSubjects.length > 1 ? (
-                  <SubjectLink href="/history" label="All Subjects" active={activeTool === "history" && currentSubject === null} />
-                ) : null}
                 {allowedSubjects.map((subject) => (
                   <SubjectLink
                     key={`history-${subject}`}
@@ -182,6 +186,14 @@ export default function TeacherToolsLayout({
             />
 
             <PrimaryLink
+              href="/user-manager"
+              icon={<Users className="h-4 w-4" />}
+              label="User Manager"
+              active={activeTool === "user-manager"}
+              collapsed={collapsed}
+            />
+
+            <PrimaryLink
               href="/paper-manager"
               icon={<BookCopy className="h-4 w-4" />}
               label="Paper Manager"
@@ -190,9 +202,6 @@ export default function TeacherToolsLayout({
             />
             {!collapsed ? (
               <div className="space-y-1 pl-10">
-                {allowedSubjects.length > 1 ? (
-                  <SubjectLink href="/paper-manager" label="All Subjects" active={activeTool === "paper-manager" && currentSubject === null} />
-                ) : null}
                 {allowedSubjects.map((subject) => (
                   <SubjectLink
                     key={`manager-${subject}`}

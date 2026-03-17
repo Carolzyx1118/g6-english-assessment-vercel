@@ -28,6 +28,7 @@ export default function Login() {
         displayName: data.user.displayName,
         role: data.user.role as 'user' | 'admin',
         allowedSubjects: data.user.allowedSubjects,
+        isActive: data.user.isActive,
       });
       toast.success("登录成功！");
       navigate("/");

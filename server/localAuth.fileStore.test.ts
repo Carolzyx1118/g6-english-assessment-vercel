@@ -83,4 +83,41 @@ describe("localAuth file fallback", () => {
     expect(meResult?.username).toBe("sessionuser");
     expect(meResult?.allowedSubjects).toEqual(["english", "math", "vocabulary"]);
   });
+
+  it("allows a teacher to update a user and blocks inactive login", async () => {
+    const { ctx: teacherCtx } = createPublicContext();
+    const teacherCaller = localAuthRouter.createCaller(teacherCtx);
+
+    const teacherRegister = await teacherCaller.register({
+      username: "teacher_user",
+      password: "password123",
+      inviteCode: "TEACHER2026",
+    });
+
+    const studentRegister = await teacherCaller.register({
+      username: "math_student",
+      password: "password123",
+      inviteCode: "ENGVOC2026",
+    });
+
+    const { ctx: manageCtx } = createPublicContext(`Bearer ${teacherRegister.token}`);
+    const manageCaller = localAuthRouter.createCaller(manageCtx);
+
+    await expect(manageCaller.listUsers()).resolves.toHaveLength(2);
+
+    const updateResult = await manageCaller.updateUser({
+      id: studentRegister.user.id,
+      allowedSubjects: ["math"],
+      isActive: false,
+    });
+
+    expect(updateResult).toEqual({ success: true });
+
+    await expect(
+      teacherCaller.login({
+        username: "math_student",
+        password: "password123",
+      }),
+    ).rejects.toThrow("该账号已停用");
+  });
 });

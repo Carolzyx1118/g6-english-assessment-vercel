@@ -7,8 +7,11 @@ import { publicProcedure, router } from "./_core/trpc";
 import {
   getLocalUserByUsername,
   getLocalUserById,
+  listLocalUsers,
   createLocalUser,
+  updateLocalUser,
   updateLocalUserLastLogin,
+  deleteLocalUser,
 } from "./db";
 
 const SALT_ROUNDS = 10;
@@ -19,6 +22,7 @@ type PaperSubject = (typeof PAPER_SUBJECTS)[number];
 type InviteAccess = {
   code: string;
   allowedSubjects: PaperSubject[];
+  isActive: boolean;
 };
 
 // Invite codes are read from env. Fallback to a sensible development default.
@@ -41,11 +45,11 @@ function parseSubjectList(raw: string): PaperSubject[] {
 }
 
 function serializeInviteAccess(access: InviteAccess): string {
-  return `${access.code}::${access.allowedSubjects.join("|")}`;
+  return `${access.code}::${access.allowedSubjects.join("|")}::${access.isActive ? "active" : "inactive"}`;
 }
 
 function parseStoredInviteAccess(inviteCode: string): InviteAccess | null {
-  const [rawCode, rawSubjects] = inviteCode.split("::");
+  const [rawCode, rawSubjects, rawStatus] = inviteCode.split("::");
   const code = normalizeInviteCode(rawCode || "");
   if (!code) return null;
 
@@ -58,7 +62,11 @@ function parseStoredInviteAccess(inviteCode: string): InviteAccess | null {
     return null;
   }
 
-  return { code, allowedSubjects };
+  return {
+    code,
+    allowedSubjects,
+    isActive: rawStatus !== "inactive",
+  };
 }
 
 function getInviteAccessList(): InviteAccess[] {
@@ -73,7 +81,7 @@ function getInviteAccessList(): InviteAccess[] {
       if (!code) return [];
 
       if (!rawSubjects) {
-        return [{ code, allowedSubjects: [...PAPER_SUBJECTS] }];
+        return [{ code, allowedSubjects: [...PAPER_SUBJECTS], isActive: true }];
       }
 
       const allowedSubjects = parseSubjectList(rawSubjects);
@@ -82,7 +90,7 @@ function getInviteAccessList(): InviteAccess[] {
         return [];
       }
 
-      return [{ code, allowedSubjects }];
+      return [{ code, allowedSubjects, isActive: true }];
     });
 }
 
@@ -98,6 +106,65 @@ function resolveInviteAccess(inviteCode: string): InviteAccess | null {
 
 function getUserAllowedSubjects(inviteCode: string): PaperSubject[] {
   return resolveInviteAccess(inviteCode)?.allowedSubjects ?? [...PAPER_SUBJECTS];
+}
+
+function isUserActive(inviteCode: string): boolean {
+  return resolveInviteAccess(inviteCode)?.isActive ?? true;
+}
+
+function hasTeacherWorkspaceAccess(user: {
+  inviteCode: string;
+  role: "user" | "admin";
+}) {
+  if (user.role === "admin") return true;
+  const allowedSubjects = getUserAllowedSubjects(user.inviteCode);
+  return PAPER_SUBJECTS.every((subject) => allowedSubjects.includes(subject));
+}
+
+function buildAuthUserPayload(user: {
+  id: number;
+  username: string;
+  displayName: string | null;
+  role: "user" | "admin";
+  inviteCode: string;
+}) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName || user.username,
+    role: user.role,
+    allowedSubjects: getUserAllowedSubjects(user.inviteCode),
+    isActive: isUserActive(user.inviteCode),
+  };
+}
+
+async function requireTeacherLocalUser(req: any) {
+  const token = getLocalToken(req);
+  const session = await verifyLocalSession(token);
+
+  if (!session) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "请先登录老师账号",
+    });
+  }
+
+  const user = await getLocalUserById(session.userId);
+  if (!user || !isUserActive(user.inviteCode)) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "账号不可用，请重新登录",
+    });
+  }
+
+  if (!hasTeacherWorkspaceAccess(user)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "当前账号没有老师管理权限",
+    });
+  }
+
+  return user;
 }
 
 function getJwtSecret() {
@@ -231,13 +298,13 @@ export const localAuthRouter = router({
       return {
         success: true,
         token,
-        user: {
+        user: buildAuthUserPayload({
           id: userId,
           username: input.username,
           displayName: input.username,
           role: "user",
-          allowedSubjects: inviteAccess.allowedSubjects,
-        },
+          inviteCode: serializeInviteAccess(inviteAccess),
+        }),
       };
     }),
 
@@ -258,6 +325,13 @@ export const localAuthRouter = router({
         });
       }
 
+      if (!isUserActive(user.inviteCode)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "该账号已停用，请联系老师",
+        });
+      }
+
       const isValid = await bcrypt.compare(input.password, user.passwordHash);
       if (!isValid) {
         throw new TRPCError({
@@ -275,13 +349,7 @@ export const localAuthRouter = router({
       return {
         success: true,
         token,
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          role: user.role,
-          allowedSubjects: getUserAllowedSubjects(user.inviteCode),
-        },
+        user: buildAuthUserPayload(user),
       };
     }),
 
@@ -295,18 +363,97 @@ export const localAuthRouter = router({
     }
 
     const user = await getLocalUserById(session.userId);
-    if (!user) {
+    if (!user || !isUserActive(user.inviteCode)) {
       return null;
     }
 
-    return {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName || user.username,
-      role: user.role,
-      allowedSubjects: getUserAllowedSubjects(user.inviteCode),
-    };
+    return buildAuthUserPayload(user);
   }),
+
+  listUsers: publicProcedure.query(async ({ ctx }) => {
+    await requireTeacherLocalUser(ctx.req);
+    const users = await listLocalUsers();
+    return users.map((user) => ({
+      ...buildAuthUserPayload(user),
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
+    }));
+  }),
+
+  updateUser: publicProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        allowedSubjects: z.array(z.enum(PAPER_SUBJECTS)).min(1, "至少保留一个科目权限"),
+        isActive: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = await requireTeacherLocalUser(ctx.req);
+
+      if (currentUser.id === input.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "不能修改当前登录中的老师账号",
+        });
+      }
+
+      const target = await getLocalUserById(input.id);
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "用户不存在",
+        });
+      }
+
+      const existingAccess = resolveInviteAccess(target.inviteCode) ?? {
+        code: normalizeInviteCode(target.inviteCode) || "CUSTOM",
+        allowedSubjects: getUserAllowedSubjects(target.inviteCode),
+        isActive: isUserActive(target.inviteCode),
+      };
+
+      const nextInviteCode = serializeInviteAccess({
+        code: existingAccess.code,
+        allowedSubjects: Array.from(new Set(input.allowedSubjects)),
+        isActive: input.isActive,
+      });
+
+      await updateLocalUser(target.id, {
+        inviteCode: nextInviteCode,
+      });
+
+      return {
+        success: true,
+      };
+    }),
+
+  deleteUser: publicProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = await requireTeacherLocalUser(ctx.req);
+
+      if (currentUser.id === input.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "不能删除当前登录中的老师账号",
+        });
+      }
+
+      const target = await getLocalUserById(input.id);
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "用户不存在",
+        });
+      }
+
+      await deleteLocalUser(target.id);
+      return { success: true };
+    }),
 
   /** Logout local user - client should clear localStorage token */
   logout: publicProcedure.mutation(() => {
