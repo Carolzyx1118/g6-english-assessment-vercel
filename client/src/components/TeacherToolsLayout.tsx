@@ -12,11 +12,12 @@ import {
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 
-type TeacherToolKey = "history" | "paper-intake" | "paper-manager" | "paper-composer";
+type TeacherToolKey = "home" | "history" | "paper-intake" | "paper-manager" | "paper-composer";
 
 interface TeacherToolsLayoutProps {
   activeTool: TeacherToolKey;
   currentSubject?: PaperSubject | null;
+  headerOffset?: boolean;
   children: ReactNode;
 }
 
@@ -85,6 +86,7 @@ function SubjectLink({
 export default function TeacherToolsLayout({
   activeTool,
   currentSubject = null,
+  headerOffset = false,
   children,
 }: TeacherToolsLayoutProps) {
   const { user } = useLocalAuth();
@@ -111,7 +113,9 @@ export default function TeacherToolsLayout({
   return (
     <div className="min-h-screen bg-[#F6F8FB] md:flex">
       <aside
-        className={`hidden shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur md:sticky md:top-0 md:flex md:h-screen md:flex-col ${
+        className={`hidden shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur md:sticky md:flex md:flex-col ${
+          headerOffset ? "md:top-16 md:h-[calc(100vh-4rem)]" : "md:top-0 md:h-screen"
+        } ${
           collapsed ? "md:w-20" : "md:w-72"
         }`}
       >
@@ -139,7 +143,7 @@ export default function TeacherToolsLayout({
               href="/"
               icon={<Home className="h-4 w-4" />}
               label="Assessments Home"
-              active={false}
+              active={activeTool === "home"}
               collapsed={collapsed}
             />
           </div>
