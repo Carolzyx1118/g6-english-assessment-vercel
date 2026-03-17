@@ -2377,6 +2377,25 @@ export default function PaperIntake() {
     }));
   };
 
+  const renderQuestionTagEditor = (
+    sectionId: string,
+    subsectionId: string,
+    question: ManualQuestion,
+    sectionType: ManualSectionType,
+  ) => {
+    if (paperSubject !== "english") return null;
+
+    return (
+      <EnglishQuestionTagEditor
+        className={isQuestionBankMode ? "order-first" : undefined}
+        value={question.tags}
+        sectionType={sectionType}
+        questionType={question.type}
+        onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
+      />
+    );
+  };
+
   const toggleImageBlock = (subsectionId: string, currentValue: boolean) => {
     setExpandedImageBlocks((prev) => ({
       ...prev,
@@ -4583,7 +4602,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Question Prompt</Label>
                                       <Textarea
@@ -4749,14 +4768,7 @@ export default function PaperIntake() {
                                       </p>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -4834,14 +4846,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -4918,14 +4923,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -4996,7 +4994,7 @@ export default function PaperIntake() {
                                       )}
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="flex flex-col gap-4">
                                       <div className="space-y-2">
                                         <Label>Prompt <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
                                         <Textarea
@@ -5030,14 +5028,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5109,7 +5100,7 @@ export default function PaperIntake() {
                                       )}
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="flex flex-col gap-4">
                                       <div className="space-y-2">
                                         <Label>Prompt <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
                                         <Textarea
@@ -5161,14 +5152,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5192,7 +5176,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Question</Label>
                                       <Textarea
@@ -5234,14 +5218,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5265,7 +5242,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Match Prompt</Label>
                                       <Textarea
@@ -5307,14 +5284,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5337,7 +5307,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <label className="flex items-center gap-2 text-sm text-slate-600">
                                       <input
                                         type="checkbox"
@@ -5429,14 +5399,7 @@ export default function PaperIntake() {
                                       Add Statement
                                     </Button>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5497,14 +5460,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5527,7 +5483,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                    <div className="flex flex-col gap-4">
                                     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
                                       <div className="space-y-2">
                                         <Label>Question Prompt</Label>
@@ -5650,7 +5606,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Question Prompt</Label>
                                       <Textarea
@@ -5739,7 +5695,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-3">
                                       {question.items.map((item) => (
                                         <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -5823,7 +5779,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-3">
                                       {question.items.map((item) => (
                                         <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -5942,7 +5898,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-3">
                                       {question.items.map((item) => (
                                         <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -6040,7 +5996,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Writing Prompt / Requirements</Label>
                                       <Textarea
@@ -6184,14 +6140,7 @@ export default function PaperIntake() {
                                       />
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6237,7 +6186,7 @@ export default function PaperIntake() {
                                     </Button>
                                   </div>
 
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     <div className="space-y-2">
                                       <Label>Speaking Prompt</Label>
                                       <Textarea
@@ -6318,14 +6267,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6351,7 +6293,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  <div className="space-y-3">
+                                  <div className="flex flex-col gap-3">
                                     <div className="grid gap-2 sm:grid-cols-2">
                                       {question.options.map((option) => (
                                         <div key={option.id} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -6417,14 +6359,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ));
@@ -6450,7 +6385,7 @@ export default function PaperIntake() {
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                     {passageQuestions.map((question, questionIndex) => (
-                                      <div key={question.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                      <div key={question.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                         <p className="mb-2 text-sm font-semibold text-slate-700">Blank {questionIndex + 1}</p>
                                         <select
                                           value={question.correctAnswerWordBankId}
@@ -6474,16 +6409,7 @@ export default function PaperIntake() {
                                           ))}
                                         </select>
 
-                                        {paperSubject === "english" ? (
-                                          <div className="mt-3">
-                                            <EnglishQuestionTagEditor
-                                              value={question.tags}
-                                              sectionType={section.sectionType}
-                                              questionType={question.type}
-                                              onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                            />
-                                          </div>
-                                        ) : null}
+                                        {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                       </div>
                                     ))}
                                   </div>
@@ -7009,7 +6935,7 @@ export default function PaperIntake() {
                             {subsection.questionType === "inline-word-choice" &&
                               subsection.questions.filter(isManualInlineWordChoiceQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-xl border border-white bg-white p-4">
-                                  <div className="space-y-4">
+                                  <div className="flex flex-col gap-4">
                                     {question.items.map((item) => (
                                       <div key={item.id} className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
                                         <p className="text-sm leading-relaxed text-slate-800">

@@ -50,6 +50,7 @@ interface EnglishQuestionTagEditorProps {
   sectionType: ManualSectionType;
   questionType: ManualQuestionType;
   onChange: (next: ManualQuestionTags | undefined) => void;
+  className?: string;
 }
 
 export default function EnglishQuestionTagEditor({
@@ -57,6 +58,7 @@ export default function EnglishQuestionTagEditor({
   sectionType,
   questionType,
   onChange,
+  className,
 }: EnglishQuestionTagEditorProps) {
   if (isSpeakingUnsupported(sectionType, questionType)) {
     return (
@@ -88,7 +90,7 @@ export default function EnglishQuestionTagEditor({
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+    <div className={`space-y-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4 ${className ?? ""}`.trim()}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-900">题目标签</p>
