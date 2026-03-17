@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Eye, EyeOff, FileText, Headphones, Loader2, Pencil, Pe
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
+import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, type PaperCategory, type PaperSubject } from "@/data/papers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,32 +135,35 @@ export default function PaperManager() {
 
   if (!canManageManualPapers) {
     return (
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Assessments
-          </Link>
+      <TeacherToolsLayout activeTool="paper-manager" currentSubject={subjectFilter}>
+        <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl">
+            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Assessments
+            </Link>
 
-          <Card className="mt-6 border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle>Paper Manager</CardTitle>
-              <CardDescription>This page is available to admins only.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-slate-600">
-                Your current account does not have permission to manage manual papers.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="mt-6 border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle>Paper Manager</CardTitle>
+                <CardDescription>This page is available to admins only.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-600">
+                  Your current account does not have permission to manage manual papers.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </TeacherToolsLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <TeacherToolsLayout activeTool="paper-manager" currentSubject={subjectFilter}>
+      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
@@ -345,37 +349,38 @@ export default function PaperManager() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
 
-      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this paper?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget
-                ? `This will permanently delete "${deleteTarget.title}". Students will no longer be able to access it, and this action cannot be undone.`
-                : "This action cannot be undone."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {deleteMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+        <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this paper?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget
+                  ? `This will permanently delete "${deleteTarget.title}". Students will no longer be able to access it, and this action cannot be undone.`
+                  : "This action cannot be undone."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TeacherToolsLayout>
   );
 }

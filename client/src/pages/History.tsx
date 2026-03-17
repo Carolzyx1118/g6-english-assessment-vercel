@@ -1,7 +1,7 @@
 import { trpc } from '@/lib/trpc';
 import { parseStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useSearch } from 'wouter';
 import {
   ArrowLeft,
   Trash2,
@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import TeacherToolsLayout from '@/components/TeacherToolsLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 import { getAudioSourceType, isLikelyAudioUrl } from '@/lib/audioStorage';
@@ -27,6 +28,7 @@ import {
   getPaperById,
   type Paper,
   type PaperCategory,
+  PAPER_SUBJECT_LABELS,
   PAPER_SUBJECT_ORDER,
   type PaperSubject,
   type Question,
@@ -142,6 +144,10 @@ function formatSectionLabel(sectionId: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function isPaperSubjectValue(value: unknown): value is PaperSubject {
+  return typeof value === 'string' && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
 }
 
 function getGradeInfo(correct: number, total: number) {
@@ -427,7 +433,11 @@ export default function History() {
 }
 
 function HistoryContent() {
+  const search = useSearch();
   const { data: results, isLoading, refetch } = trpc.results.list.useQuery();
+  const manualPapersQuery = trpc.papers.listAllManualPapers.useQuery(undefined, {
+    staleTime: 5_000,
+  });
   const deleteMutation = trpc.results.delete.useMutation({
     onSuccess: () => refetch(),
   });
@@ -442,11 +452,36 @@ function HistoryContent() {
   const [speakingDraft, setSpeakingDraft] = useState<TeacherSpeakingDraft | null>(null);
   const [teacherReviewError, setTeacherReviewError] = useState<string | null>(null);
   const [teacherReviewSuccess, setTeacherReviewSuccess] = useState<string | null>(null);
+  const subjectFilter = useMemo(() => {
+    const value = new URLSearchParams(search).get('subject');
+    return isPaperSubjectValue(value) ? value : null;
+  }, [search]);
 
   const { data: detail, refetch: refetchDetail } = trpc.results.getById.useQuery(
     { id: selectedId! },
     { enabled: selectedId !== null },
   );
+
+  const manualPaperSubjectMap = useMemo(() => {
+    return new Map(
+      (manualPapersQuery.data ?? []).map((paper) => [paper.paperId, paper.subject as PaperSubject]),
+    );
+  }, [manualPapersQuery.data]);
+
+  const getResultSubject = (paperId: string): PaperSubject | null => {
+    const staticPaper = getPaperById(paperId);
+    if (staticPaper && isPaperSubjectValue(staticPaper.subject)) {
+      return staticPaper.subject;
+    }
+    const manualSubject = manualPaperSubjectMap.get(paperId);
+    return isPaperSubjectValue(manualSubject) ? manualSubject : null;
+  };
+
+  const filteredResults = useMemo(() => {
+    if (!results) return [];
+    if (!subjectFilter) return results;
+    return results.filter((result) => getResultSubject(result.paperId) === subjectFilter);
+  }, [results, subjectFilter, manualPaperSubjectMap]);
 
   const staticPaper = useMemo(
     () => (detail?.paperId ? getPaperById(detail.paperId) : undefined),
@@ -538,6 +573,12 @@ function HistoryContent() {
     setTeacherReviewSuccess(null);
     setSpeakingDraft(speakingResponses.length > 0 ? buildSpeakingDraft(speakingResponses, speakingEvaluation) : null);
   }, [speakingResetKey, speakingEvaluation, speakingResponses]);
+
+  useEffect(() => {
+    if (selectedId === null) return;
+    if (filteredResults.some((result) => result.id === selectedId)) return;
+    setSelectedId(null);
+  }, [filteredResults, selectedId]);
 
   const handleDownloadPDF = async (fullRecord: NonNullable<typeof detail>) => {
     setDownloadingId(fullRecord.id);
@@ -734,43 +775,58 @@ function HistoryContent() {
   const isSubmittingTeacherReview = generateReportMutation.isPending || updateAIMutation.isPending;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-2 text-slate-600 hover:text-slate-900">
-              <ArrowLeft className="w-4 h-4" />
-              {lang === 'en' ? 'Back to Home' : '返回首页'}
-            </Button>
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-800">
-              {lang === 'en' ? '📋 Test History' : '📋 测试历史'}
-            </h1>
-            <p className="text-sm text-slate-500">
-              {lang === 'en' ? 'View all past assessment results' : '查看所有历史测试成绩'}
-            </p>
+    <TeacherToolsLayout activeTool="history" currentSubject={subjectFilter}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+          <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="gap-2 text-slate-600 hover:text-slate-900">
+                <ArrowLeft className="w-4 h-4" />
+                {lang === 'en' ? 'Back to Home' : '返回首页'}
+              </Button>
+            </Link>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-slate-800">
+                {lang === 'en'
+                  ? `${subjectFilter ? `${PAPER_SUBJECT_LABELS[subjectFilter]} ` : ''}Test History`
+                  : `${subjectFilter ? `${PAPER_SUBJECT_LABELS[subjectFilter]}` : ''}测试历史`}
+              </h1>
+              <p className="text-sm text-slate-500">
+                {lang === 'en'
+                  ? subjectFilter
+                    ? `View ${PAPER_SUBJECT_LABELS[subjectFilter]} assessment records.`
+                    : 'View all past assessment results'
+                  : subjectFilter
+                    ? `查看 ${PAPER_SUBJECT_LABELS[subjectFilter]} 科目的测试记录`
+                    : '查看所有历史测试成绩'}
+              </p>
+            </div>
+            <button
+              onClick={() => setLang(lang === 'en' ? 'cn' : 'en')}
+              className="rounded-full bg-violet-100 px-3 py-1.5 text-sm font-medium text-violet-700 transition hover:bg-violet-200"
+            >
+              {lang === 'en' ? '中文' : 'EN'}
+            </button>
           </div>
-          <button
-            onClick={() => setLang(lang === 'en' ? 'cn' : 'en')}
-            className="px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 text-sm font-medium hover:bg-violet-200 transition"
-          >
-            {lang === 'en' ? '中文' : 'EN'}
-          </button>
-        </div>
-      </header>
+        </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
+        <main className="mx-auto max-w-6xl px-4 py-8">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
             <p className="text-slate-500">{lang === 'en' ? 'Loading results...' : '加载中...'}</p>
           </div>
-        ) : !results || results.length === 0 ? (
+        ) : filteredResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <BookOpen className="w-16 h-16 text-slate-300" />
             <p className="text-lg text-slate-400 font-medium">
-              {lang === 'en' ? 'No test results yet' : '暂无测试记录'}
+              {lang === 'en'
+                ? subjectFilter
+                  ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} records yet`
+                  : 'No test results yet'
+                : subjectFilter
+                  ? `暂无 ${PAPER_SUBJECT_LABELS[subjectFilter]} 测试记录`
+                  : '暂无测试记录'}
             </p>
             <Link href="/">
               <Button variant="default" className="gap-2">
@@ -782,15 +838,16 @@ function HistoryContent() {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-slate-500">
-                {lang === 'en' ? `${results.length} record(s)` : `共 ${results.length} 条记录`}
+                {lang === 'en' ? `${filteredResults.length} record(s)` : `共 ${filteredResults.length} 条记录`}
               </p>
             </div>
 
-            {[...results].reverse().map((r) => {
+            {[...filteredResults].reverse().map((r) => {
               const gradeInfo = getGradeInfo(r.totalCorrect, r.totalQuestions);
               const pct = r.totalQuestions > 0 ? Math.round((r.totalCorrect / r.totalQuestions) * 100) : 0;
               const isExpanded = selectedId === r.id;
               const currentDetail = isExpanded && detail?.id === r.id ? detail : null;
+              const resultSubject = getResultSubject(r.paperId);
 
               return (
                 <motion.div
@@ -807,6 +864,11 @@ function HistoryContent() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-slate-800 truncate">{r.paperTitle}</h3>
+                          {resultSubject ? (
+                            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
+                              {PAPER_SUBJECT_LABELS[resultSubject]}
+                            </span>
+                          ) : null}
                           {r.hasReport && (
                             <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
                               {lang === 'en' ? 'Report Ready' : '报告已生成'}
@@ -1253,7 +1315,8 @@ function HistoryContent() {
             })}
           </div>
         )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </TeacherToolsLayout>
   );
 }

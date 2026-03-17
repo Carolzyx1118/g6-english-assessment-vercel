@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import type { PaperSubject } from "@/data/papers";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER } from "@/data/papers";
 import type { ManualPaperBlueprint, ManualPaperGenerationConfig } from "@shared/manualPaperBlueprint";
@@ -261,20 +262,23 @@ export default function PaperComposer() {
 
   if (isEditing && editPaperQuery.isLoading && !hasHydratedEditState) {
     return (
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading generated paper...
+      <TeacherToolsLayout activeTool="paper-composer" currentSubject="english">
+        <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-5xl">
+            <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading generated paper...
+            </div>
           </div>
         </div>
-      </div>
+      </TeacherToolsLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <TeacherToolsLayout activeTool="paper-composer" currentSubject="english">
+      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
@@ -344,47 +348,48 @@ export default function PaperComposer() {
           }}
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-              {currentPublished ? "Status: Published" : "Status: Draft"}
-            </div>
-            {saveFeedback ? (
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
-                <Check className="h-4 w-4" />
-                <span className="font-medium">{saveFeedback}</span>
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                {currentPublished ? "Status: Published" : "Status: Draft"}
               </div>
-            ) : null}
-          </div>
+              {saveFeedback ? (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+                  <Check className="h-4 w-4" />
+                  <span className="font-medium">{saveFeedback}</span>
+                </div>
+              ) : null}
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saveDisabled}
-              onClick={() => persistPaper(false)}
-              className="gap-2 border-slate-200 px-4"
-            >
-              {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-              {isEditing ? "Save Draft Changes" : "Save Draft"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saveDisabled}
+                onClick={() => persistPaper(false)}
+                className="gap-2 border-slate-200 px-4"
+              >
+                {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
+                {isEditing ? "Save Draft Changes" : "Save Draft"}
+              </Button>
 
-            <Button
-              type="button"
-              disabled={saveDisabled}
-              onClick={() => persistPaper(true)}
-              className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
-            >
-              {isPersisting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              {isEditing && currentPublished ? "Update Published Paper" : "Publish Paper"}
-            </Button>
+              <Button
+                type="button"
+                disabled={saveDisabled}
+                onClick={() => persistPaper(true)}
+                className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+              >
+                {isPersisting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                {isEditing && currentPublished ? "Update Published Paper" : "Publish Paper"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </TeacherToolsLayout>
   );
 }

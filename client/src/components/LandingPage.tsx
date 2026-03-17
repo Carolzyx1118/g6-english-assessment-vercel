@@ -302,42 +302,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <p className="text-slate-500 mb-5">
                 Choose a paper inside the {PAPER_SUBJECT_LABELS[activeSubject]} module.
               </p>
-              {isTeacher && (activeSubject === 'english' || activeSubject === 'math' || activeSubject === 'vocabulary') && (
-                <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-[#1E3A5F]">Teacher Tools</h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {activeSubject === 'math'
-                          ? 'Manage Math papers, create new multiple-choice parts, and review student records from here.'
-                          : activeSubject === 'vocabulary'
-                            ? 'Manage vocabulary papers, build spelling and word-completion drills, and review student records from here.'
-                          : 'Manage English papers, review student records, and create new assessments from here.'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Link href={`/history?subject=${activeSubject}`}>
-                        <Button variant="outline" className="gap-2 border-slate-200">
-                          <ClipboardList className="w-4 h-4" />
-                          View Test History
-                        </Button>
-                      </Link>
-                      <Link href={`/paper-intake?subject=${activeSubject}`}>
-                        <Button variant="outline" className="gap-2 border-slate-200">
-                          <FileText className="w-4 h-4" />
-                          Paper Intake
-                        </Button>
-                      </Link>
-                      <Link href={`/paper-manager?subject=${activeSubject}`}>
-                        <Button variant="outline" className="gap-2 border-slate-200">
-                          <Settings2 className="w-4 h-4" />
-                          Paper Manager
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           ) : (
             <>

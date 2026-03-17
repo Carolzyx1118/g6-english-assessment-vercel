@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import EnglishQuestionTagEditor from "@/components/EnglishQuestionTagEditor";
 import GeneratedPaperConfigEditor, { type GeneratedSourcePaperOption } from "@/components/GeneratedPaperConfigEditor";
 import type {
@@ -2162,6 +2163,33 @@ export default function PaperIntake() {
   }, [isEditing, requestedSubject]);
 
   useEffect(() => {
+    if (isEditing) return;
+
+    autosavePausedRef.current = true;
+    const nextSection = createSection(getDefaultSectionTypeForSubject(requestedSubject));
+    setPaperSubject(requestedSubject);
+    setPaperSeed(createLocalId());
+    setCreatedAt(new Date().toISOString());
+    setTitle("");
+    setDescription("");
+    setBuildMode("fixed");
+    setVisibilityMode("student");
+    setGenerationConfig(createGenerationConfig());
+    setSections([nextSection]);
+    setExpandedImageBlocks(buildExpandedImageBlockState([nextSection]));
+    setSaveFeedback(null);
+    setCurrentPublished(false);
+    setHasRestoredLocalDraft(false);
+    setActivePreviewSubsectionId(nextSection.subsections[0]?.id ?? null);
+
+    const timeout = window.setTimeout(() => {
+      autosavePausedRef.current = false;
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [isEditing, requestedSubject]);
+
+  useEffect(() => {
     if (!isEditing || !editPaperQuery.data || hasHydratedEditState) return;
 
     try {
@@ -2320,6 +2348,11 @@ export default function PaperIntake() {
       setExpandedImageBlocks(buildExpandedImageBlockState(next));
       return next;
     });
+  };
+
+  const handleSubjectSelection = (nextSubject: PaperSubject) => {
+    if (nextSubject === requestedSubject) return;
+    navigate(`/paper-intake?subject=${nextSubject}`);
   };
 
   const getDurableAssetUrl = (value?: string) => {
@@ -3932,22 +3965,25 @@ export default function PaperIntake() {
 
   if (isEditing && editPaperQuery.isLoading && !hasHydratedEditState) {
     return (
-      <div className="min-h-screen bg-[#F6F8FB]">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="flex items-center justify-center gap-3 py-10 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading saved paper…
-            </CardContent>
-          </Card>
+      <TeacherToolsLayout activeTool="paper-intake" currentSubject={paperSubject}>
+        <div className="min-h-screen bg-[#F6F8FB]">
+          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+            <Card className="border-slate-200 shadow-sm">
+              <CardContent className="flex items-center justify-center gap-3 py-10 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading saved paper…
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </TeacherToolsLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB]">
-      <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
+    <TeacherToolsLayout activeTool="paper-intake" currentSubject={paperSubject}>
+      <div className="min-h-screen bg-[#F6F8FB]">
+        <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <Link
@@ -3977,6 +4013,31 @@ export default function PaperIntake() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
           <div className="space-y-6">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle>Subject</CardTitle>
+                <CardDescription>
+                  {isEditing
+                    ? "The subject is locked while you edit an existing paper."
+                    : "Choose the subject first. The builder will switch to the matching structure."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <select
+                  value={paperSubject}
+                  disabled={isEditing}
+                  onChange={(event) => handleSubjectSelection(event.target.value as PaperSubject)}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  {PAPER_SUBJECT_ORDER.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {PAPER_SUBJECT_LABELS[subject]}
+                    </option>
+                  ))}
+                </select>
+              </CardContent>
+            </Card>
+
             {paperSubject === "english" ? (
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader>
@@ -3984,13 +4045,6 @@ export default function PaperIntake() {
                   <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-                      {PAPER_SUBJECT_LABELS[paperSubject]}
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
                     <Label>Mode</Label>
                     <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
@@ -4048,14 +4102,6 @@ export default function PaperIntake() {
                   <CardDescription>Start by naming the paper and writing a short description.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {paperSubject !== "english" ? (
-                    <div className="space-y-2">
-                      <Label>Subject</Label>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-                        {PAPER_SUBJECT_LABELS[paperSubject]}
-                      </div>
-                    </div>
-                  ) : null}
                   <div className="space-y-2">
                     <Label htmlFor="paper-title">Paper Name</Label>
                     <Input
@@ -7374,7 +7420,8 @@ export default function PaperIntake() {
           </div>
         </div>
         ) : null}
+        </div>
       </div>
-    </div>
+    </TeacherToolsLayout>
   );
 }
