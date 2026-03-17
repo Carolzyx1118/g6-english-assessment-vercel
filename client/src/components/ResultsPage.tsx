@@ -236,14 +236,14 @@ function formatTime(totalSeconds: number): string {
 function isManualWritingReview(result: WritingEvalResult | null | undefined) {
   return Boolean(
     result &&
-    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.maxScore === 0 && result.grade === 'Manual Review'))
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.maxScore === 0 && result.grade === 'Manual Review'))
   );
 }
 
 function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
   return Boolean(
     result &&
-    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.totalPossible === 0 && result.grade === 'Manual Review'))
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.totalPossible === 0 && result.grade === 'Manual Review'))
   );
 }
 

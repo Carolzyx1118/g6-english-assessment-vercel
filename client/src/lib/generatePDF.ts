@@ -147,14 +147,14 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
 function isManualWritingReview(result: WritingEvalResult | null | undefined) {
   return Boolean(
     result &&
-    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.maxScore === 0 && result.grade === 'Manual Review'))
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.maxScore === 0 && result.grade === 'Manual Review'))
   );
 }
 
 function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
   return Boolean(
     result &&
-    (result.reviewMode === 'manual' || result.manualReviewRequired || (result.totalPossible === 0 && result.grade === 'Manual Review'))
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.totalPossible === 0 && result.grade === 'Manual Review'))
   );
 }
 
@@ -644,9 +644,11 @@ export function generateReportPDF(data: PDFData): void {
   const readingAIScore = readingResults ? readingResults.reduce((sum, r) => sum + r.score, 0) : 0;
   const readingAITotal = readingResults ? readingResults.length : 0;
   const writingIsManual = isManualWritingReview(writingResult);
+  const writingUsesTeacherReview = Boolean(writingResult?.reviewMode === 'manual');
   const writingAIScore = writingResult && !writingIsManual ? writingResult.score : 0;
   const writingAITotal = writingResult && !writingIsManual ? writingResult.maxScore : 0;
   const speakingIsManual = isManualSpeakingReview(speakingEvaluation);
+  const speakingUsesTeacherReview = Boolean(speakingEvaluation?.reviewMode === 'manual');
   const speakingAIScore = speakingEvaluation && !speakingIsManual ? speakingEvaluation.totalScore : 0;
   const speakingAITotal = speakingEvaluation && !speakingIsManual ? speakingEvaluation.totalPossible : 0;
   const totalScore = data.totalCorrect + readingAIScore + writingAIScore + speakingAIScore;
@@ -1011,7 +1013,7 @@ export function generateReportPDF(data: PDFData): void {
 
   // ── WRITING EVALUATION ──
   if (writingResult) {
-    addSectionBanner(writingIsManual ? 'Writing Review' : 'Writing Evaluation', C.rose, C.roseLight);
+    addSectionBanner(writingUsesTeacherReview ? 'Writing Review' : 'Writing Evaluation', C.rose, C.roseLight);
     addGap(3);
     if (writingQuestion) {
       addText('Writing Prompt', mL, 10, true, C.text);
@@ -1100,7 +1102,7 @@ export function generateReportPDF(data: PDFData): void {
   }
 
   if (speakingEvaluation && speakingEvaluation.evaluations.length > 0) {
-    addSectionBanner(speakingIsManual ? 'Speaking Review' : 'Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
+    addSectionBanner(speakingUsesTeacherReview ? 'Speaking Review' : 'Speaking Evaluation', [14, 165, 233], [240, 249, 255]);
     addText(speakingEvaluation.overallFeedback_en, mL + 2, 9, false, C.text, contentW - 6);
     addGap(3);
 
