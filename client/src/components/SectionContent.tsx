@@ -704,6 +704,10 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
 // ========== SPEAKING (Audio Recording) ==========
 
 function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion; sectionId: string; answer?: string; onAnswer: (v: string) => void }) {
+  const isStoredAudio = (value: unknown): value is string =>
+    typeof value === 'string' &&
+    (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:audio/'));
+
   if (q.subQuestions && q.subQuestions.length > 0) {
     const parsed = (() => {
       try { return typeof answer === 'string' ? JSON.parse(answer) : (answer || {}); } catch { return {}; }
@@ -728,7 +732,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
             <AudioRecorder
               questionId={q.id * 100 + idx}
               sectionId={sectionId}
-              savedUrl={parsed[sub.label] || undefined}
+              savedUrl={isStoredAudio(parsed[sub.label]) ? parsed[sub.label] : undefined}
               onRecorded={(url) => {
                 const newVal = { ...parsed, [sub.label]: url };
                 onAnswer(JSON.stringify(newVal));
@@ -759,7 +763,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
       <AudioRecorder
         questionId={q.id}
         sectionId={sectionId}
-        savedUrl={typeof answer === 'string' && answer.startsWith('http') ? answer : undefined}
+        savedUrl={isStoredAudio(answer) ? answer : undefined}
         onRecorded={onAnswer}
       />
     </div>

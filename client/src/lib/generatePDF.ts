@@ -213,6 +213,39 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
   try { return JSON.parse(json) as T; } catch { return fallback; }
 }
 
+function extractPDFAudioAnswers(value: unknown): string[] {
+  if (typeof value === 'string') {
+    if (
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('blob:') ||
+      value.startsWith('data:audio/')
+    ) {
+      return [value];
+    }
+
+    if ((value.startsWith('{') || value.startsWith('[')) && value.length > 1) {
+      try {
+        return extractPDFAudioAnswers(JSON.parse(value));
+      } catch {
+        return [];
+      }
+    }
+
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractPDFAudioAnswers(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => extractPDFAudioAnswers(entry));
+  }
+
+  return [];
+}
+
 function isManualWritingReview(result: WritingEvalResult | null | undefined) {
   return Boolean(
     result &&
@@ -371,7 +404,7 @@ function buildAutoGradableDetails(
       });
     } else if (q.type === 'open-ended') {
       const rawText = typeof userAns === 'string' ? userAns : '';
-      const isAudioAnswer = rawText.startsWith('http') || rawText.startsWith('blob');
+      const isAudioAnswer = extractPDFAudioAnswers(userAns).length > 0;
       details.push({
         questionNum: `Q${q.id}`,
         questionText: q.question,

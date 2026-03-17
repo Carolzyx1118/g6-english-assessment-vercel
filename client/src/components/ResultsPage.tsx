@@ -78,6 +78,39 @@ type SpeakingResponseInput = {
   audioUrl: string;
 };
 
+function isAudioAnswerValue(value: string) {
+  return (
+    value.startsWith('http://') ||
+    value.startsWith('https://') ||
+    value.startsWith('blob:') ||
+    value.startsWith('data:audio/')
+  );
+}
+
+function extractSpeakingAudioUrls(value: unknown): string[] {
+  if (typeof value === 'string') {
+    if (isAudioAnswerValue(value)) return [value];
+    if ((value.startsWith('{') || value.startsWith('[')) && value.length > 1) {
+      try {
+        return extractSpeakingAudioUrls(JSON.parse(value));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractSpeakingAudioUrls(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => extractSpeakingAudioUrls(entry));
+  }
+
+  return [];
+}
+
 function normalizeTrueFalseChoice(value: unknown): 'True' | 'False' | 'Not Given' | undefined {
   if (value === true) return 'True';
   if (value === false) return 'False';
@@ -548,25 +581,32 @@ export default function ResultsPage() {
 
   const speakingResponses = useMemo((): SpeakingResponseInput[] => {
     const responses: SpeakingResponseInput[] = [];
+    const seen = new Set<string>();
 
     for (const section of sections) {
       if (!isSpeakingLikeSection(section)) continue;
 
       for (const question of section.questions) {
         const answer = getAnswer(section.id, question.id);
-        if (typeof answer === 'string' && answer.startsWith('http')) {
-          const prompt =
-            question.type === 'open-ended'
-              ? question.question
-              : section.taskDescription || section.description || section.title;
+        const audioUrls = extractSpeakingAudioUrls(answer);
+        if (audioUrls.length === 0) continue;
+
+        const prompt =
+          question.type === 'open-ended'
+            ? question.question
+            : section.taskDescription || section.description || section.title;
+
+        audioUrls.forEach((audioUrl) => {
+          if (seen.has(audioUrl)) return;
+          seen.add(audioUrl);
           responses.push({
             sectionId: section.id,
             sectionTitle: section.title,
             questionId: question.id,
             prompt,
-            audioUrl: answer,
+            audioUrl,
           });
-        }
+        });
       }
     }
 
@@ -671,7 +711,7 @@ export default function ResultsPage() {
           const userText = userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered';
           // Speaking questions (no correctAnswer) - show as submitted
           if (!q.correctAnswer) {
-            const isAudioUrl = typeof userAns === 'string' && (userAns.startsWith('http') || userAns.startsWith('blob'));
+            const isAudioUrl = extractSpeakingAudioUrls(userAns).length > 0;
             sectionResults.push({ id: q.id, question: q.question,
               userAnswer: isAudioUrl ? 'Audio recorded' : userText,
               correctAnswer: 'Manual grading required', isCorrect: false,

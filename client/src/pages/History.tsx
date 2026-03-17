@@ -112,13 +112,14 @@ function answerKey(sectionId: string, questionId: number) {
 }
 
 function isUrlLike(value: string) {
-  return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('blob:');
+  return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('blob:') || value.startsWith('data:audio/');
 }
 
 function isLikelyAudioUrl(value: string) {
   return (
     isUrlLike(value) &&
-    (/(\.webm|\.mp3|\.mpeg|\.mp4|\.m4a|\.wav|\.ogg|\.aac)(\?|$)/i.test(value) ||
+    (value.startsWith('data:audio/') ||
+      /(\.webm|\.mp3|\.mpeg|\.mp4|\.m4a|\.wav|\.ogg|\.aac)(\?|$)/i.test(value) ||
       /(?:^|\/)(speaking|audio)[-_./]/i.test(value) ||
       /[?&](?:filename|fileName)=.*(\.webm|\.mp3|\.mpeg|\.mp4|\.m4a|\.wav|\.ogg|\.aac)/i.test(value))
   );
@@ -150,6 +151,9 @@ function extractAudioUrls(value: unknown): string[] {
 
 function getAudioSourceType(audioUrl: string) {
   const normalized = audioUrl.toLowerCase();
+  if (normalized.startsWith('data:audio/')) {
+    return normalized.slice(5, normalized.indexOf(';') > 0 ? normalized.indexOf(';') : undefined);
+  }
   if (normalized.includes('.mp3') || normalized.includes('.mpeg')) return 'audio/mpeg';
   if (normalized.includes('.wav')) return 'audio/wav';
   if (normalized.includes('.ogg')) return 'audio/ogg';

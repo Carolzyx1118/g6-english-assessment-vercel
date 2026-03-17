@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Play, Pause, RotateCcw, Upload, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { trpc } from '@/lib/trpc';
 
 interface AudioRecorderProps {
   questionId: number;
@@ -25,28 +24,34 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const uploadMutation = trpc.papers.uploadFile.useMutation();
+  const isPersistedAudioUrl = useCallback((value: string) => {
+    return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:audio/');
+  }, []);
+
+  const isRevokableAudioUrl = useCallback((value: string) => {
+    return value.startsWith('blob:');
+  }, []);
 
   // Initialize with saved URL if available
   useEffect(() => {
-    if (savedUrl && savedUrl.startsWith('http')) {
+    if (savedUrl && isPersistedAudioUrl(savedUrl)) {
       setStatus('uploaded');
       audioUrlRef.current = savedUrl;
     }
-  }, [savedUrl]);
+  }, [isPersistedAudioUrl, savedUrl]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (audioUrlRef.current && !audioUrlRef.current.startsWith('http')) {
+      if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
         URL.revokeObjectURL(audioUrlRef.current);
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
       }
     };
-  }, []);
+  }, [isRevokableAudioUrl]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -73,7 +78,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        if (audioUrlRef.current && !audioUrlRef.current.startsWith('http')) {
+        if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
           URL.revokeObjectURL(audioUrlRef.current);
         }
         audioUrlRef.current = URL.createObjectURL(blob);
@@ -139,7 +144,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     if (audioElementRef.current) {
       audioElementRef.current.pause();
     }
-    if (audioUrlRef.current && !audioUrlRef.current.startsWith('http')) {
+    if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
       URL.revokeObjectURL(audioUrlRef.current);
     }
     audioUrlRef.current = null;
@@ -147,6 +152,21 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     setRecordingTime(0);
     setIsPlaying(false);
     setError(null);
+  }, [isRevokableAudioUrl]);
+
+  const blobToDataUrl = useCallback(async (blob: Blob) => {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to encode recording.'));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error('Failed to encode recording.'));
+      reader.readAsDataURL(blob);
+    });
   }, []);
 
   const uploadAudio = useCallback(async () => {
@@ -158,32 +178,16 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     try {
       const mimeType = chunksRef.current[0].type || 'audio/webm';
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-
-      // Convert to base64
-      const arrayBuffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
-
-      const result = await uploadMutation.mutateAsync({
-        fileName: `speaking-${sectionId}-q${questionId}.${ext}`,
-        fileBase64: base64,
-        contentType: mimeType,
-      });
-
-      audioUrlRef.current = result.url;
+      const dataUrl = await blobToDataUrl(blob);
+      audioUrlRef.current = dataUrl;
       setStatus('uploaded');
-      onRecorded(result.url);
+      onRecorded(dataUrl);
     } catch (err: any) {
-      console.error('Upload error:', err);
-      setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to upload recording. Please try again.');
+      console.error('Recording save error:', err);
+      setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to save recording. Please try again.');
       setStatus('recorded');
     }
-  }, [sectionId, questionId, onRecorded, uploadMutation]);
+  }, [blobToDataUrl, onRecorded]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -213,7 +217,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
         {status === 'uploading' && (
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-            <span className="text-blue-600 font-medium">Uploading...</span>
+            <span className="text-blue-600 font-medium">Saving...</span>
           </div>
         )}
         {status === 'uploaded' && (
