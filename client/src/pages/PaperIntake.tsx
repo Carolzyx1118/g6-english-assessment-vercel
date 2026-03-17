@@ -812,6 +812,31 @@ function createSection(sectionType: ManualSectionType = DEFAULT_SECTION_TYPE): M
   };
 }
 
+function normalizeSectionsForQuestionBankMode(
+  sections: ManualSection[],
+  paperSubject: PaperSubject,
+): ManualSection[] {
+  const fallbackSectionType = getDefaultSectionTypeForSubject(paperSubject);
+  const allowedSectionTypes = getAvailableSectionTypesForSubject(paperSubject);
+
+  const flattened = sections.flatMap((section) => {
+    const sectionType = allowedSectionTypes.includes(section.sectionType)
+      ? section.sectionType
+      : fallbackSectionType;
+    const subsections = section.subsections.length > 0
+      ? section.subsections
+      : [createSubsection(getDefaultQuestionTypeForSectionType(sectionType))];
+
+    return subsections.map((subsection) => ({
+      id: createLocalId(),
+      sectionType,
+      subsections: [normalizeLoadedSubsection(subsection, paperSubject, sectionType)],
+    }));
+  });
+
+  return flattened.length > 0 ? flattened : [createSection(fallbackSectionType)];
+}
+
 const MANUAL_SECTION_TYPES = Object.keys(MANUAL_SECTION_TYPE_LABELS) as ManualSectionType[];
 const MANUAL_QUESTION_TYPES = Object.keys(MANUAL_QUESTION_TYPE_LABELS) as ManualQuestionType[];
 
@@ -925,6 +950,12 @@ function normalizeLoadedBuilderState(
       })
     : [createSection(getDefaultSectionTypeForSubject(paperSubject))];
 
+  const buildMode = rawBlueprint?.buildMode === "generated" ? "generated" : "fixed";
+  const visibilityMode = rawBlueprint?.visibilityMode === "question-bank" ? "question-bank" : "student";
+  const normalizedSections = buildMode === "fixed" && visibilityMode === "question-bank"
+    ? normalizeSectionsForQuestionBankMode(sections, paperSubject)
+    : sections;
+
   return {
     paperSeed:
       typeof rawBlueprint?.id === "string" && rawBlueprint.id
@@ -936,10 +967,10 @@ function normalizeLoadedBuilderState(
         : new Date().toISOString(),
     title: typeof rawBlueprint?.title === "string" ? rawBlueprint.title : "",
     description: typeof rawBlueprint?.description === "string" ? rawBlueprint.description : "",
-    buildMode: rawBlueprint?.buildMode === "generated" ? "generated" : "fixed",
-    visibilityMode: rawBlueprint?.visibilityMode === "question-bank" ? "question-bank" : "student",
+    buildMode,
+    visibilityMode,
     generationConfig: rawBlueprint?.generationConfig ?? createGenerationConfig(),
-    sections,
+    sections: normalizedSections,
   };
 }
 
@@ -1082,7 +1113,7 @@ function buildBlueprint(
     generationConfig,
     sections: sections.map((section, sectionIndex) => ({
       ...section,
-      partLabel: `Part ${sectionIndex + 1}`,
+      partLabel: visibilityMode === "question-bank" ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`,
       subsections: section.subsections.map((subsection) => {
         if (isWordBankSubsectionType(subsection.questionType)) {
           return {
@@ -1448,10 +1479,13 @@ function validateManualPaperBuilder(
   title: string,
   sections: ManualSection[],
   buildMode: ManualPaperBuildMode,
+  visibilityMode: ManualPaperVisibilityMode,
   generationConfig: ManualPaperGenerationConfig,
 ) {
   if (!title.trim()) {
-    return "Enter a paper name before saving.";
+    return visibilityMode === "question-bank"
+      ? "Enter a question bank name before saving."
+      : "Enter a paper name before saving.";
   }
 
   if (buildMode === "generated") {
@@ -1487,7 +1521,9 @@ function validateManualPaperBuilder(
   }
 
   if (sections.length === 0) {
-    return "Add at least one part before saving.";
+    return visibilityMode === "question-bank"
+      ? "Add at least one question before saving."
+      : "Add at least one part before saving.";
   }
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
@@ -2098,6 +2134,12 @@ export default function PaperIntake() {
   const previewBlueprint = buildMode === "generated" && generatedPreview
     ? generatedPreview.blueprint
     : blueprint;
+  const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
+  const isLegacyGeneratedMode = paperSubject === "english" && buildMode === "generated";
+  const hasAnyQuestions = useMemo(
+    () => sections.some((section) => section.subsections.some((subsection) => subsection.questions.length > 0)),
+    [sections],
+  );
 
   useEffect(() => {
     if (!isEditing) {
@@ -2213,6 +2255,21 @@ export default function PaperIntake() {
       setVisibilityMode("student");
     }
   }, [buildMode, visibilityMode]);
+
+  const activateFixedMode = () => {
+    setBuildMode("fixed");
+    setVisibilityMode("student");
+  };
+
+  const activateQuestionBankMode = () => {
+    setBuildMode("fixed");
+    setVisibilityMode("question-bank");
+    setSections((prev) => {
+      const next = normalizeSectionsForQuestionBankMode(prev, paperSubject);
+      setExpandedImageBlocks(buildExpandedImageBlockState(next));
+      return next;
+    });
+  };
 
   const getDurableAssetUrl = (value?: string) => {
     if (!value) return undefined;
@@ -3707,7 +3764,7 @@ export default function PaperIntake() {
   const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
 
   const persistPaper = async (published: boolean) => {
-    const validationError = validateManualPaperBuilder(title, sections, buildMode, generationConfig);
+    const validationError = validateManualPaperBuilder(title, sections, buildMode, visibilityMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -3716,6 +3773,12 @@ export default function PaperIntake() {
     const preparedBlueprint = prepareBlueprintForSave(blueprint);
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim() || undefined;
+    const successFeedback = isQuestionBankMode
+      ? (published ? "Question bank updated." : "Question bank draft saved.")
+      : (published ? "Paper published successfully." : "Draft saved successfully.");
+    const successToast = isQuestionBankMode
+      ? (published ? "Question bank published successfully." : "Question bank draft saved successfully.")
+      : (published ? "Paper published successfully." : "Draft saved successfully.");
 
     try {
       if (isEditing) {
@@ -3739,8 +3802,8 @@ export default function PaperIntake() {
         autosavePausedRef.current = true;
         clearPaperBuilderDraft(draftStorageKey);
         setCurrentPublished(published);
-        setSaveFeedback(published ? "Published paper updated." : "Draft updated.");
-        toast.success(published ? "Paper published successfully." : "Draft saved successfully.");
+        setSaveFeedback(successFeedback);
+        toast.success(successToast);
         setTimeout(() => navigate(managerHref), 1200);
         return;
       }
@@ -3761,11 +3824,11 @@ export default function PaperIntake() {
       autosavePausedRef.current = true;
       clearPaperBuilderDraft(draftStorageKey);
       setCurrentPublished(published);
-      setSaveFeedback(published ? "Paper published successfully." : "Draft saved successfully.");
-      toast.success(published ? "Paper published successfully." : "Draft saved successfully.");
+      setSaveFeedback(successFeedback);
+      toast.success(successToast);
       setTimeout(() => navigate(managerHref), 1200);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save paper. Please try again.");
+      toast.error(err?.message || (isQuestionBankMode ? "Failed to save the question bank. Please try again." : "Failed to save paper. Please try again."));
     }
   };
 
@@ -3778,7 +3841,7 @@ export default function PaperIntake() {
   };
 
   const handleSaveAsCopy = async () => {
-    const validationError = validateManualPaperBuilder(title, sections, buildMode, generationConfig);
+    const validationError = validateManualPaperBuilder(title, sections, buildMode, visibilityMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -3893,56 +3956,35 @@ export default function PaperIntake() {
                 {paperSubject === "english" ? (
                   <>
                     <div className="space-y-2">
-                      <Label>Build Mode</Label>
+                      <Label>Paper Mode</Label>
                       <div className="grid gap-3 md:grid-cols-2">
-                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
                           <input
                             type="radio"
                             className="mr-2"
-                            checked={buildMode === "fixed"}
-                            onChange={() => setBuildMode("fixed")}
+                            checked={buildMode === "fixed" && visibilityMode === "student"}
+                            onChange={activateFixedMode}
                           />
-                          <span className="font-medium text-slate-900">固定卷 / 题库卷</span>
-                          <span className="mt-1 block text-xs text-slate-500">按现在的方式手动录题，也可以把它当成后面随机组卷的题库来源。</span>
+                          <span className="font-medium text-slate-900">固定套卷</span>
+                          <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 组织整套卷子，学生直接做这一整张卷。</span>
                         </label>
-                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "generated" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                        <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
                           <input
                             type="radio"
                             className="mr-2"
-                            checked={buildMode === "generated"}
-                            onChange={() => setBuildMode("generated")}
+                            checked={isQuestionBankMode}
+                            onChange={activateQuestionBankMode}
                           />
-                          <span className="font-medium text-slate-900">随机生成卷</span>
-                          <span className="mt-1 block text-xs text-slate-500">学生打开后按标签规则随机抽题，自动拼出一张新卷子。</span>
+                          <span className="font-medium text-slate-900">题库随机</span>
+                          <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示 section，后面可作为随机抽题来源。</span>
                         </label>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label>Visibility</Label>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className={`rounded-2xl border p-4 text-sm ${visibilityMode === "student" ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
-                          <input
-                            type="radio"
-                            className="mr-2"
-                            checked={visibilityMode === "student"}
-                            onChange={() => setVisibilityMode("student")}
-                          />
-                          <span className="font-medium text-slate-900">学生端可见</span>
-                          <span className="mt-1 block text-xs text-slate-500">会出现在学生选卷页面。</span>
-                        </label>
-                        <label className={`rounded-2xl border p-4 text-sm ${visibilityMode === "question-bank" ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
-                          <input
-                            type="radio"
-                            className="mr-2"
-                            checked={visibilityMode === "question-bank"}
-                            onChange={() => setVisibilityMode("question-bank")}
-                            disabled={buildMode === "generated"}
-                          />
-                          <span className="font-medium text-slate-900">题库专用</span>
-                          <span className="mt-1 block text-xs text-slate-500">不会在学生选卷页显示，但会继续参与随机组卷。仅固定卷可选。</span>
-                        </label>
-                      </div>
+                      {isLegacyGeneratedMode ? (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                          当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
+                        </div>
+                      ) : null}
                     </div>
                   </>
                 ) : null}
@@ -3963,9 +4005,11 @@ export default function PaperIntake() {
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <CardTitle>{`Part ${sectionIndex + 1}`}</CardTitle>
+                      <CardTitle>{isQuestionBankMode ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`}</CardTitle>
                       <CardDescription>
-                        {isMathPaper
+                        {isQuestionBankMode
+                          ? "Record one tagged question at a time for the random question bank."
+                          : isMathPaper
                           ? "Choose the part type, then add one or more question blocks below."
                           : "Choose the section type, then add one or more big questions below."}
                       </CardDescription>
@@ -3983,7 +4027,7 @@ export default function PaperIntake() {
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div className="space-y-2">
-                    <Label>{`Part ${sectionIndex + 1} Type`}</Label>
+                    <Label>{isQuestionBankMode ? "Section Type" : `Part ${sectionIndex + 1} Type`}</Label>
                     <select
                       value={section.sectionType}
                       onChange={(event) =>
@@ -4031,23 +4075,25 @@ export default function PaperIntake() {
                           const isImageBlockExpanded = expandedImageBlocks[subsection.id] ?? Boolean(subsection.sceneImage);
                           return (
                             <>
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">{`Question ${subsectionIndex + 1}`}</p>
-                            <p className="text-xs text-slate-500">
-                              Add the instructions and the questions in this block.
-                            </p>
+                        {!isQuestionBankMode ? (
+                          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">{`Question ${subsectionIndex + 1}`}</p>
+                              <p className="text-xs text-slate-500">
+                                Add the instructions and the questions in this block.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSubsection(section.id, subsection.id)}
+                              className="text-slate-500 hover:text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeSubsection(section.id, subsection.id)}
-                            className="text-slate-500 hover:text-red-500"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        ) : null}
 
                         <div className="space-y-4">
                           <div className="space-y-2">
@@ -6426,7 +6472,10 @@ export default function PaperIntake() {
                           </div>
 
                           {/* Add question/blank button — not shown for passage-based auto-synced types */}
-                          {(subsection.questionType !== "passage-fill-blank" && subsection.questionType !== "passage-mcq" && subsection.questionType !== "passage-inline-word-choice") && (
+                          {!isQuestionBankMode
+                            && subsection.questionType !== "passage-fill-blank"
+                            && subsection.questionType !== "passage-mcq"
+                            && subsection.questionType !== "passage-inline-word-choice" && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
                               {subsection.questionType === "fill-blank"
@@ -6460,10 +6509,12 @@ export default function PaperIntake() {
                     ))}
                   </div>
 
-                  <Button type="button" variant="outline" onClick={() => addSubsection(section.id)}>
-                    <SquarePen className="mr-2 h-4 w-4" />
-                    Add Question
-                  </Button>
+                  {!isQuestionBankMode ? (
+                    <Button type="button" variant="outline" onClick={() => addSubsection(section.id)}>
+                      <SquarePen className="mr-2 h-4 w-4" />
+                      Add Question
+                    </Button>
+                  ) : null}
                 </CardContent>
               </Card>
             ))}
@@ -6471,7 +6522,7 @@ export default function PaperIntake() {
             {buildMode === "fixed" ? (
               <Button type="button" variant="outline" onClick={addSection} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Section
+                {isQuestionBankMode ? "Submit Question" : "Add Section"}
               </Button>
             ) : null}
           </div>
@@ -6483,6 +6534,8 @@ export default function PaperIntake() {
                 <CardDescription>
                   {buildMode === "generated"
                     ? "Preview of the random paper assembled from your current tag rules."
+                    : isQuestionBankMode
+                      ? "Quick preview of the question bank items you are recording one by one."
                     : "Quick student-facing preview of the paper structure you are building."}
                 </CardDescription>
               </CardHeader>
@@ -7107,7 +7160,11 @@ export default function PaperIntake() {
                 <span className="font-medium">{saveFeedback}</span>
               </div>
             ) : (
-              <span className="text-slate-500">Drafts stay hidden until you publish the paper.</span>
+              <span className="text-slate-500">
+                {isQuestionBankMode
+                  ? "Question bank items stay hidden until you publish the bank."
+                  : "Drafts stay hidden until you publish the paper."}
+              </span>
             )}
           </div>
 
@@ -7132,7 +7189,7 @@ export default function PaperIntake() {
               variant="outline"
               disabled={
                 !title.trim()
-                || sections.every((s) => s.subsections.every((sub) => sub.questions.length === 0))
+                || !hasAnyQuestions
                 || isPersisting
                 || (isEditing && !editingPaperMeta)
               }
@@ -7140,7 +7197,9 @@ export default function PaperIntake() {
               className="gap-2 border-slate-200"
             >
               {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-              {isEditing ? "Save Draft Changes" : "Save Draft"}
+              {isQuestionBankMode
+                ? (isEditing ? "Save Question Draft Changes" : "Save Question Draft")
+                : (isEditing ? "Save Draft Changes" : "Save Draft")}
             </Button>
 
             <Button
@@ -7148,7 +7207,7 @@ export default function PaperIntake() {
               size="lg"
               disabled={
                 !title.trim()
-                || sections.every((s) => s.subsections.every((sub) => sub.questions.length === 0))
+                || !hasAnyQuestions
                 || isPersisting
                 || (isEditing && !editingPaperMeta)
               }
@@ -7160,7 +7219,9 @@ export default function PaperIntake() {
               ) : (
                 <Check className="h-4 w-4" />
               )}
-              {isEditing && currentPublished ? "Update Published Paper" : "Publish Paper"}
+              {isQuestionBankMode
+                ? (isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank")
+                : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper")}
             </Button>
           </div>
         </div>
