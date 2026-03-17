@@ -72,6 +72,13 @@ interface QuestionDetail {
   correctAnswer: string;     // The correct answer
   isCorrect: boolean;        // Whether the student got it right
   isAnswered: boolean;       // Whether the student answered at all
+  context?: string;
+  options?: Array<{
+    label: string;
+    text: string;
+    isCorrect: boolean;
+    isSelected: boolean;
+  }>;
   explanation?: string;      // AI explanation if available
   tip?: string;              // AI tip if available
   explanationCn?: string;
@@ -135,6 +142,37 @@ function getPDFSelectedIndexes(answer: PDFAnswerValue | undefined) {
 function getPDFOptionDisplay(option: string | { label?: string; text?: string } | undefined) {
   if (!option) return '';
   return typeof option === 'string' ? option : option.text || option.label || '';
+}
+
+function getPDFOptionLabel(index: number, option: string | { label?: string; text?: string } | undefined) {
+  if (option && typeof option !== 'string' && option.label) return option.label;
+  return String.fromCharCode(65 + index);
+}
+
+function buildPDFReviewOptions(
+  rawOptions: Array<string | { label?: string; text?: string }>,
+  selectedIndexes: number[],
+  correctIndexes: number[],
+) {
+  return rawOptions.map((option, index) => ({
+    label: getPDFOptionLabel(index, option),
+    text: getPDFOptionDisplay(option),
+    isCorrect: correctIndexes.includes(index),
+    isSelected: selectedIndexes.includes(index),
+  }));
+}
+
+function buildPDFWordBankOptions(
+  wordBank: Array<{ letter: string; word: string }> | undefined,
+  selectedLetter: string | undefined,
+  correctLetter: string | undefined,
+) {
+  return (wordBank || []).map((entry) => ({
+    label: entry.letter,
+    text: entry.word,
+    isCorrect: entry.letter.toLowerCase() === String(correctLetter || '').toLowerCase(),
+    isSelected: entry.letter.toLowerCase() === String(selectedLetter || '').toLowerCase(),
+  }));
 }
 
 function parsePDFChoiceMap(value: PDFAnswerValue | undefined): Record<string, unknown> {
@@ -222,6 +260,7 @@ function buildAutoGradableDetails(
           correctAnswer: correctText,
           isCorrect: isAnswered && isCorrect,
           isAnswered,
+          options: buildPDFReviewOptions(q.options, selectedIndexes, correctIndexes),
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
           explanationCn: expl?.explanation_cn,
@@ -244,6 +283,7 @@ function buildAutoGradableDetails(
           correctAnswer: correctText,
           isCorrect: isAnswered && isCorrect,
           isAnswered,
+          options: buildPDFReviewOptions(q.options, selectedIndexes, correctIndexes),
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
           explanationCn: expl?.explanation_cn,
@@ -257,9 +297,10 @@ function buildAutoGradableDetails(
           questionNum: `Q${q.id}`,
           questionText: q.question.replace('___', q.highlightWord || '___'),
           userAnswer: userText,
-          correctAnswer: q.options[q.correctAnswer],
+          correctAnswer: getPDFOptionDisplay(q.options[q.correctAnswer]),
           isCorrect: isAnswered && isCorrect,
           isAnswered,
+          options: buildPDFReviewOptions(q.options, userIdx >= 0 ? [userIdx] : [], [q.correctAnswer]),
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
           explanationCn: expl?.explanation_cn,
@@ -270,6 +311,10 @@ function buildAutoGradableDetails(
         const userIdx = isAnswered ? Number(userAns) : -1;
         const userOptionText = (userIdx >= 0 && q.options[userIdx]) ? q.options[userIdx] : (isAnswered ? String(userAns) : 'Not Answered');
         const isCorrect = userOptionText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+        const correctIndexes = q.options
+          .map((option, index) => ({ option, index }))
+          .filter(({ option }) => getPDFOptionDisplay(option).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase())
+          .map(({ index }) => index);
         details.push({
           questionNum: `Q${q.id}`,
           questionText: q.question,
@@ -277,6 +322,7 @@ function buildAutoGradableDetails(
           correctAnswer: String(q.correctAnswer),
           isCorrect: isAnswered && isCorrect,
           isAnswered,
+          options: buildPDFReviewOptions(q.options, userIdx >= 0 ? [userIdx] : [], correctIndexes),
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
           explanationCn: expl?.explanation_cn,
@@ -296,6 +342,7 @@ function buildAutoGradableDetails(
         correctAnswer: correctWord ? `${correctWord.letter} (${correctWord.word})` : q.correctAnswer,
         isCorrect,
         isAnswered,
+        options: buildPDFWordBankOptions(wordBank, typeof userAns === 'string' ? userAns : undefined, q.correctAnswer),
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
         explanationCn: expl?.explanation_cn,
@@ -303,8 +350,8 @@ function buildAutoGradableDetails(
       });
     } else if (q.type === 'checkbox') {
       const userArr = isAnswered ? (userAns as unknown as number[]) : [];
-      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not Answered';
-      const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
+      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ') : 'Not Answered';
+      const correctLabels = q.correctAnswers.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ');
       const sorted1 = Array.isArray(userArr) ? [...userArr].sort() : [];
       const sorted2 = [...q.correctAnswers].sort();
       const isCorrect = JSON.stringify(sorted1) === JSON.stringify(sorted2);
@@ -316,6 +363,7 @@ function buildAutoGradableDetails(
         correctAnswer: correctLabels,
         isCorrect: isAnswered && isCorrect,
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
+        options: buildPDFReviewOptions(q.options, Array.isArray(userArr) ? userArr : [], q.correctAnswers),
         explanation: expl?.explanation_en,
         tip: expl?.tip_en,
         explanationCn: expl?.explanation_cn,
@@ -345,6 +393,7 @@ function buildAutoGradableDetails(
           correctAnswer: item.options[item.correctAnswer] || '',
           isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
           isAnswered: hasAnswer,
+          options: buildPDFReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
           explanation: expl?.explanation_en,
           tip: expl?.tip_en,
           explanationCn: expl?.explanation_cn,
@@ -399,13 +448,21 @@ function buildReadingDetails(
         const subKey = `${q.id}-${stmt.label}`;
         const rr = readingMap.get(subKey);
         const subAnswered = parsed[stmt.label] !== undefined;
+        const choiceOptions = ['True', 'False', 'Not Given'];
+        const userChoice = subAnswered ? (parsed[stmt.label] ? 'True' : 'False') : undefined;
+        const correctChoice = stmt.isTrue ? 'True' : 'False';
         details.push({
           questionNum: `Q${q.id}(${stmt.label})`,
           questionText: `True or False: "${stmt.statement}"`,
           userAnswer: subAnswered ? (parsed[stmt.label] ? 'True' : 'False') : 'Not Answered',
-          correctAnswer: stmt.isTrue ? 'True' : 'False',
+          correctAnswer: correctChoice,
           isCorrect: rr ? rr.isCorrect : (subAnswered && parsed[stmt.label] === stmt.isTrue),
           isAnswered: subAnswered,
+          options: buildPDFReviewOptions(
+            choiceOptions,
+            userChoice ? [choiceOptions.indexOf(userChoice)].filter((value) => value >= 0) : [],
+            [choiceOptions.indexOf(correctChoice)].filter((value) => value >= 0),
+          ),
           explanation: rr?.explanation_en,
           explanationCn: rr?.explanation_cn,
         });
@@ -517,8 +574,8 @@ function buildReadingDetails(
       });
     } else if (q.type === 'checkbox') {
       const userArr = isAnswered ? (userAns as unknown as number[]) : [];
-      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not Answered';
-      const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
+      const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ') : 'Not Answered';
+      const correctLabels = q.correctAnswers.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ');
       const rr = readingMap.get(String(q.id));
       details.push({
         questionNum: `Q${q.id}`,
@@ -527,6 +584,7 @@ function buildReadingDetails(
         correctAnswer: correctLabels,
         isCorrect: rr ? rr.isCorrect : false,
         isAnswered: Array.isArray(userArr) && userArr.length > 0,
+        options: buildPDFReviewOptions(q.options, Array.isArray(userArr) ? userArr : [], q.correctAnswers),
         explanation: rr?.explanation_en,
         explanationCn: rr?.explanation_cn,
       });
@@ -543,6 +601,7 @@ function buildReadingDetails(
           correctAnswer: item.options[item.correctAnswer] || '',
           isCorrect: rr ? rr.isCorrect : (hasAnswer && selectedIndex === item.correctAnswer),
           isAnswered: hasAnswer,
+          options: buildPDFReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
           explanation: rr?.explanation_en,
           explanationCn: rr?.explanation_cn,
         });
@@ -1065,6 +1124,24 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
         // Question text
         addText(detail.questionText, mL + 6, 8.5, false, C.text, contentW - 14);
         addGap(1);
+
+        if (detail.context) {
+          addText(`${t('说明：', 'Context: ')}${detail.context}`, mL + 6, 7.8, false, C.textMuted, contentW - 14);
+          addGap(1);
+        }
+
+        if (detail.options && detail.options.length > 0) {
+          addText(t('选项：', 'Options:'), mL + 6, 8, true, C.textMuted, contentW - 14);
+          detail.options.forEach((option) => {
+            const tags = [
+              option.isSelected ? t('学生所选', 'Selected') : null,
+              option.isCorrect ? t('正确项', 'Correct') : null,
+            ].filter(Boolean).join(' / ');
+            const optionLine = `${option.label}. ${option.text}${tags ? ` (${tags})` : ''}`;
+            addText(optionLine, mL + 8, 7.8, false, option.isCorrect ? C.success : C.text, contentW - 16);
+          });
+          addGap(1);
+        }
 
         // Student's answer
         if (detail.isAnswered) {

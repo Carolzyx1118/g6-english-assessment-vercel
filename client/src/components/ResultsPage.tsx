@@ -55,6 +55,21 @@ type WritingEvalResult = {
   manualReviewRequired?: boolean;
 };
 type ExplanationResult = { questionId: number; explanation_en: string; explanation_cn: string; tip_en: string; tip_cn: string };
+type ReviewOption = {
+  label: string;
+  text: string;
+  isCorrect: boolean;
+  isSelected: boolean;
+};
+type ReviewQuestion = {
+  id: number;
+  question: string;
+  userAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  context?: string;
+  options?: ReviewOption[];
+};
 type SpeakingResponseInput = {
   sectionId: string;
   sectionTitle: string;
@@ -165,6 +180,71 @@ function getMCQOptionDisplay(option: string | { label?: string; text?: string } 
   return typeof option === 'string' ? option : option.text || option.label || '';
 }
 
+function getReviewOptionLabel(index: number, option: string | { label?: string; text?: string } | undefined) {
+  if (option && typeof option !== 'string' && option.label) return option.label;
+  return String.fromCharCode(65 + index);
+}
+
+function buildReviewOptions(
+  rawOptions: Array<string | { label?: string; text?: string }>,
+  selectedIndexes: number[],
+  correctIndexes: number[],
+): ReviewOption[] {
+  return rawOptions.map((option, index) => ({
+    label: getReviewOptionLabel(index, option),
+    text: getMCQOptionDisplay(option),
+    isCorrect: correctIndexes.includes(index),
+    isSelected: selectedIndexes.includes(index),
+  }));
+}
+
+function buildWordBankReviewOptions(
+  wordBank: Array<{ letter: string; word: string }> | undefined,
+  selectedLetter: string | undefined,
+  correctLetter: string | undefined,
+): ReviewOption[] {
+  return (wordBank || []).map((entry) => ({
+    label: entry.letter,
+    text: entry.word,
+    isCorrect: entry.letter.toLowerCase() === String(correctLetter || '').toLowerCase(),
+    isSelected: entry.letter.toLowerCase() === String(selectedLetter || '').toLowerCase(),
+  }));
+}
+
+function ReviewOptionsList({ options, lang }: { options: ReviewOption[]; lang: Lang }) {
+  if (options.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-lg bg-slate-50 border border-slate-200 p-3">
+      <p className="text-xs font-semibold text-slate-500 mb-2">{lang === 'en' ? 'Options' : '选项'}</p>
+      <ul className="space-y-2">
+        {options.map((option) => (
+          <li key={`${option.label}-${option.text}`} className="rounded-md bg-white border border-slate-200 px-3 py-2 text-sm text-slate-700">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="font-semibold text-slate-600 mr-2">{option.label}.</span>
+                <span>{option.text}</span>
+              </div>
+              <div className="shrink-0 flex flex-wrap justify-end gap-1.5">
+                {option.isSelected && (
+                  <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                    {lang === 'en' ? 'Selected' : '已选'}
+                  </span>
+                )}
+                {option.isCorrect && (
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    {lang === 'en' ? 'Correct' : '正确项'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // Parse annotated essay for writing section
 function parseAnnotatedEssay(text: string): { type: 'text' | 'error'; content: string; correction?: string; explanation?: string }[] {
   const segments: { type: 'text' | 'error'; content: string; correction?: string; explanation?: string }[] = [];
@@ -250,6 +330,8 @@ function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefi
 interface ReadingSubItem {
   id: string; parentId: number; label: string;
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
+  context?: string;
+  options?: ReviewOption[];
 }
 
 export default function ResultsPage() {
@@ -324,10 +406,14 @@ export default function ResultsPage() {
           const raw = parsed[stmt.label];
           const userChoice = normalizeTrueFalseChoice(raw && typeof raw === 'object' ? raw.tf : raw);
           const correctChoice = getExpectedTrueFalseChoice(stmt);
+          const choiceOptions = ['True', 'False', 'Not Given'];
+          const selectedIndexes = userChoice ? [choiceOptions.indexOf(userChoice)].filter((value) => value >= 0) : [];
+          const correctIndexes = [choiceOptions.indexOf(correctChoice)].filter((value) => value >= 0);
           items.push({ id: `${q.id}-${stmt.label}`, parentId: q.id, label: `Q${q.id}(${stmt.label})`,
             questionText: `True or False: "${stmt.statement}"`,
             userAnswer: userChoice || 'Not answered',
-            correctAnswer: correctChoice, questionType: 'true-false-sub' });
+            correctAnswer: correctChoice, questionType: 'true-false-sub',
+            options: buildReviewOptions(choiceOptions, selectedIndexes, correctIndexes) });
         }
       } else if (q.type === 'open-ended' && q.subQuestions) {
         const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
@@ -380,8 +466,9 @@ export default function ResultsPage() {
         const userArr = userAns as number[] | undefined;
         items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
           questionText: q.question,
-          userAnswer: userArr && userArr.length ? userArr.map((i: number) => q.options[i]).join(', ') : 'Not answered',
-          correctAnswer: q.correctAnswers.map((i: number) => q.options[i]).join(', '), questionType: 'checkbox' });
+          userAnswer: userArr && userArr.length ? userArr.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', ') : 'Not answered',
+          correctAnswer: q.correctAnswers.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', '), questionType: 'checkbox',
+          options: buildReviewOptions(q.options, userArr || [], q.correctAnswers) });
       } else if (q.type === 'sentence-reorder') {
         const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
         q.items.forEach((item) => {
@@ -409,6 +496,7 @@ export default function ResultsPage() {
             userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
             correctAnswer: item.options[item.correctAnswer] || '',
             questionType: 'inline-word-choice-sub',
+            options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
           });
         });
       } else if (q.type === 'passage-inline-word-choice') {
@@ -424,6 +512,7 @@ export default function ResultsPage() {
             userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
             correctAnswer: item.options[item.correctAnswer] || '',
             questionType: 'passage-inline-word-choice-sub',
+            options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
           });
         });
       } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
@@ -486,10 +575,10 @@ export default function ResultsPage() {
 
   // Detailed answer review for auto-gradable sections (vocabulary, grammar, listening)
   const detailedResults = useMemo(() => {
-    const results: { sectionId: string; sectionTitle: string; questions: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] }[] = [];
+    const results: { sectionId: string; sectionTitle: string; questions: ReviewQuestion[] }[] = [];
     for (const section of sections) {
       if (section.id === 'reading' || isWritingLikeSection(section) || isSpeakingLikeSection(section)) continue;
-      const sectionResults: { id: number; question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean; context?: string }[] = [];
+      const sectionResults: ReviewQuestion[] = [];
       for (const q of section.questions) {
         if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
           const userAns = getAnswer(section.id, q.id);
@@ -503,6 +592,7 @@ export default function ResultsPage() {
             : (q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label);
           sectionResults.push({ id: q.id, question: q.question, userAnswer: userText, correctAnswer: correctText,
             isCorrect: JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b)),
+            options: buildReviewOptions(q.options, selectedIndexes, correctIndexes),
             context: correctIndexes.length > 1
               ? `The correct answers are: ${correctText}.`
               : `The correct answer is option ${q.options[q.correctAnswer]?.label}: ${correctText}.` });
@@ -519,13 +609,15 @@ export default function ResultsPage() {
               userAnswer: userText,
               correctAnswer: correctText,
               isCorrect: JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b)),
+              options: buildReviewOptions(q.options, selectedIndexes, correctIndexes),
               context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
           } else if (typeof q.correctAnswer === 'number') {
             // Standard MCQ with numeric index answer
             const userIdx = userAns !== undefined ? Number(userAns) : -1;
             sectionResults.push({ id: q.id, question: q.question.replace('___', q.highlightWord || '___'),
-              userAnswer: userIdx >= 0 ? q.options[userIdx] : 'Not answered',
-              correctAnswer: q.options[q.correctAnswer], isCorrect: userIdx === q.correctAnswer,
+              userAnswer: userIdx >= 0 ? getMCQOptionDisplay(q.options[userIdx]) : 'Not answered',
+              correctAnswer: getMCQOptionDisplay(q.options[q.correctAnswer]), isCorrect: userIdx === q.correctAnswer,
+              options: buildReviewOptions(q.options, userIdx >= 0 ? [userIdx] : [], [q.correctAnswer]),
               context: q.highlightWord ? `The word "${q.highlightWord}" is tested.` : undefined });
           } else {
             // MCQ with string answer (e.g., yes/no) - answer stored as index, convert to option text
@@ -533,8 +625,13 @@ export default function ResultsPage() {
             const rawOpt: any = (userIdx >= 0 && q.options && q.options[userIdx]) ? q.options[userIdx] : null;
             const userText = rawOpt ? (typeof rawOpt === 'string' ? rawOpt : (rawOpt.text || rawOpt.label || '')) : (userAns !== undefined && userAns !== '' ? String(userAns) : 'Not answered');
             const isCorrect = userText !== 'Not answered' && userText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+            const correctIndexes = q.options
+              .map((option, index) => ({ option, index }))
+              .filter(({ option }) => getMCQOptionDisplay(option).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase())
+              .map(({ index }) => index);
             sectionResults.push({ id: q.id, question: q.question,
-              userAnswer: userText, correctAnswer: String(q.correctAnswer), isCorrect });
+              userAnswer: userText, correctAnswer: String(q.correctAnswer), isCorrect,
+              options: buildReviewOptions(q.options, userIdx >= 0 ? [userIdx] : [], correctIndexes) });
           }
         } else if (q.type === 'fill-blank') {
           const userAns = getAnswer(section.id, q.id);
@@ -547,6 +644,7 @@ export default function ResultsPage() {
               userAnswer: userLetterEntry ? `${userLetterEntry.letter} ${userLetterEntry.word}` : (userAns ? String(userAns) : 'Not answered'),
               correctAnswer: `${correctLetterEntry.letter} ${correctLetterEntry.word}`,
               isCorrect: String(userAns).trim().toUpperCase() === q.correctAnswer.trim().toUpperCase(),
+              options: buildWordBankReviewOptions(wordBank, typeof userAns === 'string' ? userAns : undefined, q.correctAnswer),
               context: `Grammar fill-in-the-blank. The correct word is "${correctLetterEntry.word}".` });
           } else {
             sectionResults.push({ id: q.id, question: q.question || `Fill in blank ${q.id}`,
@@ -598,19 +696,24 @@ export default function ResultsPage() {
               const correctChoice = getExpectedTrueFalseChoice(stmt);
               const userDisplay = userChoice ? `${userChoice}${userChoice === 'True' ? ' (\u2713)' : userChoice === 'False' ? ' (\u2717)' : ''}` : 'Not answered';
               const correctDisplay = `${correctChoice}${correctChoice === 'True' ? ' (\u2713)' : correctChoice === 'False' ? ' (\u2717)' : ''}`;
+              const choiceOptions = ['True', 'False', 'Not Given'];
+              const selectedIndexes = userChoice ? [choiceOptions.indexOf(userChoice)].filter((value) => value >= 0) : [];
+              const correctIndexes = [choiceOptions.indexOf(correctChoice)].filter((value) => value >= 0);
               sectionResults.push({ id: q.id, question: stmt.statement,
                 userAnswer: userDisplay, correctAnswer: correctDisplay,
-                isCorrect: userChoice === correctChoice });
+                isCorrect: userChoice === correctChoice,
+                options: buildReviewOptions(choiceOptions, selectedIndexes, correctIndexes) });
             }
           }
         } else if (q.type === 'checkbox') {
           const userAns = getAnswer(section.id, q.id) as number[] | undefined;
-          const userLabels = userAns && userAns.length ? userAns.map((i: number) => q.options[i]).join(', ') : 'Not answered';
-          const correctLabels = q.correctAnswers.map((i: number) => q.options[i]).join(', ');
+          const userLabels = userAns && userAns.length ? userAns.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', ') : 'Not answered';
+          const correctLabels = q.correctAnswers.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', ');
           const sorted1 = userAns ? [...userAns].sort() : [];
           const sorted2 = [...q.correctAnswers].sort();
           sectionResults.push({ id: q.id, question: q.question, userAnswer: userLabels,
-            correctAnswer: correctLabels, isCorrect: JSON.stringify(sorted1) === JSON.stringify(sorted2) });
+            correctAnswer: correctLabels, isCorrect: JSON.stringify(sorted1) === JSON.stringify(sorted2),
+            options: buildReviewOptions(q.options, userAns || [], q.correctAnswers) });
         } else if (q.type === 'order') {
           const userAns = getAnswer(section.id, q.id);
           const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
@@ -645,6 +748,7 @@ export default function ResultsPage() {
               userAnswer: userValue,
               correctAnswer: correctValue,
               isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
+              options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
             });
           });
         } else if (q.type === 'passage-inline-word-choice') {
@@ -661,6 +765,7 @@ export default function ResultsPage() {
               userAnswer: userValue,
               correctAnswer: correctValue,
               isCorrect: hasAnswer && selectedIndex === item.correctAnswer,
+              options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
             });
           });
         }
@@ -1254,6 +1359,9 @@ export default function ResultsPage() {
                             <p className="text-sm text-slate-600 mb-1">
                               <span className="font-bold text-slate-500">Q{q.id}.</span> {q.question}
                             </p>
+                            {q.context && (
+                              <p className="text-xs text-slate-400 mb-2">{q.context}</p>
+                            )}
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={q.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 {lang === 'en' ? 'Your answer' : '你的答案'}: <span className="font-medium">{q.userAnswer}</span>
@@ -1264,6 +1372,7 @@ export default function ResultsPage() {
                                 </span>
                               )}
                             </div>
+                            {q.options && q.options.length > 0 && <ReviewOptionsList options={q.options} lang={lang} />}
                             {!q.isCorrect && expl && (
                               <CollapsibleExplanation
                                 explanation={lang === 'en' ? expl.explanation_en : expl.explanation_cn}
@@ -1325,6 +1434,9 @@ export default function ResultsPage() {
                               <span className={`text-base font-bold ${result.isCorrect ? 'text-emerald-500' : 'text-red-400'}`}>{result.score}/1</span>
                             </div>
                             <p className="text-sm text-slate-500 mb-1">{item.questionText}</p>
+                            {item.context && (
+                              <p className="text-xs text-slate-400 mb-2">{item.context}</p>
+                            )}
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                               <span className={result.isCorrect ? 'text-emerald-600' : 'text-red-500'}>
                                 {lang === 'en' ? 'Your answer' : '你的答案'}: <span className="font-medium">{item.userAnswer}</span>
@@ -1335,6 +1447,7 @@ export default function ResultsPage() {
                                 </span>
                               )}
                             </div>
+                            {item.options && item.options.length > 0 && <ReviewOptionsList options={item.options} lang={lang} />}
                             <p className="text-sm text-slate-400 mt-1">{lang === 'en' ? result.feedback_en : result.feedback_cn}</p>
                             {!result.isCorrect && (lang === 'en' ? result.explanation_en : result.explanation_cn) && (
                               <CollapsibleExplanation
