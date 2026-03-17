@@ -202,6 +202,10 @@ function getPaperBuilderDraftKey(editPaperId: string, paperSubject: PaperSubject
   return `${PAPER_BUILDER_DRAFT_STORAGE_PREFIX}:${editPaperId || `__new__:${paperSubject}`}`;
 }
 
+function getDefaultQuestionBankTitle(subject: PaperSubject) {
+  return `${PAPER_SUBJECT_LABELS[subject]} Question Bank`;
+}
+
 interface ManualPaperBuilderDraft {
   version: 2;
   subject: PaperSubject;
@@ -1482,10 +1486,8 @@ function validateManualPaperBuilder(
   visibilityMode: ManualPaperVisibilityMode,
   generationConfig: ManualPaperGenerationConfig,
 ) {
-  if (!title.trim()) {
-    return visibilityMode === "question-bank"
-      ? "Enter a question bank name before saving."
-      : "Enter a paper name before saving.";
+  if (visibilityMode !== "question-bank" && !title.trim()) {
+    return "Enter a paper name before saving.";
   }
 
   if (buildMode === "generated") {
@@ -2082,6 +2084,10 @@ export default function PaperIntake() {
   const publishedManualPapersQuery = trpc.papers.listManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
+  const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
+  const isLegacyGeneratedMode = paperSubject === "english" && buildMode === "generated";
+  const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
+  const effectiveDescription = isQuestionBankMode ? "" : description;
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: editPaperId },
@@ -2093,8 +2099,8 @@ export default function PaperIntake() {
   );
 
   const blueprint = useMemo(
-    () => buildBlueprint(paperSeed, createdAt, title, description, sections, buildMode, visibilityMode, generationConfig),
-    [buildMode, createdAt, description, generationConfig, paperSeed, sections, title, visibilityMode],
+    () => buildBlueprint(paperSeed, createdAt, effectiveTitle, effectiveDescription, sections, buildMode, visibilityMode, generationConfig),
+    [buildMode, createdAt, effectiveDescription, effectiveTitle, generationConfig, paperSeed, sections, visibilityMode],
   );
   const publishedEnglishSourcePapers = useMemo<GeneratedSourcePaperOption[]>(() => {
     return (publishedManualPapersQuery.data ?? []).flatMap((paper) => {
@@ -2134,8 +2140,6 @@ export default function PaperIntake() {
   const previewBlueprint = buildMode === "generated" && generatedPreview
     ? generatedPreview.blueprint
     : blueprint;
-  const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
-  const isLegacyGeneratedMode = paperSubject === "english" && buildMode === "generated";
   const hasAnyQuestions = useMemo(
     () => sections.some((section) => section.subsections.some((subsection) => subsection.questions.length > 0)),
     [sections],
@@ -3764,15 +3768,15 @@ export default function PaperIntake() {
   const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
 
   const persistPaper = async (published: boolean) => {
-    const validationError = validateManualPaperBuilder(title, sections, buildMode, visibilityMode, generationConfig);
+    const validationError = validateManualPaperBuilder(effectiveTitle, sections, buildMode, visibilityMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
     const preparedBlueprint = prepareBlueprintForSave(blueprint);
-    const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim() || undefined;
+    const trimmedTitle = effectiveTitle.trim();
+    const trimmedDescription = effectiveDescription.trim() || undefined;
     const successFeedback = isQuestionBankMode
       ? (published ? "Question bank updated." : "Question bank draft saved.")
       : (published ? "Paper published successfully." : "Draft saved successfully.");
@@ -3841,24 +3845,24 @@ export default function PaperIntake() {
   };
 
   const handleSaveAsCopy = async () => {
-    const validationError = validateManualPaperBuilder(title, sections, buildMode, visibilityMode, generationConfig);
+    const validationError = validateManualPaperBuilder(effectiveTitle, sections, buildMode, visibilityMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
-    const copyTitle = createCopyTitle(title);
+    const copyTitle = createCopyTitle(effectiveTitle);
     const copySeed = createLocalId();
     const copyCreatedAt = new Date().toISOString();
     const copyBlueprint = prepareBlueprintForSave(
-      buildBlueprint(copySeed, copyCreatedAt, copyTitle, description, sections, buildMode, visibilityMode, generationConfig),
+      buildBlueprint(copySeed, copyCreatedAt, copyTitle, effectiveDescription, sections, buildMode, visibilityMode, generationConfig),
     );
 
     try {
       await saveManualPaperMutation.mutateAsync({
         paperId: `manual-${copySeed}`,
         title: copyTitle,
-        description: description.trim() || undefined,
+        description: effectiveDescription.trim() || undefined,
         subject: paperSubject,
         published: false,
         blueprintJson: JSON.stringify(copyBlueprint),
@@ -3921,75 +3925,92 @@ export default function PaperIntake() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
           <div className="space-y-6">
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader>
-                <CardTitle>Paper Info</CardTitle>
-                <CardDescription>Start by naming the paper and writing a short description.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Subject</Label>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-                    {PAPER_SUBJECT_LABELS[paperSubject]}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paper-title">Paper Name</Label>
-                  <Input
-                    id="paper-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder={isMathPaper ? "e.g. Grade 5 Math Practice" : "e.g. PET English Assessment"}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paper-description">Description</Label>
-                  <Textarea
-                    id="paper-description"
-                    rows={4}
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    placeholder="Describe what this paper is for."
-                  />
-                </div>
-
-                {paperSubject === "english" ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Paper Mode</Label>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                          <input
-                            type="radio"
-                            className="mr-2"
-                            checked={buildMode === "fixed" && visibilityMode === "student"}
-                            onChange={activateFixedMode}
-                          />
-                          <span className="font-medium text-slate-900">固定套卷</span>
-                          <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 组织整套卷子，学生直接做这一整张卷。</span>
-                        </label>
-                        <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                          <input
-                            type="radio"
-                            className="mr-2"
-                            checked={isQuestionBankMode}
-                            onChange={activateQuestionBankMode}
-                          />
-                          <span className="font-medium text-slate-900">题库随机</span>
-                          <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示 section，后面可作为随机抽题来源。</span>
-                        </label>
-                      </div>
-
-                      {isLegacyGeneratedMode ? (
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                          当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
-                        </div>
-                      ) : null}
+            {paperSubject === "english" ? (
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Paper Mode</CardTitle>
+                  <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Subject</Label>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                      {PAPER_SUBJECT_LABELS[paperSubject]}
                     </div>
-                  </>
-                ) : null}
-              </CardContent>
-            </Card>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Mode</Label>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                        <input
+                          type="radio"
+                          className="mr-2"
+                          checked={buildMode === "fixed" && visibilityMode === "student"}
+                          onChange={activateFixedMode}
+                        />
+                        <span className="font-medium text-slate-900">固定套卷</span>
+                        <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 组织整套卷子，学生直接做这一整张卷。</span>
+                      </label>
+                      <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                        <input
+                          type="radio"
+                          className="mr-2"
+                          checked={isQuestionBankMode}
+                          onChange={activateQuestionBankMode}
+                        />
+                        <span className="font-medium text-slate-900">题库随机</span>
+                        <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示 section，后面可作为随机抽题来源。</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {isLegacyGeneratedMode ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {paperSubject !== "english" || !isQuestionBankMode ? (
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Paper Info</CardTitle>
+                  <CardDescription>Start by naming the paper and writing a short description.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {paperSubject !== "english" ? (
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                        {PAPER_SUBJECT_LABELS[paperSubject]}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="space-y-2">
+                    <Label htmlFor="paper-title">Paper Name</Label>
+                    <Input
+                      id="paper-title"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder={isMathPaper ? "e.g. Grade 5 Math Practice" : "e.g. PET English Assessment"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paper-description">Description</Label>
+                    <Textarea
+                      id="paper-description"
+                      rows={4}
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Describe what this paper is for."
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {paperSubject === "english" && buildMode === "generated" ? (
               <GeneratedPaperConfigEditor
