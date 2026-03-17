@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
+import { isAudioAnswerValue } from '@/lib/audioStorage';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
   AssessmentReportResult,
@@ -77,15 +78,6 @@ type SpeakingResponseInput = {
   prompt: string;
   audioUrl: string;
 };
-
-function isAudioAnswerValue(value: string) {
-  return (
-    value.startsWith('http://') ||
-    value.startsWith('https://') ||
-    value.startsWith('blob:') ||
-    value.startsWith('data:audio/')
-  );
-}
 
 function extractSpeakingAudioUrls(value: unknown): string[] {
   if (typeof value === 'string') {

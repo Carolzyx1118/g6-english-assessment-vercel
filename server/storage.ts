@@ -12,6 +12,7 @@ import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 type StorageConfig = { baseUrl: string; apiKey: string };
 
 export const LOCAL_STORAGE_ROUTE = "/local-paper-assets";
+export const BLOB_PROXY_ROUTE = "/api/blob";
 const CURRENT_DIR = moduleDir(import.meta.url);
 export const LOCAL_STORAGE_DIR = isVercelRuntime()
   ? getWritableDataPath("local-paper-assets")
@@ -91,6 +92,10 @@ function hasBlobStorageConfig() {
   return Boolean(ENV.blobReadWriteToken);
 }
 
+export function buildBlobProxyUrl(relKey: string) {
+  return `${BLOB_PROXY_ROUTE}?key=${encodeURIComponent(normalizeKey(relKey))}`;
+}
+
 async function storagePutLocal(
   relKey: string,
   data: Buffer | Uint8Array | string
@@ -115,13 +120,37 @@ async function storagePutBlob(
   contentType: string
 ): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
-  const blob = await put(key, toBuffer(data), {
-    access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType,
-  });
+  const body = toBuffer(data);
+  const putBlob = async (access: "private" | "public") =>
+    put(
+      key,
+      body,
+      {
+        access: access as "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType,
+      } as Parameters<typeof put>[2]
+    );
 
+  try {
+    await putBlob("private");
+    return {
+      key,
+      url: buildBlobProxyUrl(key),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    const canRetryPublic =
+      message.includes("cannot use private access on a public store") ||
+      message.includes("private access") && message.includes("public store");
+
+    if (!canRetryPublic) {
+      throw error;
+    }
+  }
+
+  const blob = await putBlob("public");
   return {
     key,
     url: blob.url,
@@ -132,11 +161,24 @@ async function storageGetBlob(
   relKey: string
 ): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
+  await head(key);
+
+  return {
+    key,
+    url: buildBlobProxyUrl(key),
+  };
+}
+
+export async function getBlobProxyTarget(relKey: string) {
+  const key = normalizeKey(relKey);
   const blob = await head(key);
 
   return {
     key,
     url: blob.url,
+    contentType: blob.contentType,
+    contentDisposition: blob.contentDisposition,
+    cacheControl: blob.cacheControl,
   };
 }
 

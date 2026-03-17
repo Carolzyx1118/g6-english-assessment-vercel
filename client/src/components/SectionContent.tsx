@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Send, AlertTriangle, GripVertical, Play, Pause, Volume2 } from 'lucide-react';
 import DragDropFillBlank from '@/components/DragDropFillBlank';
 import AudioRecorder from '@/components/AudioRecorder';
+import { isPersistedAudioUrl } from '@/lib/audioStorage';
 import { renderTextWithFractions } from '@/lib/renderTextWithFractions';
 import {
   buildWordCompletionAnswer,
@@ -705,8 +706,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
 
 function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion; sectionId: string; answer?: string; onAnswer: (v: string) => void }) {
   const isStoredAudio = (value: unknown): value is string =>
-    typeof value === 'string' &&
-    (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:audio/'));
+    typeof value === 'string' && isPersistedAudioUrl(value);
 
   if (q.subQuestions && q.subQuestions.length > 0) {
     const parsed = (() => {

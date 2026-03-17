@@ -5,6 +5,7 @@
  */
 import jsPDF from 'jspdf';
 import { getPaperById, type Section, type Question } from '@/data/papers';
+import { isAudioAnswerValue } from '@/lib/audioStorage';
 import { APP_BRAND_TITLE } from '@/lib/branding';
 import type {
   AssessmentReportResult,
@@ -215,12 +216,7 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
 
 function extractPDFAudioAnswers(value: unknown): string[] {
   if (typeof value === 'string') {
-    if (
-      value.startsWith('http://') ||
-      value.startsWith('https://') ||
-      value.startsWith('blob:') ||
-      value.startsWith('data:audio/')
-    ) {
+    if (isAudioAnswerValue(value)) {
       return [value];
     }
 

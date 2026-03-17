@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Play, Pause, RotateCcw, Upload, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { trpc } from '@/lib/trpc';
+import { isPersistedAudioUrl } from '@/lib/audioStorage';
 
 interface AudioRecorderProps {
   questionId: number;
@@ -23,10 +25,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
-  const isPersistedAudioUrl = useCallback((value: string) => {
-    return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:audio/');
-  }, []);
+  const uploadFileMutation = trpc.papers.uploadFile.useMutation();
 
   const isRevokableAudioUrl = useCallback((value: string) => {
     return value.startsWith('blob:');
@@ -38,7 +37,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       setStatus('uploaded');
       audioUrlRef.current = savedUrl;
     }
-  }, [isPersistedAudioUrl, savedUrl]);
+  }, [savedUrl]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -154,12 +153,17 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     setError(null);
   }, [isRevokableAudioUrl]);
 
-  const blobToDataUrl = useCallback(async (blob: Blob) => {
+  const blobToBase64 = useCallback(async (blob: Blob) => {
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
-          resolve(reader.result);
+          const [, base64 = ''] = reader.result.split(',', 2);
+          if (base64) {
+            resolve(base64);
+            return;
+          }
+          reject(new Error('Failed to encode recording.'));
         } else {
           reject(new Error('Failed to encode recording.'));
         }
@@ -167,6 +171,15 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       reader.onerror = () => reject(reader.error || new Error('Failed to encode recording.'));
       reader.readAsDataURL(blob);
     });
+  }, []);
+
+  const getAudioExtension = useCallback((mimeType: string) => {
+    if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
+    if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'mp3';
+    if (mimeType.includes('wav')) return 'wav';
+    if (mimeType.includes('ogg')) return 'ogg';
+    if (mimeType.includes('aac')) return 'aac';
+    return 'webm';
   }, []);
 
   const uploadAudio = useCallback(async () => {
@@ -178,16 +191,23 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     try {
       const mimeType = chunksRef.current[0].type || 'audio/webm';
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const dataUrl = await blobToDataUrl(blob);
-      audioUrlRef.current = dataUrl;
+      const fileBase64 = await blobToBase64(blob);
+      const extension = getAudioExtension(mimeType);
+      const uploaded = await uploadFileMutation.mutateAsync({
+        fileName: `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`,
+        fileBase64,
+        contentType: mimeType,
+      });
+
+      audioUrlRef.current = uploaded.url;
       setStatus('uploaded');
-      onRecorded(dataUrl);
+      onRecorded(uploaded.url);
     } catch (err: any) {
       console.error('Recording save error:', err);
       setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to save recording. Please try again.');
       setStatus('recorded');
     }
-  }, [blobToDataUrl, onRecorded]);
+  }, [blobToBase64, getAudioExtension, onRecorded, questionId, sectionId, uploadFileMutation]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
