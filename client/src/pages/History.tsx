@@ -987,18 +987,6 @@ function HistoryContent() {
                                     <h5 className="font-semibold">{lang === 'en' ? 'Speaking Review' : '口语评分'}</h5>
                                   </div>
 
-                                  <div>
-                                    <p className="text-xs font-semibold text-slate-500 mb-1.5">
-                                      {lang === 'en' ? 'Overall Speaking Comment' : '口语总评'}
-                                    </p>
-                                    <Textarea
-                                      value={speakingDraft.overallFeedback}
-                                      onChange={(event) => setSpeakingDraft((prev) => prev ? { ...prev, overallFeedback: event.target.value } : prev)}
-                                      placeholder={lang === 'en' ? 'Add a short overall note for the speaking section.' : '填写口语总评。'}
-                                      className="min-h-20"
-                                    />
-                                  </div>
-
                                   <div className="space-y-4">
                                     {speakingDraft.items.map((item, index) => (
                                       <div key={`${item.sectionId}-${item.questionId}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
