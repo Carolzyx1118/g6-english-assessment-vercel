@@ -14,7 +14,6 @@ interface EnglishQuickGeneratedBuilderProps {
     partId: string,
     updater: (part: EnglishQuickGeneratedPartSelection) => EnglishQuickGeneratedPartSelection,
   ) => void;
-  previewWarnings: string[];
 }
 
 export default function EnglishQuickGeneratedBuilder({
@@ -22,7 +21,6 @@ export default function EnglishQuickGeneratedBuilder({
   parts,
   onTrackChange,
   onPartChange,
-  previewWarnings,
 }: EnglishQuickGeneratedBuilderProps) {
   const configuredParts = parts.filter((part) => (Number.isFinite(part.totalQuestions) ? part.totalQuestions : 0) > 0);
   const totalQuestions = configuredParts.reduce((sum, part) => sum + Math.max(0, part.totalQuestions || 0), 0);
@@ -73,7 +71,7 @@ export default function EnglishQuickGeneratedBuilder({
           <span>道数</span>
         </div>
 
-        <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto">
+        <div className="divide-y divide-slate-100">
           {parts.map((part) => {
             const availableQuestionTypes = getQuestionTypesForEnglishExamPart(part.examPart);
             const isEnabled = part.totalQuestions > 0;
@@ -133,21 +131,6 @@ export default function EnglishQuickGeneratedBuilder({
             );
           })}
         </div>
-      </div>
-
-      {previewWarnings.length > 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-900">预览提醒</p>
-          <ul className="mt-2 space-y-1 text-sm text-amber-800">
-            {previewWarnings.map((warning) => (
-              <li key={warning}>• {warning}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
-        配好后直接用页面底部的保存或发布按钮提交这张随机组卷模板。
       </div>
     </div>
   );

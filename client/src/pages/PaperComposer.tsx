@@ -342,7 +342,6 @@ export default function PaperComposer() {
           onPartChange={(partId, updater) => {
             setParts((current) => current.map((part) => (part.id === partId ? updater(part) : part)));
           }}
-          previewWarnings={generatedPreview.warnings}
         />
 
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
