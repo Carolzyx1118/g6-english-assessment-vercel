@@ -27,17 +27,7 @@ function createPublicContext(): TrpcContext {
 describe("grading.checkReadingAnswers", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("returns bilingual AI grading results for WIDA reading answers", async () => {
-    const mockResponse = {
-      results: [
-        { questionId: "33", isCorrect: true, score: 1, feedback_en: "Correct!", feedback_cn: "正确！", explanation_en: "Good job selecting the right word.", explanation_cn: "很好地选择了正确的词。" },
-        { questionId: "34", isCorrect: false, score: 0, feedback_en: "Incorrect.", feedback_cn: "不正确。", explanation_en: "The correct word from the bank is different.", explanation_cn: "词库中正确的词不同。" },
-      ],
-    };
-    mockInvokeLLM.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify(mockResponse) } }],
-    } as any);
-
+  it("checks reading answers locally without calling the LLM", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.checkReadingAnswers({
       answers: [
@@ -46,30 +36,22 @@ describe("grading.checkReadingAnswers", () => {
       ],
     });
 
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result).toHaveLength(2);
     expect(result[0].questionId).toBe("33");
     expect(result[0].isCorrect).toBe(true);
-    expect(result[0].feedback_en).toBe("Correct!");
-    expect(result[0].feedback_cn).toBe("正确！");
+    expect(result[0].feedback_en).toBe("Answer accepted.");
+    expect(result[0].feedback_cn).toBe("答案可接受。");
     expect(result[0].explanation_en).toBeTruthy();
     expect(result[0].explanation_cn).toBeTruthy();
     expect(result[1].isCorrect).toBe(false);
   });
 
-  it("grades story-fill type questions correctly", async () => {
-    const mockResponse = {
-      results: [
-        { questionId: "38", isCorrect: true, score: 1, feedback_en: "Well done!", feedback_cn: "做得好！", explanation_en: "Correct answer from the story.", explanation_cn: "从故事中选出了正确答案。" },
-      ],
-    };
-    mockInvokeLLM.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify(mockResponse) } }],
-    } as any);
-
+  it("accepts slash-separated answer variants for reading comprehension", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.checkReadingAnswers({
       answers: [
-        { questionId: "38", questionType: "story-fill", questionText: "Complete the sentence based on the story.", userAnswer: "happy", correctAnswer: "happy" },
+        { questionId: "38", questionType: "reference-sub", questionText: "What does it refer to?", userAnswer: "the weather", correctAnswer: "the rain / the weather" },
       ],
     });
 
@@ -78,22 +60,18 @@ describe("grading.checkReadingAnswers", () => {
     expect(result[0].score).toBe(1);
   });
 
-  it("returns fallback bilingual results on LLM error", async () => {
-    mockInvokeLLM.mockRejectedValueOnce(new Error("LLM unavailable"));
-
+  it("compares checkbox-style reading answers without AI", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.checkReadingAnswers({
       answers: [
-        { questionId: "33", questionType: "wordbank-fill", questionText: "Fill in the blank.", userAnswer: "Nothing", correctAnswer: "Something" },
+        { questionId: "44", questionType: "checkbox", questionText: "Choose two items.", userAnswer: "dog, cat", correctAnswer: "cat, dog" },
       ],
     });
 
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result).toHaveLength(1);
-    expect(result[0].isCorrect).toBe(false);
-    expect(result[0].feedback_en).toBeTruthy();
-    expect(result[0].feedback_cn).toBeTruthy();
-    expect(result[0].explanation_en).toBeTruthy();
-    expect(result[0].explanation_cn).toBeTruthy();
+    expect(result[0].isCorrect).toBe(true);
+    expect(result[0].score).toBe(1);
   });
 });
 

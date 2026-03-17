@@ -678,7 +678,7 @@ export default function ResultsPage() {
     [studentInfo?.grade],
   );
 
-  // Send reading sub-items to AI for grading + writing evaluation
+  // Save initial result state, then request reading checks and review placeholders.
   // Auto-save initial results to database
   useEffect(() => {
     if (hasSavedInitial.current) return;
@@ -727,7 +727,7 @@ export default function ResultsPage() {
       setIsGradingReading(true);
       checkReadingMutation.mutate({ answers: readingAnswers }, {
         onSuccess: (data) => { setReadingResults(data); setIsGradingReading(false); },
-        onError: () => { setReadingError('Failed to grade reading answers.'); setIsGradingReading(false); },
+        onError: () => { setReadingError('Failed to check reading answers.'); setIsGradingReading(false); },
       });
     }
     if (writingSubmission && writingSubmission.essay.trim().length > 10) {
@@ -1011,7 +1011,7 @@ export default function ResultsPage() {
               const sTime = sectionTimings[section.id] || 0;
               const timeStr = sTime > 0 ? formatTime(sTime) : '';
 
-              // Reading section (AI graded)
+              // Reading section (rule-based auto check)
               if (section.id === 'reading') {
                 if (isGradingReading) {
                   return (
@@ -1019,7 +1019,7 @@ export default function ResultsPage() {
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                       <div className="flex-1">
                         <div className="font-semibold text-base text-slate-700">{section.title}</div>
-                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'AI grading...' : 'AI 评分中...'}</div>
+                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Checking answers...' : '正在检查答案...'}</div>
                       </div>
                     </div>
                   );
@@ -1033,7 +1033,7 @@ export default function ResultsPage() {
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-base text-slate-700 flex items-center gap-1">{section.title}<Sparkles className="w-3.5 h-3.5 text-indigo-500" /></span>
+                            <span className="font-semibold text-base text-slate-700 flex items-center gap-1">{section.title}<CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" /></span>
                           <div className="flex items-center gap-3">
                             {timeStr && <span className="text-sm text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeStr}</span>}
                             <span className="text-base font-bold text-slate-600">{rCorrect}/{rTotal}</span>
@@ -1286,15 +1286,15 @@ export default function ResultsPage() {
           })}
         </motion.div>
 
-        {/* AI Reading Comprehension Review */}
+        {/* Reading Comprehension Review */}
         {(readingResults || isGradingReading) && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }} className="mb-8">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 bg-indigo-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-base text-slate-700">{lang === 'en' ? 'Reading Comprehension' : '阅读理解'}</h3>
-                  <Sparkles className="w-4 h-4 text-indigo-500" />
-                  <span className="text-sm text-indigo-500 font-medium">{lang === 'en' ? 'AI Graded' : 'AI 评分'}</span>
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm text-indigo-500 font-medium">{lang === 'en' ? 'Automatically Checked' : '自动检查'}</span>
                 </div>
                 {readingResults && (
                   <span className="text-base font-bold text-slate-600">
@@ -1305,7 +1305,7 @@ export default function ResultsPage() {
               {isGradingReading ? (
                 <div className="p-8 text-center">
                   <Loader2 className="w-6 h-6 animate-spin text-indigo-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'AI is grading your reading answers...' : 'AI 正在批改阅读理解...'}</p>
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'Checking your reading answers...' : '正在检查阅读理解答案...'}</p>
                 </div>
               ) : readingResults ? (
                 <div className="divide-y divide-slate-100">

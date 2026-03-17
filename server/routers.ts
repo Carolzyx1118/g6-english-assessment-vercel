@@ -13,6 +13,100 @@ import type {
   SpeakingQuestionEvaluation,
 } from "../shared/assessmentReport";
 
+function normalizeReadingText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripLeadingArticle(value: string) {
+  return value.replace(/^(a|an|the)\s+/i, "").trim();
+}
+
+function getReadingAcceptableAnswers(correctAnswer: string) {
+  return correctAnswer
+    .split(/\s*\/\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function compareReadingLists(userAnswer: string, correctAnswer: string) {
+  const normalizeList = (value: string) =>
+    value
+      .split(",")
+      .map((item) => normalizeReadingText(item))
+      .filter(Boolean)
+      .sort();
+
+  const user = normalizeList(userAnswer);
+  const correct = normalizeList(correctAnswer);
+  return user.length > 0 && JSON.stringify(user) === JSON.stringify(correct);
+}
+
+function isEquivalentReadingPhrase(userAnswer: string, expectedAnswer: string) {
+  const user = normalizeReadingText(userAnswer);
+  const expected = normalizeReadingText(expectedAnswer);
+  if (!user || !expected) return false;
+  if (user === expected) return true;
+
+  const userNoArticle = stripLeadingArticle(user);
+  const expectedNoArticle = stripLeadingArticle(expected);
+  if (userNoArticle === expectedNoArticle) return true;
+
+  const userTokens = userNoArticle.split(" ").filter(Boolean);
+  const expectedTokens = expectedNoArticle.split(" ").filter(Boolean);
+
+  if (userTokens.length === 1 && userTokens[0].length >= 4 && expectedTokens.includes(userTokens[0])) {
+    return true;
+  }
+  if (expectedTokens.length === 1 && expectedTokens[0].length >= 4 && userTokens.includes(expectedTokens[0])) {
+    return true;
+  }
+
+  return false;
+}
+
+function gradeReadingAnswer(answer: {
+  questionId: string;
+  questionType: string;
+  questionText: string;
+  userAnswer: string;
+  correctAnswer: string;
+}) {
+  const userAnswer = answer.userAnswer.trim();
+  const correctAnswer = answer.correctAnswer.trim();
+  const acceptableAnswers = getReadingAcceptableAnswers(correctAnswer);
+  const isAnswered = userAnswer.length > 0 && userAnswer.toLowerCase() !== "not answered";
+
+  let isCorrect = false;
+  if (isAnswered) {
+    if (answer.questionType === "checkbox") {
+      isCorrect = compareReadingLists(userAnswer, correctAnswer);
+    } else {
+      isCorrect = acceptableAnswers.some((item) => isEquivalentReadingPhrase(userAnswer, item));
+    }
+  }
+
+  return {
+    questionId: answer.questionId,
+    isCorrect,
+    score: isCorrect ? 1 : 0,
+    feedback_en: isCorrect ? "Answer accepted." : "Answer does not match the answer key.",
+    feedback_cn: isCorrect ? "答案可接受。" : "答案与参考答案不一致。",
+    explanation_en: isCorrect
+      ? `Accepted answer: ${correctAnswer}.`
+      : `Expected answer: ${correctAnswer}. If the wording is acceptable but different from the key, please review it manually.`,
+    explanation_cn: isCorrect
+      ? `参考答案：${correctAnswer}。`
+      : `参考答案：${correctAnswer}。如果学生表达意思正确但与答案写法不同，请人工复核。`,
+  };
+}
+
 function buildManualWritingEvaluation(input: {
   essay: string;
   topic: string;
@@ -220,7 +314,7 @@ export const appRouter = router({
   }),
 
   grading: router({
-    // AI-powered reading comprehension answer checking with bilingual explanations
+    // Rule-based reading comprehension checking without AI
     checkReadingAnswers: publicProcedure
       .input(z.object({
         answers: z.array(z.object({
@@ -231,93 +325,7 @@ export const appRouter = router({
           correctAnswer: z.string(),
         })),
       }))
-      .mutation(async ({ input }) => {
-        const prompt = `You are an English teacher grading a student's WIDA English Proficiency Assessment reading comprehension answers. 
-For each question below, compare the student's answer with the correct answer. 
-The student's answer does NOT need to match word-for-word. Accept answers that convey the same meaning, even if worded differently.
-Be lenient with minor spelling errors, but the core meaning must be correct.
-
-For each question, provide:
-- isCorrect: true/false (whether the answer is essentially correct)
-- score: 0 or 1 (1 if correct, 0 if wrong)
-- feedback_en: brief explanation in English (1-2 sentences)
-- feedback_cn: brief explanation in Chinese (1-2 sentences)
-- explanation_en: a detailed explanation in English (2-4 sentences) that helps the student understand WHY the answer is correct or incorrect
-- explanation_cn: the same detailed explanation in Chinese (2-4 sentences)
-
-Questions:
-${input.answers.map((a, i) => `
-${i + 1}. [${a.questionId}] Type: ${a.questionType}
-   Question: ${a.questionText}
-   Student's Answer: ${a.userAnswer || '(no answer)'}
-   Expected Answer: ${a.correctAnswer}
-`).join('\n')}
-
-Respond in JSON format:
-{
-  "results": [
-    { "questionId": "<string>", "isCorrect": <boolean>, "score": <0|1>, "feedback_en": "<string>", "feedback_cn": "<string>", "explanation_en": "<string>", "explanation_cn": "<string>" }
-  ]
-}`;
-
-        try {
-          const response = await invokeLLM({
-            messages: [
-              { role: "system", content: "You are a fair and encouraging English teacher. Grade answers based on meaning, not exact wording. Provide detailed educational explanations in both English and Chinese. Always respond with valid JSON. The questionId in your response MUST be a string that exactly matches the questionId from the input." },
-              { role: "user", content: prompt },
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "reading_grading",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    results: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          questionId: { type: "string" },
-                          isCorrect: { type: "boolean" },
-                          score: { type: "number" },
-                          feedback_en: { type: "string" },
-                          feedback_cn: { type: "string" },
-                          explanation_en: { type: "string" },
-                          explanation_cn: { type: "string" },
-                        },
-                        required: ["questionId", "isCorrect", "score", "feedback_en", "feedback_cn", "explanation_en", "explanation_cn"],
-                        additionalProperties: false,
-                      },
-                    },
-                  },
-                  required: ["results"],
-                  additionalProperties: false,
-                },
-              },
-            },
-          });
-
-          const content = response.choices[0]?.message?.content;
-          if (typeof content === 'string') {
-            const parsed = JSON.parse(content);
-            return parsed.results as { questionId: string; isCorrect: boolean; score: number; feedback_en: string; feedback_cn: string; explanation_en: string; explanation_cn: string }[];
-          }
-        } catch (err) {
-          console.error("AI grading error:", err);
-        }
-
-        return input.answers.map(a => ({
-          questionId: a.questionId,
-          isCorrect: false,
-          score: 0,
-          feedback_en: "Unable to grade automatically. Please review manually.",
-          feedback_cn: "无法自动评分，请手动检查。",
-          explanation_en: "The AI grading service is temporarily unavailable.",
-          explanation_cn: "AI评分服务暂时不可用。",
-        }));
-      }),
+      .mutation(async ({ input }) => input.answers.map(gradeReadingAnswer)),
 
     // AI-powered writing evaluation with bilingual inline annotations
     evaluateWriting: publicProcedure
