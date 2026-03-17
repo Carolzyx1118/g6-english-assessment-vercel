@@ -6552,7 +6552,7 @@ export default function PaperIntake() {
             ) : null}
           </div>
 
-          <div className="space-y-6">
+          <div className={`space-y-6 ${isQuestionBankMode ? "xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:pr-1" : ""}`}>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Preview</CardTitle>
