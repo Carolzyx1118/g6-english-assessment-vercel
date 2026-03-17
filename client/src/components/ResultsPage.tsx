@@ -1371,11 +1371,13 @@ export default function ResultsPage() {
                 )}
               </div>
 
-              <div className="p-6 space-y-6">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                  <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Feedback' : '总体反馈'}</h4>
-                  <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn}</p>
-                </div>
+	              <div className="p-6 space-y-6">
+	                {!writingIsManual && (
+	                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+	                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Feedback' : '总体反馈'}</h4>
+	                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? writingResult.overallFeedback_en : writingResult.overallFeedback_cn}</p>
+	                  </div>
+	                )}
 
                 {writingIsManual ? (
                   <div>
@@ -1463,10 +1465,10 @@ export default function ResultsPage() {
                   </>
                 )}
 
-                {((lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn) || []).length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Suggestions for Improvement' : '改进建议'}</h4>
-                    <ul className="space-y-2">
+	                {!writingIsManual && ((lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn) || []).length > 0 && (
+	                  <div>
+	                    <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Suggestions for Improvement' : '改进建议'}</h4>
+	                    <ul className="space-y-2">
                       {(lang === 'en' ? writingResult.suggestions_en : writingResult.suggestions_cn).map((s, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                           <span className="text-blue-500 font-bold mt-0.5">{i + 1}.</span>{s}

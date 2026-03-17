@@ -1036,9 +1036,11 @@ export function generateReportPDF(data: PDFData): void {
       y += 14;
     }
 
-    addText('Overall Feedback', mL, 10, true, C.text);
-    addText(writingResult.overallFeedback_en, mL + 2, 9.5, false, C.textMuted);
-    addGap(4);
+    if (!writingIsManual) {
+      addText('Overall Feedback', mL, 10, true, C.text);
+      addText(writingResult.overallFeedback_en, mL + 2, 9.5, false, C.textMuted);
+      addGap(4);
+    }
 
     if (!writingIsManual && writingResult.grammarErrors.length > 0) {
       addText('Errors Found', mL, 10, true, C.danger);
@@ -1066,7 +1068,7 @@ export function generateReportPDF(data: PDFData): void {
     }
 
     const suggestions = writingResult.suggestions_en;
-    if (suggestions && suggestions.length > 0) {
+    if (!writingIsManual && suggestions && suggestions.length > 0) {
       checkPage(10);
       drawRect(mL, y - 1, contentW, 1, C.primary);
       y += 3;
