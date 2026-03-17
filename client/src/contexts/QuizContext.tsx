@@ -5,6 +5,11 @@ import { trpc } from '@/lib/trpc';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import { blueprintToPaper } from '@shared/blueprintToPaper';
 import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
+import {
+  generatePaperFromTaggedSources,
+  getBlueprintBuildMode,
+  getBlueprintVisibilityMode,
+} from '@shared/taggedPaperGenerator';
 
 export interface StudentInfo {
   name: string;
@@ -212,34 +217,73 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const allPapers = useMemo(() => {
     const filteredStatic = staticPapers.filter((paper) => allowedSubjects.includes(paper.subject));
 
-    // Convert manual papers from DB into Paper format
-    const manualPapers: Paper[] = (manualPapersData ?? []).map((mp) => {
+    const parsedManualPapers = (manualPapersData ?? []).flatMap((mp) => {
       try {
         const subject = PAPER_SUBJECT_ORDER.includes(mp.subject as PaperSubject)
           ? (mp.subject as PaperSubject)
           : "english";
         if (!allowedSubjects.includes(subject)) {
-          return null;
+          return [];
         }
 
         const blueprint: ManualPaperBlueprint = JSON.parse(mp.blueprintJson);
-        const converted = blueprintToPaper(blueprint, {
+        return [{
+          ...mp,
           subject,
-          category: mp.category,
+          blueprint,
+        }];
+      } catch {
+        return [];
+      }
+    });
+
+    const fixedManualPapers: Paper[] = parsedManualPapers
+      .filter((paper) => getBlueprintBuildMode(paper.blueprint) === "fixed")
+      .map((paper) => {
+        const converted = blueprintToPaper(paper.blueprint, {
+          subject: paper.subject,
+          category: paper.category,
         });
         return {
           ...converted,
-          id: mp.paperId,
-          subject,
-          category: (mp.category || 'assessment') as any,
+          id: paper.paperId,
+          subject: paper.subject,
+          category: (paper.category || 'assessment') as any,
           sections: converted.sections as unknown as Section[],
+          hiddenFromStudentSelection: getBlueprintVisibilityMode(paper.blueprint) === "question-bank",
         } as Paper;
-      } catch {
-        return null;
-      }
-    }).filter((p): p is Paper => p !== null);
+      });
 
-    return [...filteredStatic, ...manualPapers];
+    const sourcePapers = parsedManualPapers
+      .filter((paper) => paper.subject === "english" && getBlueprintBuildMode(paper.blueprint) === "fixed")
+      .map((paper) => ({
+        paperId: paper.paperId,
+        title: paper.title,
+        blueprint: paper.blueprint,
+      }));
+
+    const generatedManualPapers: Paper[] = parsedManualPapers
+      .filter((paper) => paper.subject === "english" && getBlueprintBuildMode(paper.blueprint) === "generated")
+      .map((paper) => {
+        const generated = generatePaperFromTaggedSources(paper.blueprint, sourcePapers);
+        const converted = blueprintToPaper(generated.blueprint, {
+          subject: paper.subject,
+          category: paper.category,
+        });
+        return {
+          ...converted,
+          id: paper.paperId,
+          title: paper.title,
+          description: paper.description || converted.description,
+          subject: paper.subject,
+          category: (paper.category || 'assessment') as any,
+          sections: converted.sections as unknown as Section[],
+          isGeneratedPaper: true,
+          generationWarnings: generated.warnings,
+        } as Paper;
+      });
+
+    return [...filteredStatic, ...fixedManualPapers, ...generatedManualPapers];
   }, [allowedSubjects, manualPapersData]);
 
   const currentSections = selectedPaper?.sections || [];

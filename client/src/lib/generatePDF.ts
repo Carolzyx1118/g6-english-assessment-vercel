@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 import { getPaperById, type Section, type Question } from '@/data/papers';
 import { isAudioAnswerValue } from '@/lib/audioStorage';
 import { APP_BRAND_TITLE } from '@/lib/branding';
+import { parseStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import type {
   AssessmentReportResult,
   SpeakingEvaluationResult,
@@ -810,7 +811,8 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
   };
 
   // ── Parse stored JSON data ──
-  const answers = safeParseJSON<Record<string, PDFAnswerValue>>(data.answersJson, {});
+  const storedAssessmentPayload = parseStoredAssessmentPayload(data.answersJson);
+  const answers = storedAssessmentPayload.answers as Record<string, PDFAnswerValue>;
   const bySection = safeParseJSON<Record<string, { correct: number; total: number }>>(data.scoreBySectionJson, {});
   const sectionTimings = safeParseJSON<Record<string, number>>(data.sectionTimingsJson, {});
   const readingResults = safeParseJSON<ReadingGradingResult[] | null>(data.readingResultsJson, null);
@@ -829,7 +831,10 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
   }
 
   // Get paper data for question details
-  const paper = getPaperById(data.paperId);
+  const storedPaperSnapshot = storedAssessmentPayload.paperSnapshot;
+  const paper = storedPaperSnapshot && typeof storedPaperSnapshot === 'object'
+    ? (storedPaperSnapshot as ReturnType<typeof getPaperById>)
+    : getPaperById(data.paperId);
   const writingSection = paper?.sections.find((section) => section.questions.some((question) => question.type === 'writing'));
   const writingQuestion = writingSection?.questions.find((question): question is Extract<Question, { type: 'writing' }> => question.type === 'writing');
   const writingAnswerKey = writingSection && writingQuestion ? `${writingSection.id}:${writingQuestion.id}` : null;

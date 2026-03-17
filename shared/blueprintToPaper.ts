@@ -4,6 +4,7 @@
  */
 import { MANUAL_SECTION_TYPE_LABELS } from "./manualPaperBlueprint";
 import type { ManualPaperBlueprint, ManualQuestion, ManualSectionType, ManualSubsection } from "./manualPaperBlueprint";
+import { getBlueprintBuildMode, getGenerationConfigQuestionCount } from "./taggedPaperGenerator";
 
 // Re-export the types we need from papers.ts (but keep this file dependency-free for the server)
 // The caller is responsible for casting the result to the Paper type.
@@ -656,6 +657,9 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
 
 /** Count total questions in a blueprint */
 export function countBlueprintQuestions(blueprint: ManualPaperBlueprint): number {
+  if (getBlueprintBuildMode(blueprint) === "generated") {
+    return getGenerationConfigQuestionCount(blueprint.generationConfig);
+  }
   let count = 0;
   for (const section of blueprint.sections) {
     for (const subsection of section.subsections) {
@@ -667,11 +671,17 @@ export function countBlueprintQuestions(blueprint: ManualPaperBlueprint): number
 
 /** Check if blueprint has listening sections */
 export function blueprintHasListening(blueprint: ManualPaperBlueprint): boolean {
+  if (getBlueprintBuildMode(blueprint) === "generated") {
+    return (blueprint.generationConfig?.sections ?? []).some((section) => section.sectionType === "listening");
+  }
   return blueprint.sections.some((s) => s.sectionType === "listening");
 }
 
 /** Check if blueprint has writing sections or writing questions */
 export function blueprintHasWriting(blueprint: ManualPaperBlueprint): boolean {
+  if (getBlueprintBuildMode(blueprint) === "generated") {
+    return (blueprint.generationConfig?.sections ?? []).some((section) => section.sectionType === "writing");
+  }
   return blueprint.sections.some(
     (s) => s.sectionType === "writing" || s.subsections.some((sub) => sub.questionType === "writing"),
   );

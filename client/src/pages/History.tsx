@@ -1,4 +1,5 @@
 import { trpc } from '@/lib/trpc';
+import { parseStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
@@ -451,24 +452,34 @@ function HistoryContent() {
     () => (detail?.paperId ? getPaperById(detail.paperId) : undefined),
     [detail?.paperId],
   );
+  const storedAssessmentPayload = useMemo(
+    () => parseStoredAssessmentPayload(detail?.answersJson),
+    [detail?.answersJson],
+  );
+  const storedPaperSnapshot = useMemo(() => {
+    const snapshot = storedAssessmentPayload.paperSnapshot;
+    if (!snapshot || typeof snapshot !== 'object') return undefined;
+    return snapshot as Paper;
+  }, [storedAssessmentPayload.paperSnapshot]);
 
   const manualPaperDetailQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: detail?.paperId || '' },
     {
-      enabled: Boolean(detail?.paperId && !staticPaper),
+      enabled: Boolean(detail?.paperId && !staticPaper && !storedPaperSnapshot),
       staleTime: 30_000,
     },
   );
 
   const paper = useMemo(() => {
     if (staticPaper) return staticPaper;
+    if (storedPaperSnapshot) return storedPaperSnapshot;
     if (!manualPaperDetailQuery.data) return undefined;
     return toHistoryPaper(manualPaperDetailQuery.data);
-  }, [manualPaperDetailQuery.data, staticPaper]);
+  }, [manualPaperDetailQuery.data, staticPaper, storedPaperSnapshot]);
 
   const answers = useMemo(
-    () => safeParseJSON<Record<string, unknown>>(detail?.answersJson, {}),
-    [detail?.answersJson],
+    () => storedAssessmentPayload.answers,
+    [storedAssessmentPayload.answers],
   );
   const bySection = useMemo(
     () => safeParseJSON<Record<string, { correct: number; total: number }>>(detail?.scoreBySectionJson, {}),

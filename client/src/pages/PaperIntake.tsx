@@ -26,6 +26,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import EnglishQuestionTagEditor from "@/components/EnglishQuestionTagEditor";
+import GeneratedPaperConfigEditor, { type GeneratedSourcePaperOption } from "@/components/GeneratedPaperConfigEditor";
 import type {
   ManualAudioFile,
   ManualCheckboxOption,
@@ -41,7 +43,10 @@ import type {
   ManualOptionImage,
   ManualOrderingItem,
   ManualOrderingQuestion,
+  ManualPaperBuildMode,
   ManualPaperBlueprint,
+  ManualPaperGenerationConfig,
+  ManualPaperVisibilityMode,
   ManualPassageFillBlankQuestion,
   ManualPassageInlineWordChoiceQuestion,
   ManualPassageMCQOption,
@@ -49,6 +54,7 @@ import type {
   ManualPassageMatchingQuestion,
   ManualPictureSpellingQuestion,
   ManualQuestion,
+  ManualQuestionTags,
   ManualQuestionType,
   ManualSentenceReorderItem,
   ManualSentenceReorderQuestion,
@@ -71,15 +77,21 @@ import {
   MANUAL_QUESTION_TYPE_OPTIONS,
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
+import {
+  generatePaperFromTaggedSources,
+  getBlueprintBuildMode,
+  getBlueprintVisibilityMode,
+} from "@shared/taggedPaperGenerator";
 import { toast } from "sonner";
 import PassageMCQPreview from "@/components/PassageMCQPreview";
 
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
 const DEFAULT_WORD_BANK_SIZE = 4;
-const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v1";
+const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v2";
 const ENGLISH_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "speaking", "grammar", "vocabulary"];
 const MATH_SECTION_TYPES: ManualSectionType[] = ["math-multiple-choice", "math-short-answer", "math-application"];
+const ENGLISH_GENERATED_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "grammar", "vocabulary"];
 const DEFAULT_SECTION_TYPE_BY_SUBJECT: Record<PaperSubject, ManualSectionType> = {
   english: "reading",
   math: "math-multiple-choice",
@@ -117,6 +129,39 @@ function getNumberLabel(index: number) {
 function createCopyTitle(title: string) {
   const trimmed = title.trim();
   return trimmed ? `${trimmed} (Copy)` : "Untitled Paper (Copy)";
+}
+
+function createGenerationRule() {
+  return {
+    id: createLocalId(),
+    label: "新规则",
+    weight: 1,
+    filters: {
+      track: "ket" as const,
+      entries: [],
+      abilities: [],
+      grammarPoints: [],
+      difficulties: [],
+    },
+  };
+}
+
+function createGenerationSection(sectionType: ManualSectionType = "reading") {
+  return {
+    id: createLocalId(),
+    title: "",
+    sectionType,
+    instructions: "",
+    totalQuestions: 5,
+    rules: [createGenerationRule()],
+  };
+}
+
+function createGenerationConfig(): ManualPaperGenerationConfig {
+  return {
+    sourcePaperIds: [],
+    sections: [createGenerationSection()],
+  };
 }
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
@@ -158,12 +203,15 @@ function getPaperBuilderDraftKey(editPaperId: string, paperSubject: PaperSubject
 }
 
 interface ManualPaperBuilderDraft {
-  version: 1;
+  version: 2;
   subject: PaperSubject;
   paperSeed: string;
   createdAt: string;
   title: string;
   description: string;
+  buildMode: ManualPaperBuildMode;
+  visibilityMode: ManualPaperVisibilityMode;
+  generationConfig?: ManualPaperGenerationConfig;
   sections: ManualSection[];
   savedAt: string;
 }
@@ -174,17 +222,21 @@ function readPaperBuilderDraft(storageKey: string, paperSubject: PaperSubject): 
   try {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ManualPaperBuilderDraft>;
-    if (parsed.version !== 1) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsedVersion = typeof parsed.version === "number" ? parsed.version : undefined;
+    if (parsedVersion !== 1 && parsedVersion !== 2) return null;
 
     return {
-      version: 1,
+      version: 2,
       subject: isPaperSubjectValue(parsed.subject) ? parsed.subject : paperSubject,
       paperSeed: typeof parsed.paperSeed === "string" ? parsed.paperSeed : createLocalId(),
       createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : new Date().toISOString(),
       title: typeof parsed.title === "string" ? parsed.title : "",
       description: typeof parsed.description === "string" ? parsed.description : "",
-      sections: Array.isArray(parsed.sections) ? parsed.sections : [createSection(getDefaultSectionTypeForSubject(paperSubject))],
+      buildMode: parsed.buildMode === "generated" ? "generated" : "fixed",
+      visibilityMode: parsed.visibilityMode === "question-bank" ? "question-bank" : "student",
+      generationConfig: (parsed.generationConfig as ManualPaperGenerationConfig | undefined) ?? createGenerationConfig(),
+      sections: Array.isArray(parsed.sections) ? (parsed.sections as ManualSection[]) : [createSection(getDefaultSectionTypeForSubject(paperSubject))],
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : new Date().toISOString(),
     };
   } catch {
@@ -842,7 +894,16 @@ function normalizeLoadedSubsection(
 function normalizeLoadedBuilderState(
   rawBlueprint: Partial<ManualPaperBlueprint> | undefined,
   paperSubject: PaperSubject,
-) {
+): {
+  paperSeed: string;
+  createdAt: string;
+  title: string;
+  description: string;
+  buildMode: ManualPaperBuildMode;
+  visibilityMode: ManualPaperVisibilityMode;
+  generationConfig: ManualPaperGenerationConfig;
+  sections: ManualSection[];
+} {
   const sections = Array.isArray(rawBlueprint?.sections) && rawBlueprint.sections.length > 0
     ? rawBlueprint.sections.map((rawSection) => {
         const sectionType = isManualSectionTypeValue(rawSection?.sectionType)
@@ -875,6 +936,9 @@ function normalizeLoadedBuilderState(
         : new Date().toISOString(),
     title: typeof rawBlueprint?.title === "string" ? rawBlueprint.title : "",
     description: typeof rawBlueprint?.description === "string" ? rawBlueprint.description : "",
+    buildMode: rawBlueprint?.buildMode === "generated" ? "generated" : "fixed",
+    visibilityMode: rawBlueprint?.visibilityMode === "question-bank" ? "question-bank" : "student",
+    generationConfig: rawBlueprint?.generationConfig ?? createGenerationConfig(),
     sections,
   };
 }
@@ -984,7 +1048,27 @@ function buildBlueprint(
   title: string,
   description: string,
   sections: ManualSection[],
+  buildMode: ManualPaperBuildMode,
+  visibilityMode: ManualPaperVisibilityMode,
+  generationConfig: ManualPaperGenerationConfig,
 ): ManualPaperBlueprint {
+  if (buildMode === "generated") {
+    return {
+      id: title
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || `paper-${paperSeed}`,
+      title: title.trim(),
+      description: description.trim(),
+      buildMode,
+      visibilityMode,
+      generationConfig,
+      sections: [],
+      createdAt,
+    };
+  }
+
   return {
     id: title
       .trim()
@@ -993,6 +1077,9 @@ function buildBlueprint(
       .replace(/^-+|-+$/g, "") || `paper-${paperSeed}`,
     title: title.trim(),
     description: description.trim(),
+    buildMode,
+    visibilityMode,
+    generationConfig,
     sections: sections.map((section, sectionIndex) => ({
       ...section,
       partLabel: `Part ${sectionIndex + 1}`,
@@ -1357,9 +1444,46 @@ function WordCompletionSubsectionPreview({ subsection }: { subsection: ManualSub
   );
 }
 
-function validateManualPaperBuilder(title: string, sections: ManualSection[]) {
+function validateManualPaperBuilder(
+  title: string,
+  sections: ManualSection[],
+  buildMode: ManualPaperBuildMode,
+  generationConfig: ManualPaperGenerationConfig,
+) {
   if (!title.trim()) {
     return "Enter a paper name before saving.";
+  }
+
+  if (buildMode === "generated") {
+    if (!generationConfig.sections.length) {
+      return "Add at least one random generation section before saving.";
+    }
+
+    for (let sectionIndex = 0; sectionIndex < generationConfig.sections.length; sectionIndex += 1) {
+      const section = generationConfig.sections[sectionIndex];
+      const sectionLabel = `Generated section ${sectionIndex + 1}`;
+      if (section.totalQuestions <= 0) {
+        return `${sectionLabel} needs a target question count.`;
+      }
+      if (!ENGLISH_GENERATED_SECTION_TYPES.includes(section.sectionType)) {
+        return `${sectionLabel} has an unsupported section type.`;
+      }
+      if (!section.rules.length) {
+        return `${sectionLabel} needs at least one generation rule.`;
+      }
+
+      for (let ruleIndex = 0; ruleIndex < section.rules.length; ruleIndex += 1) {
+        const rule = section.rules[ruleIndex];
+        if (!rule.label.trim()) {
+          return `${sectionLabel} rule ${ruleIndex + 1} needs a name.`;
+        }
+        if (!Number.isFinite(rule.weight) || rule.weight <= 0) {
+          return `${sectionLabel} rule ${ruleIndex + 1} needs a valid weight.`;
+        }
+      }
+    }
+
+    return null;
   }
 
   if (sections.length === 0) {
@@ -1904,6 +2028,9 @@ export default function PaperIntake() {
   const [createdAt, setCreatedAt] = useState(() => new Date().toISOString());
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [buildMode, setBuildMode] = useState<ManualPaperBuildMode>("fixed");
+  const [visibilityMode, setVisibilityMode] = useState<ManualPaperVisibilityMode>("student");
+  const [generationConfig, setGenerationConfig] = useState<ManualPaperGenerationConfig>(() => createGenerationConfig());
   const [sections, setSections] = useState<ManualSection[]>([createSection(getDefaultSectionTypeForSubject(requestedSubject))]);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [currentPublished, setCurrentPublished] = useState(false);
@@ -1916,6 +2043,9 @@ export default function PaperIntake() {
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
   const isMathPaper = paperSubject === "math";
   const managerHref = `/paper-manager?subject=${paperSubject}`;
+  const publishedManualPapersQuery = trpc.papers.listManualPapers.useQuery(undefined, {
+    staleTime: 5_000,
+  });
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: editPaperId },
@@ -1927,9 +2057,47 @@ export default function PaperIntake() {
   );
 
   const blueprint = useMemo(
-    () => buildBlueprint(paperSeed, createdAt, title, description, sections),
-    [createdAt, description, paperSeed, sections, title],
+    () => buildBlueprint(paperSeed, createdAt, title, description, sections, buildMode, visibilityMode, generationConfig),
+    [buildMode, createdAt, description, generationConfig, paperSeed, sections, title, visibilityMode],
   );
+  const publishedEnglishSourcePapers = useMemo<GeneratedSourcePaperOption[]>(() => {
+    return (publishedManualPapersQuery.data ?? []).flatMap((paper) => {
+      if (paper.subject !== "english") return [];
+      try {
+        const parsedBlueprint = JSON.parse(paper.blueprintJson) as ManualPaperBlueprint;
+        if (getBlueprintBuildMode(parsedBlueprint) !== "fixed") return [];
+        return [{
+          paperId: paper.paperId,
+          title: paper.title,
+          totalQuestions: paper.totalQuestions,
+          hiddenFromStudentSelection: getBlueprintVisibilityMode(parsedBlueprint) === "question-bank",
+        }];
+      } catch {
+        return [];
+      }
+    });
+  }, [publishedManualPapersQuery.data]);
+  const generatedPreview = useMemo(() => {
+    if (buildMode !== "generated") return null;
+    const sourcePapers = (publishedManualPapersQuery.data ?? []).flatMap((paper) => {
+      if (paper.subject !== "english") return [];
+      try {
+        const parsedBlueprint = JSON.parse(paper.blueprintJson) as ManualPaperBlueprint;
+        if (getBlueprintBuildMode(parsedBlueprint) !== "fixed") return [];
+        return [{
+          paperId: paper.paperId,
+          title: paper.title,
+          blueprint: parsedBlueprint,
+        }];
+      } catch {
+        return [];
+      }
+    });
+    return generatePaperFromTaggedSources(blueprint, sourcePapers);
+  }, [blueprint, buildMode, publishedManualPapersQuery.data]);
+  const previewBlueprint = buildMode === "generated" && generatedPreview
+    ? generatedPreview.blueprint
+    : blueprint;
 
   useEffect(() => {
     if (!isEditing) {
@@ -1951,6 +2119,9 @@ export default function PaperIntake() {
       setCreatedAt(normalized.createdAt);
       setTitle(editPaperQuery.data.title || normalized.title);
       setDescription(editPaperQuery.data.description || normalized.description);
+      setBuildMode(normalized.buildMode);
+      setVisibilityMode(normalized.visibilityMode);
+      setGenerationConfig(normalized.generationConfig);
       setSections(normalized.sections);
       setExpandedImageBlocks(buildExpandedImageBlockState(normalized.sections));
       setEditingPaperMeta({
@@ -1984,6 +2155,9 @@ export default function PaperIntake() {
       setCreatedAt(normalized.createdAt);
       setTitle(normalized.title);
       setDescription(normalized.description);
+      setBuildMode(normalized.buildMode);
+      setVisibilityMode(normalized.visibilityMode);
+      setGenerationConfig(normalized.generationConfig);
       setSections(normalized.sections);
       setExpandedImageBlocks(buildExpandedImageBlockState(normalized.sections));
       toast.success("Recovered your last unsaved draft.");
@@ -1999,12 +2173,15 @@ export default function PaperIntake() {
 
     const timeout = window.setTimeout(() => {
       writePaperBuilderDraft(draftStorageKey, {
-        version: 1,
+        version: 2,
         subject: paperSubject,
         paperSeed,
         createdAt,
         title,
         description,
+        buildMode,
+        visibilityMode,
+        generationConfig,
         sections,
         savedAt: new Date().toISOString(),
       });
@@ -2015,6 +2192,8 @@ export default function PaperIntake() {
     createdAt,
     description,
     draftStorageKey,
+    buildMode,
+    generationConfig,
     hasHydratedEditState,
     hasRestoredLocalDraft,
     isEditing,
@@ -2022,11 +2201,18 @@ export default function PaperIntake() {
     paperSubject,
     sections,
     title,
+    visibilityMode,
   ]);
 
   useEffect(() => {
     setSaveFeedback(null);
-  }, [title, description, sections]);
+  }, [buildMode, description, generationConfig, sections, title, visibilityMode]);
+
+  useEffect(() => {
+    if (buildMode === "generated" && visibilityMode === "question-bank") {
+      setVisibilityMode("student");
+    }
+  }, [buildMode, visibilityMode]);
 
   const getDurableAssetUrl = (value?: string) => {
     if (!value) return undefined;
@@ -2115,6 +2301,18 @@ export default function PaperIntake() {
       questions: subsection.questions.map((question) => (
         question.id === questionId ? updater(question) : question
       )),
+    }));
+  };
+
+  const updateQuestionTags = (
+    sectionId: string,
+    subsectionId: string,
+    questionId: string,
+    tags: ManualQuestionTags | undefined,
+  ) => {
+    updateQuestion(sectionId, subsectionId, questionId, (question) => ({
+      ...question,
+      tags,
     }));
   };
 
@@ -3509,7 +3707,7 @@ export default function PaperIntake() {
   const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
 
   const persistPaper = async (published: boolean) => {
-    const validationError = validateManualPaperBuilder(title, sections);
+    const validationError = validateManualPaperBuilder(title, sections, buildMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -3580,7 +3778,7 @@ export default function PaperIntake() {
   };
 
   const handleSaveAsCopy = async () => {
-    const validationError = validateManualPaperBuilder(title, sections);
+    const validationError = validateManualPaperBuilder(title, sections, buildMode, generationConfig);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -3590,7 +3788,7 @@ export default function PaperIntake() {
     const copySeed = createLocalId();
     const copyCreatedAt = new Date().toISOString();
     const copyBlueprint = prepareBlueprintForSave(
-      buildBlueprint(copySeed, copyCreatedAt, copyTitle, description, sections),
+      buildBlueprint(copySeed, copyCreatedAt, copyTitle, description, sections, buildMode, visibilityMode, generationConfig),
     );
 
     try {
@@ -3691,10 +3889,76 @@ export default function PaperIntake() {
                     placeholder="Describe what this paper is for."
                   />
                 </div>
+
+                {paperSubject === "english" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Build Mode</Label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                          <input
+                            type="radio"
+                            className="mr-2"
+                            checked={buildMode === "fixed"}
+                            onChange={() => setBuildMode("fixed")}
+                          />
+                          <span className="font-medium text-slate-900">固定卷 / 题库卷</span>
+                          <span className="mt-1 block text-xs text-slate-500">按现在的方式手动录题，也可以把它当成后面随机组卷的题库来源。</span>
+                        </label>
+                        <label className={`rounded-2xl border p-4 text-sm ${buildMode === "generated" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                          <input
+                            type="radio"
+                            className="mr-2"
+                            checked={buildMode === "generated"}
+                            onChange={() => setBuildMode("generated")}
+                          />
+                          <span className="font-medium text-slate-900">随机生成卷</span>
+                          <span className="mt-1 block text-xs text-slate-500">学生打开后按标签规则随机抽题，自动拼出一张新卷子。</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Visibility</Label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className={`rounded-2xl border p-4 text-sm ${visibilityMode === "student" ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
+                          <input
+                            type="radio"
+                            className="mr-2"
+                            checked={visibilityMode === "student"}
+                            onChange={() => setVisibilityMode("student")}
+                          />
+                          <span className="font-medium text-slate-900">学生端可见</span>
+                          <span className="mt-1 block text-xs text-slate-500">会出现在学生选卷页面。</span>
+                        </label>
+                        <label className={`rounded-2xl border p-4 text-sm ${visibilityMode === "question-bank" ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
+                          <input
+                            type="radio"
+                            className="mr-2"
+                            checked={visibilityMode === "question-bank"}
+                            onChange={() => setVisibilityMode("question-bank")}
+                            disabled={buildMode === "generated"}
+                          />
+                          <span className="font-medium text-slate-900">题库专用</span>
+                          <span className="mt-1 block text-xs text-slate-500">不会在学生选卷页显示，但会继续参与随机组卷。仅固定卷可选。</span>
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </CardContent>
             </Card>
 
-            {sections.map((section, sectionIndex) => (
+            {paperSubject === "english" && buildMode === "generated" ? (
+              <GeneratedPaperConfigEditor
+                value={generationConfig}
+                sourcePapers={publishedEnglishSourcePapers}
+                previewWarnings={generatedPreview?.warnings ?? []}
+                onChange={setGenerationConfig}
+              />
+            ) : null}
+
+            {buildMode === "fixed" && sections.map((section, sectionIndex) => (
               <Card key={section.id} className="border-slate-200 shadow-sm">
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -4417,6 +4681,15 @@ export default function PaperIntake() {
                                         </span>
                                       </p>
                                     </div>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -4493,6 +4766,15 @@ export default function PaperIntake() {
                                       </p>
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -4568,6 +4850,15 @@ export default function PaperIntake() {
                                       </p>
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -4671,6 +4962,15 @@ export default function PaperIntake() {
                                         </p>
                                       </div>
                                     </div>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -4793,6 +5093,15 @@ export default function PaperIntake() {
                                       </p>
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -4857,6 +5166,15 @@ export default function PaperIntake() {
                                       />
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -4921,6 +5239,15 @@ export default function PaperIntake() {
                                       </select>
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -5034,6 +5361,15 @@ export default function PaperIntake() {
                                       <Plus className="mr-2 h-4 w-4" />
                                       Add Statement
                                     </Button>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -5093,6 +5429,15 @@ export default function PaperIntake() {
                                       </select>
                                     </div>
                                   </div>
+
+                                  {paperSubject === "english" ? (
+                                    <EnglishQuestionTagEditor
+                                      value={question.tags}
+                                      sectionType={section.sectionType}
+                                      questionType={question.type}
+                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                    />
+                                  ) : null}
                                 </div>
                               ))}
 
@@ -5771,6 +6116,15 @@ export default function PaperIntake() {
                                         placeholder="Type a model/reference answer for grading purposes."
                                       />
                                     </div>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -5896,6 +6250,15 @@ export default function PaperIntake() {
                                         </div>
                                       </div>
                                     </div>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
@@ -5986,6 +6349,15 @@ export default function PaperIntake() {
                                         </select>
                                       </div>
                                     </div>
+
+                                    {paperSubject === "english" ? (
+                                      <EnglishQuestionTagEditor
+                                        value={question.tags}
+                                        sectionType={section.sectionType}
+                                        questionType={question.type}
+                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                               ));
@@ -6034,6 +6406,17 @@ export default function PaperIntake() {
                                             </option>
                                           ))}
                                         </select>
+
+                                        {paperSubject === "english" ? (
+                                          <div className="mt-3">
+                                            <EnglishQuestionTagEditor
+                                              value={question.tags}
+                                              sectionType={section.sectionType}
+                                              questionType={question.type}
+                                              onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
+                                            />
+                                          </div>
+                                        ) : null}
                                       </div>
                                     ))}
                                   </div>
@@ -6085,31 +6468,43 @@ export default function PaperIntake() {
               </Card>
             ))}
 
-            <Button type="button" variant="outline" onClick={addSection} className="w-full">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Section
-            </Button>
+            {buildMode === "fixed" ? (
+              <Button type="button" variant="outline" onClick={addSection} className="w-full">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Section
+              </Button>
+            ) : null}
           </div>
 
           <div className="space-y-6">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Preview</CardTitle>
-                <CardDescription>Quick student-facing preview of the paper structure you are building.</CardDescription>
+                <CardDescription>
+                  {buildMode === "generated"
+                    ? "Preview of the random paper assembled from your current tag rules."
+                    : "Quick student-facing preview of the paper structure you are building."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!title.trim() && !description.trim() && sections.length === 0 && (
+                {!title.trim() && !description.trim() && previewBlueprint.sections.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
                     Start building the paper on the left.
                   </div>
                 )}
+
+                {buildMode === "generated" && previewBlueprint.sections.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+                    配好组卷分区和规则后，这里会显示一份随机生成的预览卷。
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl bg-slate-50 p-4">
                   <p className="text-lg font-semibold text-slate-800">{title || "Untitled Paper"}</p>
                   <p className="mt-2 text-sm text-slate-500">{description || "No description yet."}</p>
                 </div>
 
-                {blueprint.sections.map((section) => (
+                {previewBlueprint.sections.map((section) => (
                   <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-sm font-semibold text-slate-800">
                       {section.partLabel} · {MANUAL_SECTION_TYPE_LABELS[section.sectionType]}

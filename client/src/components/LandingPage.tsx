@@ -107,6 +107,10 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
   const { papers } = useQuiz();
   const { user, isTeacher } = useLocalAuth();
   const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all' | null>('all');
+  const visiblePapers = useMemo(
+    () => papers.filter((paper) => !paper.hiddenFromStudentSelection),
+    [papers],
+  );
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
       PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
@@ -149,16 +153,16 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       activeSubject === null
         ? []
         : activeSubject === 'all'
-          ? papers
-          : papers.filter((paper) => paper.subject === activeSubject)
+          ? visiblePapers
+          : visiblePapers.filter((paper) => paper.subject === activeSubject)
     ),
-    [papers, activeSubject],
+    [visiblePapers, activeSubject],
   );
   const subjectCounts = useMemo(
     () => Object.fromEntries(
-      visibleSubjectModules.map((subject) => [subject, papers.filter((paper) => paper.subject === subject).length]),
+      visibleSubjectModules.map((subject) => [subject, visiblePapers.filter((paper) => paper.subject === subject).length]),
     ) as Record<PaperSubject, number>,
-    [papers, visibleSubjectModules],
+    [visiblePapers, visibleSubjectModules],
   );
 
   useEffect(() => {

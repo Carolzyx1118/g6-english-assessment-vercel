@@ -13,6 +13,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
 import { isAudioAnswerValue } from '@/lib/audioStorage';
+import { packStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
   AssessmentReportResult,
@@ -829,7 +830,10 @@ export default function ResultsPage() {
       totalCorrect: correct,
       totalQuestions: total,
       totalTimeSeconds: totalTime || undefined,
-      answersJson: JSON.stringify(state.answers),
+      answersJson: packStoredAssessmentPayload(
+        state.answers as Record<string, unknown>,
+        selectedPaper?.isGeneratedPaper ? selectedPaper : undefined,
+      ),
       scoreBySectionJson: JSON.stringify(bySection),
       sectionTimingsJson: JSON.stringify(sectionTimings),
     }, {

@@ -1,3 +1,11 @@
+import type {
+  EnglishExamTagAbility,
+  EnglishExamTagDifficulty,
+  EnglishExamTagEntry,
+  EnglishExamTagTrack,
+  EnglishQuestionTagProfile,
+} from "./englishQuestionTags";
+
 export type ManualSectionType =
   | "reading"
   | "listening"
@@ -97,6 +105,52 @@ export interface ManualOptionImage {
   size: number;
 }
 
+export interface ManualQuestionTags {
+  english?: EnglishQuestionTagProfile;
+}
+
+interface ManualQuestionBase {
+  id: string;
+  tags?: ManualQuestionTags;
+}
+
+export type ManualPaperBuildMode = "fixed" | "generated";
+export type ManualPaperVisibilityMode = "student" | "question-bank";
+
+export interface ManualPaperGenerationRuleFilters {
+  sectionTypes?: ManualSectionType[];
+  questionTypes?: ManualQuestionType[];
+  track?: EnglishExamTagTrack;
+  entries?: EnglishExamTagEntry[];
+  unit?: string;
+  examPart?: string;
+  abilities?: EnglishExamTagAbility[];
+  grammarUnit?: string;
+  grammarPoints?: string[];
+  difficulties?: EnglishExamTagDifficulty[];
+}
+
+export interface ManualPaperGenerationRule {
+  id: string;
+  label: string;
+  weight: number;
+  filters: ManualPaperGenerationRuleFilters;
+}
+
+export interface ManualPaperGenerationSection {
+  id: string;
+  title: string;
+  sectionType: ManualSectionType;
+  instructions?: string;
+  totalQuestions: number;
+  rules: ManualPaperGenerationRule[];
+}
+
+export interface ManualPaperGenerationConfig {
+  sourcePaperIds?: string[];
+  sections: ManualPaperGenerationSection[];
+}
+
 export interface ManualMCQOption {
   id: string;
   label: string;
@@ -104,8 +158,7 @@ export interface ManualMCQOption {
   image?: ManualOptionImage;
 }
 
-export interface ManualMCQQuestion {
-  id: string;
+export interface ManualMCQQuestion extends ManualQuestionBase {
   type: "mcq";
   prompt: string;
   options: ManualMCQOption[];
@@ -120,15 +173,13 @@ export interface ManualWordBankItem {
   word: string;
 }
 
-export interface ManualFillBlankQuestion {
-  id: string;
+export interface ManualFillBlankQuestion extends ManualQuestionBase {
   type: "fill-blank";
   prompt: string;
   correctAnswerWordBankId: string;
 }
 
-export interface ManualPassageFillBlankQuestion {
-  id: string;
+export interface ManualPassageFillBlankQuestion extends ManualQuestionBase {
   type: "passage-fill-blank";
   /** Not used for passage type — the passage text is on the subsection */
   prompt: string;
@@ -142,8 +193,7 @@ export interface ManualPassageMCQOption {
   text: string;
 }
 
-export interface ManualPassageMCQQuestion {
-  id: string;
+export interface ManualPassageMCQQuestion extends ManualQuestionBase {
   type: "passage-mcq";
   /** Label like "Blank 1", "Blank 2" — auto-generated from passage */
   prompt: string;
@@ -152,8 +202,7 @@ export interface ManualPassageMCQQuestion {
 }
 
 /** Fill in blank — student types the answer directly (no word bank) */
-export interface ManualTypedFillBlankQuestion {
-  id: string;
+export interface ManualTypedFillBlankQuestion extends ManualQuestionBase {
   type: "typed-fill-blank";
   /** The sentence/question with ___ marking the blank */
   prompt: string;
@@ -161,16 +210,14 @@ export interface ManualTypedFillBlankQuestion {
   correctAnswer: string;
 }
 
-export interface ManualPictureSpellingQuestion {
-  id: string;
+export interface ManualPictureSpellingQuestion extends ManualQuestionBase {
   type: "picture-spelling";
   prompt: string;
   image?: ManualOptionImage;
   correctAnswer: string;
 }
 
-export interface ManualWordCompletionQuestion {
-  id: string;
+export interface ManualWordCompletionQuestion extends ManualQuestionBase {
   type: "word-completion";
   prompt: string;
   image?: ManualOptionImage;
@@ -179,8 +226,7 @@ export interface ManualWordCompletionQuestion {
 }
 
 /** Passage open-ended — student reads a passage then answers free-form questions */
-export interface ManualPassageOpenEndedQuestion {
-  id: string;
+export interface ManualPassageOpenEndedQuestion extends ManualQuestionBase {
   type: "passage-open-ended";
   /** The question text, e.g. "What is the main idea of the passage?" */
   prompt: string;
@@ -189,8 +235,7 @@ export interface ManualPassageOpenEndedQuestion {
 }
 
 /** Writing question — student writes an essay/composition based on a prompt */
-export interface ManualWritingQuestion {
-  id: string;
+export interface ManualWritingQuestion extends ManualQuestionBase {
   type: "writing";
   /** The writing prompt/requirements, e.g. "Write a letter to your friend about your holiday." */
   prompt: string;
@@ -205,8 +250,7 @@ export interface ManualWritingQuestion {
 }
 
 /** Speaking question — student responds by recording audio */
-export interface ManualSpeakingQuestion {
-  id: string;
+export interface ManualSpeakingQuestion extends ManualQuestionBase {
   type: "speaking";
   prompt: string;
   image?: ManualOptionImage;
@@ -222,8 +266,7 @@ export interface ManualTrueFalseStatement {
   explanation?: string;
 }
 
-export interface ManualTrueFalseQuestion {
-  id: string;
+export interface ManualTrueFalseQuestion extends ManualQuestionBase {
   type: "true-false";
   prompt: string;
   statements: ManualTrueFalseStatement[];
@@ -236,8 +279,7 @@ export interface ManualCheckboxOption {
   text: string;
 }
 
-export interface ManualCheckboxQuestion {
-  id: string;
+export interface ManualCheckboxQuestion extends ManualQuestionBase {
   type: "checkbox";
   prompt: string;
   options: ManualCheckboxOption[];
@@ -251,8 +293,7 @@ export interface ManualOrderingItem {
   correctPosition: number;
 }
 
-export interface ManualOrderingQuestion {
-  id: string;
+export interface ManualOrderingQuestion extends ManualQuestionBase {
   type: "ordering";
   prompt: string;
   items: ManualOrderingItem[];
@@ -265,8 +306,7 @@ export interface ManualSentenceReorderItem {
   correctAnswer: string;
 }
 
-export interface ManualSentenceReorderQuestion {
-  id: string;
+export interface ManualSentenceReorderQuestion extends ManualQuestionBase {
   type: "sentence-reorder";
   prompt: string;
   items: ManualSentenceReorderItem[];
@@ -288,8 +328,7 @@ export interface ManualInlineWordChoiceItem {
   correctAnswer: string;
 }
 
-export interface ManualInlineWordChoiceQuestion {
-  id: string;
+export interface ManualInlineWordChoiceQuestion extends ManualQuestionBase {
   type: "inline-word-choice";
   prompt: string;
   items: ManualInlineWordChoiceItem[];
@@ -302,8 +341,7 @@ export interface ManualPassageInlineWordChoiceItem {
   correctAnswer: string;
 }
 
-export interface ManualPassageInlineWordChoiceQuestion {
-  id: string;
+export interface ManualPassageInlineWordChoiceQuestion extends ManualQuestionBase {
   type: "passage-inline-word-choice";
   prompt: string;
   items: ManualPassageInlineWordChoiceItem[];
@@ -321,8 +359,7 @@ export interface ManualMatchingDescription {
 }
 
 /** Passage matching — match person descriptions to labeled descriptions (PET Reading Part 2) */
-export interface ManualPassageMatchingQuestion {
-  id: string;
+export interface ManualPassageMatchingQuestion extends ManualQuestionBase {
   type: "passage-matching";
   /** The person description with criteria, e.g. "Thomas and his sister enjoy eating French food..." */
   prompt: string;
@@ -330,8 +367,7 @@ export interface ManualPassageMatchingQuestion {
   correctAnswer: string;
 }
 
-export interface ManualHeadingMatchQuestion {
-  id: string;
+export interface ManualHeadingMatchQuestion extends ManualQuestionBase {
   type: "heading-match";
   /** The paragraph / passage excerpt students should match */
   prompt: string;
@@ -379,6 +415,9 @@ export interface ManualPaperBlueprint {
   id: string;
   title: string;
   description: string;
+  buildMode?: ManualPaperBuildMode;
+  visibilityMode?: ManualPaperVisibilityMode;
+  generationConfig?: ManualPaperGenerationConfig;
   sections: Array<ManualSection & { partLabel: string }>;
   createdAt: string;
 }

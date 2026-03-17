@@ -291,6 +291,9 @@ export interface Paper {
   subject: PaperSubject;
   category: PaperCategory;
   tags?: string[];
+  hiddenFromStudentSelection?: boolean;
+  isGeneratedPaper?: boolean;
+  generationWarnings?: string[];
   sections: Section[];
   readingWordBank?: { word: string; imageUrl: string }[];
   totalQuestions: number;
