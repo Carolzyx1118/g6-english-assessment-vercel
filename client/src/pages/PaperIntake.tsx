@@ -84,6 +84,10 @@ import {
 } from "@shared/taggedPaperGenerator";
 import { toast } from "sonner";
 import PassageMCQPreview from "@/components/PassageMCQPreview";
+import {
+  clearEnglishQuickGeneratedPreset,
+  readEnglishQuickGeneratedPreset,
+} from "@/lib/englishQuickPaperPreset";
 
 const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
@@ -2052,6 +2056,10 @@ export default function PaperIntake() {
     const value = new URLSearchParams(search).get("subject");
     return isPaperSubjectValue(value) ? value : "english";
   }, [search]);
+  const requestedMode = useMemo(
+    () => new URLSearchParams(search).get("mode")?.trim() || "",
+    [search],
+  );
   const editPaperId = useMemo(
     () => new URLSearchParams(search).get("edit")?.trim() || "",
     [search],
@@ -2075,6 +2083,7 @@ export default function PaperIntake() {
   const [expandedImageBlocks, setExpandedImageBlocks] = useState<Record<string, boolean>>({});
   const [editingPaperMeta, setEditingPaperMeta] = useState<{ id: number; paperId: string; published: boolean } | null>(null);
   const [hasHydratedEditState, setHasHydratedEditState] = useState(false);
+  const [hasAppliedEntryPreset, setHasAppliedEntryPreset] = useState(false);
   const [hasRestoredLocalDraft, setHasRestoredLocalDraft] = useState(false);
   const [activePreviewSubsectionId, setActivePreviewSubsectionId] = useState<string | null>(null);
   const autosavePausedRef = useRef(false);
@@ -2087,7 +2096,8 @@ export default function PaperIntake() {
     staleTime: 5_000,
   });
   const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
-  const isLegacyGeneratedMode = paperSubject === "english" && buildMode === "generated";
+  const isLegacyGeneratedMode = isEditing && paperSubject === "english" && buildMode === "generated";
+  const isQuickGeneratedMode = !isEditing && paperSubject === "english" && buildMode === "generated";
   const showPreviewActionCard = buildMode === "fixed";
   const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
   const effectiveDescription = isQuestionBankMode ? "" : description;
@@ -2162,6 +2172,26 @@ export default function PaperIntake() {
   }, [isEditing, requestedSubject]);
 
   useEffect(() => {
+    if (isEditing || hasAppliedEntryPreset) return;
+
+    if (requestedSubject === "english" && requestedMode === "generated") {
+      const preset = readEnglishQuickGeneratedPreset();
+      setPaperSubject("english");
+      setBuildMode("generated");
+      setVisibilityMode("student");
+      setGenerationConfig(preset?.generationConfig ?? createGenerationConfig());
+      setTitle(preset?.title ?? "English Random Assessment");
+      setDescription(preset?.description ?? "");
+      setHasRestoredLocalDraft(true);
+      setHasAppliedEntryPreset(true);
+      clearEnglishQuickGeneratedPreset();
+      return;
+    }
+
+    setHasAppliedEntryPreset(true);
+  }, [hasAppliedEntryPreset, isEditing, requestedMode, requestedSubject]);
+
+  useEffect(() => {
     if (!isEditing || !editPaperQuery.data || hasHydratedEditState) return;
 
     try {
@@ -2200,6 +2230,7 @@ export default function PaperIntake() {
   }, [editPaperQuery.error, navigate]);
 
   useEffect(() => {
+    if (!hasAppliedEntryPreset) return;
     if (hasRestoredLocalDraft) return;
     if (isEditing && !hasHydratedEditState) return;
 
@@ -2220,7 +2251,7 @@ export default function PaperIntake() {
     }
 
     setHasRestoredLocalDraft(true);
-  }, [draftStorageKey, hasHydratedEditState, hasRestoredLocalDraft, isEditing, paperSubject]);
+  }, [draftStorageKey, hasAppliedEntryPreset, hasHydratedEditState, hasRestoredLocalDraft, isEditing, paperSubject]);
 
   useEffect(() => {
     if (!hasRestoredLocalDraft) return;
@@ -3813,8 +3844,9 @@ export default function PaperIntake() {
   };
 
   const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
+  const hasGeneratedSections = generationConfig.sections.some((section) => Math.max(0, section.totalQuestions || 0) > 0);
   const saveDisabled = !effectiveTitle.trim()
-    || !hasAnyQuestions
+    || (buildMode === "generated" ? !hasGeneratedSections : !hasAnyQuestions)
     || isPersisting
     || (isEditing && !editingPaperMeta);
 
@@ -3992,7 +4024,7 @@ export default function PaperIntake() {
 
                   <div className="space-y-2">
                     <Label>Mode</Label>
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                       <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
                         <input
                           type="radio"
@@ -4013,8 +4045,29 @@ export default function PaperIntake() {
                         <span className="font-medium text-slate-900">题库随机</span>
                         <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示 section，后面可作为随机抽题来源。</span>
                       </label>
+                      {buildMode === "generated" ? (
+                        <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
+                          <input
+                            type="radio"
+                            className="mr-2"
+                            checked
+                            onChange={() => {
+                              setBuildMode("generated");
+                              setVisibilityMode("student");
+                            }}
+                          />
+                          <span className="font-medium text-slate-900">随机组卷模板</span>
+                          <span className="mt-1 block text-xs text-slate-500">按考试体系和标签规则组合 Part，再从题库里随机抽题生成一张新卷。</span>
+                        </label>
+                      ) : null}
                     </div>
                   </div>
+
+                  {isQuickGeneratedMode ? (
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                      这是从老师首页“添加试卷”快捷入口带进来的随机组卷模板。下面可以继续微调题库来源、各个 Part 的题型和道数。
+                    </div>
+                  ) : null}
 
                   {isLegacyGeneratedMode ? (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

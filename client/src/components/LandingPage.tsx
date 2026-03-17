@@ -2,10 +2,22 @@ import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList, LogOut, User, Sparkles, Settings2, Languages, Calculator } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, ClipboardList, LogOut, User, Sparkles, Settings2, Languages, Calculator, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { MANUAL_QUESTION_TYPE_LABELS, MANUAL_SECTION_TYPE_LABELS } from '@shared/manualPaperBlueprint';
+import { ENGLISH_EXAM_TAG_SCHEMAS, type EnglishExamTagTrack } from '@shared/englishQuestionTags';
+import {
+  createEnglishQuickGeneratedPartSelections,
+  createEnglishQuickGeneratedPreset,
+  getQuestionTypesForEnglishExamPart,
+  type EnglishQuickGeneratedPartSelection,
+  writeEnglishQuickGeneratedPreset,
+} from '@/lib/englishQuickPaperPreset';
 
 const PUREON_LOGO = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bJDnAegOAPWmMppj.png';
 
@@ -106,7 +118,13 @@ function BrandHeader() {
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
   const { papers } = useQuiz();
   const { user, isTeacher } = useLocalAuth();
+  const [, navigate] = useLocation();
   const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all' | null>('all');
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickTrack, setQuickTrack] = useState<EnglishExamTagTrack>('ket');
+  const [quickPartSelections, setQuickPartSelections] = useState<EnglishQuickGeneratedPartSelection[]>(() =>
+    createEnglishQuickGeneratedPartSelections('ket'),
+  );
   const visiblePapers = useMemo(
     () => papers.filter((paper) => !paper.hiddenFromStudentSelection),
     [papers],
@@ -164,6 +182,15 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ) as Record<PaperSubject, number>,
     [visiblePapers, visibleSubjectModules],
   );
+  const configuredQuickParts = useMemo(
+    () => quickPartSelections.filter((part) => (Number.isFinite(part.totalQuestions) ? part.totalQuestions : 0) > 0),
+    [quickPartSelections],
+  );
+  const totalQuickQuestions = useMemo(
+    () => configuredQuickParts.reduce((sum, part) => sum + Math.max(0, part.totalQuestions || 0), 0),
+    [configuredQuickParts],
+  );
+  const showQuickCreateTile = isTeacher && activeSubject === 'english';
 
   useEffect(() => {
     if (hasSingleSubjectAccess) {
@@ -191,6 +218,32 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       setSelectedSubject('all');
     }
   }, [allowedSubjects, hasSingleSubjectAccess, isTeacher, selectedSubject]);
+
+  const openQuickCreateDialog = () => {
+    setQuickTrack('ket');
+    setQuickPartSelections(createEnglishQuickGeneratedPartSelections('ket'));
+    setQuickCreateOpen(true);
+  };
+
+  const handleQuickTrackChange = (track: EnglishExamTagTrack) => {
+    setQuickTrack(track);
+    setQuickPartSelections(createEnglishQuickGeneratedPartSelections(track));
+  };
+
+  const handleQuickPartChange = (
+    partId: string,
+    updater: (part: EnglishQuickGeneratedPartSelection) => EnglishQuickGeneratedPartSelection,
+  ) => {
+    setQuickPartSelections((current) => current.map((part) => (part.id === partId ? updater(part) : part)));
+  };
+
+  const handleQuickCreateSubmit = () => {
+    if (configuredQuickParts.length === 0) return;
+
+    writeEnglishQuickGeneratedPreset(createEnglishQuickGeneratedPreset(quickTrack, quickPartSelections));
+    setQuickCreateOpen(false);
+    navigate('/paper-intake?subject=english&mode=generated');
+  };
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -461,8 +514,42 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   </div>
                 </motion.button>
               ))}
+              {showQuickCreateTile && (
+                <motion.button
+                  key="quick-create-paper"
+                  type="button"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.5 + filteredPapers.length * 0.15 }}
+                  onClick={openQuickCreateDialog}
+                  className="group relative text-left rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-[#D4A84B]/60 hover:bg-white hover:shadow-xl"
+                >
+                  <div className="flex h-full min-h-[260px] flex-col justify-between">
+                    <div>
+                      <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1E3A5F]/5 text-[#1E3A5F] transition-colors group-hover:bg-[#D4A84B]/10 group-hover:text-[#D4A84B]">
+                        <Plus className="h-8 w-8" />
+                      </div>
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <h3 className="text-xl font-bold text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">添加试卷</h3>
+                        <ArrowRight className="w-5 h-5 text-slate-300 transition-all group-hover:translate-x-1 group-hover:text-[#D4A84B]" />
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-600">
+                        先选择考试体系，再按对应 Part 设置题型和道数，系统会带你进入随机组卷模板页。
+                      </p>
+                    </div>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                        KET / PET
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1.5 text-xs font-semibold text-[#A97C21]">
+                        Random Builder
+                      </span>
+                    </div>
+                  </div>
+                </motion.button>
+              )}
             </div>
-            {filteredPapers.length === 0 && (
+            {filteredPapers.length === 0 && !showQuickCreateTile && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
                 No papers in this subject yet. Add one later and it will appear here automatically.
               </div>
@@ -481,6 +568,120 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
           <span className="text-xs text-slate-400">专注新加坡国际教育</span>
         </div>
       </div>
+
+      <Dialog open={quickCreateOpen} onOpenChange={setQuickCreateOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>添加试卷</DialogTitle>
+            <DialogDescription>
+              先选考试体系，再为每个 Part 指定题型和题数。完成后会进入随机组卷编辑页继续设置和保存。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <Label>考试体系</Label>
+              <div className="grid gap-3 md:grid-cols-2">
+                {(['ket', 'pet'] as EnglishExamTagTrack[]).map((track) => (
+                  <button
+                    key={track}
+                    type="button"
+                    onClick={() => handleQuickTrackChange(track)}
+                    className={`rounded-2xl border p-4 text-left transition-colors ${
+                      quickTrack === track
+                        ? 'border-sky-300 bg-sky-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{ENGLISH_EXAM_TAG_SCHEMAS[track].label}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {track === 'ket' ? '阅读 1-5，听力 1-5，写作 6-7' : '阅读 1-6，听力 1-4，写作 1-2'}
+                        </p>
+                      </div>
+                      <div className={`h-3.5 w-3.5 rounded-full border ${quickTrack === track ? 'border-sky-500 bg-sky-500' : 'border-slate-300 bg-white'}`} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-semibold text-slate-900">Part 配置</h4>
+                  <p className="text-sm text-slate-500">把题数设为 0 就表示这次试卷不抽这个 Part。</p>
+                </div>
+                <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                  已选 {configuredQuickParts.length} 个 Part / 共 {totalQuickQuestions} 题
+                </div>
+              </div>
+
+              <div className="mt-4 max-h-[52vh] space-y-3 overflow-y-auto pr-1">
+                {quickPartSelections.map((part) => {
+                  const availableQuestionTypes = getQuestionTypesForEnglishExamPart(part.examPart);
+                  return (
+                    <div key={part.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1.4fr,1fr,120px]">
+                      <div>
+                        <p className="font-semibold text-slate-900">{part.examPart}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          对应分区：{MANUAL_SECTION_TYPE_LABELS[part.sectionType]}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs text-slate-500">题型</Label>
+                        <select
+                          value={part.questionType}
+                          onChange={(event) => handleQuickPartChange(part.id, (current) => ({
+                            ...current,
+                            questionType: event.target.value as EnglishQuickGeneratedPartSelection['questionType'],
+                          }))}
+                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                        >
+                          {availableQuestionTypes.map((questionType) => (
+                            <option key={questionType} value={questionType}>
+                              {MANUAL_QUESTION_TYPE_LABELS[questionType]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs text-slate-500">道数</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={part.totalQuestions}
+                          onChange={(event) => handleQuickPartChange(part.id, (current) => ({
+                            ...current,
+                            totalQuestions: Math.max(0, Number(event.target.value) || 0),
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setQuickCreateOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={handleQuickCreateSubmit}
+              disabled={configuredQuickParts.length === 0}
+              className="bg-[#1E3A5F] text-white hover:bg-[#2a4f7a]"
+            >
+              继续设置试卷
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
