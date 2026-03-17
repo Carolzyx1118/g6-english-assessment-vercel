@@ -2076,7 +2076,9 @@ export default function PaperIntake() {
   const [editingPaperMeta, setEditingPaperMeta] = useState<{ id: number; paperId: string; published: boolean } | null>(null);
   const [hasHydratedEditState, setHasHydratedEditState] = useState(false);
   const [hasRestoredLocalDraft, setHasRestoredLocalDraft] = useState(false);
+  const [activePreviewSubsectionId, setActivePreviewSubsectionId] = useState<string | null>(null);
   const autosavePausedRef = useRef(false);
+  const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const availableSectionTypes = useMemo(() => getAvailableSectionTypesForSubject(paperSubject), [paperSubject]);
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
   const isMathPaper = paperSubject === "math";
@@ -2144,6 +2146,7 @@ export default function PaperIntake() {
     () => sections.some((section) => section.subsections.some((subsection) => subsection.questions.length > 0)),
     [sections],
   );
+  const isStickyPreviewMode = buildMode === "fixed";
 
   useEffect(() => {
     if (!isEditing) {
@@ -2259,6 +2262,43 @@ export default function PaperIntake() {
       setVisibilityMode("student");
     }
   }, [buildMode, visibilityMode]);
+
+  useEffect(() => {
+    if (buildMode !== "fixed" || !activePreviewSubsectionId || !previewColumnRef.current) return;
+
+    const target = previewColumnRef.current.querySelector<HTMLElement>(
+      `[data-preview-subsection-id="${activePreviewSubsectionId}"]`,
+    );
+    if (!target) return;
+
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activePreviewSubsectionId, buildMode]);
+
+  useEffect(() => {
+    if (buildMode !== "fixed") return;
+    const firstSubsectionId = sections[0]?.subsections[0]?.id ?? null;
+    if (!firstSubsectionId) return;
+    if (!activePreviewSubsectionId || !sections.some((section) => section.subsections.some((subsection) => subsection.id === activePreviewSubsectionId))) {
+      setActivePreviewSubsectionId(firstSubsectionId);
+    }
+  }, [activePreviewSubsectionId, buildMode, sections]);
+
+  const getSubsectionTrackingProps = (subsectionId: string) => ({
+    onFocusCapture: () => {
+      if (buildMode === "fixed") {
+        setActivePreviewSubsectionId(subsectionId);
+      }
+    },
+    onClick: () => {
+      if (buildMode === "fixed") {
+        setActivePreviewSubsectionId(subsectionId);
+      }
+    },
+  });
 
   const activateFixedMode = () => {
     setBuildMode("fixed");
@@ -4095,7 +4135,11 @@ export default function PaperIntake() {
 
                   <div className="space-y-4">
                     {section.subsections.map((subsection, subsectionIndex) => (
-                      <div key={subsection.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div
+                        key={subsection.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                        {...getSubsectionTrackingProps(subsection.id)}
+                      >
                         {(() => {
                           const isImageBlockExpanded = expandedImageBlocks[subsection.id] ?? Boolean(subsection.sceneImage);
                           return (
@@ -6552,7 +6596,10 @@ export default function PaperIntake() {
             ) : null}
           </div>
 
-          <div className={`space-y-6 ${isQuestionBankMode ? "xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:pr-1" : ""}`}>
+          <div
+            ref={previewColumnRef}
+            className={`space-y-6 ${isStickyPreviewMode ? "xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:pr-1" : ""}`}
+          >
             <Card className="border-slate-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Preview</CardTitle>
@@ -6592,7 +6639,15 @@ export default function PaperIntake() {
 
                     <div className="mt-4 space-y-4">
                       {section.subsections.map((subsection, subsectionIndex) => (
-                        <div key={subsection.id} className="rounded-xl bg-slate-50 p-4">
+                        <div
+                          key={subsection.id}
+                          data-preview-subsection-id={subsection.id}
+                          className={`rounded-xl p-4 transition-colors ${
+                            activePreviewSubsectionId === subsection.id
+                              ? "bg-sky-50 ring-2 ring-sky-200"
+                              : "bg-slate-50"
+                          }`}
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-slate-800">
                               {`Question ${subsectionIndex + 1}`}
