@@ -7,21 +7,12 @@ import type {
 } from "@shared/manualPaperBlueprint";
 import { ENGLISH_EXAM_TAG_SCHEMAS, type EnglishExamTagTrack } from "@shared/englishQuestionTags";
 
-const QUICK_GENERATED_PAPER_PRESET_KEY = "pureon_english_quick_generated_preset_v1";
-
 export interface EnglishQuickGeneratedPartSelection {
   id: string;
   examPart: string;
   sectionType: ManualSectionType;
   questionType: ManualQuestionType;
   totalQuestions: number;
-}
-
-export interface EnglishQuickGeneratedPaperPreset {
-  subject: "english";
-  title: string;
-  description: string;
-  generationConfig: ManualPaperGenerationConfig;
 }
 
 function createLocalId() {
@@ -114,55 +105,11 @@ export function buildEnglishQuickGeneratedConfig(
   };
 }
 
-export function createEnglishQuickGeneratedPreset(
-  track: EnglishExamTagTrack,
-  parts: EnglishQuickGeneratedPartSelection[],
-): EnglishQuickGeneratedPaperPreset {
+export function getEnglishQuickGeneratedTitle(track: EnglishExamTagTrack) {
+  return `${track.toUpperCase()} Random Assessment`;
+}
+
+export function getEnglishQuickGeneratedDescription(track: EnglishExamTagTrack) {
   const trackLabel = ENGLISH_EXAM_TAG_SCHEMAS[track].label;
-  return {
-    subject: "english",
-    title: `${track.toUpperCase()} Random Assessment`,
-    description: `Auto-generated from tagged ${trackLabel} question bank parts.`,
-    generationConfig: buildEnglishQuickGeneratedConfig(track, parts),
-  };
-}
-
-export function writeEnglishQuickGeneratedPreset(preset: EnglishQuickGeneratedPaperPreset) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.setItem(QUICK_GENERATED_PAPER_PRESET_KEY, JSON.stringify(preset));
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
-export function readEnglishQuickGeneratedPreset() {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.sessionStorage.getItem(QUICK_GENERATED_PAPER_PRESET_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<EnglishQuickGeneratedPaperPreset>;
-    if (parsed.subject !== "english" || !parsed.generationConfig) return null;
-
-    return {
-      subject: "english" as const,
-      title: typeof parsed.title === "string" ? parsed.title : "KET Random Assessment",
-      description: typeof parsed.description === "string" ? parsed.description : "",
-      generationConfig: parsed.generationConfig,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function clearEnglishQuickGeneratedPreset() {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.removeItem(QUICK_GENERATED_PAPER_PRESET_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
+  return `Auto-generated from tagged ${trackLabel} question bank parts.`;
 }
