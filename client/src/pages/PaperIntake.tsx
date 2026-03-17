@@ -3766,6 +3766,10 @@ export default function PaperIntake() {
   };
 
   const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
+  const saveDisabled = !effectiveTitle.trim()
+    || !hasAnyQuestions
+    || isPersisting
+    || (isEditing && !editingPaperMeta);
 
   const persistPaper = async (published: boolean) => {
     const validationError = validateManualPaperBuilder(effectiveTitle, sections, buildMode, visibilityMode, generationConfig);
@@ -7168,10 +7172,76 @@ export default function PaperIntake() {
                 ))}
               </CardContent>
             </Card>
+
+            {isQuestionBankMode ? (
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="space-y-4 pt-6">
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {currentPublished ? "Status: Published" : "Status: Draft"}
+                    </div>
+                    {saveFeedback ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+                        <Check className="h-4 w-4" />
+                        <span className="font-medium">{saveFeedback}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">
+                        Question bank items stay hidden until you publish the bank.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {isEditing ? (
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="outline"
+                        disabled={isPersisting || !editingPaperMeta}
+                        onClick={handleSaveAsCopy}
+                        className="gap-2 border-slate-200"
+                      >
+                        <FilePlus2 className="h-4 w-4" />
+                        Save as Copy
+                      </Button>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      size="lg"
+                      variant="outline"
+                      disabled={saveDisabled}
+                      onClick={handleSaveDraft}
+                      className="gap-2 border-slate-200"
+                    >
+                      {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
+                      {isEditing ? "Save Question Draft Changes" : "Save Question Draft"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="lg"
+                      disabled={saveDisabled}
+                      onClick={handlePublishPaper}
+                      className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+                    >
+                      {isPersisting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                      {isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
         </div>
 
         {/* ── Confirm / Save Button ── */}
+        {!isQuestionBankMode ? (
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -7210,12 +7280,7 @@ export default function PaperIntake() {
               type="button"
               size="lg"
               variant="outline"
-              disabled={
-                !title.trim()
-                || !hasAnyQuestions
-                || isPersisting
-                || (isEditing && !editingPaperMeta)
-              }
+              disabled={saveDisabled}
               onClick={handleSaveDraft}
               className="gap-2 border-slate-200"
             >
@@ -7228,12 +7293,7 @@ export default function PaperIntake() {
             <Button
               type="button"
               size="lg"
-              disabled={
-                !title.trim()
-                || !hasAnyQuestions
-                || isPersisting
-                || (isEditing && !editingPaperMeta)
-              }
+              disabled={saveDisabled}
               onClick={handlePublishPaper}
               className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
             >
@@ -7248,6 +7308,7 @@ export default function PaperIntake() {
             </Button>
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   );
