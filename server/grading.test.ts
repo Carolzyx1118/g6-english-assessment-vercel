@@ -129,62 +129,7 @@ describe("grading.explainWrongAnswers", () => {
 describe("grading.generateReport", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("returns bilingual proficiency report for WIDA assessment", async () => {
-    const mockResponse = {
-      languageLevel: "A2",
-      summary_en: "The student shows basic proficiency.", summary_cn: "学生展现了基础水平。",
-      strengths_en: ["Good vocabulary recognition"], strengths_cn: ["词汇识别能力不错"],
-      weaknesses_en: ["Grammar needs work"], weaknesses_cn: ["语法需要加强"],
-      recommendations_en: ["Practice daily"], recommendations_cn: ["每天练习"],
-      timeAnalysis_en: "Good pace.", timeAnalysis_cn: "节奏不错。",
-      reportTitle_en: "Assessment Feedback Report",
-      reportTitle_cn: "测评反馈报告",
-      overallSummary_en: "The student has a workable base but still needs stronger grammar and output control.",
-      overallSummary_cn: "学生目前有一定基础，但语法和输出能力还需要继续加强。",
-      abilitySnapshot_en: ["Input is stronger than output"],
-      abilitySnapshot_cn: ["输入能力强于输出能力"],
-      sectionInsights: [
-        {
-          sectionId: "vocabulary",
-          sectionTitle: "Part 1: Vocabulary",
-          summary_en: "Vocabulary recognition is relatively stable.",
-          summary_cn: "词汇识别相对稳定。",
-        },
-      ],
-      studyPlan: [
-        {
-          stage_en: "Stage 1",
-          stage_cn: "第一阶段",
-          focus_en: "Build the basics",
-          focus_cn: "补基础",
-          actions_en: ["Review core grammar."],
-          actions_cn: ["复习核心语法。"],
-        },
-        {
-          stage_en: "Stage 2",
-          stage_cn: "第二阶段",
-          focus_en: "Target weak sections",
-          focus_cn: "做专项",
-          actions_en: ["Practice reading weekly."],
-          actions_cn: ["每周练阅读专项。"],
-        },
-        {
-          stage_en: "Stage 3",
-          stage_cn: "第三阶段",
-          focus_en: "Return to full papers",
-          focus_cn: "整套题训练",
-          actions_en: ["Complete timed papers."],
-          actions_cn: ["完成限时整套题。"],
-        },
-      ],
-      parentFeedback_en: "There is clear room for improvement with steady practice.",
-      parentFeedback_cn: "只要训练方向清晰，后续还有明显提升空间。",
-      speakingEvaluation: null,
-    };
-    mockInvokeLLM.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify(mockResponse) } }],
-    } as any);
-
+  it("builds a deterministic template report without calling the LLM", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
       paperTitle: "PET English Assessment",
@@ -199,45 +144,69 @@ describe("grading.generateReport", () => {
       ],
     });
 
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result.languageLevel).toBe("A2");
-    expect(result.summary_en).toBeTruthy();
-    expect(result.summary_cn).toBeTruthy();
-    expect(result.strengths_en).toHaveLength(1);
-    expect(result.strengths_cn).toHaveLength(1);
-    expect(result.weaknesses_en).toHaveLength(1);
-    expect(result.weaknesses_cn).toHaveLength(1);
-    expect(result.recommendations_en).toHaveLength(1);
-    expect(result.recommendations_cn).toHaveLength(1);
-    expect(result.timeAnalysis_en).toBeTruthy();
-    expect(result.timeAnalysis_cn).toBeTruthy();
+    expect(result.summary_en).toContain("some English foundation");
+    expect(result.summary_cn).toContain("有一定英语基础");
+    expect(result.strengths_en.length).toBeGreaterThan(0);
+    expect(result.weaknesses_en.length).toBeGreaterThan(0);
+    expect(result.recommendations_en).toHaveLength(3);
+    expect(result.recommendations_cn).toHaveLength(3);
+    expect(result.timeAnalysis_en).toContain("The full assessment took 30 minutes");
+    expect(result.timeAnalysis_cn).toContain("本次整套测评总用时 30 分 0 秒");
     expect(result.reportTitle_cn).toBe("测评反馈报告");
-    expect(result.overallSummary_cn).toBeTruthy();
-    expect(result.abilitySnapshot_cn).toHaveLength(1);
-    expect(result.sectionInsights).toHaveLength(1);
+    expect(result.overallSummary_cn).toContain("综合等级为 C");
+    expect(result.abilitySnapshot_cn.length).toBeGreaterThanOrEqual(3);
+    expect(result.sectionInsights).toHaveLength(4);
+    expect(result.sectionInsights[0].summary_en).toContain("Vocabulary");
     expect(result.studyPlan).toHaveLength(3);
     expect(result.parentFeedback_cn).toBeTruthy();
+    expect(result.speakingEvaluation).toBeNull();
   });
 
-  it("returns fallback bilingual report on LLM error", async () => {
-    mockInvokeLLM.mockRejectedValueOnce(new Error("LLM error"));
-
+  it("marks writing and speaking as manual review in the template report", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
-      paperTitle: "PET English Assessment",
-      totalScore: 20, totalPossible: 46, percentage: 43, grade: "D", totalTimeSeconds: 600,
+      paperTitle: "G6 English Assessment",
+      studentName: "Manual Student",
+      totalScore: 22,
+      totalPossible: 40,
+      percentage: 55,
+      grade: "C",
+      totalTimeSeconds: 1200,
       sectionResults: [
-        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 12, timeSeconds: 120 },
-        { sectionId: "grammar", sectionTitle: "Part 2: Grammar", correct: 5, total: 13, timeSeconds: 150 },
-        { sectionId: "listening", sectionTitle: "Part 3: Listening", correct: 3, total: 6, timeSeconds: 100 },
-        { sectionId: "reading", sectionTitle: "Part 4: Reading", correct: 4, total: 15, timeSeconds: 230 },
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 12, timeSeconds: 180 },
+        { sectionId: "reading", sectionTitle: "Part 2: Reading", correct: 6, total: 10, timeSeconds: 420 },
+        { sectionId: "writing", sectionTitle: "Part 3: Writing", correct: 0, total: 0, timeSeconds: 300 },
+        { sectionId: "speaking-part-1", sectionTitle: "Part 4: Speaking", correct: 0, total: 0, timeSeconds: 300 },
       ],
+      writingSummary: {
+        score: 0,
+        maxScore: 0,
+        grade: "Manual Review",
+        manualReviewRequired: true,
+      },
+      speakingSummary: {
+        totalScore: 0,
+        totalPossible: 0,
+        grade: "Manual Review",
+        overallFeedback_en: "Teacher review required.",
+        overallFeedback_cn: "需要老师人工批改。",
+        reviewMode: "manual",
+        manualReviewRequired: true,
+        evaluations: [],
+      },
     });
 
-    expect(result.languageLevel).toBe("N/A");
-    expect(result.summary_en).toBeTruthy();
-    expect(result.summary_cn).toBeTruthy();
+    expect(mockInvokeLLM).not.toHaveBeenCalled();
+    expect(result.languageLevel).toBe("A2");
     expect(result.reportTitle_en).toBe("Assessment Feedback Report");
+    expect(result.abilitySnapshot_en).toContain("Writing and speaking should be finalized together with teacher review.");
+    expect(result.overallSummary_en).toContain("teacher scoring notes");
+    expect(result.sectionInsights.find((item) => item.sectionId === "writing")?.summary_en).toContain("teacher review");
+    expect(result.sectionInsights.find((item) => item.sectionId === "speaking-part-1")?.summary_en).toContain("teacher review");
     expect(result.studyPlan).toHaveLength(3);
+    expect(result.speakingEvaluation?.reviewMode).toBe("manual");
   });
 });
 

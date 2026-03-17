@@ -5,6 +5,7 @@
  */
 import jsPDF from 'jspdf';
 import { getPaperById, type Paper, type Section, type Question } from '@/data/papers';
+import { APP_BRAND_TITLE } from '@/lib/branding';
 import type {
   AssessmentReportResult,
   SpeakingEvaluationResult,
@@ -535,8 +536,26 @@ export function generateReportPDF(data: PDFData): void {
     reading: [99, 102, 241],
     writing: [225, 29, 72],
   };
+  const watermarkText = 'PUREON EDUCATION';
 
   // ── Helper functions ──
+  const addWatermark = () => {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(30);
+    pdf.setTextColor(238, 242, 247);
+    pdf.text(watermarkText, pageW / 2, pageH / 2, {
+      align: 'center',
+      angle: -32,
+    });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(226, 232, 240);
+    pdf.text(APP_BRAND_TITLE, pageW / 2, pageH / 2 + 10, {
+      align: 'center',
+      angle: -32,
+    });
+  };
+
   const addPageFooter = () => {
     pdf.setDrawColor(...C.border);
     pdf.setLineWidth(0.3);
@@ -554,6 +573,7 @@ export function generateReportPDF(data: PDFData): void {
       pdf.addPage();
       pageNum++;
       y = 15;
+      addWatermark();
     }
   };
 
@@ -656,6 +676,7 @@ export function generateReportPDF(data: PDFData): void {
   pdf.setTextColor(200, 210, 255);
   const reportDate = new Date(data.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   pdf.text(`${data.paperTitle} · Generated on ${reportDate}`, pageW / 2, 22, { align: 'center' });
+  addWatermark();
   y = 38;
 
   // ── STUDENT INFO ──

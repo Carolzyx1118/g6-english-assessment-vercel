@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
   AssessmentReportResult,
@@ -1613,83 +1614,136 @@ export default function ResultsPage() {
 
         {(reportResult || isGeneratingReport || reportError) && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="mb-8">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-              <div className="px-5 py-3 bg-blue-50 border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-700">{reportResult?.reportTitle_en || 'Assessment Feedback Report'}</h3>
-                  <Sparkles className="w-4 h-4 text-blue-500" />
+            <div className="relative bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
+              >
+                <div className="select-none whitespace-nowrap text-[52px] sm:text-[88px] font-black tracking-[0.2em] text-slate-100/80 rotate-[-24deg]">
+                  {APP_BRAND_SUBTITLE} · PUREON EDUCATION
                 </div>
-                {reportResult && <span className="text-sm font-semibold text-blue-700">{reportResult.languageLevel}</span>}
               </div>
-
-              {isGeneratingReport ? (
-                <div className="p-8 text-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'Generating the final report...' : '正在生成最终报告...'}</p>
-                </div>
-              ) : reportResult ? (
-                <div className="p-6 space-y-6">
-                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Summary' : '整体情况总结'}</h4>
-                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.overallSummary_en : reportResult.overallSummary_cn}</p>
+              <div className="relative z-10">
+                <div className="px-5 py-3 bg-blue-50/95 border-b border-slate-200 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-base text-slate-700">{reportResult?.reportTitle_en || 'Assessment Feedback Report'}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">{APP_BRAND_TITLE} · {APP_BRAND_SUBTITLE}</p>
                   </div>
+                  {reportResult && <span className="text-sm font-semibold text-blue-700">{reportResult.languageLevel}</span>}
+                </div>
 
-                  {((lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn) || []).length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Ability Snapshot' : '能力概括'}</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {(lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn).map((item, index) => (
-                          <span key={index} className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm border border-blue-100">{item}</span>
-                        ))}
+                {isGeneratingReport ? (
+                  <div className="p-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-3" />
+                    <p className="text-base text-slate-500">{lang === 'en' ? 'Preparing the final report...' : '正在整理最终报告...'}</p>
+                  </div>
+                ) : reportResult ? (
+                  <div className="p-6 space-y-6">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                      <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Summary' : '整体情况总结'}</h4>
+                      <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.overallSummary_en : reportResult.overallSummary_cn}</p>
+                    </div>
+
+                    {((lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn) || []).length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Ability Snapshot' : '能力概括'}</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {(lang === 'en' ? reportResult.abilitySnapshot_en : reportResult.abilitySnapshot_cn).map((item, index) => (
+                            <span key={index} className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm border border-blue-100">{item}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Current Strengths' : '当前优势'}</h4>
+                        <ul className="space-y-2">
+                          {(lang === 'en' ? reportResult.strengths_en : reportResult.strengths_cn).map((item, index) => (
+                            <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">{index + 1}.</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Priority Areas' : '优先提升方向'}</h4>
+                        <ul className="space-y-2">
+                          {(lang === 'en' ? reportResult.weaknesses_en : reportResult.weaknesses_cn).map((item, index) => (
+                            <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                              <span className="text-amber-600 font-bold mt-0.5">{index + 1}.</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
-                  )}
 
-                  {reportResult.sectionInsights.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Section Insights' : '分项能力分析'}</h4>
-                      <div className="space-y-3">
-                        {reportResult.sectionInsights.map((item) => (
-                          <div key={item.sectionId} className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                            <p className="font-medium text-slate-700 mb-1">{item.sectionTitle}</p>
-                            <p className="text-sm text-slate-600">{lang === 'en' ? item.summary_en : item.summary_cn}</p>
-                          </div>
-                        ))}
+                    <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+                      <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Core Improvement Directions' : '核心提升方向'}</h4>
+                        <ul className="space-y-2">
+                          {(lang === 'en' ? reportResult.recommendations_en : reportResult.recommendations_cn).map((item, index) => (
+                            <li key={index} className="text-sm text-slate-600 flex items-start gap-2">
+                              <span className="text-blue-600 font-bold mt-0.5">{index + 1}.</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                        <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Time Analysis' : '时间分析'}</h4>
+                        <p className="text-sm text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.timeAnalysis_en : reportResult.timeAnalysis_cn}</p>
                       </div>
                     </div>
-                  )}
 
-                  {reportResult.studyPlan.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Suggested Study Plan' : '后续学习规划'}</h4>
-                      <div className="space-y-3">
-                        {reportResult.studyPlan.map((stage, index) => (
-                          <div key={index} className="rounded-lg border border-slate-200 overflow-hidden">
-                            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                              <p className="font-medium text-slate-700">{lang === 'en' ? stage.stage_en : stage.stage_cn} · {lang === 'en' ? stage.focus_en : stage.focus_cn}</p>
+                    {reportResult.sectionInsights.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Section Insights' : '分项能力分析'}</h4>
+                        <div className="space-y-3">
+                          {reportResult.sectionInsights.map((item) => (
+                            <div key={item.sectionId} className="rounded-lg bg-slate-50 border border-slate-200 p-4">
+                              <p className="font-medium text-slate-700 mb-1">{item.sectionTitle}</p>
+                              <p className="text-sm text-slate-600">{lang === 'en' ? item.summary_en : item.summary_cn}</p>
                             </div>
-                            <ul className="p-4 space-y-2">
-                              {(lang === 'en' ? stage.actions_en : stage.actions_cn).map((action, actionIndex) => (
-                                <li key={actionIndex} className="text-sm text-slate-600 flex items-start gap-2">
-                                  <span className="text-blue-500 font-bold mt-0.5">{actionIndex + 1}.</span>
-                                  <span>{action}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
-                    <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Parent Feedback' : '给家长的反馈'}</h4>
-                    <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.parentFeedback_en : reportResult.parentFeedback_cn}</p>
+                    {reportResult.studyPlan.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Three-Stage Study Plan' : '三阶段学习规划'}</h4>
+                        <div className="space-y-3">
+                          {reportResult.studyPlan.map((stage, index) => (
+                            <div key={index} className="rounded-lg border border-slate-200 overflow-hidden">
+                              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                                <p className="font-medium text-slate-700">{lang === 'en' ? stage.stage_en : stage.stage_cn} · {lang === 'en' ? stage.focus_en : stage.focus_cn}</p>
+                              </div>
+                              <ul className="p-4 space-y-2">
+                                {(lang === 'en' ? stage.actions_en : stage.actions_cn).map((action, actionIndex) => (
+                                  <li key={actionIndex} className="text-sm text-slate-600 flex items-start gap-2">
+                                    <span className="text-blue-500 font-bold mt-0.5">{actionIndex + 1}.</span>
+                                    <span>{action}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                      <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Parent Feedback' : '给家长的反馈'}</h4>
+                      <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.parentFeedback_en : reportResult.parentFeedback_cn}</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-5 text-center text-base text-red-400">{reportError || (lang === 'en' ? 'Report generation failed' : '报告生成失败')}</div>
-              )}
+                ) : (
+                  <div className="p-5 text-center text-base text-red-400">{reportError || (lang === 'en' ? 'Report preparation failed' : '报告整理失败')}</div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
