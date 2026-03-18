@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
   normalizeEnglishTagSystems,
@@ -51,9 +50,9 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
 }
 
 const PART_PREFIX_OPTIONS: Record<PaperSubject, string[]> = {
-  english: ["阅读", "听力", "写作", "口语", "语法", "词汇"],
-  math: ["选择", "填空", "计算", "应用", "几何", "代数", "统计", "综合"],
-  vocabulary: ["词义", "拼写", "词汇运用", "搭配", "词形", "选词填空"],
+  english: ["Reading", "Listening", "Writing", "Speaking", "Grammar", "Vocabulary"],
+  math: ["Multiple Choice", "Fill in the Blank", "Calculation", "Word Problem", "Geometry", "Algebra", "Statistics", "Mixed Practice"],
+  vocabulary: ["Meaning", "Spelling", "Usage", "Collocation", "Word Form", "Cloze"],
 };
 
 function clampPositiveInt(value: number) {
@@ -186,9 +185,9 @@ export default function TagManager() {
         await saveVocabularyMutation.mutateAsync({ systems: normalized });
       }
 
-      toast.success("标签体系已保存。录题页会直接读取这里的配置。");
+      toast.success("Tag systems saved. Paper intake and random builder now use the updated settings.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "保存失败，请稍后重试。");
+      toast.error(error instanceof Error ? error.message : "Failed to save tag systems.");
     }
   };
 
@@ -244,11 +243,11 @@ export default function TagManager() {
             <div>
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" />
-                返回老师首页
+                Back to Teacher Home
               </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">标签管理</h1>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Tag Manager</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                在这里维护不同考试体系下的 Part 和教材单元。保存后，录题页和随机组卷页会直接读取这里的配置。
+                Manage exam systems, parts, and unit ranges here. Paper intake and the random builder will read these settings directly.
               </p>
             </div>
 
@@ -272,7 +271,7 @@ export default function TagManager() {
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                正在加载考试体系...
+                Loading exam systems...
               </CardContent>
             </Card>
           ) : (
@@ -280,7 +279,7 @@ export default function TagManager() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
                   <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                    {systems.length} 个考试体系
+                    {systems.length} exam systems
                   </Badge>
                   <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
                     {PAPER_SUBJECT_LABELS[subjectFilter]} Question Tags
@@ -304,7 +303,7 @@ export default function TagManager() {
                   }}
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  新增考试体系
+                  Add Exam System
                 </Button>
               </div>
 
@@ -318,8 +317,8 @@ export default function TagManager() {
                             <Layers3 className="h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle className="text-lg text-[#1E3A5F] sm:text-xl">{system.label.trim() || `考试体系 ${index + 1}`}</CardTitle>
-                            <CardDescription>系统 ID：{system.id}</CardDescription>
+                            <CardTitle className="text-lg text-[#1E3A5F] sm:text-xl">{system.label.trim() || `Exam System ${index + 1}`}</CardTitle>
+                            <CardDescription>System ID: {system.id}</CardDescription>
                           </div>
                         </div>
 
@@ -335,7 +334,7 @@ export default function TagManager() {
                             ) : (
                               <ChevronDown className="mr-2 h-4 w-4" />
                             )}
-                            {expandedSystemIds.includes(system.id) ? "收起" : "展开"}
+                            {expandedSystemIds.includes(system.id) ? "Collapse" : "Expand"}
                           </Button>
                           <Button
                             type="button"
@@ -352,17 +351,17 @@ export default function TagManager() {
                             disabled={systems.length <= 1}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            删除
+                            Delete
                           </Button>
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
                         <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                          {getUnitCount(system.units)} 个单元
+                          {getUnitCount(system.units)} Units
                         </Badge>
                         <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                          {system.examParts.length} 个 Part
+                          {system.examParts.length} Parts
                         </Badge>
                       </div>
                     </CardHeader>
@@ -370,7 +369,7 @@ export default function TagManager() {
                     {expandedSystemIds.includes(system.id) ? (
                       <CardContent className="grid gap-5 lg:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>考试体系名称</Label>
+                          <Label>Exam System Name</Label>
                           <Input
                             value={system.label}
                             onChange={(event) => {
@@ -387,17 +386,14 @@ export default function TagManager() {
                                 label: nextLabel,
                               }));
                             }}
-                            placeholder={subjectFilter === "english" ? "例如：FCE / B2 First" : "例如：校内同步 / 竞赛数学 / 核心词汇"}
+                            placeholder={subjectFilter === "english" ? "e.g. FCE / B2 First" : "e.g. School Sync / Competition Math / Core Vocabulary"}
                           />
-                          <p className="text-xs text-slate-500">这里的名称会直接显示在录题页和随机组卷页。</p>
+                          <p className="text-xs text-slate-500">This name appears directly in paper intake and the random builder.</p>
                         </div>
 
                         <div className="space-y-2">
-                          <Label>教材单元</Label>
+                          <Label>Unit Range</Label>
                           <div className="flex flex-wrap items-center gap-3">
-                            <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
-                              Unit 1 -
-                            </div>
                             <Input
                               type="number"
                               min={1}
@@ -408,15 +404,15 @@ export default function TagManager() {
                               }}
                               className="w-32 bg-white"
                             />
-                            <span className="text-sm text-slate-500">个单元</span>
+                            <span className="text-sm text-slate-500">units from Unit 1</span>
                           </div>
                         </div>
 
                         <div className="space-y-2 lg:col-span-2">
-                          <Label>考试 Part</Label>
+                          <Label>Exam Parts</Label>
                           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                             {system.examParts.map((examPart, examPartIndex) => {
-                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
+                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
                               const parsedPart = parseExamPart(examPart, defaultPrefix);
                               const partOptions = Array.from(
                                 new Set([
@@ -464,48 +460,48 @@ export default function TagManager() {
                                   />
 
                                   <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  type="button"
+                                  variant="outline"
+                                  className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
                                     onClick={() => {
                                       const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
                                       setExamPartsForSystem(system.id, nextExamParts);
                                     }}
-                                    disabled={system.examParts.length <= 1}
-                                  >
-                                    <Trash2 className="mr-1.5 h-4 w-4" />
-                                    删除
-                                  </Button>
-                                </div>
-                              );
-                            })}
+                                  disabled={system.examParts.length <= 1}
+                                >
+                                  <Trash2 className="mr-1.5 h-4 w-4" />
+                                  Delete
+                                </Button>
+                              </div>
+                            );
+                          })}
 
                             <Button
                               type="button"
-                              variant="outline"
-                              className="border-slate-200 bg-white"
-                              onClick={() => {
-                                const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
-                                setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              添加 Part
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap items-end justify-between gap-3">
-                            <p className="text-xs text-slate-500">先选分区类型，再调整 Part 后面的数字。</p>
-                            <Button
-                              type="button"
-                              className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F]"
+                            variant="outline"
+                            className="border-slate-200 bg-white"
+                            onClick={() => {
+                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
+                              setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
+                            }}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Part
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap items-end justify-between gap-3">
+                          <p className="text-xs text-slate-500">Choose the part type first, then adjust the part number.</p>
+                          <Button
+                            type="button"
+                            className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F]"
                               onClick={handleSave}
                               disabled={!canSave || isSaving}
-                            >
-                              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                              保存标签配置
-                            </Button>
-                          </div>
+                          >
+                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Save Tag Configuration
+                          </Button>
                         </div>
+                      </div>
                       </CardContent>
                     ) : null}
                   </Card>
