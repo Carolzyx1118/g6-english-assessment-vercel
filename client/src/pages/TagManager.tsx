@@ -317,8 +317,8 @@ export default function TagManager() {
                             <Layers3 className="h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle className="text-lg text-[#1E3A5F] sm:text-xl">{system.label.trim() || `Exam System ${index + 1}`}</CardTitle>
-                            <CardDescription>System ID: {system.id}</CardDescription>
+                            <CardTitle className="text-base text-[#1E3A5F] sm:text-lg">{system.label.trim() || `Exam System ${index + 1}`}</CardTitle>
+                            <CardDescription className="text-xs sm:text-sm">System ID: {system.id}</CardDescription>
                           </div>
                         </div>
 
