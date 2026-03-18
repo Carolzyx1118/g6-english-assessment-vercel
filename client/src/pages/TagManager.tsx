@@ -705,7 +705,15 @@ export default function TagManager() {
                             <div className="space-y-2 lg:col-span-2">
                               <Label>Exam Parts</Label>
                               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                                {system.examParts.map((examPart, examPartIndex) => {
+                                {buildGeneratedPaperConfig(
+                                  subjectFilter,
+                                  system.label,
+                                  system.examParts,
+                                  system.generatedPaper,
+                                  "assessment",
+                                  system.units,
+                                ).parts.map((partConfig, examPartIndex) => {
+                                  const examPart = partConfig.examPart;
                                   const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
                                   const parsedPart = parseExamPart(examPart, defaultPrefix);
                                   const partOptions = Array.from(
@@ -718,7 +726,7 @@ export default function TagManager() {
                                   return (
                                     <div
                                       key={`${system.id}-part-${examPartIndex}`}
-                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
+                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_minmax(0,1fr)_120px_auto]"
                                     >
                                       <select
                                         className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
@@ -753,6 +761,45 @@ export default function TagManager() {
                                         className="bg-white"
                                       />
 
+                                      <select
+                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                        value={partConfig.questionType}
+                                        onChange={(event) =>
+                                          updateGeneratedPaper(system.id, (current) => ({
+                                            ...current,
+                                            parts: current.parts.map((item, itemIndex) =>
+                                              itemIndex === examPartIndex
+                                                ? { ...item, questionType: event.target.value }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                      >
+                                        {getGeneratedQuestionTypeOptions(subjectFilter, examPart).map((option) => (
+                                          <option key={option} value={option}>
+                                            {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
+                                          </option>
+                                        ))}
+                                      </select>
+
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={partConfig.totalQuestions}
+                                        onChange={(event) =>
+                                          updateGeneratedPaper(system.id, (current) => ({
+                                            ...current,
+                                            parts: current.parts.map((item, itemIndex) =>
+                                              itemIndex === examPartIndex
+                                                ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                        className="bg-white text-center"
+                                      />
+
                                       <Button
                                         type="button"
                                         variant="outline"
@@ -784,72 +831,6 @@ export default function TagManager() {
                                 </Button>
                               </div>
                             </div>
-
-                            <div className="space-y-2 lg:col-span-2">
-                              <Label>Assessment Builder Setup</Label>
-                              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                                {buildGeneratedPaperConfig(
-                                  subjectFilter,
-                                  system.label,
-                                  system.examParts,
-                                  system.generatedPaper,
-                                  "assessment",
-                                  system.units,
-                                ).parts.map((partConfig, partIndex) => {
-                                  const questionTypeOptions = getGeneratedQuestionTypeOptions(subjectFilter, partConfig.examPart);
-
-                                  return (
-                                    <div
-                                      key={`${system.id}-generated-${partConfig.examPart}-${partIndex}`}
-                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]"
-                                    >
-                                      <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
-                                        {partConfig.examPart}
-                                      </div>
-
-                                      <select
-                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                        value={partConfig.questionType}
-                                        onChange={(event) =>
-                                          updateGeneratedPaper(system.id, (current) => ({
-                                            ...current,
-                                            parts: current.parts.map((item) =>
-                                              item.examPart === partConfig.examPart
-                                                ? { ...item, questionType: event.target.value }
-                                                : item,
-                                            ),
-                                          }))
-                                        }
-                                      >
-                                        {questionTypeOptions.map((option) => (
-                                          <option key={option} value={option}>
-                                            {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
-                                          </option>
-                                        ))}
-                                      </select>
-
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        step={1}
-                                        value={partConfig.totalQuestions}
-                                        onChange={(event) =>
-                                          updateGeneratedPaper(system.id, (current) => ({
-                                            ...current,
-                                            parts: current.parts.map((item) =>
-                                              item.examPart === partConfig.examPart
-                                                ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
-                                                : item,
-                                            ),
-                                          }))
-                                        }
-                                        className="bg-white text-center"
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
                           </>
                         )}
 
@@ -857,7 +838,7 @@ export default function TagManager() {
                           <p className="text-xs text-slate-500">
                             {system.systemMode === "textbook-practice"
                               ? "Textbook practice can be filtered by unit or question type."
-                              : "Choose the part type first, then adjust the part number."}
+                              : "Set the question type and question count directly in each part row."}
                           </p>
                           <Button
                             type="button"
