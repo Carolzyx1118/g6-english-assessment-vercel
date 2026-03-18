@@ -240,7 +240,7 @@ export default function TagManager() {
     <TeacherToolsLayout activeTool="tag-manager" currentSubject={subjectFilter}>
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-4">
             <div>
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" />
@@ -252,19 +252,32 @@ export default function TagManager() {
               </p>
             </div>
 
-            <div className="w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <Label className="text-sm font-medium text-slate-700">Subject</Label>
-              <select
-                className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={subjectFilter}
-                onChange={(event) => navigate(`/tag-manager?subject=${event.target.value}`)}
-              >
-                {PAPER_SUBJECT_ORDER.map((subject) => (
-                  <option key={subject} value={subject}>
-                    {PAPER_SUBJECT_LABELS[subject]}
-                  </option>
-                ))}
-              </select>
+            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium text-slate-700">Subject</Label>
+                  <select
+                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    value={subjectFilter}
+                    onChange={(event) => navigate(`/tag-manager?subject=${event.target.value}`)}
+                  >
+                    {PAPER_SUBJECT_ORDER.map((subject) => (
+                      <option key={subject} value={subject}>
+                        {PAPER_SUBJECT_LABELS[subject]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  type="button"
+                  className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F] sm:self-auto"
+                  onClick={handleSave}
+                  disabled={!canSave || isSaving}
+                >
+                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  保存标签配置
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -287,36 +300,25 @@ export default function TagManager() {
                   </Badge>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-slate-200"
-                    onClick={() => {
-                      if (subjectFilter === "english") {
-                        const nextSystem = createEmptyEnglishSystem(englishSystems.length);
-                        setEnglishSystems((current) => [...current, nextSystem]);
-                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
-                      } else {
-                        const nextSystem = createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", basicSystems.length);
-                        setBasicSystems((current) => [...current, nextSystem]);
-                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
-                      }
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    新增考试体系
-                  </Button>
-                  <Button
-                    type="button"
-                    className="bg-[#1E3A5F] text-white hover:bg-[#17324F]"
-                    onClick={handleSave}
-                    disabled={!canSave || isSaving}
-                  >
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    保存标签配置
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-slate-200"
+                  onClick={() => {
+                    if (subjectFilter === "english") {
+                      const nextSystem = createEmptyEnglishSystem(englishSystems.length);
+                      setEnglishSystems((current) => [...current, nextSystem]);
+                      setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
+                    } else {
+                      const nextSystem = createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", basicSystems.length);
+                      setBasicSystems((current) => [...current, nextSystem]);
+                      setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
+                    }
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增考试体系
+                </Button>
               </div>
 
               <div className="space-y-4">
