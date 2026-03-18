@@ -469,7 +469,7 @@ function HistoryContent() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [lang, setLang] = useState<Lang>('en');
+  const lang: Lang = 'en';
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [writingDraft, setWritingDraft] = useState<TeacherWritingDraft | null>(null);
   const [speakingDraft, setSpeakingDraft] = useState<TeacherSpeakingDraft | null>(null);
@@ -508,17 +508,8 @@ function HistoryContent() {
   const historySummary = useMemo(() => {
     const total = filteredResults.length;
     const reportReady = filteredResults.filter((result) => result.hasReport).length;
-    const average =
-      total > 0
-        ? Math.round(
-            filteredResults.reduce((sum, result) => {
-              const totalQuestions = Math.max(result.totalQuestions, 1);
-              return sum + (result.totalCorrect / totalQuestions) * 100;
-            }, 0) / total,
-          )
-        : 0;
 
-    return { total, reportReady, average };
+    return { total, reportReady };
   }, [filteredResults]);
   const deleteTarget = useMemo(
     () => filteredResults.find((result) => result.id === confirmDeleteId) ?? null,
@@ -838,17 +829,9 @@ function HistoryContent() {
                     : 'Review assessment records, update teacher scoring, download reports, or delete outdated entries.'
                   : subjectFilter
                     ? `查看 ${PAPER_SUBJECT_LABELS[subjectFilter]} 科目的测试记录，更新人工评分、下载报告或删除旧记录。`
-                    : '查看测试记录，更新人工评分、下载报告或删除旧记录。'}
+                  : '查看测试记录，更新人工评分、下载报告或删除旧记录。'}
               </p>
             </div>
-
-            <Button
-              variant="outline"
-              className="border-slate-200"
-              onClick={() => setLang(lang === 'en' ? 'cn' : 'en')}
-            >
-              {lang === 'en' ? '中文' : 'EN'}
-            </Button>
           </div>
 
           {isLoading ? (
@@ -880,7 +863,7 @@ function HistoryContent() {
             </Card>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Card className="border-slate-200 shadow-sm">
                   <CardHeader className="pb-2">
                     <CardDescription>{lang === 'en' ? 'Total Records' : '总记录数'}</CardDescription>
@@ -891,12 +874,6 @@ function HistoryContent() {
                   <CardHeader className="pb-2">
                     <CardDescription>{lang === 'en' ? 'Report Ready' : '已生成报告'}</CardDescription>
                     <CardTitle className="text-2xl text-emerald-700">{historySummary.reportReady}</CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card className="border-slate-200 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardDescription>{lang === 'en' ? 'Average Score' : '平均得分率'}</CardDescription>
-                    <CardTitle className="text-2xl text-amber-700">{historySummary.average}%</CardTitle>
                   </CardHeader>
                 </Card>
               </div>
