@@ -253,31 +253,18 @@ export default function TagManager() {
             </div>
 
             <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium text-slate-700">Subject</Label>
-                  <select
-                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                    value={subjectFilter}
-                    onChange={(event) => navigate(`/tag-manager?subject=${event.target.value}`)}
-                  >
-                    {PAPER_SUBJECT_ORDER.map((subject) => (
-                      <option key={subject} value={subject}>
-                        {PAPER_SUBJECT_LABELS[subject]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Button
-                  type="button"
-                  className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F] sm:self-auto"
-                  onClick={handleSave}
-                  disabled={!canSave || isSaving}
-                >
-                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  保存标签配置
-                </Button>
-              </div>
+              <Label className="text-sm font-medium text-slate-700">Subject</Label>
+              <select
+                className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                value={subjectFilter}
+                onChange={(event) => navigate(`/tag-manager?subject=${event.target.value}`)}
+              >
+                {PAPER_SUBJECT_ORDER.map((subject) => (
+                  <option key={subject} value={subject}>
+                    {PAPER_SUBJECT_LABELS[subject]}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -382,134 +369,145 @@ export default function TagManager() {
 
                     {expandedSystemIds.includes(system.id) ? (
                       <CardContent className="grid gap-5 lg:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>考试体系名称</Label>
-                        <Input
-                          value={system.label}
-                          onChange={(event) => {
-                            const nextLabel = event.target.value;
-                            if (subjectFilter === "english") {
-                              updateSystem(system.id, (current) => ({
+                        <div className="space-y-2">
+                          <Label>考试体系名称</Label>
+                          <Input
+                            value={system.label}
+                            onChange={(event) => {
+                              const nextLabel = event.target.value;
+                              if (subjectFilter === "english") {
+                                updateSystem(system.id, (current) => ({
+                                  ...current,
+                                  label: nextLabel,
+                                }));
+                                return;
+                              }
+                              updateBasicSystem(system.id, (current) => ({
                                 ...current,
                                 label: nextLabel,
                               }));
-                              return;
-                            }
-                            updateBasicSystem(system.id, (current) => ({
-                              ...current,
-                              label: nextLabel,
-                            }));
-                          }}
-                          placeholder={subjectFilter === "english" ? "例如：FCE / B2 First" : "例如：校内同步 / 竞赛数学 / 核心词汇"}
-                        />
-                        <p className="text-xs text-slate-500">这里的名称会直接显示在录题页和随机组卷页。</p>
-                      </div>
+                            }}
+                            placeholder={subjectFilter === "english" ? "例如：FCE / B2 First" : "例如：校内同步 / 竞赛数学 / 核心词汇"}
+                          />
+                          <p className="text-xs text-slate-500">这里的名称会直接显示在录题页和随机组卷页。</p>
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label>教材单元</Label>
-                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
-                              Unit 1 -
+                        <div className="space-y-2">
+                          <Label>教材单元</Label>
+                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
+                                Unit 1 -
+                              </div>
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={getUnitCount(system.units)}
+                                onChange={(event) => {
+                                  setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
+                                }}
+                                className="w-32 bg-white"
+                              />
+                              <span className="text-sm text-slate-500">个单元</span>
                             </div>
-                            <Input
-                              type="number"
-                              min={1}
-                              step={1}
-                              value={getUnitCount(system.units)}
-                              onChange={(event) => {
-                                setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
-                              }}
-                              className="w-32 bg-white"
-                            />
-                            <span className="text-sm text-slate-500">个单元</span>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="space-y-2 lg:col-span-2">
-                        <Label>考试 Part</Label>
-                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                          {system.examParts.map((examPart, examPartIndex) => {
-                            const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
-                            const parsedPart = parseExamPart(examPart, defaultPrefix);
-                            const partOptions = Array.from(
-                              new Set([
-                                ...PART_PREFIX_OPTIONS[subjectFilter],
-                                ...system.examParts.map((currentPart) => parseExamPart(currentPart, defaultPrefix).prefix),
-                              ]),
-                            );
-
-                            return (
-                              <div
-                                key={`${system.id}-part-${examPartIndex}`}
-                                className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
-                              >
-                                <select
-                                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                  value={parsedPart.prefix}
-                                  onChange={(event) => {
-                                    const nextExamParts = [...system.examParts];
-                                    nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
-                                    setExamPartsForSystem(system.id, nextExamParts);
-                                  }}
-                                >
-                                  {partOptions.map((option) => (
-                                    <option key={option} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600">
-                                  Part
-                                </div>
-
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  value={parsedPart.number}
-                                  onChange={(event) => {
-                                    const nextExamParts = [...system.examParts];
-                                    nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
-                                    setExamPartsForSystem(system.id, nextExamParts);
-                                  }}
-                                  className="bg-white"
-                                />
-
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                  onClick={() => {
-                                    const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
-                                    setExamPartsForSystem(system.id, nextExamParts);
-                                  }}
-                                  disabled={system.examParts.length <= 1}
-                                >
-                                  <Trash2 className="mr-1.5 h-4 w-4" />
-                                  删除
-                                </Button>
-                              </div>
-                            );
-                          })}
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-slate-200 bg-white"
-                            onClick={() => {
+                        <div className="space-y-2 lg:col-span-2">
+                          <Label>考试 Part</Label>
+                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                            {system.examParts.map((examPart, examPartIndex) => {
                               const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
-                              setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
-                            }}
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            添加 Part
-                          </Button>
+                              const parsedPart = parseExamPart(examPart, defaultPrefix);
+                              const partOptions = Array.from(
+                                new Set([
+                                  ...PART_PREFIX_OPTIONS[subjectFilter],
+                                  ...system.examParts.map((currentPart) => parseExamPart(currentPart, defaultPrefix).prefix),
+                                ]),
+                              );
+
+                              return (
+                                <div
+                                  key={`${system.id}-part-${examPartIndex}`}
+                                  className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
+                                >
+                                  <select
+                                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                    value={parsedPart.prefix}
+                                    onChange={(event) => {
+                                      const nextExamParts = [...system.examParts];
+                                      nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
+                                      setExamPartsForSystem(system.id, nextExamParts);
+                                    }}
+                                  >
+                                    {partOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600">
+                                    Part
+                                  </div>
+
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={parsedPart.number}
+                                    onChange={(event) => {
+                                      const nextExamParts = [...system.examParts];
+                                      nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
+                                      setExamPartsForSystem(system.id, nextExamParts);
+                                    }}
+                                    className="bg-white"
+                                  />
+
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    onClick={() => {
+                                      const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
+                                      setExamPartsForSystem(system.id, nextExamParts);
+                                    }}
+                                    disabled={system.examParts.length <= 1}
+                                  >
+                                    <Trash2 className="mr-1.5 h-4 w-4" />
+                                    删除
+                                  </Button>
+                                </div>
+                              );
+                            })}
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="border-slate-200 bg-white"
+                              onClick={() => {
+                                const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
+                                setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
+                              }}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              添加 Part
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap items-end justify-between gap-3">
+                            <p className="text-xs text-slate-500">先选分区类型，再调整 Part 后面的数字。</p>
+                            <Button
+                              type="button"
+                              className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F]"
+                              onClick={handleSave}
+                              disabled={!canSave || isSaving}
+                            >
+                              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                              保存标签配置
+                            </Button>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-500">先选分区类型，再调整 Part 后面的数字。</p>
-                      </div>
                       </CardContent>
                     ) : null}
                   </Card>
