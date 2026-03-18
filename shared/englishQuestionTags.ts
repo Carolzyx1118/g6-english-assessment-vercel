@@ -1,13 +1,19 @@
 export type EnglishExamTagTrack = string;
-export type EnglishExamTagEntry = "教材配套" | "考试题库";
+export type EnglishExamTagEntry = "Textbook Practice" | "Exam Bank" | "教材配套" | "考试题库";
 export type EnglishExamTagAbility =
+  | "Vocabulary"
+  | "Grammar"
+  | "Reading"
+  | "Listening"
+  | "Writing"
+  | "Speaking"
   | "词汇"
   | "语法"
   | "阅读理解"
   | "听力理解"
   | "写作"
   | "口语";
-export type EnglishExamTagDifficulty = "基础" | "中等" | "提高";
+export type EnglishExamTagDifficulty = "Basic" | "Intermediate" | "Advanced" | "基础" | "中等" | "提高";
 
 export interface EnglishQuestionTagProfile {
   track: EnglishExamTagTrack;
@@ -95,16 +101,73 @@ export type EnglishExamTagSystemInput = Pick<
   grammarByUnit?: Record<string, string[]>;
 };
 
-export const ENGLISH_TAG_ENTRY_OPTIONS: EnglishExamTagEntry[] = ["教材配套", "考试题库"];
+const LEGACY_ENGLISH_TAG_ENTRY_MAP: Record<string, "Textbook Practice" | "Exam Bank"> = {
+  教材配套: "Textbook Practice",
+  考试题库: "Exam Bank",
+};
+
+const LEGACY_ENGLISH_TAG_ABILITY_MAP: Record<string, "Vocabulary" | "Grammar" | "Reading" | "Listening" | "Writing" | "Speaking"> = {
+  词汇: "Vocabulary",
+  语法: "Grammar",
+  阅读理解: "Reading",
+  听力理解: "Listening",
+  写作: "Writing",
+  口语: "Speaking",
+};
+
+const LEGACY_ENGLISH_TAG_DIFFICULTY_MAP: Record<string, "Basic" | "Intermediate" | "Advanced"> = {
+  基础: "Basic",
+  中等: "Intermediate",
+  提高: "Advanced",
+};
+
+export function normalizeEnglishTagEntry(value: string | undefined | null): "Textbook Practice" | "Exam Bank" {
+  if (!value) return "Exam Bank";
+  return LEGACY_ENGLISH_TAG_ENTRY_MAP[value] ?? (value === "Textbook Practice" ? "Textbook Practice" : "Exam Bank");
+}
+
+export function normalizeEnglishTagAbility(value: string | undefined | null): "Vocabulary" | "Grammar" | "Reading" | "Listening" | "Writing" | "Speaking" {
+  if (!value) return "Reading";
+  return LEGACY_ENGLISH_TAG_ABILITY_MAP[value] ?? (
+    value === "Vocabulary"
+    || value === "Grammar"
+    || value === "Reading"
+    || value === "Listening"
+    || value === "Writing"
+    || value === "Speaking"
+      ? value
+      : "Reading"
+  );
+}
+
+export function normalizeEnglishTagDifficulty(value: string | undefined | null): "Basic" | "Intermediate" | "Advanced" | undefined {
+  if (!value) return undefined;
+  return LEGACY_ENGLISH_TAG_DIFFICULTY_MAP[value] ?? (
+    value === "Basic" || value === "Intermediate" || value === "Advanced"
+      ? value
+      : undefined
+  );
+}
+
+export function normalizeEnglishQuestionTagProfile(profile: EnglishQuestionTagProfile): EnglishQuestionTagProfile {
+  return {
+    ...profile,
+    entries: Array.from(new Set((profile.entries ?? []).map((entry) => normalizeEnglishTagEntry(entry)))) as EnglishExamTagEntry[],
+    ability: normalizeEnglishTagAbility(profile.ability),
+    difficulty: normalizeEnglishTagDifficulty(profile.difficulty),
+  };
+}
+
+export const ENGLISH_TAG_ENTRY_OPTIONS: EnglishExamTagEntry[] = ["Textbook Practice", "Exam Bank"];
 export const ENGLISH_TAG_ABILITY_OPTIONS: EnglishExamTagAbility[] = [
-  "词汇",
-  "语法",
-  "阅读理解",
-  "听力理解",
-  "写作",
-  "口语",
+  "Vocabulary",
+  "Grammar",
+  "Reading",
+  "Listening",
+  "Writing",
+  "Speaking",
 ];
-export const ENGLISH_TAG_DIFFICULTY_OPTIONS: EnglishExamTagDifficulty[] = ["基础", "中等", "提高"];
+export const ENGLISH_TAG_DIFFICULTY_OPTIONS: EnglishExamTagDifficulty[] = ["Basic", "Intermediate", "Advanced"];
 export const DEFAULT_ENGLISH_EXAM_TAG_TRACK = "ket";
 
 const KET_UNITS = Array.from({ length: 14 }, (_, index) => `Unit ${index + 1}`);

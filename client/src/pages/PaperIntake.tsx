@@ -85,6 +85,7 @@ import {
   getBlueprintBuildMode,
   getBlueprintVisibilityMode,
 } from "@shared/taggedPaperGenerator";
+import { normalizeEnglishTagAbility } from "@shared/englishQuestionTags";
 import { toast } from "sonner";
 import PassageMCQPreview from "@/components/PassageMCQPreview";
 
@@ -203,12 +204,13 @@ function getLockedMathQuestionType(sectionType: ManualSectionType): ManualQuesti
 
 function getEnglishSectionTypeFromAbility(ability?: string): ManualSectionType | null {
   if (!ability) return null;
-  if (ability === "语法") return "grammar";
-  if (ability === "词汇") return "vocabulary";
-  if (ability === "听力理解") return "listening";
-  if (ability === "口语") return "speaking";
-  if (ability === "写作") return "writing";
-  if (ability === "阅读理解") return "reading";
+  const normalizedAbility = normalizeEnglishTagAbility(ability);
+  if (normalizedAbility === "Grammar") return "grammar";
+  if (normalizedAbility === "Vocabulary") return "vocabulary";
+  if (normalizedAbility === "Listening") return "listening";
+  if (normalizedAbility === "Speaking") return "speaking";
+  if (normalizedAbility === "Writing") return "writing";
+  if (normalizedAbility === "Reading") return "reading";
   return null;
 }
 

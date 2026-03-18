@@ -4,6 +4,7 @@ import {
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
   ENGLISH_TAG_ENTRY_OPTIONS,
   getEnglishExamTagSchema,
+  normalizeEnglishQuestionTagProfile,
   type EnglishExamTagAbility,
   type EnglishExamTagTrack,
   type EnglishQuestionTagProfile,
@@ -18,17 +19,17 @@ function createDefaultProfile(
   defaultTrack: EnglishExamTagTrack,
 ): EnglishQuestionTagProfile {
   const ability = (() => {
-    if (sectionType === "grammar") return "语法";
-    if (sectionType === "vocabulary") return "词汇";
-    if (sectionType === "listening") return "听力理解";
-    if (sectionType === "speaking" || questionType === "speaking") return "口语";
-    if (sectionType === "writing" || questionType === "writing") return "写作";
-    return "阅读理解";
+    if (sectionType === "grammar") return "Grammar";
+    if (sectionType === "vocabulary") return "Vocabulary";
+    if (sectionType === "listening") return "Listening";
+    if (sectionType === "speaking" || questionType === "speaking") return "Speaking";
+    if (sectionType === "writing" || questionType === "writing") return "Writing";
+    return "Reading";
   })() as EnglishExamTagAbility;
 
   return {
     track: defaultTrack,
-    entries: ["考试题库"],
+    entries: ["Exam Bank"],
     ability,
     grammarPoints: [],
   };
@@ -59,7 +60,9 @@ export default function EnglishQuestionTagEditor({
 }: EnglishQuestionTagEditorProps) {
   const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
 
-  const rawProfile = value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack);
+  const rawProfile = normalizeEnglishQuestionTagProfile(
+    value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack),
+  );
   const safeTrack = schemaEntries.some(([track]) => track === rawProfile.track) ? rawProfile.track : defaultTrack;
   const profile = safeTrack === rawProfile.track ? rawProfile : { ...rawProfile, track: safeTrack };
   const schema = getEnglishExamTagSchema(profile.track, schemas);
@@ -86,8 +89,8 @@ export default function EnglishQuestionTagEditor({
     <div className="space-y-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-900">题目标签</p>
-          <p className="text-xs text-slate-500">随机组卷只会抽取这里已经打好标签的英语题。</p>
+          <p className="text-sm font-semibold text-slate-900">Question Tags</p>
+          <p className="text-xs text-slate-500">Random paper generation only pulls English questions tagged here.</p>
         </div>
         <Button
           type="button"
@@ -95,13 +98,13 @@ export default function EnglishQuestionTagEditor({
           className="h-auto px-2 py-1 text-xs text-slate-500"
           onClick={() => onChange(undefined)}
         >
-          清空标签
+          Clear Tags
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>考试体系</Label>
+          <Label>Exam System</Label>
           <select
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             value={profile.track}
@@ -127,7 +130,7 @@ export default function EnglishQuestionTagEditor({
         </div>
 
         <div className="space-y-2">
-          <Label>类型</Label>
+          <Label>Skill</Label>
           <select
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             value={profile.ability}
@@ -136,8 +139,8 @@ export default function EnglishQuestionTagEditor({
               handleProfileChange((current) => ({
                 ...current,
                 ability: nextAbility,
-                grammarPoints: nextAbility === "语法" ? current.grammarPoints ?? [] : [],
-                difficulty: nextAbility === "语法" ? current.difficulty : undefined,
+                grammarPoints: nextAbility === "Grammar" ? current.grammarPoints ?? [] : [],
+                difficulty: nextAbility === "Grammar" ? current.difficulty : undefined,
               }));
             }}
           >
@@ -149,7 +152,7 @@ export default function EnglishQuestionTagEditor({
       </div>
 
       <div className="space-y-2">
-        <Label>入口</Label>
+        <Label>Entry</Label>
         <div className="flex flex-wrap gap-3">
           {ENGLISH_TAG_ENTRY_OPTIONS.map((entry) => {
             const checked = profile.entries.includes(entry);
@@ -173,7 +176,7 @@ export default function EnglishQuestionTagEditor({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>教材单元</Label>
+          <Label>Unit</Label>
           <select
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             value={profile.unit || ""}
@@ -182,14 +185,14 @@ export default function EnglishQuestionTagEditor({
               handleProfileChange((current) => ({
                 ...current,
                 unit: nextUnit,
-                grammarUnit: current.ability === "语法" ? (nextUnit || current.grammarUnit) : current.grammarUnit,
-                grammarPoints: current.ability === "语法" && nextUnit && current.grammarUnit !== nextUnit
+                grammarUnit: current.ability === "Grammar" ? (nextUnit || current.grammarUnit) : current.grammarUnit,
+                grammarPoints: current.ability === "Grammar" && nextUnit && current.grammarUnit !== nextUnit
                   ? []
                   : current.grammarPoints ?? [],
               }));
             }}
           >
-            <option value="">未设置</option>
+            <option value="">Unassigned</option>
             {schema.units.map((unit) => (
               <option key={unit} value={unit}>{unit}</option>
             ))}
@@ -197,7 +200,7 @@ export default function EnglishQuestionTagEditor({
         </div>
 
         <div className="space-y-2">
-          <Label>考试 Part</Label>
+          <Label>Exam Part</Label>
           <select
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             value={profile.examPart || ""}
@@ -217,11 +220,11 @@ export default function EnglishQuestionTagEditor({
         </div>
       </div>
 
-      {profile.ability === "语法" ? (
+      {profile.ability === "Grammar" ? (
         <div className="space-y-4 rounded-xl border border-amber-100 bg-white/90 p-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>语法所属单元</Label>
+              <Label>Grammar Unit</Label>
               <select
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 value={grammarUnit || ""}
@@ -234,7 +237,7 @@ export default function EnglishQuestionTagEditor({
                   }));
                 }}
               >
-                <option value="">请选择</option>
+                <option value="">Select a unit</option>
                 {schema.units.map((unit) => (
                   <option key={unit} value={unit}>{unit}</option>
                 ))}
@@ -242,7 +245,7 @@ export default function EnglishQuestionTagEditor({
             </div>
 
             <div className="space-y-2">
-              <Label>难度</Label>
+              <Label>Difficulty</Label>
               <select
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 value={profile.difficulty || ""}
@@ -254,7 +257,7 @@ export default function EnglishQuestionTagEditor({
                   }));
                 }}
               >
-                <option value="">未设置</option>
+                <option value="">Unassigned</option>
                 {ENGLISH_TAG_DIFFICULTY_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
@@ -263,7 +266,7 @@ export default function EnglishQuestionTagEditor({
           </div>
 
           <div className="space-y-2">
-            <Label>语法知识点</Label>
+            <Label>Grammar Points</Label>
             {grammarOptions.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {grammarOptions.map((point) => {
@@ -285,7 +288,7 @@ export default function EnglishQuestionTagEditor({
                 })}
               </div>
             ) : (
-              <p className="text-xs text-slate-500">先选择语法所属单元，再勾选知识点。</p>
+              <p className="text-xs text-slate-500">Choose a grammar unit first, then select grammar points.</p>
             )}
           </div>
         </div>

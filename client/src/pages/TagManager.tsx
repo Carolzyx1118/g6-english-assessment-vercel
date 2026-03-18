@@ -40,8 +40,8 @@ function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
     systemMode: "assessment",
     units: [formatUnitNumber(1)],
     examParts: [],
-    abilities: ["词汇", "语法", "阅读理解", "听力理解", "写作", "口语"],
-    difficulties: ["基础", "中等", "提高"],
+    abilities: ["Vocabulary", "Grammar", "Reading", "Listening", "Writing", "Speaking"],
+    difficulties: ["Basic", "Intermediate", "Advanced"],
     grammarByUnit: {},
     generatedPaper: { title: "", description: "", practiceMode: "unit", parts: [], practiceRules: [] },
   };
