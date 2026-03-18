@@ -127,7 +127,9 @@ function matchesQuestionTagProfile(
   const filters = rule.filters;
   if (filters.track && profile.track !== filters.track) return false;
   if (filters.unit && profile.unit !== filters.unit) return false;
-  if (filters.examPart && profile.examPart !== filters.examPart) return false;
+  // Exam part is optional in question intake. If a question leaves it unset,
+  // keep it eligible for framework-based assembly instead of excluding it.
+  if (filters.examPart && profile.examPart && profile.examPart !== filters.examPart) return false;
 
   if (profile.kind === "english") {
     if (filters.entries && filters.entries.length > 0) {

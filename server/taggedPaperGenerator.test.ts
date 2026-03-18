@@ -50,6 +50,52 @@ function makeFixedBlueprint(id: string, prompt: string, unit: string): ManualPap
   };
 }
 
+function makeAssessmentFallbackBlueprint(id: string, prompt: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 1",
+        sectionType: "reading",
+        subsections: [
+          {
+            id: `${id}-subsection`,
+            title: "",
+            instructions: "",
+            questionType: "mcq",
+            questions: [
+              {
+                id: `${id}-question`,
+                type: "mcq",
+                prompt,
+                options: [
+                  { id: `${id}-a`, label: "A", text: "A" },
+                  { id: `${id}-b`, label: "B", text: "B" },
+                ],
+                correctAnswer: "A",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function makeMathFixedBlueprint(id: string, prompt: string, examPart: string): ManualPaperBlueprint {
   return {
     id,
@@ -235,5 +281,49 @@ describe("tagged random paper generation", () => {
     expect(result.blueprint.sections).toHaveLength(1);
     expect(result.blueprint.sections[0].subsections).toHaveLength(1);
     expect(result.blueprint.sections[0].subsections[0]?.questions[0]?.prompt).toBe("Math question A");
+  });
+
+  it("allows assessment frameworks to pull questions without an explicit exam part tag", () => {
+    const source = makeAssessmentFallbackBlueprint("english-a", "Fallback reading question");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-assessment-paper",
+      title: "Generated Assessment Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-a"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 1",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-1",
+                label: "Reading Part 1",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 1",
+                  questionTypes: ["mcq"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-a", title: "English A", blueprint: source },
+    ]);
+
+    expect(result.blueprint.sections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections[0]?.questions[0]?.prompt).toBe("Fallback reading question");
   });
 });
