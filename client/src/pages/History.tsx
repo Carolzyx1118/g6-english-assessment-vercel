@@ -881,9 +881,9 @@ function HistoryContent() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <CardTitle>{lang === 'en' ? 'Assessment Records' : '测试记录'}</CardTitle>
-                      <CardDescription>
+                    <div className="space-y-1.5">
+                      <CardTitle className="leading-tight">{lang === 'en' ? 'Assessment Records' : '测试记录'}</CardTitle>
+                      <CardDescription className="leading-relaxed">
                         {lang === 'en'
                           ? 'Open a record to review details, update manual scoring, download the report, or remove the entry.'
                           : '展开记录可查看详情、更新人工评分、下载报告或删除该条记录。'}
