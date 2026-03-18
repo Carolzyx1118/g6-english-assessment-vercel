@@ -4172,7 +4172,7 @@ export default function PaperIntake() {
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
               {isEditing ? `Edit ${PAPER_SUBJECT_LABELS[paperSubject]} Paper` : `${PAPER_SUBJECT_LABELS[paperSubject]} Paper Builder`}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+            <p className="mt-2 max-w-3xl text-sm text-slate-500 md:max-w-none md:whitespace-nowrap">
               {isEditing
                 ? "Update a saved paper. The builder is prefilled with the current content so you can fix mistakes and save changes."
                 : isMathPaper
