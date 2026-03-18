@@ -204,16 +204,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
         <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject} headerOffset>
           <div className="bg-[#FAFBFD]">
             <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-[-18rem] hidden w-[calc(100%+18rem)] md:block">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
-                <div className="absolute inset-0 opacity-5" style={{
-                  backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
-                  backgroundSize: '40px 40px'
-                }} />
-                <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
-              </div>
-
               <div className="relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
                 <div className="absolute inset-0 opacity-5" style={{
@@ -277,11 +267,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
                   </svg>
                 </div>
-              </div>
-              <div className="pointer-events-none absolute bottom-0 left-[-18rem] hidden h-[60px] w-[calc(100%+18rem)] md:block">
-                <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full block">
-                  <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
-                </svg>
               </div>
             </div>
 
