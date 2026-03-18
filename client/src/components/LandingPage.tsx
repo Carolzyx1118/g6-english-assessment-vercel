@@ -2,7 +2,7 @@ import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator, Plus } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
@@ -166,8 +166,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ) as Record<PaperSubject, number>,
     [visiblePapers, visibleSubjectModules],
   );
-  const showQuickCreateTile = isTeacher && activeSubject === 'english';
-
   useEffect(() => {
     if (hasSingleSubjectAccess) {
       setSelectedSubject(allowedSubjects[0]);
@@ -382,42 +380,8 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                         </div>
                       </motion.button>
                     ))}
-                    {showQuickCreateTile && (
-                      <motion.button
-                        key="quick-create-paper"
-                        type="button"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.5 + filteredPapers.length * 0.15 }}
-                        onClick={() => navigate('/paper-composer?subject=english')}
-                        className="group relative text-left rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-[#D4A84B]/60 hover:bg-white hover:shadow-xl"
-                      >
-                        <div className="flex h-full min-h-[260px] flex-col justify-between">
-                          <div>
-                            <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1E3A5F]/5 text-[#1E3A5F] transition-colors group-hover:bg-[#D4A84B]/10 group-hover:text-[#D4A84B]">
-                              <Plus className="h-8 w-8" />
-                            </div>
-                            <div className="mb-4 flex items-center justify-between gap-4">
-                              <h3 className="text-xl font-bold text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">添加试卷</h3>
-                              <ArrowRight className="w-5 h-5 text-slate-300 transition-all group-hover:translate-x-1 group-hover:text-[#D4A84B]" />
-                            </div>
-                            <p className="text-sm leading-relaxed text-slate-600">
-                              先选择考试体系，再按对应 Part 设置题型和道数，系统会带你进入随机组卷模板页。
-                            </p>
-                          </div>
-                          <div className="mt-6 flex flex-wrap gap-3">
-                            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                              KET / PET
-                            </span>
-                            <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1.5 text-xs font-semibold text-[#A97C21]">
-                              Random Builder
-                            </span>
-                          </div>
-                        </div>
-                      </motion.button>
-                    )}
                   </div>
-                  {filteredPapers.length === 0 && !showQuickCreateTile && (
+                  {filteredPapers.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
                       No papers in this subject yet. Add one later and it will appear here automatically.
                     </div>
