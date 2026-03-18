@@ -472,29 +472,6 @@ export default function TagManager() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label>Exam System Name</Label>
-                          <Input
-                            value={system.label}
-                            onChange={(event) => {
-                              const nextLabel = event.target.value;
-                              if (subjectFilter === "english") {
-                                updateSystem(system.id, (current) => ({
-                                  ...current,
-                                  label: nextLabel,
-                                }));
-                                return;
-                              }
-                              updateBasicSystem(system.id, (current) => ({
-                                ...current,
-                                label: nextLabel,
-                              }));
-                            }}
-                            placeholder={subjectFilter === "english" ? "e.g. FCE / B2 First" : "e.g. School Sync / Competition Math / Core Vocabulary"}
-                          />
-                          <p className="text-xs text-slate-500">This name appears directly in paper intake and tag-based paper setup.</p>
-                        </div>
-
-                        <div className="space-y-2">
                           <Label>Unit Range</Label>
                           <div className="flex flex-wrap items-center gap-3">
                             <Input
@@ -522,13 +499,44 @@ export default function TagManager() {
                               system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
                               system.units,
                             ).title}
-                            onChange={(event) =>
-                              updateGeneratedPaper(system.id, (current) => ({
+                            onChange={(event) => {
+                              const nextTitle = event.target.value;
+                              if (subjectFilter === "english") {
+                                updateSystem(system.id, (current) => ({
+                                  ...current,
+                                  label: nextTitle,
+                                  generatedPaper: {
+                                    ...buildGeneratedPaperConfig(
+                                      "english",
+                                      nextTitle,
+                                      current.examParts,
+                                      current.generatedPaper,
+                                      current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                                      current.units,
+                                    ),
+                                    title: nextTitle,
+                                  },
+                                }));
+                                return;
+                              }
+
+                              updateBasicSystem(system.id, (current) => ({
                                 ...current,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder="e.g. KET Random Assessment"
+                                label: nextTitle,
+                                generatedPaper: {
+                                  ...buildGeneratedPaperConfig(
+                                    subjectFilter as "math" | "vocabulary",
+                                    nextTitle,
+                                    current.examParts,
+                                    current.generatedPaper,
+                                    current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                                    current.units,
+                                  ),
+                                  title: nextTitle,
+                                },
+                              }));
+                            }}
+                            placeholder={subjectFilter === "english" ? "e.g. KET Assessment" : "e.g. Grade 5 Math Review"}
                           />
                         </div>
 
