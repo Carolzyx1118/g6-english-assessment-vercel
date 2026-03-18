@@ -276,6 +276,10 @@ function buildTagSystemPaper(
   } as Paper;
 }
 
+function hasUsableStudentStructure(paper: Paper) {
+  return paper.sections.length > 0 && paper.totalQuestions > 0;
+}
+
 function buildFallbackTagSystemPaper(
   subject: PaperSubject,
   system: TagSystemConfig,
@@ -317,11 +321,13 @@ export function buildTagSystemPapers(
   systems: TagSystemConfig[],
   sourcePapers: TagSystemPaperSource[],
 ): Paper[] {
-  return systems.map((system) => {
+  return systems.flatMap((system) => {
     try {
-      return buildTagSystemPaper(subject, system, sourcePapers);
+      const paper = buildTagSystemPaper(subject, system, sourcePapers);
+      return hasUsableStudentStructure(paper) ? [paper] : [];
     } catch (error) {
-      return buildFallbackTagSystemPaper(subject, system, error);
+      const fallback = buildFallbackTagSystemPaper(subject, system, error);
+      return hasUsableStudentStructure(fallback) ? [fallback] : [];
     }
   });
 }

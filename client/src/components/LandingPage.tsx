@@ -589,6 +589,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const { startQuiz } = useQuiz();
   const hasDistinctSubtitle = Boolean(paper.subtitle?.trim())
     && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
+  const isReadyToStart = paper.sections.length > 0 && paper.totalQuestions > 0;
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -645,10 +646,16 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
                 {paper.description}
               </p>
+              {!isReadyToStart ? (
+                <div className="mt-6 inline-flex items-center rounded-full bg-amber-500/15 px-4 py-2 text-sm font-medium text-[#F4D48B]">
+                  This paper is not ready yet. Add question counts and tagged question-bank items first.
+                </div>
+              ) : null}
               <div className="mt-8 flex flex-wrap gap-4">
                 <Button
                   size="lg"
                   onClick={startQuiz}
+                  disabled={!isReadyToStart}
                   className="bg-gradient-to-r from-[#D4A84B] to-[#C49A3F] hover:from-[#C49A3F] hover:to-[#B48A35] text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-[#D4A84B]/20 hover:shadow-xl hover:shadow-[#D4A84B]/30 transition-all duration-300"
                 >
                   Start Assessment
@@ -704,7 +711,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
           <p className="text-slate-500 mb-8">Complete each section to get your full proficiency score.</p>
         </motion.div>
 
-        <div className={`grid sm:grid-cols-2 ${paper.sections.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-' + paper.sections.length} gap-5`}>
+        <div className={`grid sm:grid-cols-2 ${paper.sections.length >= 4 ? 'lg:grid-cols-4' : paper.sections.length > 0 ? 'lg:grid-cols-' + paper.sections.length : ''} gap-5`}>
           {paper.sections.map((section: Section, i: number) => (
             <motion.div
               key={section.id}

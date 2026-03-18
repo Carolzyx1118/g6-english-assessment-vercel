@@ -445,7 +445,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const paper = allPapers.find(p => p.id === paperId);
-    if (paper) {
+    if (paper && paper.sections.length > 0 && paper.totalQuestions > 0) {
       setSelectedPaper(paper);
       currentSectionIdRef.current = paper.sections[0]?.id || '';
     }
@@ -504,6 +504,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startQuiz = useCallback(() => {
+    if (currentSections.length === 0) return;
     setIsStarted(true);
     const now = Date.now();
     sectionEnteredAtRef.current = now;
