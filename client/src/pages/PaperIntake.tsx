@@ -2178,7 +2178,7 @@ export default function PaperIntake() {
     ? (isEditing ? "Save Question Draft Changes" : "Save Question Draft")
     : (isEditing ? "Save Draft Changes" : "Save Draft");
   const publishActionLabel = isQuestionBankMode
-    ? (isEditing && currentPublished ? "Update Question Bank" : "Submit Question Bank")
+    ? (isEditing && currentPublished ? "Update Question" : "Submit Question")
     : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper");
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
