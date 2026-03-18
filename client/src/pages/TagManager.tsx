@@ -422,12 +422,7 @@ export default function TagManager() {
                             />
                             <span className="text-sm text-slate-500">个单元</span>
                           </div>
-                          <div className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-500">
-                            系统会自动生成 <span className="font-medium text-slate-700">Unit 1</span> 到{" "}
-                            <span className="font-medium text-slate-700">Unit {getUnitCount(system.units)}</span>。
-                          </div>
                         </div>
-                        <p className="text-xs text-slate-500">这里只设置总单元数，不再逐条罗列每个 Unit。</p>
                       </div>
 
                       <div className="space-y-2 lg:col-span-2">
