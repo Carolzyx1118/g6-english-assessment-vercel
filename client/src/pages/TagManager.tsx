@@ -206,7 +206,7 @@ export default function TagManager() {
         await saveVocabularyMutation.mutateAsync({ systems: normalized });
       }
 
-      toast.success("Tag systems saved. Paper intake and tag-based paper setup now use the updated settings.");
+      toast.success("Paper structure saved. Question intake now uses the updated settings.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save tag systems.");
     }
@@ -351,7 +351,7 @@ export default function TagManager() {
               </Link>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Structure</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Manage exam systems, parts, unit ranges, and random paper setup here. Paper intake and tag-based paper setup will read these settings directly.
+                Manage paper names, system types, parts, and practice filters here. Question intake reads these settings directly.
               </p>
             </div>
           </div>
@@ -360,7 +360,7 @@ export default function TagManager() {
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Loading exam systems...
+                Loading paper structures...
               </CardContent>
             </Card>
           ) : (
@@ -371,7 +371,7 @@ export default function TagManager() {
                     {systems.length} exam systems
                   </Badge>
                   <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                    {PAPER_SUBJECT_LABELS[subjectFilter]} Question Tags
+                    {PAPER_SUBJECT_LABELS[subjectFilter]}
                   </Badge>
                 </div>
 
