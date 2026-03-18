@@ -897,7 +897,6 @@ function HistoryContent() {
                 <CardContent className="space-y-4">
                   {[...filteredResults].reverse().map((r) => {
                     const gradeInfo = getGradeInfo(r.totalCorrect, r.totalQuestions);
-                    const pct = r.totalQuestions > 0 ? Math.round((r.totalCorrect / r.totalQuestions) * 100) : 0;
                     const isExpanded = selectedId === r.id;
                     const currentDetail = isExpanded && detail?.id === r.id ? detail : null;
                     const resultSubject = getResultSubject(r.paperId);
@@ -949,7 +948,7 @@ function HistoryContent() {
                               </div>
                             </div>
 
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-center gap-3">
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -965,17 +964,14 @@ function HistoryContent() {
 
                               <button
                                 type="button"
-                                className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-right transition hover:bg-slate-50"
+                                className="inline-flex items-center gap-2 text-right transition hover:text-slate-600"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   setSelectedId(isExpanded ? null : r.id);
                                 }}
                               >
-                                <div>
-                                  <div className="text-lg font-bold text-slate-800">
-                                    {r.totalCorrect}/{r.totalQuestions}
-                                  </div>
-                                  <div className="text-sm text-slate-500">{pct}%</div>
+                                <div className="text-lg font-bold text-slate-800">
+                                  {r.totalCorrect}/{r.totalQuestions}
                                 </div>
                                 {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                               </button>
