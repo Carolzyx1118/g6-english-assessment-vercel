@@ -315,7 +315,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         : []),
     ];
 
-    return [...filteredStatic, ...fixedManualPapers, ...tagSystemPapers];
+    return [...tagSystemPapers, ...filteredStatic, ...fixedManualPapers];
   }, [
     allowedSubjects,
     englishTagSystemsData,

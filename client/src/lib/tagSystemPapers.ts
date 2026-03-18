@@ -42,6 +42,12 @@ const ICON_BY_SUBJECT: Record<PaperSubject, string> = {
   vocabulary: "📚",
 };
 
+const COLOR_BY_SUBJECT: Record<PaperSubject, string> = {
+  english: "#1E3A5F",
+  math: "#0F766E",
+  vocabulary: "#B45309",
+};
+
 function inferEnglishSectionTypeFromExamPart(examPart: string | undefined) {
   const normalized = (examPart || "").trim().toLowerCase();
   if (!normalized) return null;
@@ -272,10 +278,52 @@ function buildTagSystemPaper(
   } as Paper;
 }
 
+function buildFallbackTagSystemPaper(
+  subject: PaperSubject,
+  system: TagSystemConfig,
+  error?: unknown,
+): Paper {
+  const generatedPaper = system.generatedPaper;
+  const totalQuestions = system.systemMode === "textbook-practice"
+    ? (generatedPaper?.practiceRules ?? []).reduce((sum, rule) => sum + Math.max(0, Number(rule.totalQuestions || 0)), 0)
+    : (generatedPaper?.parts ?? []).reduce((sum, part) => sum + Math.max(0, Number(part.totalQuestions || 0)), 0);
+
+  return {
+    id: `tag-system-${subject}-${system.id}`,
+    title: generatedPaper?.title?.trim() || system.label,
+    subtitle: "",
+    description: generatedPaper?.description?.trim()
+      || (system.systemMode === "textbook-practice"
+        ? `Built from ${system.label} textbook-practice rules.`
+        : `Built from ${system.label} assessment rules.`),
+    icon: ICON_BY_SUBJECT[subject],
+    color: COLOR_BY_SUBJECT[subject],
+    subject,
+    category: toPaperCategory(system.systemMode),
+    sections: [],
+    totalQuestions,
+    hasListening: false,
+    hasWriting: false,
+    tags: [
+      PAPER_SUBJECT_LABELS[subject],
+      system.systemMode === "textbook-practice" ? "Practice" : "Assessment",
+      system.label,
+    ],
+    isGeneratedPaper: true,
+    generationWarnings: error instanceof Error ? [error.message] : [],
+  } as Paper;
+}
+
 export function buildTagSystemPapers(
   subject: PaperSubject,
   systems: TagSystemConfig[],
   sourcePapers: TagSystemPaperSource[],
 ): Paper[] {
-  return systems.map((system) => buildTagSystemPaper(subject, system, sourcePapers));
+  return systems.map((system) => {
+    try {
+      return buildTagSystemPaper(subject, system, sourcePapers);
+    } catch (error) {
+      return buildFallbackTagSystemPaper(subject, system, error);
+    }
+  });
 }

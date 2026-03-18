@@ -6804,18 +6804,11 @@ export default function PaperIntake() {
               </Card>
             ))}
 
-            {buildMode === "fixed" ? (
-              isQuestionBankMode ? (
-                <Button type="button" variant="outline" onClick={addSection}>
-                  <FilePlus2 className="mr-2 h-4 w-4" />
-                  Add Question Block
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" onClick={addSection} className="w-full">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Section
-                </Button>
-              )
+            {buildMode === "fixed" && !isQuestionBankMode ? (
+              <Button type="button" variant="outline" onClick={addSection} className="w-full">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Section
+              </Button>
             ) : null}
           </div>
 
@@ -7459,12 +7452,12 @@ export default function PaperIntake() {
             </Card>
 
             {showPreviewActionCard ? (
-              <div className="flex flex-wrap items-center gap-3 px-1">
-                <div className={`rounded-full px-3 py-1 text-sm font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+              <div className="flex flex-nowrap items-center gap-3 overflow-x-auto px-1 pb-1">
+                <div className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                   {currentPublished ? "Status: Published" : "Status: Draft"}
                 </div>
                 {saveFeedback ? (
-                  <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+                  <div className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
                     <Check className="h-4 w-4" />
                     <span className="font-medium">{saveFeedback}</span>
                   </div>
@@ -7475,7 +7468,7 @@ export default function PaperIntake() {
                     variant="outline"
                     disabled={isPersisting || !editingPaperMeta}
                     onClick={handleSaveAsCopy}
-                    className="gap-2 border-slate-200 px-4"
+                    className="shrink-0 gap-2 border-slate-200 px-4 whitespace-nowrap"
                   >
                     <FilePlus2 className="h-4 w-4" />
                     Save as Copy
@@ -7487,7 +7480,7 @@ export default function PaperIntake() {
                   variant="outline"
                   disabled={saveDisabled}
                   onClick={handleSaveDraft}
-                  className="gap-2 border-slate-200 px-4"
+                  className="shrink-0 gap-2 border-slate-200 px-4 whitespace-nowrap"
                 >
                   {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
                   {draftActionLabel}
@@ -7497,7 +7490,7 @@ export default function PaperIntake() {
                   type="button"
                   disabled={saveDisabled}
                   onClick={handlePublishPaper}
-                  className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+                  className="shrink-0 gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all whitespace-nowrap hover:bg-[#2a4f7a] hover:shadow-xl"
                 >
                   {isPersisting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -7513,12 +7506,12 @@ export default function PaperIntake() {
 
         {/* ── Confirm / Save Button ── */}
         {buildMode !== "fixed" ? (
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <div className={`rounded-full px-3 py-1 text-sm font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+        <div className="mt-8 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
+          <div className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
             {currentPublished ? "Status: Published" : "Status: Draft"}
           </div>
           {saveFeedback ? (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+            <div className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
               <Check className="h-4 w-4" />
               <span className="font-medium">{saveFeedback}</span>
             </div>
@@ -7530,7 +7523,7 @@ export default function PaperIntake() {
               variant="outline"
               disabled={isPersisting || !editingPaperMeta}
               onClick={handleSaveAsCopy}
-              className="gap-2 border-slate-200"
+              className="shrink-0 gap-2 border-slate-200 whitespace-nowrap"
             >
               <FilePlus2 className="h-4 w-4" />
               Save as Copy
@@ -7543,7 +7536,7 @@ export default function PaperIntake() {
             variant="outline"
             disabled={saveDisabled}
             onClick={handleSaveDraft}
-            className="gap-2 border-slate-200"
+            className="shrink-0 gap-2 border-slate-200 whitespace-nowrap"
           >
             {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
             {draftActionLabel}
@@ -7554,7 +7547,7 @@ export default function PaperIntake() {
             size="lg"
             disabled={saveDisabled}
             onClick={handlePublishPaper}
-            className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+            className="shrink-0 gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all whitespace-nowrap hover:bg-[#2a4f7a] hover:shadow-xl"
           >
             {isPersisting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
