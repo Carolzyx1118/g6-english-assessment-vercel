@@ -2546,6 +2546,20 @@ export default function PaperIntake() {
     }));
   };
 
+  const updateSubsectionQuestionTags = (
+    sectionId: string,
+    subsectionId: string,
+    tags: ManualQuestionTags | undefined,
+  ) => {
+    updateSubsection(sectionId, subsectionId, (subsection) => ({
+      ...subsection,
+      questions: subsection.questions.map((question) => ({
+        ...question,
+        tags,
+      })),
+    }));
+  };
+
   const renderQuestionTagEditor = (
     sectionId: string,
     subsectionId: string,
@@ -2569,6 +2583,41 @@ export default function PaperIntake() {
           subject={paperSubject}
           value={question.tags}
           onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
+        />
+      );
+    }
+
+    return null;
+  };
+
+  const renderSharedPassageTagEditor = (
+    sectionId: string,
+    subsectionId: string,
+    subsection: ManualSubsection,
+    sectionType: ManualSectionType,
+  ) => {
+    if (!isQuestionBankMode) return null;
+
+    const sourceQuestion = subsection.questions[0];
+    if (!sourceQuestion) return null;
+
+    if (paperSubject === "english") {
+      return (
+        <EnglishQuestionTagEditor
+          value={sourceQuestion.tags}
+          sectionType={sectionType}
+          questionType={sourceQuestion.type}
+          onChange={(nextTags) => updateSubsectionQuestionTags(sectionId, subsectionId, nextTags)}
+        />
+      );
+    }
+
+    if (paperSubject === "math" || paperSubject === "vocabulary") {
+      return (
+        <SubjectQuestionTagEditor
+          subject={paperSubject}
+          value={sourceQuestion.tags}
+          onChange={(nextTags) => updateSubsectionQuestionTags(sectionId, subsectionId, nextTags)}
         />
       );
     }
@@ -3713,6 +3762,7 @@ export default function PaperIntake() {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestions = subsection.questions.filter(isManualPassageFillBlankQuestion);
       const fallbackWordBankId = subsection.wordBank?.[0]?.id || "";
+      const sharedTags = existingQuestions[0]?.tags;
 
       let nextQuestions: ManualPassageFillBlankQuestion[];
       if (existingQuestions.length < blankCount) {
@@ -3720,7 +3770,10 @@ export default function PaperIntake() {
         nextQuestions = [
           ...existingQuestions,
           ...Array.from({ length: blankCount - existingQuestions.length }, () =>
-            createPassageFillBlankQuestion(fallbackWordBankId),
+            ({
+              ...createPassageFillBlankQuestion(fallbackWordBankId),
+              tags: sharedTags,
+            }),
           ),
         ];
       } else {
@@ -3744,13 +3797,17 @@ export default function PaperIntake() {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
+      const sharedTags = existingQuestions[0]?.tags;
 
       let nextQuestions: ManualPassageMCQQuestion[];
       if (existingQuestions.length < blankCount) {
         nextQuestions = [
           ...existingQuestions,
           ...Array.from({ length: blankCount - existingQuestions.length }, (_, i) =>
-            createPassageMCQQuestion(existingQuestions.length + i + 1),
+            ({
+              ...createPassageMCQQuestion(existingQuestions.length + i + 1),
+              tags: sharedTags,
+            }),
           ),
         ];
       } else {
@@ -4760,6 +4817,11 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-emerald-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
+                              {isQuestionBankMode && (
+                                <div className="mt-4">
+                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -4784,6 +4846,11 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-violet-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
+                              {isQuestionBankMode && (
+                                <div className="mt-4">
+                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -4807,6 +4874,11 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-blue-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
+                              {isQuestionBankMode && (
+                                <div className="mt-4">
+                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -6599,7 +6671,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
+                                    {!isQuestionBankMode && renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ));
@@ -6649,9 +6721,11 @@ export default function PaperIntake() {
                                           ))}
                                         </select>
 
-                                        <div className="mt-3">
-                                          {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
-                                        </div>
+                                        {!isQuestionBankMode && (
+                                          <div className="mt-3">
+                                            {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
