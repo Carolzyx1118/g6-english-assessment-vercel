@@ -4346,8 +4346,8 @@ export default function PaperIntake() {
             {buildMode === "fixed" && sections.map((section, sectionIndex) => (
               <Card key={section.id} className="border-slate-200 shadow-sm">
                 <CardHeader>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle>{isQuestionBankMode ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`}</CardTitle>
                         {isQuestionBankMode ? (
@@ -4369,7 +4369,7 @@ export default function PaperIntake() {
                       variant="ghost"
                       size="icon"
                       onClick={() => removeSection(section.id)}
-                      className="text-slate-500 hover:text-red-500"
+                      className="shrink-0 text-slate-500 hover:text-red-500"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

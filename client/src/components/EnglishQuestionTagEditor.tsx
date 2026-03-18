@@ -102,30 +102,27 @@ export default function EnglishQuestionTagEditor({
         </Button>
       </div>
 
-      <div className="space-y-2">
-        <Label>Entry</Label>
-        <div className="flex flex-wrap gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-          {ENGLISH_TAG_ENTRY_OPTIONS.map((entry) => {
-            const checked = profile.entries.includes(entry);
-            return (
-              <label key={entry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => {
-                    toggleArrayValue(profile.entries, entry, (entries) => {
-                      handleProfileChange((current) => ({ ...current, entries: entries as typeof profile.entries }));
-                    });
-                  }}
-                />
-                <span>{entry}</span>
-              </label>
-            );
-          })}
-        </div>
+      <div className="flex flex-wrap gap-3">
+        {ENGLISH_TAG_ENTRY_OPTIONS.map((entry) => {
+          const checked = profile.entries.includes(entry);
+          return (
+            <label key={entry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => {
+                  toggleArrayValue(profile.entries, entry, (entries) => {
+                    handleProfileChange((current) => ({ ...current, entries: entries as typeof profile.entries }));
+                  });
+                }}
+              />
+              <span>{entry}</span>
+            </label>
+          );
+        })}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-2">
           <Label>Exam System</Label>
           <select
