@@ -304,16 +304,25 @@ export default function UserManager() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-end gap-3">
+                          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                             <p className="text-sm font-medium text-slate-700">Account Status</p>
-                            <p className="text-xs text-slate-500">Turn off to block sign-in</p>
+                            <Switch
+                              checked={draft.isActive}
+                              onCheckedChange={(checked) => void handleToggleActive(managedUser, checked)}
+                              disabled={isSelf || isSaving}
+                            />
                           </div>
-                          <Switch
-                            checked={draft.isActive}
-                            onCheckedChange={(checked) => void handleToggleActive(managedUser, checked)}
-                            disabled={isSelf || isSaving}
-                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => setDeleteTarget(managedUser)}
+                            disabled={isSelf || isSaving || isDeleting}
+                          >
+                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Delete User
+                          </Button>
                         </div>
                       </div>
 
@@ -344,19 +353,6 @@ export default function UserManager() {
                             );
                           })}
                         </div>
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => setDeleteTarget(managedUser)}
-                            disabled={isSelf || isSaving || isDeleting}
-                          >
-                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                            Delete User
-                          </Button>
                       </div>
                     </CardContent>
                   </Card>
