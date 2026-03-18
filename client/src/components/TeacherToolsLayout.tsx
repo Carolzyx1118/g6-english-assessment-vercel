@@ -271,14 +271,6 @@ export default function TeacherToolsLayout({
               />
             )}
 
-            <PrimaryLink
-              href="/user-manager"
-              icon={<Users className="h-4 w-4" />}
-              label="User Manager"
-              active={activeTool === "user-manager"}
-              collapsed={collapsed}
-            />
-
             {!collapsed ? (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -319,6 +311,17 @@ export default function TeacherToolsLayout({
                 collapsed={collapsed}
               />
             )}
+          </div>
+
+          <div className="space-y-1">
+            {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Administration</p> : null}
+            <PrimaryLink
+              href="/user-manager"
+              icon={<Users className="h-4 w-4" />}
+              label="User Manager"
+              active={activeTool === "user-manager"}
+              collapsed={collapsed}
+            />
           </div>
           </nav>
         </div>
