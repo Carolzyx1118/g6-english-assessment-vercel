@@ -123,6 +123,7 @@ const SYSTEM_MODE_LABELS: Record<TagSystemMode, string> = {
 const PRACTICE_MODE_LABELS: Record<TagSystemPracticeMode, string> = {
   unit: "By Unit",
   "question-type": "By Question Type",
+  skill: "By Skill",
 };
 
 export default function TagManager() {
@@ -591,6 +592,9 @@ export default function TagManager() {
                                   >
                                     <option value="unit">{PRACTICE_MODE_LABELS.unit}</option>
                                     <option value="question-type">{PRACTICE_MODE_LABELS["question-type"]}</option>
+                                    {subjectFilter === "english" ? (
+                                      <option value="skill">{PRACTICE_MODE_LABELS.skill}</option>
+                                    ) : null}
                                   </select>
                                 </div>
 
@@ -607,6 +611,7 @@ export default function TagManager() {
                                     subjectFilter,
                                     generatedConfig.practiceMode,
                                     system.units,
+                                    subjectFilter === "english" ? (system as EnglishExamTagSystem).abilities : [],
                                   );
 
                                   return (

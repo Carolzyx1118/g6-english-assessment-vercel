@@ -38,7 +38,7 @@ const englishTagSystemInputSchema = z.object({
   generatedPaper: z.object({
     title: z.string().default(""),
     description: z.string().default(""),
-    practiceMode: z.enum(["unit", "question-type"]).default("unit"),
+    practiceMode: z.enum(["unit", "question-type", "skill"]).default("unit"),
     parts: z.array(
       z.object({
         examPart: z.string().min(1),
@@ -65,7 +65,7 @@ const basicTagSystemInputSchema = z.object({
   generatedPaper: z.object({
     title: z.string().default(""),
     description: z.string().default(""),
-    practiceMode: z.enum(["unit", "question-type"]).default("unit"),
+    practiceMode: z.enum(["unit", "question-type", "skill"]).default("unit"),
     parts: z.array(
       z.object({
         examPart: z.string().min(1),

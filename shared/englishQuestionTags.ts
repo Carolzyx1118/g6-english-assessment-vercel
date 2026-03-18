@@ -42,7 +42,7 @@ export interface TagSystemGeneratedPartConfig {
 }
 
 export type TagSystemMode = "assessment" | "textbook-practice";
-export type TagSystemPracticeMode = "unit" | "question-type";
+export type TagSystemPracticeMode = "unit" | "question-type" | "skill";
 
 export interface TagSystemPracticeRuleConfig {
   id: string;
@@ -271,7 +271,15 @@ export function getGeneratedPracticeValueOptions(
   subject: ConfigurableTagSubject,
   practiceMode: TagSystemPracticeMode,
   units: string[],
+  abilities: string[] = [],
 ) {
+  if (practiceMode === "skill") {
+    if (subject === "english") {
+      return dedupeStrings(abilities.map((ability) => normalizeEnglishTagAbility(ability)));
+    }
+    return [];
+  }
+
   if (practiceMode === "question-type") {
     return getSubjectQuestionTypeOptions(subject);
   }
@@ -302,8 +310,17 @@ export function buildGeneratedPaperConfig(
   });
 
   const normalizedLabel = label.trim() || "Untitled Assessment";
-  const practiceMode = current?.practiceMode === "question-type" ? "question-type" : "unit";
-  const practiceValueOptions = getGeneratedPracticeValueOptions(subject, practiceMode, units);
+  const practiceMode = current?.practiceMode === "question-type"
+    ? "question-type"
+    : current?.practiceMode === "skill"
+      ? "skill"
+      : "unit";
+  const practiceValueOptions = getGeneratedPracticeValueOptions(
+    subject,
+    practiceMode,
+    units,
+    subject === "english" ? ENGLISH_TAG_ABILITY_OPTIONS : [],
+  );
   const normalizedPracticeRules = (current?.practiceRules ?? [])
     .map((rule, index) => ({
       id: (rule.id || "").trim() || `${practiceMode}-${index + 1}`,
