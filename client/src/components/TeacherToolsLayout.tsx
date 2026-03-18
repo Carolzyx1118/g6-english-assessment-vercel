@@ -169,7 +169,7 @@ export default function TeacherToolsLayout({
         <div
           className={`flex h-full flex-col ${
             headerOffset
-              ? "mr-4 rounded-r-[28px] border-r border-y border-slate-200/80 bg-white/94 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur"
+              ? "rounded-br-[28px] border-r border-b border-slate-200/80 bg-white/94 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur"
               : "h-full"
           }`}
         >
