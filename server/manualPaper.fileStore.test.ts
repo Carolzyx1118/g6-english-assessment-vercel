@@ -232,4 +232,27 @@ describe("manual paper file fallback", () => {
     expect(allPapers.find((paper) => paper.id === duplicate.id)?.published).toBe(false);
     expect(allPapers.find((paper) => paper.id === duplicate.id)?.title).toBe("Source Paper (Copy)");
   });
+
+  it("stores English tag systems without exposing them as normal papers", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    await caller.papers.saveEnglishTagSystems({
+      systems: [
+        {
+          id: "fce",
+          label: "FCE / B2 First",
+          units: ["Unit 1", "Unit 2"],
+          examParts: ["阅读 Part 1", "写作 Part 2"],
+          grammarByUnit: {},
+        },
+      ],
+    });
+
+    const systems = await caller.papers.getEnglishTagSystems();
+    const allPapers = await caller.papers.listAllManualPapers();
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0].label).toBe("FCE / B2 First");
+    expect(allPapers).toHaveLength(0);
+  });
 });

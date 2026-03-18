@@ -1,4 +1,4 @@
-export type EnglishExamTagTrack = "ket" | "pet";
+export type EnglishExamTagTrack = string;
 export type EnglishExamTagEntry = "教材配套" | "考试题库";
 export type EnglishExamTagAbility =
   | "词汇"
@@ -28,6 +28,24 @@ export interface EnglishExamTagSchema {
   grammarByUnit: Record<string, string[]>;
 }
 
+export interface EnglishExamTagSystem extends EnglishExamTagSchema {
+  id: EnglishExamTagTrack;
+}
+
+export interface EnglishTagSchemaStore {
+  version: 1;
+  subject: "english";
+  systems: EnglishExamTagSystem[];
+}
+
+export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
+export type EnglishExamTagSystemInput = Pick<
+  EnglishExamTagSystem,
+  "id" | "label" | "units" | "examParts"
+> & {
+  grammarByUnit?: Record<string, string[]>;
+};
+
 export const ENGLISH_TAG_ENTRY_OPTIONS: EnglishExamTagEntry[] = ["教材配套", "考试题库"];
 export const ENGLISH_TAG_ABILITY_OPTIONS: EnglishExamTagAbility[] = [
   "词汇",
@@ -37,12 +55,14 @@ export const ENGLISH_TAG_ABILITY_OPTIONS: EnglishExamTagAbility[] = [
   "写作",
 ];
 export const ENGLISH_TAG_DIFFICULTY_OPTIONS: EnglishExamTagDifficulty[] = ["基础", "中等", "提高"];
+export const DEFAULT_ENGLISH_EXAM_TAG_TRACK = "ket";
 
 const KET_UNITS = Array.from({ length: 14 }, (_, index) => `Unit ${index + 1}`);
 const PET_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
 
-export const ENGLISH_EXAM_TAG_SCHEMAS: Record<EnglishExamTagTrack, EnglishExamTagSchema> = {
-  ket: {
+export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
+  {
+    id: "ket",
     label: "KET / A2 Key",
     units: KET_UNITS,
     examParts: [
@@ -78,7 +98,8 @@ export const ENGLISH_EXAM_TAG_SCHEMAS: Record<EnglishExamTagTrack, EnglishExamTa
       "Unit 14": ["被动语态", "现在完成时 just/already/yet"],
     },
   },
-  pet: {
+  {
+    id: "pet",
     label: "PET / B1 Preliminary",
     units: PET_UNITS,
     examParts: [
@@ -132,8 +153,90 @@ export const ENGLISH_EXAM_TAG_SCHEMAS: Record<EnglishExamTagTrack, EnglishExamTa
       "Unit 12": ["间接引语与间接命令", "间接疑问句", "间接问句"],
     },
   },
-};
+];
 
-export function getEnglishExamTagSchema(track: EnglishExamTagTrack) {
-  return ENGLISH_EXAM_TAG_SCHEMAS[track];
+function dedupeStrings(values: string[] | undefined) {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+export function englishTagSystemsToMap(
+  systems: EnglishExamTagSystem[],
+): EnglishExamTagSchemaMap {
+  return Object.fromEntries(
+    systems.map(({ id, ...schema }) => [id, schema]),
+  );
+}
+
+export const ENGLISH_EXAM_TAG_SCHEMAS: EnglishExamTagSchemaMap =
+  englishTagSystemsToMap(DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS);
+
+export function createDefaultEnglishTagSchemaStore(): EnglishTagSchemaStore {
+  return {
+    version: 1,
+    subject: "english",
+    systems: normalizeEnglishTagSystems(DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS),
+  };
+}
+
+export function normalizeEnglishTagSystems(
+  input: EnglishExamTagSystemInput[] | undefined | null,
+) {
+  const systems = (input ?? [])
+    .map((system, index) => {
+      const id = (system.id || "").trim() || `system-${index + 1}`;
+      const units = dedupeStrings(system.units);
+      const examParts = dedupeStrings(system.examParts);
+      const grammarByUnit = Object.fromEntries(
+        Object.entries(system.grammarByUnit ?? {}).map(([unit, points]) => [
+          unit,
+          dedupeStrings(points),
+        ]),
+      );
+
+      return {
+        id,
+        label: (system.label || "").trim() || id,
+        units,
+        examParts,
+        abilities: ENGLISH_TAG_ABILITY_OPTIONS,
+        difficulties: ENGLISH_TAG_DIFFICULTY_OPTIONS,
+        grammarByUnit,
+      } satisfies EnglishExamTagSystem;
+    })
+    .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
+
+  return systems.length > 0 ? systems : [...DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS];
+}
+
+export function getEnglishExamTagEntries(
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+) {
+  const entries = Object.entries(schemas) as Array<[EnglishExamTagTrack, EnglishExamTagSchema]>;
+  return entries.length > 0
+    ? entries
+    : (Object.entries(ENGLISH_EXAM_TAG_SCHEMAS) as Array<[EnglishExamTagTrack, EnglishExamTagSchema]>);
+}
+
+export function getDefaultEnglishExamTagTrack(
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+) {
+  return getEnglishExamTagEntries(schemas)[0]?.[0] ?? DEFAULT_ENGLISH_EXAM_TAG_TRACK;
+}
+
+export function getEnglishExamTagSchema(
+  track: EnglishExamTagTrack,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+) {
+  const defaultTrack = getDefaultEnglishExamTagTrack(schemas);
+  return (
+    schemas[track]
+    ?? schemas[defaultTrack]
+    ?? ENGLISH_EXAM_TAG_SCHEMAS[DEFAULT_ENGLISH_EXAM_TAG_TRACK]
+  );
 }

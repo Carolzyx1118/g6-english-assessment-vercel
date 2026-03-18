@@ -1,19 +1,21 @@
 import type { ManualQuestionTags, ManualQuestionType, ManualSectionType } from "@shared/manualPaperBlueprint";
 import {
-  ENGLISH_EXAM_TAG_SCHEMAS,
   ENGLISH_TAG_ABILITY_OPTIONS,
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
   ENGLISH_TAG_ENTRY_OPTIONS,
+  getEnglishExamTagSchema,
   type EnglishExamTagAbility,
   type EnglishExamTagTrack,
   type EnglishQuestionTagProfile,
 } from "@shared/englishQuestionTags";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { useEnglishTagSchemas } from "@/hooks/useEnglishTagSchemas";
 
 function createDefaultProfile(
   sectionType: ManualSectionType,
   questionType: ManualQuestionType,
+  defaultTrack: EnglishExamTagTrack,
 ): EnglishQuestionTagProfile {
   const ability = (() => {
     if (sectionType === "grammar") return "语法";
@@ -24,7 +26,7 @@ function createDefaultProfile(
   })() as EnglishExamTagAbility;
 
   return {
-    track: "ket",
+    track: defaultTrack,
     entries: ["考试题库"],
     ability,
     grammarPoints: [],
@@ -58,16 +60,20 @@ export default function EnglishQuestionTagEditor({
   questionType,
   onChange,
 }: EnglishQuestionTagEditorProps) {
+  const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
+
   if (isSpeakingUnsupported(sectionType, questionType)) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-        KET / PET 标签体系当前只覆盖词汇、语法、阅读、听力、写作题，口语题先不参与随机组卷。
+        当前英语标签体系只覆盖词汇、语法、阅读、听力、写作题，口语题先不参与随机组卷。
       </div>
     );
   }
 
-  const profile = value?.english ?? createDefaultProfile(sectionType, questionType);
-  const schema = ENGLISH_EXAM_TAG_SCHEMAS[profile.track];
+  const rawProfile = value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack);
+  const safeTrack = schemaEntries.some(([track]) => track === rawProfile.track) ? rawProfile.track : defaultTrack;
+  const profile = safeTrack === rawProfile.track ? rawProfile : { ...rawProfile, track: safeTrack };
+  const schema = getEnglishExamTagSchema(profile.track, schemas);
   const grammarUnit = profile.grammarUnit || profile.unit;
   const grammarOptions = grammarUnit ? (schema.grammarByUnit[grammarUnit] ?? []) : [];
 
@@ -112,7 +118,7 @@ export default function EnglishQuestionTagEditor({
             value={profile.track}
             onChange={(event) => {
               const nextTrack = event.target.value as EnglishExamTagTrack;
-              const nextSchema = ENGLISH_EXAM_TAG_SCHEMAS[nextTrack];
+              const nextSchema = getEnglishExamTagSchema(nextTrack, schemas);
               handleProfileChange((current) => ({
                 ...current,
                 track: nextTrack,
@@ -125,8 +131,9 @@ export default function EnglishQuestionTagEditor({
               }));
             }}
           >
-            <option value="ket">KET / A2 Key</option>
-            <option value="pet">PET / B1 Preliminary</option>
+            {schemaEntries.map(([track, entrySchema]) => (
+              <option key={track} value={track}>{entrySchema.label}</option>
+            ))}
           </select>
         </div>
 

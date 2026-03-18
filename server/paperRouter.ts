@@ -12,6 +12,8 @@ import {
   getManualPaperByPaperId,
   deleteManualPaper,
   updateManualPaper as persistManualPaperUpdate,
+  getEnglishTagSystems,
+  saveEnglishTagSystems,
 } from "./db";
 import {
   countBlueprintQuestions,
@@ -20,6 +22,15 @@ import {
 } from "../shared/blueprintToPaper";
 import { getBlueprintBuildMode, getBlueprintVisibilityMode } from "../shared/taggedPaperGenerator";
 import { z } from "zod";
+import { normalizeEnglishTagSystems } from "../shared/englishQuestionTags";
+
+const englishTagSystemInputSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  units: z.array(z.string()),
+  examParts: z.array(z.string()),
+  grammarByUnit: z.record(z.string(), z.array(z.string())).default({}),
+});
 
 export const paperRouter = router({
   // Shared upload endpoint used by speaking audio recording.
@@ -171,6 +182,24 @@ export const paperRouter = router({
       updatedAt: p.updatedAt,
     }));
   }),
+
+  getEnglishTagSystems: publicProcedure.query(async () => {
+    return getEnglishTagSystems();
+  }),
+
+  saveEnglishTagSystems: publicProcedure
+    .input(z.object({ systems: z.array(englishTagSystemInputSchema).min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        await saveEnglishTagSystems(normalizeEnglishTagSystems(input.systems));
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Failed to save English tag systems.",
+        });
+      }
+    }),
 
   /** Fetch one manual paper with its blueprint for editing */
   getManualPaperDetail: publicProcedure

@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { useEnglishTagSchemas } from "@/hooks/useEnglishTagSchemas";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import type { PaperSubject } from "@/data/papers";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER } from "@/data/papers";
 import type { ManualPaperBlueprint, ManualPaperGenerationConfig } from "@shared/manualPaperBlueprint";
-import type { EnglishExamTagTrack } from "@shared/englishQuestionTags";
+import { DEFAULT_ENGLISH_EXAM_TAG_TRACK, type EnglishExamTagTrack } from "@shared/englishQuestionTags";
 import {
   generatePaperFromTaggedSources,
   getBlueprintBuildMode,
@@ -101,14 +102,15 @@ export default function PaperComposer() {
     [search],
   );
   const isEditing = editPaperId.length > 0;
+  const { schemas, defaultTrack } = useEnglishTagSchemas();
   const managerHref = `/paper-manager?subject=${requestedSubject}`;
   const [paperSeed] = useState(() => createLocalId());
   const [createdAt] = useState(() => new Date().toISOString());
-  const [title, setTitle] = useState(getEnglishQuickGeneratedTitle("ket"));
-  const [description, setDescription] = useState(getEnglishQuickGeneratedDescription("ket"));
-  const [track, setTrack] = useState<EnglishExamTagTrack>("ket");
+  const [title, setTitle] = useState(getEnglishQuickGeneratedTitle(DEFAULT_ENGLISH_EXAM_TAG_TRACK, schemas));
+  const [description, setDescription] = useState(getEnglishQuickGeneratedDescription(DEFAULT_ENGLISH_EXAM_TAG_TRACK, schemas));
+  const [track, setTrack] = useState<EnglishExamTagTrack>(defaultTrack);
   const [parts, setParts] = useState<EnglishQuickGeneratedPartSelection[]>(() =>
-    createEnglishQuickGeneratedPartSelections("ket"),
+    createEnglishQuickGeneratedPartSelections(DEFAULT_ENGLISH_EXAM_TAG_TRACK, schemas),
   );
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [currentPublished, setCurrentPublished] = useState(false);
@@ -165,6 +167,15 @@ export default function PaperComposer() {
   }, [navigate, requestedSubject]);
 
   useEffect(() => {
+    if (isEditing) return;
+    if (schemas[track]) return;
+    setTrack(defaultTrack);
+    setTitle(getEnglishQuickGeneratedTitle(defaultTrack, schemas));
+    setDescription(getEnglishQuickGeneratedDescription(defaultTrack, schemas));
+    setParts(createEnglishQuickGeneratedPartSelections(defaultTrack, schemas));
+  }, [defaultTrack, isEditing, schemas, track]);
+
+  useEffect(() => {
     if (!isEditing || !editPaperQuery.data || hasHydratedEditState) return;
 
     try {
@@ -174,10 +185,10 @@ export default function PaperComposer() {
         return;
       }
 
-      const nextTrack = inferTrackFromEnglishQuickGeneratedConfig(parsedBlueprint.generationConfig);
-      const nextParts = restoreEnglishQuickGeneratedPartSelections(nextTrack, parsedBlueprint.generationConfig);
-      setTitle(editPaperQuery.data.title || getEnglishQuickGeneratedTitle(nextTrack));
-      setDescription(editPaperQuery.data.description || getEnglishQuickGeneratedDescription(nextTrack));
+      const nextTrack = inferTrackFromEnglishQuickGeneratedConfig(parsedBlueprint.generationConfig, schemas);
+      const nextParts = restoreEnglishQuickGeneratedPartSelections(nextTrack, parsedBlueprint.generationConfig, schemas);
+      setTitle(editPaperQuery.data.title || getEnglishQuickGeneratedTitle(nextTrack, schemas));
+      setDescription(editPaperQuery.data.description || getEnglishQuickGeneratedDescription(nextTrack, schemas));
       setTrack(nextTrack);
       setParts(nextParts);
       setEditingPaperMeta({
@@ -191,7 +202,7 @@ export default function PaperComposer() {
       toast.error(error instanceof Error ? error.message : "Failed to load the generated paper.");
       navigate(managerHref);
     }
-  }, [editPaperId, editPaperQuery.data, hasHydratedEditState, isEditing, managerHref, navigate, requestedSubject]);
+  }, [editPaperId, editPaperQuery.data, hasHydratedEditState, isEditing, managerHref, navigate, requestedSubject, schemas]);
 
   useEffect(() => {
     if (!editPaperQuery.error) return;
@@ -341,7 +352,9 @@ export default function PaperComposer() {
           parts={parts}
           onTrackChange={(nextTrack) => {
             setTrack(nextTrack);
-            setParts(createEnglishQuickGeneratedPartSelections(nextTrack));
+            setTitle(getEnglishQuickGeneratedTitle(nextTrack, schemas));
+            setDescription(getEnglishQuickGeneratedDescription(nextTrack, schemas));
+            setParts(createEnglishQuickGeneratedPartSelections(nextTrack, schemas));
           }}
           onPartChange={(partId, updater) => {
             setParts((current) => current.map((part) => (part.id === partId ? updater(part) : part)));

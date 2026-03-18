@@ -3,6 +3,12 @@ import path from "path";
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
+import {
+  createDefaultEnglishTagSchemaStore,
+  normalizeEnglishTagSystems,
+  type EnglishExamTagSystem,
+  type EnglishTagSchemaStore,
+} from "../shared/englishQuestionTags";
 import { ENV } from './_core/env';
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
@@ -11,6 +17,9 @@ let hasLoggedLocalAuthFileFallback = false;
 let hasLoggedManualPaperFileFallback = false;
 let hasLoggedTestResultsFileFallback = false;
 let hasLoggedEphemeralPersistenceWarning = false;
+const RESERVED_MANUAL_PAPER_PREFIX = "__system:";
+const ENGLISH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}english-tag-schemas`;
+const ENGLISH_TAG_SCHEMA_STORE_TITLE = "__English Tag Schemas__";
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
@@ -82,6 +91,31 @@ function normalizeManualPaperRecord(raw: any): ManualPaper {
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
   };
+}
+
+function isReservedManualPaperRecord(paper: Pick<ManualPaper, "paperId">) {
+  return paper.paperId.startsWith(RESERVED_MANUAL_PAPER_PREFIX);
+}
+
+function filterVisibleManualPapers(papers: ManualPaper[]) {
+  return papers.filter((paper) => !isReservedManualPaperRecord(paper));
+}
+
+function parseEnglishTagSchemaStore(raw: string | null | undefined): EnglishTagSchemaStore {
+  if (!raw) {
+    return createDefaultEnglishTagSchemaStore();
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<EnglishTagSchemaStore>;
+    return {
+      version: 1,
+      subject: "english",
+      systems: normalizeEnglishTagSystems(parsed.systems as EnglishExamTagSystem[] | undefined),
+    };
+  } catch {
+    return createDefaultEnglishTagSchemaStore();
+  }
 }
 
 function normalizeTestResultRecord(raw: any): TestResult {
@@ -463,9 +497,10 @@ export async function getAllManualPapers(): Promise<ManualPaper[]> {
   if (!db) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
-    return [...data.papers].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return filterVisibleManualPapers([...data.papers]).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  return db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
+  const papers = await db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
+  return filterVisibleManualPapers(papers);
 }
 
 export async function getPublishedManualPapers(): Promise<ManualPaper[]> {
@@ -473,11 +508,12 @@ export async function getPublishedManualPapers(): Promise<ManualPaper[]> {
   if (!db) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
-    return data.papers
+    return filterVisibleManualPapers(data.papers)
       .filter((paper) => paper.published === 1)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  return db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
+  const papers = await db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
+  return filterVisibleManualPapers(papers);
 }
 
 export async function getManualPaperByPaperId(paperId: string): Promise<ManualPaper | undefined> {
@@ -543,6 +579,39 @@ export async function updateManualPaper(id: number, data: Partial<InsertManualPa
     .update(manualPapers)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(manualPapers.id, id));
+}
+
+export async function getEnglishTagSystems(): Promise<EnglishExamTagSystem[]> {
+  const store = await getManualPaperByPaperId(ENGLISH_TAG_SCHEMA_STORE_PAPER_ID);
+  return parseEnglishTagSchemaStore(store?.blueprintJson).systems;
+}
+
+export async function saveEnglishTagSystems(systems: EnglishExamTagSystem[]): Promise<void> {
+  const normalizedSystems = normalizeEnglishTagSystems(systems);
+  const store = await getManualPaperByPaperId(ENGLISH_TAG_SCHEMA_STORE_PAPER_ID);
+  const payload = {
+    paperId: ENGLISH_TAG_SCHEMA_STORE_PAPER_ID,
+    title: ENGLISH_TAG_SCHEMA_STORE_TITLE,
+    description: "Reserved system record for English tag schemas.",
+    subject: "english",
+    category: "assessment",
+    published: 0,
+    blueprintJson: JSON.stringify({
+      version: 1,
+      subject: "english",
+      systems: normalizedSystems,
+    } satisfies EnglishTagSchemaStore),
+    totalQuestions: 0,
+    hasListening: 0,
+    hasWriting: 0,
+  } satisfies InsertManualPaper;
+
+  if (!store) {
+    await saveManualPaper(payload);
+    return;
+  }
+
+  await updateManualPaper(store.id, payload);
 }
 
 // ── Local Auth Users ──

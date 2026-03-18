@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MANUAL_QUESTION_TYPE_LABELS, MANUAL_SECTION_TYPE_LABELS } from "@shared/manualPaperBlueprint";
-import { ENGLISH_EXAM_TAG_SCHEMAS, type EnglishExamTagTrack } from "@shared/englishQuestionTags";
+import { getEnglishExamTagSchema, type EnglishExamTagTrack } from "@shared/englishQuestionTags";
 import type { EnglishQuickGeneratedPartSelection } from "@/lib/englishQuickPaperPreset";
 import { getQuestionTypesForEnglishExamPart } from "@/lib/englishQuickPaperPreset";
+import { useEnglishTagSchemas } from "@/hooks/useEnglishTagSchemas";
 
 interface EnglishQuickGeneratedBuilderProps {
   track: EnglishExamTagTrack;
@@ -22,6 +23,7 @@ export default function EnglishQuickGeneratedBuilder({
   onTrackChange,
   onPartChange,
 }: EnglishQuickGeneratedBuilderProps) {
+  const { schemaEntries, schemas } = useEnglishTagSchemas();
   const configuredParts = parts.filter((part) => (Number.isFinite(part.totalQuestions) ? part.totalQuestions : 0) > 0);
   const totalQuestions = configuredParts.reduce((sum, part) => sum + Math.max(0, part.totalQuestions || 0), 0);
 
@@ -46,7 +48,7 @@ export default function EnglishQuickGeneratedBuilder({
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          {(["ket", "pet"] as EnglishExamTagTrack[]).map((option) => (
+          {schemaEntries.map(([option, schema]) => (
             <button
               key={option}
               type="button"
@@ -57,7 +59,7 @@ export default function EnglishQuickGeneratedBuilder({
                   : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-[#1E3A5F]"
               }`}
             >
-              {ENGLISH_EXAM_TAG_SCHEMAS[option].label}
+              {schema.label}
             </button>
           ))}
         </div>
@@ -75,6 +77,7 @@ export default function EnglishQuickGeneratedBuilder({
           {parts.map((part) => {
             const availableQuestionTypes = getQuestionTypesForEnglishExamPart(part.examPart);
             const isEnabled = part.totalQuestions > 0;
+            const currentSchema = getEnglishExamTagSchema(track, schemas);
 
             return (
               <div
@@ -86,7 +89,7 @@ export default function EnglishQuickGeneratedBuilder({
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-900">{part.examPart}</p>
                   <p className="mt-1 text-xs text-slate-400 md:hidden">
-                    对应分区：{MANUAL_SECTION_TYPE_LABELS[part.sectionType]}
+                    对应分区：{MANUAL_SECTION_TYPE_LABELS[part.sectionType]} · {currentSchema.label}
                   </p>
                 </div>
 

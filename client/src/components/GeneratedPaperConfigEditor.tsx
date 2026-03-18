@@ -10,10 +10,10 @@ import {
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
 import {
-  ENGLISH_EXAM_TAG_SCHEMAS,
   ENGLISH_TAG_ABILITY_OPTIONS,
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
   ENGLISH_TAG_ENTRY_OPTIONS,
+  getEnglishExamTagSchema,
   type EnglishExamTagAbility,
   type EnglishExamTagDifficulty,
   type EnglishExamTagEntry,
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useEnglishTagSchemas } from "@/hooks/useEnglishTagSchemas";
 import { Plus, Trash2 } from "lucide-react";
 
 function createLocalId() {
@@ -32,13 +33,13 @@ function createLocalId() {
   return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function createRule(): ManualPaperGenerationRule {
+function createRule(defaultTrack: EnglishExamTagTrack): ManualPaperGenerationRule {
   return {
     id: createLocalId(),
     label: "新规则",
     weight: 1,
     filters: {
-      track: "ket",
+      track: defaultTrack,
       entries: [],
       abilities: [],
       grammarPoints: [],
@@ -47,14 +48,14 @@ function createRule(): ManualPaperGenerationRule {
   };
 }
 
-function createSection(): ManualPaperGenerationSection {
+function createSection(defaultTrack: EnglishExamTagTrack): ManualPaperGenerationSection {
   return {
     id: createLocalId(),
     title: "新题型分区",
     sectionType: "reading",
     instructions: "",
     totalQuestions: 5,
-    rules: [createRule()],
+    rules: [createRule(defaultTrack)],
   };
 }
 
@@ -113,7 +114,8 @@ export default function GeneratedPaperConfigEditor({
   previewWarnings,
   onChange,
 }: GeneratedPaperConfigEditorProps) {
-  const config = value ?? { sourcePaperIds: [], sections: [createSection()] };
+  const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
+  const config = value ?? { sourcePaperIds: [], sections: [createSection(defaultTrack)] };
 
   const updateConfig = (updater: (current: ManualPaperGenerationConfig) => ManualPaperGenerationConfig) => {
     onChange(updater(config));
@@ -272,8 +274,8 @@ export default function GeneratedPaperConfigEditor({
 
             <div className="mt-5 space-y-4">
               {section.rules.map((rule, ruleIndex) => {
-                const track = rule.filters.track || "ket";
-                const schema = ENGLISH_EXAM_TAG_SCHEMAS[track];
+                const track = rule.filters.track || defaultTrack;
+                const schema = getEnglishExamTagSchema(track, schemas);
                 const grammarUnit = rule.filters.grammarUnit || rule.filters.unit;
                 const grammarOptions = grammarUnit ? (schema.grammarByUnit[grammarUnit] ?? []) : [];
                 const usesGrammar = rule.filters.abilities?.includes("语法") ?? false;
@@ -342,8 +344,9 @@ export default function GeneratedPaperConfigEditor({
                             },
                           }))}
                         >
-                          <option value="ket">KET / A2 Key</option>
-                          <option value="pet">PET / B1 Preliminary</option>
+                          {schemaEntries.map(([trackId, trackSchema]) => (
+                            <option key={trackId} value={trackId}>{trackSchema.label}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -558,7 +561,7 @@ export default function GeneratedPaperConfigEditor({
                 className="border-dashed"
                 onClick={() => updateSection(section.id, (current) => ({
                   ...current,
-                  rules: [...current.rules, createRule()],
+                  rules: [...current.rules, createRule(defaultTrack)],
                 }))}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -572,11 +575,11 @@ export default function GeneratedPaperConfigEditor({
           type="button"
           variant="outline"
           className="border-dashed"
-          onClick={() => updateConfig((current) => ({
-            ...current,
-            sections: [...current.sections, createSection()],
-          }))}
-        >
+        onClick={() => updateConfig((current) => ({
+          ...current,
+          sections: [...current.sections, createSection(defaultTrack)],
+        }))}
+      >
           <Plus className="mr-2 h-4 w-4" />
           添加组卷分区
         </Button>

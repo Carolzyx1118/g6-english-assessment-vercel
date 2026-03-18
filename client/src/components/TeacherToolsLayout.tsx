@@ -8,6 +8,7 @@ import {
   FilePlus2,
   Home,
   Layers3,
+  Tags,
   Users,
 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
@@ -17,6 +18,7 @@ type TeacherToolKey =
   | "home"
   | "history"
   | "paper-intake"
+  | "tag-manager"
   | "paper-manager"
   | "paper-composer"
   | "user-manager";
@@ -182,6 +184,14 @@ export default function TeacherToolsLayout({
               icon={<FilePlus2 className="h-4 w-4" />}
               label="Paper Intake"
               active={activeTool === "paper-intake"}
+              collapsed={collapsed}
+            />
+
+            <PrimaryLink
+              href="/tag-manager?subject=english"
+              icon={<Tags className="h-4 w-4" />}
+              label="Tag Manager"
+              active={activeTool === "tag-manager"}
               collapsed={collapsed}
             />
 

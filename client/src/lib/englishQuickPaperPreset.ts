@@ -5,7 +5,13 @@ import type {
   ManualQuestionType,
   ManualSectionType,
 } from "@shared/manualPaperBlueprint";
-import { ENGLISH_EXAM_TAG_SCHEMAS, type EnglishExamTagTrack } from "@shared/englishQuestionTags";
+import {
+  ENGLISH_EXAM_TAG_SCHEMAS,
+  getDefaultEnglishExamTagTrack,
+  getEnglishExamTagSchema,
+  type EnglishExamTagSchemaMap,
+  type EnglishExamTagTrack,
+} from "@shared/englishQuestionTags";
 
 export interface EnglishQuickGeneratedPartSelection {
   id: string;
@@ -55,8 +61,11 @@ export function getQuestionTypesForEnglishExamPart(examPart: string): ManualQues
   ];
 }
 
-export function createEnglishQuickGeneratedPartSelections(track: EnglishExamTagTrack): EnglishQuickGeneratedPartSelection[] {
-  return ENGLISH_EXAM_TAG_SCHEMAS[track].examParts.map((examPart) => {
+export function createEnglishQuickGeneratedPartSelections(
+  track: EnglishExamTagTrack,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+): EnglishQuickGeneratedPartSelection[] {
+  return getEnglishExamTagSchema(track, schemas).examParts.map((examPart) => {
     const sectionType = inferEnglishSectionTypeFromExamPart(examPart);
     return {
       id: createLocalId(),
@@ -105,32 +114,42 @@ export function buildEnglishQuickGeneratedConfig(
   };
 }
 
-export function getEnglishQuickGeneratedTitle(track: EnglishExamTagTrack) {
-  return `${track.toUpperCase()} Random Assessment`;
+export function getEnglishQuickGeneratedTitle(
+  track: EnglishExamTagTrack,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+) {
+  return `${getEnglishExamTagSchema(track, schemas).label} Random Assessment`;
 }
 
-export function getEnglishQuickGeneratedDescription(track: EnglishExamTagTrack) {
-  const trackLabel = ENGLISH_EXAM_TAG_SCHEMAS[track].label;
+export function getEnglishQuickGeneratedDescription(
+  track: EnglishExamTagTrack,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+) {
+  const trackLabel = getEnglishExamTagSchema(track, schemas).label;
   return `Auto-generated from tagged ${trackLabel} question bank parts.`;
 }
 
-export function inferTrackFromEnglishQuickGeneratedConfig(config: ManualPaperGenerationConfig | undefined): EnglishExamTagTrack {
+export function inferTrackFromEnglishQuickGeneratedConfig(
+  config: ManualPaperGenerationConfig | undefined,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
+): EnglishExamTagTrack {
   for (const section of config?.sections ?? []) {
     for (const rule of section.rules) {
-      if (rule.filters.track === "ket" || rule.filters.track === "pet") {
+      if (rule.filters.track && schemas[rule.filters.track]) {
         return rule.filters.track;
       }
     }
   }
 
-  return "ket";
+  return getDefaultEnglishExamTagTrack(schemas);
 }
 
 export function restoreEnglishQuickGeneratedPartSelections(
   track: EnglishExamTagTrack,
   config: ManualPaperGenerationConfig | undefined,
+  schemas: EnglishExamTagSchemaMap = ENGLISH_EXAM_TAG_SCHEMAS,
 ) {
-  const baseSelections = createEnglishQuickGeneratedPartSelections(track);
+  const baseSelections = createEnglishQuickGeneratedPartSelections(track, schemas);
 
   for (const section of config?.sections ?? []) {
     const firstRule = section.rules[0];
