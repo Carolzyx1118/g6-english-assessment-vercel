@@ -53,7 +53,7 @@ export default function SubjectQuestionTagEditor({
   if (!activeSystem) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-        还没有可用的标签体系。请先到 Tag Manager 里配置{subject === "math" ? "数学" : "词汇"}考试体系、Part 和教材单元。
+        还没有可用的标签体系。请先到 Paper Structure 里配置{subject === "math" ? "数学" : "词汇"}考试体系、Part 和教材单元。
       </div>
     );
   }

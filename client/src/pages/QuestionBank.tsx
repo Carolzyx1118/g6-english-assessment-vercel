@@ -108,7 +108,7 @@ export default function QuestionBank() {
           ) : filteredPapers.length === 0 ? (
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="py-16 text-center text-sm text-slate-500">
-                No question-bank papers have been recorded for this subject yet. Add some from Paper Intake first.
+                No question-bank papers have been recorded for this subject yet. Add some from Question Intake first.
               </CardContent>
             </Card>
           ) : (

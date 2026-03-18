@@ -348,7 +348,7 @@ export default function TagManager() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Teacher Home
               </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Tag Manager</h1>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Structure</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Manage exam systems, parts, unit ranges, and random paper setup here. Paper intake and tag-based paper setup will read these settings directly.
               </p>

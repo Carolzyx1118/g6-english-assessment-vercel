@@ -220,7 +220,7 @@ export default function TeacherToolsLayout({
                     <PrimaryLink
                       href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
                       icon={<Tags className="h-4 w-4" />}
-                      label="Tag Manager"
+                      label="Paper Structure"
                       active={activeTool === "tag-manager"}
                       collapsed={false}
                     />
@@ -228,7 +228,7 @@ export default function TeacherToolsLayout({
                   <ExpandToggle
                     expanded={tagManagerExpanded}
                     onToggle={() => setTagManagerExpanded((current) => !current)}
-                    label="Tag Manager subjects"
+                    label="Paper Structure subjects"
                   />
                 </div>
                 {tagManagerExpanded ? (
@@ -248,7 +248,7 @@ export default function TeacherToolsLayout({
               <PrimaryLink
                 href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
                 icon={<Tags className="h-4 w-4" />}
-                label="Tag Manager"
+                label="Paper Structure"
                 active={activeTool === "tag-manager"}
                 collapsed={collapsed}
               />
@@ -257,7 +257,7 @@ export default function TeacherToolsLayout({
             <PrimaryLink
               href={`/paper-intake?subject=${defaultSubject}`}
               icon={<FilePlus2 className="h-4 w-4" />}
-              label="Paper Intake"
+              label="Question Intake"
               active={activeTool === "paper-intake"}
               collapsed={collapsed}
             />

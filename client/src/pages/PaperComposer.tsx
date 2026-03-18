@@ -300,7 +300,7 @@ export default function PaperComposer() {
               {isEditing ? "Edit Generated Paper" : "Add Generated Paper"}
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              This page is only for assembling random English papers from tagged question banks. Recording questions stays in Paper Intake.
+              This page is only for assembling random English papers from tagged question banks. Recording questions stays in Question Intake.
             </p>
           </div>
 
