@@ -6,9 +6,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
-import { formatQuestionBankItemId, getQuestionBankItemSummary } from "@/lib/questionBankItem";
+import { formatQuestionBankItemId } from "@/lib/questionBankItem";
 import { trpc } from "@/lib/trpc";
-import { MANUAL_QUESTION_TYPE_LABELS, MANUAL_SECTION_TYPE_LABELS, type ManualPaperBlueprint } from "@shared/manualPaperBlueprint";
+import {
+  normalizeEnglishQuestionTagProfile,
+  type EnglishQuestionTagProfile,
+  type SubjectQuestionTagProfile,
+} from "@shared/englishQuestionTags";
+import {
+  type ManualAudioFile,
+  type ManualCheckboxOption,
+  type ManualInlineWordChoiceItem,
+  type ManualMatchingDescription,
+  type ManualMCQOption,
+  type ManualOptionImage,
+  type ManualPaperBlueprint,
+  type ManualPassageInlineWordChoiceItem,
+  type ManualPassageMCQOption,
+  type ManualQuestion,
+  type ManualSubsection,
+} from "@shared/manualPaperBlueprint";
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
@@ -32,6 +49,326 @@ function parseBlueprint(raw: string): ManualPaperBlueprint | null {
   } catch {
     return null;
   }
+}
+
+function isVisibleTagValue(value: string | undefined | null) {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return trimmed.toUpperCase() !== "N/A" && trimmed !== "未设置";
+}
+
+function getSubsectionTagValues(subject: PaperSubject, subsection: ManualSubsection) {
+  const sharedTags = subsection.sharedQuestionTags?.[subject];
+  const firstQuestionTags = subsection.questions.find((question) => question.tags?.[subject])?.tags?.[subject];
+  const tags = sharedTags ?? firstQuestionTags;
+  if (!tags) return [];
+
+  if (subject === "english") {
+    const normalized = normalizeEnglishQuestionTagProfile(tags as EnglishQuestionTagProfile);
+    return Array.from(
+      new Set(
+        [normalized.track, normalized.ability, normalized.unit, normalized.examPart].filter(isVisibleTagValue),
+      ),
+    );
+  }
+
+  const normalized = tags as SubjectQuestionTagProfile;
+  return Array.from(new Set([normalized.track, normalized.unit, normalized.examPart].filter(isVisibleTagValue)));
+}
+
+function PreviewImage({ image, className = "h-36 w-full max-w-xs" }: { image?: ManualOptionImage; className?: string }) {
+  if (!image?.previewUrl && !image?.dataUrl) return null;
+  const source = image.previewUrl || image.dataUrl;
+
+  return (
+    <img
+      src={source}
+      alt={image.fileName || "Question image"}
+      className={`rounded-xl border border-slate-200 object-cover ${className}`}
+    />
+  );
+}
+
+function AudioPreview({ audio }: { audio?: ManualAudioFile }) {
+  if (!audio?.previewUrl && !audio?.dataUrl) return null;
+  const source = audio.previewUrl || audio.dataUrl;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Audio</p>
+      <audio controls className="w-full">
+        <source src={source} type={audio.mimeType} />
+      </audio>
+    </div>
+  );
+}
+
+function OptionPill({ label, text }: { label?: string; text: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+      {label ? (
+        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-600">
+          {label}
+        </span>
+      ) : null}
+      <span className="text-sm leading-6 text-slate-700">{text || "No content yet."}</span>
+    </div>
+  );
+}
+
+function OptionList({
+  options,
+}: {
+  options: Array<ManualMCQOption | ManualPassageMCQOption | ManualCheckboxOption>;
+}) {
+  if (options.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {options.map((option) => (
+        <OptionPill key={option.id} label={option.label} text={option.text} />
+      ))}
+    </div>
+  );
+}
+
+function PassageTextPreview({ passageText }: { passageText?: string }) {
+  if (!passageText?.trim()) return null;
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Passage</p>
+      <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{passageText}</p>
+    </div>
+  );
+}
+
+function WordBankPreview({ subsection }: { subsection: ManualSubsection }) {
+  if (!subsection.wordBank?.length) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Word Bank</p>
+      <div className="flex flex-wrap gap-2">
+        {subsection.wordBank.map((item) => (
+          <Badge key={item.id} variant="outline" className="rounded-full border-slate-200 bg-white px-3 py-1 text-slate-700">
+            {item.letter}. {item.word}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchingDescriptionsPreview({ descriptions }: { descriptions?: ManualMatchingDescription[] }) {
+  if (!descriptions?.length) return null;
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Matching Options</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {descriptions.map((description) => (
+          <div key={description.id} className="rounded-xl border border-slate-200 bg-white p-3">
+            <p className="text-sm font-semibold text-slate-900">
+              {description.label}. {description.name}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{description.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InlineChoiceLine({ item }: { item: ManualInlineWordChoiceItem }) {
+  const optionsText = item.options.map((option) => option.text).filter(Boolean).join(" / ");
+  const sentenceText = item.sentenceText?.trim();
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-start gap-2 text-sm leading-7 text-slate-700">
+        <span className="font-semibold text-slate-900">{item.label}.</span>
+        {sentenceText ? (
+          <span>{sentenceText}</span>
+        ) : (
+          <>
+            <span>{item.beforeText}</span>
+            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-600">{optionsText || "Option group"}</span>
+            <span>{item.afterText}</span>
+          </>
+        )}
+      </div>
+      {!sentenceText && optionsText ? (
+        <p className="mt-2 text-xs text-slate-500">Choices: {optionsText}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function PassageInlineChoiceLine({ item }: { item: ManualPassageInlineWordChoiceItem }) {
+  const optionsText = item.options.map((option) => `${option.label}. ${option.text}`).join(" / ");
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
+      <span className="font-semibold text-slate-900">{item.label}.</span> {optionsText || "No choices yet."}
+    </div>
+  );
+}
+
+function QuestionPreview({ question }: { question: ManualQuestion }) {
+  switch (question.type) {
+    case "mcq":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <OptionList options={question.options} />
+        </div>
+      );
+    case "checkbox":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <OptionList options={question.options} />
+        </div>
+      );
+    case "fill-blank":
+    case "passage-fill-blank":
+    case "typed-fill-blank":
+    case "passage-open-ended":
+    case "heading-match":
+      return question.prompt?.trim() ? (
+        <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p>
+      ) : null;
+    case "passage-mcq":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <OptionList options={question.options} />
+        </div>
+      );
+    case "picture-spelling":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <PreviewImage image={question.image} className="h-32 w-32 max-w-none object-contain" />
+        </div>
+      );
+    case "word-completion":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          {question.wordPattern?.trim() ? (
+            <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700">
+              {question.wordPattern}
+            </p>
+          ) : null}
+          <PreviewImage image={question.image} className="h-32 w-32 max-w-none object-contain" />
+        </div>
+      );
+    case "writing":
+    case "speaking":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <PreviewImage image={question.image} className="h-40 w-full max-w-sm object-contain" />
+        </div>
+      );
+    case "true-false":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <div className="space-y-2">
+            {question.statements.map((statement) => (
+              <div key={statement.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
+                <span className="font-semibold text-slate-900">{statement.label}.</span> {statement.statement}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "ordering":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <div className="space-y-2">
+            {question.items.map((item, index) => (
+              <OptionPill key={item.id} label={`${index + 1}`} text={item.text} />
+            ))}
+          </div>
+        </div>
+      );
+    case "sentence-reorder":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <div className="space-y-2">
+            {question.items.map((item) => (
+              <OptionPill key={item.id} label={item.label} text={item.scrambledWords} />
+            ))}
+          </div>
+        </div>
+      );
+    case "inline-word-choice":
+      return (
+        <div className="space-y-3">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          <div className="space-y-2">
+            {question.items.map((item) => (
+              <InlineChoiceLine key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      );
+    case "passage-inline-word-choice":
+      return (
+        <div className="space-y-2">
+          {question.prompt?.trim() ? <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p> : null}
+          {question.items.map((item) => (
+            <PassageInlineChoiceLine key={item.id} item={item} />
+          ))}
+        </div>
+      );
+    case "passage-matching":
+      return question.prompt?.trim() ? (
+        <p className="text-sm font-medium leading-7 text-slate-900">{question.prompt}</p>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+function SubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
+  const hasQuestionCards = subsection.questions.some((question) => {
+    if ("prompt" in question && typeof question.prompt === "string" && question.prompt.trim()) return true;
+    if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") return question.options.length > 0;
+    if (question.type === "true-false") return question.statements.length > 0;
+    if (question.type === "ordering" || question.type === "sentence-reorder") return question.items.length > 0;
+    if (question.type === "inline-word-choice" || question.type === "passage-inline-word-choice") return question.items.length > 0;
+    if (question.type === "picture-spelling" || question.type === "word-completion" || question.type === "writing" || question.type === "speaking") {
+      return Boolean(question.image || ("wordPattern" in question && question.wordPattern));
+    }
+    return false;
+  });
+
+  return (
+    <div className="space-y-4">
+      <AudioPreview audio={subsection.audio} />
+      <PreviewImage image={subsection.sceneImage} className="h-44 w-full max-w-sm" />
+      <PassageTextPreview passageText={subsection.passageText} />
+      <WordBankPreview subsection={subsection} />
+      <MatchingDescriptionsPreview descriptions={subsection.matchingDescriptions} />
+      {hasQuestionCards ? (
+        <div className="space-y-3">
+          {subsection.questions.map((question) => {
+            const preview = <QuestionPreview question={question} />;
+            if (!preview) return null;
+            return (
+              <div key={question.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                {preview}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function QuestionBank() {
@@ -78,7 +415,7 @@ export default function QuestionBank() {
                 {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question Bank`}
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Review the question-bank items used for random paper building. Each entry shows the item ID, question type, section, and content summary.
+                Review the question-bank items used for random paper building. Each entry shows the saved tags and a live preview of the question content.
               </p>
             </div>
           </div>
@@ -166,9 +503,10 @@ export default function QuestionBank() {
                             There are no visible items in this question bank paper yet.
                           </div>
                         ) : (
-                          items.map((section, index) => {
+                          items.map((section) => {
                             const subsection = section.subsections[0];
                             if (!subsection) return null;
+                            const tagValues = getSubsectionTagValues(paper.subject as PaperSubject, subsection);
 
                             return (
                               <div
@@ -181,23 +519,13 @@ export default function QuestionBank() {
                                       <Badge className="rounded-full bg-[#1E3A5F] px-3 py-1 text-white hover:bg-[#1E3A5F]">
                                         {formatQuestionBankItemId(paper.subject as PaperSubject, subsection.id)}
                                       </Badge>
-                                      <Badge variant="outline">
-                                        {MANUAL_SECTION_TYPE_LABELS[section.sectionType]}
-                                      </Badge>
-                                      <Badge variant="outline">
-                                        {MANUAL_QUESTION_TYPE_LABELS[subsection.questionType]}
-                                      </Badge>
+                                      {tagValues.map((tag) => (
+                                        <Badge key={`${subsection.id}-${tag}`} variant="outline">
+                                          {tag}
+                                        </Badge>
+                                      ))}
                                     </div>
-                                    <p className="text-sm font-semibold text-slate-800">
-                                      Item {index + 1}
-                                    </p>
-                                    <p className="text-sm leading-relaxed text-slate-600">
-                                      {getQuestionBankItemSummary(subsection)}
-                                    </p>
-                                  </div>
-
-                                  <div className="text-right text-xs text-slate-500">
-                                    <p>{subsection.questions.length} internal item(s)</p>
+                                    <SubsectionPreview subsection={subsection} />
                                   </div>
                                 </div>
                               </div>
