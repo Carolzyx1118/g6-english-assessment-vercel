@@ -4630,7 +4630,7 @@ export default function PaperIntake() {
                                 </p>
                               </div>
                               <Textarea
-                                rows={10}
+                                rows={14}
                                 value={subsection.passageText ?? ""}
                                 onChange={(event) =>
                                   updateSubsection(section.id, subsection.id, (sub) => ({
@@ -4639,7 +4639,7 @@ export default function PaperIntake() {
                                   }))
                                 }
                                 placeholder={`Example:\n\nOnce upon a time, there was a little girl who loved to read. Every day after school, she would go to the library and spend hours reading books about faraway lands and magical creatures...`}
-                                className="font-mono text-sm"
+                                className="min-h-[420px] font-mono text-sm"
                               />
                             </div>
                           )}
@@ -4653,13 +4653,13 @@ export default function PaperIntake() {
                                 </p>
                               </div>
                               <Textarea
-                                rows={8}
+                                rows={14}
                                 value={subsection.passageText ?? ""}
                                 onChange={(event) =>
                                   syncPassageInlineWordChoiceBlanksToQuestions(section.id, subsection.id, event.target.value)
                                 }
                                 placeholder={`Example:\n\n___ is my favourite activity because I love being in the water.\nYou’ll find the potatoes in the ___ in the kitchen.`}
-                                className="font-mono text-sm"
+                                className="min-h-[420px] font-mono text-sm"
                               />
                               <p className="mt-2 text-xs text-emerald-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
@@ -4677,13 +4677,13 @@ export default function PaperIntake() {
                                 </p>
                               </div>
                               <Textarea
-                                rows={8}
+                                rows={14}
                                 value={subsection.passageText ?? ""}
                                 onChange={(event) =>
                                   syncPassageMCQBlanksToQuestions(section.id, subsection.id, event.target.value)
                                 }
                                 placeholder={`Example:\n\nLast summer, I ___ to the beach with my family. We ___ a wonderful time. The weather was ___ and sunny.`}
-                                className="font-mono text-sm"
+                                className="min-h-[420px] font-mono text-sm"
                               />
                               <p className="mt-2 text-xs text-violet-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
@@ -4700,13 +4700,13 @@ export default function PaperIntake() {
                                 </p>
                               </div>
                               <Textarea
-                                rows={8}
+                                rows={14}
                                 value={subsection.passageText ?? ""}
                                 onChange={(event) =>
                                   syncPassageBlanksToQuestions(section.id, subsection.id, event.target.value)
                                 }
                                 placeholder={`Example:\n\nThe boy ___ to school every day. He ___ his lunch in a bag. His mother always ___ him goodbye at the door.`}
-                                className="font-mono text-sm"
+                                className="min-h-[420px] font-mono text-sm"
                               />
                               <p className="mt-2 text-xs text-blue-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
