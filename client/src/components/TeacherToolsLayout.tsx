@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
   BookCopy,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ClipboardList,
   FilePlus2,
   Home,
@@ -92,6 +94,29 @@ function SubjectLink({
   );
 }
 
+function ExpandToggle({
+  expanded,
+  onToggle,
+  label,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+      title={expanded ? `Collapse ${label}` : `Expand ${label}`}
+      aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`}
+      aria-expanded={expanded}
+    >
+      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+    </button>
+  );
+}
+
 export default function TeacherToolsLayout({
   activeTool,
   currentSubject = null,
@@ -103,11 +128,22 @@ export default function TeacherToolsLayout({
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
   });
+  const [historyExpanded, setHistoryExpanded] = useState(activeTool === "history");
+  const [paperManagerExpanded, setPaperManagerExpanded] = useState(activeTool === "paper-manager");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  useEffect(() => {
+    if (activeTool === "history") {
+      setHistoryExpanded(true);
+    }
+    if (activeTool === "paper-manager") {
+      setPaperManagerExpanded(true);
+    }
+  }, [activeTool]);
 
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
@@ -159,25 +195,46 @@ export default function TeacherToolsLayout({
 
           <div className="space-y-1">
             {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Teacher Tools</p> : null}
-            <PrimaryLink
-              href="/history"
-              icon={<ClipboardList className="h-4 w-4" />}
-              label="Test History"
-              active={activeTool === "history"}
-              collapsed={collapsed}
-            />
             {!collapsed ? (
-              <div className="space-y-1 pl-10">
-                {allowedSubjects.map((subject) => (
-                  <SubjectLink
-                    key={`history-${subject}`}
-                    href={`/history?subject=${subject}`}
-                    label={PAPER_SUBJECT_LABELS[subject]}
-                    active={activeTool === "history" && currentSubject === subject}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PrimaryLink
+                      href="/history"
+                      icon={<ClipboardList className="h-4 w-4" />}
+                      label="Test History"
+                      active={activeTool === "history"}
+                      collapsed={false}
+                    />
+                  </div>
+                  <ExpandToggle
+                    expanded={historyExpanded}
+                    onToggle={() => setHistoryExpanded((current) => !current)}
+                    label="Test History subjects"
                   />
-                ))}
+                </div>
+                {historyExpanded ? (
+                  <div className="space-y-1 pl-10">
+                    {allowedSubjects.map((subject) => (
+                      <SubjectLink
+                        key={`history-${subject}`}
+                        href={`/history?subject=${subject}`}
+                        label={PAPER_SUBJECT_LABELS[subject]}
+                        active={activeTool === "history" && currentSubject === subject}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            ) : (
+              <PrimaryLink
+                href="/history"
+                icon={<ClipboardList className="h-4 w-4" />}
+                label="Test History"
+                active={activeTool === "history"}
+                collapsed={collapsed}
+              />
+            )}
 
             <PrimaryLink
               href={`/paper-intake?subject=${defaultSubject}`}
@@ -203,25 +260,46 @@ export default function TeacherToolsLayout({
               collapsed={collapsed}
             />
 
-            <PrimaryLink
-              href="/paper-manager"
-              icon={<BookCopy className="h-4 w-4" />}
-              label="Paper Manager"
-              active={activeTool === "paper-manager"}
-              collapsed={collapsed}
-            />
             {!collapsed ? (
-              <div className="space-y-1 pl-10">
-                {allowedSubjects.map((subject) => (
-                  <SubjectLink
-                    key={`manager-${subject}`}
-                    href={`/paper-manager?subject=${subject}`}
-                    label={PAPER_SUBJECT_LABELS[subject]}
-                    active={activeTool === "paper-manager" && currentSubject === subject}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PrimaryLink
+                      href="/paper-manager"
+                      icon={<BookCopy className="h-4 w-4" />}
+                      label="Paper Manager"
+                      active={activeTool === "paper-manager"}
+                      collapsed={false}
+                    />
+                  </div>
+                  <ExpandToggle
+                    expanded={paperManagerExpanded}
+                    onToggle={() => setPaperManagerExpanded((current) => !current)}
+                    label="Paper Manager subjects"
                   />
-                ))}
+                </div>
+                {paperManagerExpanded ? (
+                  <div className="space-y-1 pl-10">
+                    {allowedSubjects.map((subject) => (
+                      <SubjectLink
+                        key={`manager-${subject}`}
+                        href={`/paper-manager?subject=${subject}`}
+                        label={PAPER_SUBJECT_LABELS[subject]}
+                        active={activeTool === "paper-manager" && currentSubject === subject}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            ) : (
+              <PrimaryLink
+                href="/paper-manager"
+                icon={<BookCopy className="h-4 w-4" />}
+                label="Paper Manager"
+                active={activeTool === "paper-manager"}
+                collapsed={collapsed}
+              />
+            )}
 
             {allowedSubjects.includes("english") ? (
               <PrimaryLink
