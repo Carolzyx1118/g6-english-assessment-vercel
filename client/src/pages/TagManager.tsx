@@ -331,7 +331,7 @@ export default function TagManager() {
                             <Layers3 className="h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle className="text-xl text-[#1E3A5F]">{system.label.trim() || `考试体系 ${index + 1}`}</CardTitle>
+                            <CardTitle className="text-lg text-[#1E3A5F] sm:text-xl">{system.label.trim() || `考试体系 ${index + 1}`}</CardTitle>
                             <CardDescription>系统 ID：{system.id}</CardDescription>
                           </div>
                         </div>
