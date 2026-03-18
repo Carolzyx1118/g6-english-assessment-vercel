@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
+import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import { blueprintToPaper } from '@shared/blueprintToPaper';
 import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
 import {
-  generatePaperFromTaggedSources,
   getBlueprintBuildMode,
   getBlueprintVisibilityMode,
 } from '@shared/taggedPaperGenerator';
@@ -213,6 +213,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const { data: manualPapersData } = trpc.papers.listManualPapers.useQuery(undefined, {
     staleTime: 30_000,
   });
+  const { data: questionBankPapersData } = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const { data: englishTagSystemsData } = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const { data: mathTagSystemsData } = trpc.papers.getMathTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const { data: vocabularyTagSystemsData } = trpc.papers.getVocabularyTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
 
   const allPapers = useMemo(() => {
     const filteredStatic = staticPapers.filter((paper) => allowedSubjects.includes(paper.subject));
@@ -237,6 +249,43 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const questionBankSourceBySubject = (questionBankPapersData ?? [])
+      .flatMap((paper) => {
+        try {
+          const subject = PAPER_SUBJECT_ORDER.includes(paper.subject as PaperSubject)
+            ? (paper.subject as PaperSubject)
+            : "english";
+          if (!allowedSubjects.includes(subject) || !paper.published) {
+            return [];
+          }
+
+          const blueprint: ManualPaperBlueprint = JSON.parse(paper.blueprintJson);
+          return [{
+            subject,
+            paperId: paper.paperId,
+            title: paper.title,
+            blueprint,
+          }];
+        } catch {
+          return [];
+        }
+      })
+      .reduce<Record<PaperSubject, Array<{ paperId: string; title: string; blueprint: ManualPaperBlueprint }>>>(
+        (accumulator, paper) => {
+          accumulator[paper.subject].push({
+            paperId: paper.paperId,
+            title: paper.title,
+            blueprint: paper.blueprint,
+          });
+          return accumulator;
+        },
+        {
+          english: [],
+          math: [],
+          vocabulary: [],
+        },
+      );
+
     const fixedManualPapers: Paper[] = parsedManualPapers
       .filter((paper) => getBlueprintBuildMode(paper.blueprint) === "fixed")
       .map((paper) => {
@@ -254,37 +303,27 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         } as Paper;
       });
 
-    const sourcePapers = parsedManualPapers
-      .filter((paper) => paper.subject === "english" && getBlueprintBuildMode(paper.blueprint) === "fixed")
-      .map((paper) => ({
-        paperId: paper.paperId,
-        title: paper.title,
-        blueprint: paper.blueprint,
-      }));
+    const tagSystemPapers: Paper[] = [
+      ...(allowedSubjects.includes("english")
+        ? buildTagSystemPapers("english", englishTagSystemsData ?? [], questionBankSourceBySubject.english)
+        : []),
+      ...(allowedSubjects.includes("math")
+        ? buildTagSystemPapers("math", mathTagSystemsData ?? [], questionBankSourceBySubject.math)
+        : []),
+      ...(allowedSubjects.includes("vocabulary")
+        ? buildTagSystemPapers("vocabulary", vocabularyTagSystemsData ?? [], questionBankSourceBySubject.vocabulary)
+        : []),
+    ];
 
-    const generatedManualPapers: Paper[] = parsedManualPapers
-      .filter((paper) => paper.subject === "english" && getBlueprintBuildMode(paper.blueprint) === "generated")
-      .map((paper) => {
-        const generated = generatePaperFromTaggedSources(paper.blueprint, sourcePapers);
-        const converted = blueprintToPaper(generated.blueprint, {
-          subject: paper.subject,
-          category: paper.category,
-        });
-        return {
-          ...converted,
-          id: paper.paperId,
-          title: paper.title,
-          description: paper.description || converted.description,
-          subject: paper.subject,
-          category: (paper.category || 'assessment') as any,
-          sections: converted.sections as unknown as Section[],
-          isGeneratedPaper: true,
-          generationWarnings: generated.warnings,
-        } as Paper;
-      });
-
-    return [...filteredStatic, ...fixedManualPapers, ...generatedManualPapers];
-  }, [allowedSubjects, manualPapersData]);
+    return [...filteredStatic, ...fixedManualPapers, ...tagSystemPapers];
+  }, [
+    allowedSubjects,
+    englishTagSystemsData,
+    manualPapersData,
+    mathTagSystemsData,
+    questionBankPapersData,
+    vocabularyTagSystemsData,
+  ]);
 
   const currentSections = selectedPaper?.sections || [];
   const currentSection = currentSections[state.currentSectionIndex] || currentSections[0];

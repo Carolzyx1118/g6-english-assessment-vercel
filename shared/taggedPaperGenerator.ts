@@ -10,8 +10,18 @@ import type {
   ManualSectionType,
   ManualSubsection,
 } from "./manualPaperBlueprint";
+import {
+  normalizeEnglishTagAbility,
+  normalizeEnglishTagDifficulty,
+  normalizeEnglishTagEntry,
+  type EnglishQuestionTagProfile,
+  type SubjectQuestionTagProfile,
+} from "./englishQuestionTags";
 
-type EnglishTagProfile = NonNullable<NonNullable<ManualQuestion["tags"]>["english"]>;
+type QuestionTagProfile =
+  | ({ kind: "english" } & EnglishQuestionTagProfile)
+  | ({ kind: "math" } & SubjectQuestionTagProfile)
+  | ({ kind: "vocabulary" } & SubjectQuestionTagProfile);
 
 type GeneratorSourcePaper = {
   paperId: string;
@@ -27,7 +37,7 @@ type GenerationCandidate = {
   questionType: ManualQuestionType;
   questionCount: number;
   subsection: ManualSubsection;
-  questionProfiles: EnglishTagProfile[];
+  questionProfiles: QuestionTagProfile[];
 };
 
 type SelectedCandidate = {
@@ -54,7 +64,7 @@ function shuffle<T>(items: T[]) {
   return next;
 }
 
-function hasEnglishTagFilters(rule: ManualPaperGenerationRule) {
+function hasQuestionTagFilters(rule: ManualPaperGenerationRule) {
   const filters = rule.filters;
   return Boolean(
     filters.track
@@ -69,7 +79,33 @@ function hasEnglishTagFilters(rule: ManualPaperGenerationRule) {
 }
 
 function getQuestionProfiles(question: ManualQuestion) {
-  return question.tags?.english ? [question.tags.english] : [];
+  const profiles: QuestionTagProfile[] = [];
+
+  if (question.tags?.english) {
+    profiles.push({
+      kind: "english",
+      ...question.tags.english,
+      entries: question.tags.english.entries.map((entry) => normalizeEnglishTagEntry(entry)),
+      ability: normalizeEnglishTagAbility(question.tags.english.ability),
+      difficulty: normalizeEnglishTagDifficulty(question.tags.english.difficulty),
+    });
+  }
+
+  if (question.tags?.math) {
+    profiles.push({
+      kind: "math",
+      ...question.tags.math,
+    });
+  }
+
+  if (question.tags?.vocabulary) {
+    profiles.push({
+      kind: "vocabulary",
+      ...question.tags.vocabulary,
+    });
+  }
+
+  return profiles;
 }
 
 function getCandidateProfiles(subsection: ManualSubsection) {
@@ -84,29 +120,50 @@ function isFixedBlueprint(blueprint: ManualPaperBlueprint) {
   return getBlueprintBuildMode(blueprint) === "fixed";
 }
 
-function matchesEnglishRule(
-  profile: EnglishTagProfile,
+function matchesQuestionTagProfile(
+  profile: QuestionTagProfile,
   rule: ManualPaperGenerationRule,
 ) {
   const filters = rule.filters;
   if (filters.track && profile.track !== filters.track) return false;
-  if (filters.entries && filters.entries.length > 0) {
-    const overlaps = filters.entries.some((entry) => profile.entries.includes(entry));
-    if (!overlaps) return false;
-  }
   if (filters.unit && profile.unit !== filters.unit) return false;
   if (filters.examPart && profile.examPart !== filters.examPart) return false;
-  if (filters.abilities && filters.abilities.length > 0 && !filters.abilities.includes(profile.ability)) {
+
+  if (profile.kind === "english") {
+    if (filters.entries && filters.entries.length > 0) {
+      const normalizedEntries = filters.entries.map((entry) => normalizeEnglishTagEntry(entry));
+      const overlaps = normalizedEntries.some((entry) => profile.entries.includes(entry));
+      if (!overlaps) return false;
+    }
+    if (filters.abilities && filters.abilities.length > 0) {
+      const normalizedAbilities = filters.abilities.map((ability) => normalizeEnglishTagAbility(ability));
+      const normalizedProfileAbility = normalizeEnglishTagAbility(profile.ability);
+      if (!normalizedAbilities.includes(normalizedProfileAbility)) return false;
+    }
+    if (filters.grammarUnit && profile.grammarUnit !== filters.grammarUnit) return false;
+    if (filters.grammarPoints && filters.grammarPoints.length > 0) {
+      const overlaps = filters.grammarPoints.some((point) => profile.grammarPoints?.includes(point));
+      if (!overlaps) return false;
+    }
+    if (filters.difficulties && filters.difficulties.length > 0) {
+      const normalizedDifficulties = filters.difficulties
+        .map((difficulty) => normalizeEnglishTagDifficulty(difficulty))
+        .filter((difficulty): difficulty is NonNullable<typeof difficulty> => Boolean(difficulty));
+      const normalizedProfileDifficulty = profile.difficulty
+        ? normalizeEnglishTagDifficulty(profile.difficulty)
+        : undefined;
+      if (!normalizedProfileDifficulty || !normalizedDifficulties.includes(normalizedProfileDifficulty)) return false;
+    }
+  } else if (
+    filters.entries?.length
+    || filters.abilities?.length
+    || filters.grammarUnit
+    || filters.grammarPoints?.length
+    || filters.difficulties?.length
+  ) {
     return false;
   }
-  if (filters.grammarUnit && profile.grammarUnit !== filters.grammarUnit) return false;
-  if (filters.grammarPoints && filters.grammarPoints.length > 0) {
-    const overlaps = filters.grammarPoints.some((point) => profile.grammarPoints?.includes(point));
-    if (!overlaps) return false;
-  }
-  if (filters.difficulties && filters.difficulties.length > 0) {
-    if (!profile.difficulty || !filters.difficulties.includes(profile.difficulty)) return false;
-  }
+
   return true;
 }
 
@@ -119,11 +176,11 @@ function matchesRule(candidate: GenerationCandidate, sectionType: ManualSectionT
     return false;
   }
 
-  if (!hasEnglishTagFilters(rule)) {
+  if (!hasQuestionTagFilters(rule)) {
     return true;
   }
 
-  return candidate.questionProfiles.some((profile) => matchesEnglishRule(profile, rule));
+  return candidate.questionProfiles.some((profile) => matchesQuestionTagProfile(profile, rule));
 }
 
 function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {

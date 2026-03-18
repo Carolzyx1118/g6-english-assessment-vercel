@@ -50,6 +50,51 @@ function makeFixedBlueprint(id: string, prompt: string, unit: string): ManualPap
   };
 }
 
+function makeMathFixedBlueprint(id: string, prompt: string, examPart: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 1",
+        sectionType: "math-multiple-choice",
+        subsections: [
+          {
+            id: `${id}-subsection`,
+            title: "",
+            instructions: "",
+            questionType: "mcq",
+            questions: [
+              {
+                id: `${id}-question`,
+                type: "mcq",
+                prompt,
+                options: [
+                  { id: `${id}-a`, label: "A", text: "A" },
+                  { id: `${id}-b`, label: "B", text: "B" },
+                ],
+                correctAnswer: "A",
+                tags: {
+                  math: {
+                    track: "school-math",
+                    examPart,
+                    unit: "Unit 3",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe("tagged random paper generation", () => {
   it("builds a generated paper from matching tagged source questions", () => {
     const sourceA = makeFixedBlueprint("source-a", "Read question A", "Unit 1");
@@ -144,5 +189,51 @@ describe("tagged random paper generation", () => {
     };
 
     expect(countBlueprintQuestions(generatedBlueprint)).toBe(7);
+  });
+
+  it("matches math tag filters outside English", () => {
+    const sourceA = makeMathFixedBlueprint("math-a", "Math question A", "Multiple Choice Part 1");
+    const sourceB = makeMathFixedBlueprint("math-b", "Math question B", "Word Problem Part 1");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-math-paper",
+      title: "Generated Math Paper",
+      description: "Randomized from math tags",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["math-a", "math-b"],
+        sections: [
+          {
+            id: "generated-math-section",
+            title: "Math Mix",
+            sectionType: "math-multiple-choice",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-math-1",
+                label: "Math MCQ",
+                weight: 1,
+                filters: {
+                  track: "school-math",
+                  examPart: "Multiple Choice Part 1",
+                  questionTypes: ["mcq"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "math-a", title: "Math A", blueprint: sourceA },
+      { paperId: "math-b", title: "Math B", blueprint: sourceB },
+    ]);
+
+    expect(result.blueprint.sections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections[0]?.questions[0]?.prompt).toBe("Math question A");
   });
 });
