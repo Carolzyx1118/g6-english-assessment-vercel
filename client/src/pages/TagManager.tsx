@@ -471,22 +471,24 @@ export default function TagManager() {
                           </select>
                         </div>
 
-                        <div className="space-y-2">
-                          <Label>Unit Range</Label>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <Input
-                              type="number"
-                              min={1}
-                              step={1}
-                              value={getUnitCount(system.units)}
-                              onChange={(event) => {
-                                setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
-                              }}
-                              className="w-32 bg-white"
-                            />
-                            <span className="text-sm text-slate-500">units from Unit 1</span>
+                        {system.systemMode === "textbook-practice" ? (
+                          <div className="space-y-2">
+                            <Label>Unit Range</Label>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={getUnitCount(system.units)}
+                                onChange={(event) => {
+                                  setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
+                                }}
+                                className="w-32 bg-white"
+                              />
+                              <span className="text-sm text-slate-500">units from Unit 1</span>
+                            </div>
                           </div>
-                        </div>
+                        ) : null}
 
                         <div className="space-y-2">
                           <Label>Paper Name</Label>
