@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { ArrowLeft, Copy, Eye, EyeOff, FileText, Headphones, Loader2, Pencil, PencilRuler, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, EyeOff, FileText, Headphones, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
@@ -164,7 +164,7 @@ export default function PaperManager() {
     <TeacherToolsLayout activeTool="paper-manager" currentSubject={subjectFilter}>
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <div>
             <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
               <ArrowLeft className="h-4 w-4" />
@@ -178,23 +178,6 @@ export default function PaperManager() {
                 ? `Manage manually created ${PAPER_SUBJECT_LABELS[subjectFilter]} papers. You can unpublish a paper to hide it from students, or delete it permanently.`
                 : "Manage manually created papers. You can unpublish a paper to hide it from students, or delete it permanently."}
             </p>
-          </div>
-
-          <div className="flex gap-3">
-            <Link href={`/paper-intake?subject=${subjectFilter || "english"}`}>
-              <Button variant="outline" className="border-slate-200">
-                <PencilRuler className="mr-2 h-4 w-4" />
-                New Paper
-              </Button>
-            </Link>
-            {(subjectFilter === "english" || subjectFilter === null) && (
-              <Link href="/paper-composer?subject=english">
-                <Button variant="outline" className="border-slate-200">
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Add Generated Paper
-                </Button>
-              </Link>
-            )}
           </div>
         </div>
 
