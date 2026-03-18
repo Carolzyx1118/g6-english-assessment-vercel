@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2 } from "lucide-react";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -36,11 +36,10 @@ function parseBlueprint(raw: string): ManualPaperBlueprint | null {
 
 export default function QuestionBank() {
   const search = useSearch();
-  const [, navigate] = useLocation();
   const [expandedPaperIds, setExpandedPaperIds] = useState<number[]>([]);
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get("subject");
-    return isPaperSubjectValue(value) ? value : null;
+    return isPaperSubjectValue(value) ? value : "english";
   }, [search]);
 
   const listQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
@@ -49,7 +48,6 @@ export default function QuestionBank() {
 
   const filteredPapers = useMemo(() => {
     const papers = listQuery.data ?? [];
-    if (!subjectFilter) return papers;
     return papers.filter((paper) => paper.subject === subjectFilter);
   }, [listQuery.data, subjectFilter]);
 
@@ -74,40 +72,21 @@ export default function QuestionBank() {
             <div>
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" />
-                返回老师首页
+                Back to Teacher Home
               </Link>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
-                {subjectFilter ? `${PAPER_SUBJECT_LABELS[subjectFilter]} Question Bank` : "Question Bank"}
+                {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question Bank`}
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                查看随机组卷使用的题库题目。这里会显示每个题库卷里的题目 ID、题型、分区和内容摘要。
+                Review the question-bank items used for random paper building. Each entry shows the item ID, question type, section, and content summary.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="w-full min-w-[220px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="text-sm font-medium text-slate-700">Subject</label>
-                <select
-                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={subjectFilter ?? ""}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    navigate(next ? `/question-bank?subject=${next}` : "/question-bank");
-                  }}
-                >
-                  <option value="">All Subjects</option>
-                  {PAPER_SUBJECT_ORDER.map((subject) => (
-                    <option key={subject} value={subject}>
-                      {PAPER_SUBJECT_LABELS[subject]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Link href={`/paper-intake?subject=${subjectFilter ?? "english"}`}>
+              <Link href={`/paper-intake?subject=${subjectFilter}`}>
                 <Button className="bg-[#1E3A5F] text-white hover:bg-[#17324F]">
                   <FilePenLine className="mr-2 h-4 w-4" />
-                  录入题库题目
+                  Add Question Bank Items
                 </Button>
               </Link>
             </div>
@@ -116,13 +95,13 @@ export default function QuestionBank() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>题库卷数量</CardDescription>
+                <CardDescription>Question Bank Papers</CardDescription>
                 <CardTitle className="text-2xl">{summary.totalBanks}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>题库题目数量</CardDescription>
+                <CardDescription>Question Bank Items</CardDescription>
                 <CardTitle className="text-2xl text-sky-700">{summary.totalItems}</CardTitle>
               </CardHeader>
             </Card>
@@ -132,13 +111,13 @@ export default function QuestionBank() {
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                正在加载题库...
+                Loading question bank...
               </CardContent>
             </Card>
           ) : filteredPapers.length === 0 ? (
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="py-16 text-center text-sm text-slate-500">
-                当前科目还没有题库卷。先去 Paper Intake 里用题库随机模式录入题目。
+                No question-bank papers have been recorded for this subject yet. Add some from Paper Intake first.
               </CardContent>
             </Card>
           ) : (
@@ -157,11 +136,11 @@ export default function QuestionBank() {
                             <CardTitle className="text-xl text-[#1E3A5F]">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                              {paper.itemCount} 题
+                              {paper.itemCount} items
                             </Badge>
                           </div>
                           <CardDescription>
-                            题库 ID：{paper.paperId} · 最后更新 {formatDate(paper.updatedAt)}
+                            Bank ID: {paper.paperId} · Updated {formatDate(paper.updatedAt)}
                           </CardDescription>
                         </div>
 
@@ -169,7 +148,7 @@ export default function QuestionBank() {
                           <Link href={`/paper-intake?subject=${paper.subject}&edit=${paper.paperId}`}>
                             <Button variant="outline" className="border-slate-200">
                               <FilePenLine className="mr-2 h-4 w-4" />
-                              编辑
+                              Edit
                             </Button>
                           </Link>
                           <Button
@@ -183,7 +162,7 @@ export default function QuestionBank() {
                             ) : (
                               <ChevronDown className="mr-2 h-4 w-4" />
                             )}
-                            {expanded ? "收起题目" : "查看题目"}
+                            {expanded ? "Hide Items" : "View Items"}
                           </Button>
                         </div>
                       </div>
@@ -193,7 +172,7 @@ export default function QuestionBank() {
                       <CardContent className="space-y-3">
                         {items.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                            这张题库卷里还没有可显示的题目。
+                            There are no visible items in this question bank paper yet.
                           </div>
                         ) : (
                           items.map((section, index) => {
@@ -219,7 +198,7 @@ export default function QuestionBank() {
                                       </Badge>
                                     </div>
                                     <p className="text-sm font-semibold text-slate-800">
-                                      题目 {index + 1}
+                                      Item {index + 1}
                                     </p>
                                     <p className="text-sm leading-relaxed text-slate-600">
                                       {getQuestionBankItemSummary(subsection)}
@@ -227,7 +206,7 @@ export default function QuestionBank() {
                                   </div>
 
                                   <div className="text-right text-xs text-slate-500">
-                                    <p>{subsection.questions.length} 个内部题目</p>
+                                    <p>{subsection.questions.length} internal item(s)</p>
                                   </div>
                                 </div>
                               </div>

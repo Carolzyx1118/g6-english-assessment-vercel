@@ -129,6 +129,8 @@ export default function TeacherToolsLayout({
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
   });
+  const [tagManagerExpanded, setTagManagerExpanded] = useState(activeTool === "tag-manager");
+  const [questionBankExpanded, setQuestionBankExpanded] = useState(activeTool === "question-bank");
   const [historyExpanded, setHistoryExpanded] = useState(activeTool === "history");
   const [paperManagerExpanded, setPaperManagerExpanded] = useState(activeTool === "paper-manager");
 
@@ -138,6 +140,12 @@ export default function TeacherToolsLayout({
   }, [collapsed]);
 
   useEffect(() => {
+    if (activeTool === "tag-manager") {
+      setTagManagerExpanded(true);
+    }
+    if (activeTool === "question-bank") {
+      setQuestionBankExpanded(true);
+    }
     if (activeTool === "history") {
       setHistoryExpanded(true);
     }
@@ -205,13 +213,46 @@ export default function TeacherToolsLayout({
 
           <div className="space-y-1">
             {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Teacher Tools</p> : null}
-            <PrimaryLink
-              href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
-              icon={<Tags className="h-4 w-4" />}
-              label="Tag Manager"
-              active={activeTool === "tag-manager"}
-              collapsed={collapsed}
-            />
+            {!collapsed ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PrimaryLink
+                      href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
+                      icon={<Tags className="h-4 w-4" />}
+                      label="Tag Manager"
+                      active={activeTool === "tag-manager"}
+                      collapsed={false}
+                    />
+                  </div>
+                  <ExpandToggle
+                    expanded={tagManagerExpanded}
+                    onToggle={() => setTagManagerExpanded((current) => !current)}
+                    label="Tag Manager subjects"
+                  />
+                </div>
+                {tagManagerExpanded ? (
+                  <div className="space-y-1 pl-10">
+                    {allowedSubjects.map((subject) => (
+                      <SubjectLink
+                        key={`tag-manager-${subject}`}
+                        href={`/tag-manager?subject=${subject}`}
+                        label={PAPER_SUBJECT_LABELS[subject]}
+                        active={activeTool === "tag-manager" && currentSubject === subject}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <PrimaryLink
+                href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
+                icon={<Tags className="h-4 w-4" />}
+                label="Tag Manager"
+                active={activeTool === "tag-manager"}
+                collapsed={collapsed}
+              />
+            )}
 
             <PrimaryLink
               href={`/paper-intake?subject=${defaultSubject}`}
@@ -221,13 +262,46 @@ export default function TeacherToolsLayout({
               collapsed={collapsed}
             />
 
-            <PrimaryLink
-              href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
-              icon={<Database className="h-4 w-4" />}
-              label="Question Bank"
-              active={activeTool === "question-bank"}
-              collapsed={collapsed}
-            />
+            {!collapsed ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PrimaryLink
+                      href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
+                      icon={<Database className="h-4 w-4" />}
+                      label="Question Bank"
+                      active={activeTool === "question-bank"}
+                      collapsed={false}
+                    />
+                  </div>
+                  <ExpandToggle
+                    expanded={questionBankExpanded}
+                    onToggle={() => setQuestionBankExpanded((current) => !current)}
+                    label="Question Bank subjects"
+                  />
+                </div>
+                {questionBankExpanded ? (
+                  <div className="space-y-1 pl-10">
+                    {allowedSubjects.map((subject) => (
+                      <SubjectLink
+                        key={`question-bank-${subject}`}
+                        href={`/question-bank?subject=${subject}`}
+                        label={PAPER_SUBJECT_LABELS[subject]}
+                        active={activeTool === "question-bank" && currentSubject === subject}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <PrimaryLink
+                href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
+                icon={<Database className="h-4 w-4" />}
+                label="Question Bank"
+                active={activeTool === "question-bank"}
+                collapsed={collapsed}
+              />
+            )}
 
             {!collapsed ? (
               <div className="space-y-1">

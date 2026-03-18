@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronUp, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
@@ -112,7 +112,6 @@ function formatExamPart(prefix: string, number: number) {
 
 export default function TagManager() {
   const search = useSearch();
-  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get("subject");
@@ -276,21 +275,6 @@ export default function TagManager() {
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Manage exam systems, parts, unit ranges, and random paper setup here. Paper intake and tag-based paper setup will read these settings directly.
               </p>
-            </div>
-
-            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <Label className="text-sm font-medium text-slate-700">Subject</Label>
-              <select
-                className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={subjectFilter}
-                onChange={(event) => navigate(`/tag-manager?subject=${event.target.value}`)}
-              >
-                {PAPER_SUBJECT_ORDER.map((subject) => (
-                  <option key={subject} value={subject}>
-                    {PAPER_SUBJECT_LABELS[subject]}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
