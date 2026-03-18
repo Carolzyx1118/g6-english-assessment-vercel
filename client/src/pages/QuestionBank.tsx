@@ -68,7 +68,7 @@ export default function QuestionBank() {
     <TeacherToolsLayout activeTool="question-bank" currentSubject={subjectFilter}>
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
             <div>
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
                 <ArrowLeft className="h-4 w-4" />
@@ -80,15 +80,6 @@ export default function QuestionBank() {
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Review the question-bank items used for random paper building. Each entry shows the item ID, question type, section, and content summary.
               </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link href={`/paper-intake?subject=${subjectFilter}`}>
-                <Button className="bg-[#1E3A5F] text-white hover:bg-[#17324F]">
-                  <FilePenLine className="mr-2 h-4 w-4" />
-                  Add Question Bank Items
-                </Button>
-              </Link>
             </div>
           </div>
 
