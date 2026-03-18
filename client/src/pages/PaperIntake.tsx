@@ -4262,7 +4262,6 @@ export default function PaperIntake() {
                         onChange={activateFixedMode}
                       />
                       <span className="font-medium text-slate-900">固定套卷</span>
-                      <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 或 part 组织整套卷子，学生直接做这一整张卷。</span>
                     </label>
                     <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
                       <input
@@ -4272,7 +4271,6 @@ export default function PaperIntake() {
                         onChange={activateQuestionBankMode}
                       />
                       <span className="font-medium text-slate-900">题库随机</span>
-                      <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示外层 section，后面可作为随机抽题来源。</span>
                     </label>
                     {buildMode === "generated" ? (
                       <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
