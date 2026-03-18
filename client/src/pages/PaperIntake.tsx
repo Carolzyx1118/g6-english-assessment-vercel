@@ -2561,12 +2561,22 @@ export default function PaperIntake() {
     }));
   };
 
+  const applySharedQuestionTags = <T extends ManualQuestion>(
+    question: T,
+    tags: ManualQuestionTags | undefined,
+  ): T => ({
+    ...question,
+    tags,
+  });
+
   const renderQuestionTagEditor = (
     sectionId: string,
     subsectionId: string,
     question: ManualQuestion,
     sectionType: ManualSectionType,
   ) => {
+    if (isQuestionBankMode) return null;
+
     if (paperSubject === "english") {
       return (
         <EnglishQuestionTagEditor
@@ -2591,7 +2601,7 @@ export default function PaperIntake() {
     return null;
   };
 
-  const renderSharedPassageTagEditor = (
+  const renderSharedQuestionBlockTagEditor = (
     sectionId: string,
     subsectionId: string,
     subsection: ManualSubsection,
@@ -3448,21 +3458,24 @@ export default function PaperIntake() {
         ...subsection,
         questionType: nextQuestionType,
         wordBank: nextSubsection.wordBank,
-        questions: nextSubsection.questions,
+        questions: nextSubsection.questions.map((question) => applySharedQuestionTags(question, subsection.sharedQuestionTags)),
         passageText: nextSubsection.passageText,
         matchingDescriptions: nextSubsection.matchingDescriptions,
+        sharedQuestionTags: subsection.sharedQuestionTags,
       };
     });
   };
 
   const addQuestion = (sectionId: string, subsectionId: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
+      const sharedTags = subsection.sharedQuestionTags;
+
       if (subsection.questionType === "fill-blank") {
         return {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualFillBlankQuestion),
-            createFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
+            applySharedQuestionTags(createFillBlankQuestion(subsection.wordBank?.[0]?.id || ""), sharedTags),
           ],
         };
       }
@@ -3472,7 +3485,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualPassageFillBlankQuestion),
-            createPassageFillBlankQuestion(subsection.wordBank?.[0]?.id || ""),
+            applySharedQuestionTags(createPassageFillBlankQuestion(subsection.wordBank?.[0]?.id || ""), sharedTags),
           ],
         };
       }
@@ -3482,7 +3495,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualTypedFillBlankQuestion),
-            createTypedFillBlankQuestion(),
+            applySharedQuestionTags(createTypedFillBlankQuestion(), sharedTags),
           ],
         };
       }
@@ -3492,7 +3505,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualPictureSpellingQuestion),
-            createPictureSpellingQuestion(),
+            applySharedQuestionTags(createPictureSpellingQuestion(), sharedTags),
           ],
         };
       }
@@ -3502,7 +3515,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualWordCompletionQuestion),
-            createWordCompletionQuestion(),
+            applySharedQuestionTags(createWordCompletionQuestion(), sharedTags),
           ],
         };
       }
@@ -3512,7 +3525,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualPassageOpenEndedQuestion),
-            createPassageOpenEndedQuestion(),
+            applySharedQuestionTags(createPassageOpenEndedQuestion(), sharedTags),
           ],
         };
       }
@@ -3523,7 +3536,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualWritingQuestion),
-            createWritingQuestion(),
+            applySharedQuestionTags(createWritingQuestion(), sharedTags),
           ],
         };
       }
@@ -3533,7 +3546,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualSpeakingQuestion),
-            createSpeakingQuestion(),
+            applySharedQuestionTags(createSpeakingQuestion(), sharedTags),
           ],
         };
       }
@@ -3543,7 +3556,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualPassageMatchingQuestion),
-            createPassageMatchingQuestion(),
+            applySharedQuestionTags(createPassageMatchingQuestion(), sharedTags),
           ],
         };
       }
@@ -3553,7 +3566,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualTrueFalseQuestion),
-            createTrueFalseQuestion(),
+            applySharedQuestionTags(createTrueFalseQuestion(), sharedTags),
           ],
         };
       }
@@ -3563,7 +3576,10 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualHeadingMatchQuestion),
-            createHeadingMatchQuestion(subsection.questions.filter(isManualHeadingMatchQuestion).length),
+            applySharedQuestionTags(
+              createHeadingMatchQuestion(subsection.questions.filter(isManualHeadingMatchQuestion).length),
+              sharedTags,
+            ),
           ],
         };
       }
@@ -3573,7 +3589,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualCheckboxQuestion),
-            createCheckboxQuestion(),
+            applySharedQuestionTags(createCheckboxQuestion(), sharedTags),
           ],
         };
       }
@@ -3583,7 +3599,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualOrderingQuestion),
-            createOrderingQuestion(),
+            applySharedQuestionTags(createOrderingQuestion(), sharedTags),
           ],
         };
       }
@@ -3593,7 +3609,7 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualSentenceReorderQuestion),
-            createSentenceReorderQuestion(),
+            applySharedQuestionTags(createSentenceReorderQuestion(), sharedTags),
           ],
         };
       }
@@ -3603,14 +3619,17 @@ export default function PaperIntake() {
           ...subsection,
           questions: [
             ...subsection.questions.filter(isManualInlineWordChoiceQuestion),
-            createInlineWordChoiceQuestion(),
+            applySharedQuestionTags(createInlineWordChoiceQuestion(), sharedTags),
           ],
         };
       }
 
       return {
         ...subsection,
-        questions: [...subsection.questions.filter(isManualMCQQuestion), createMCQQuestion()],
+        questions: [
+          ...subsection.questions.filter(isManualMCQQuestion),
+          applySharedQuestionTags(createMCQQuestion(), sharedTags),
+        ],
       };
     });
   };
@@ -4506,6 +4525,15 @@ export default function PaperIntake() {
                             />
                           </div>
 
+                          {isQuestionBankMode
+                            ? renderSharedQuestionBlockTagEditor(
+                                section.id,
+                                subsection.id,
+                                subsection,
+                                section.sectionType,
+                              )
+                            : null}
+
                           <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <button
                               type="button"
@@ -4827,11 +4855,6 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-emerald-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
-                              {isQuestionBankMode && (
-                                <div className="mt-4">
-                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
-                                </div>
-                              )}
                             </div>
                           )}
 
@@ -4856,11 +4879,6 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-violet-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
-                              {isQuestionBankMode && (
-                                <div className="mt-4">
-                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
-                                </div>
-                              )}
                             </div>
                           )}
 
@@ -4884,11 +4902,6 @@ export default function PaperIntake() {
                               <p className="mt-2 text-xs text-blue-700">
                                 {countPassageBlanks(subsection.passageText ?? "")} blank(s) detected
                               </p>
-                              {isQuestionBankMode && (
-                                <div className="mt-4">
-                                  {renderSharedPassageTagEditor(section.id, subsection.id, subsection, section.sectionType)}
-                                </div>
-                              )}
                             </div>
                           )}
 
