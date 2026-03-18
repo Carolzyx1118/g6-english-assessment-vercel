@@ -399,6 +399,8 @@ export interface ManualSubsection {
   sceneImage?: ManualOptionImage;
   questionType: ManualQuestionType;
   questions: ManualQuestion[];
+  /** Shared question tags for passage-based question-bank types before/while blanks are generated. */
+  sharedQuestionTags?: ManualQuestionTags;
   wordBank?: ManualWordBankItem[];
   /** Full passage text for passage-fill-blank, passage-mcq, passage-inline-word-choice, and passage-open-ended types. Use ___ to mark blanks where applicable. */
   passageText?: string;

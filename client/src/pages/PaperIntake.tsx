@@ -2553,6 +2553,7 @@ export default function PaperIntake() {
   ) => {
     updateSubsection(sectionId, subsectionId, (subsection) => ({
       ...subsection,
+      sharedQuestionTags: tags,
       questions: subsection.questions.map((question) => ({
         ...question,
         tags,
@@ -2599,14 +2600,15 @@ export default function PaperIntake() {
     if (!isQuestionBankMode) return null;
 
     const sourceQuestion = subsection.questions[0];
-    if (!sourceQuestion) return null;
+    const sharedTags = sourceQuestion?.tags ?? subsection.sharedQuestionTags;
+    const sharedQuestionType = sourceQuestion?.type ?? subsection.questionType;
 
     if (paperSubject === "english") {
       return (
         <EnglishQuestionTagEditor
-          value={sourceQuestion.tags}
+          value={sharedTags}
           sectionType={sectionType}
-          questionType={sourceQuestion.type}
+          questionType={sharedQuestionType}
           onChange={(nextTags) => updateSubsectionQuestionTags(sectionId, subsectionId, nextTags)}
         />
       );
@@ -2616,7 +2618,7 @@ export default function PaperIntake() {
       return (
         <SubjectQuestionTagEditor
           subject={paperSubject}
-          value={sourceQuestion.tags}
+          value={sharedTags}
           onChange={(nextTags) => updateSubsectionQuestionTags(sectionId, subsectionId, nextTags)}
         />
       );
@@ -3762,7 +3764,7 @@ export default function PaperIntake() {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestions = subsection.questions.filter(isManualPassageFillBlankQuestion);
       const fallbackWordBankId = subsection.wordBank?.[0]?.id || "";
-      const sharedTags = existingQuestions[0]?.tags;
+      const sharedTags = existingQuestions[0]?.tags ?? subsection.sharedQuestionTags;
 
       let nextQuestions: ManualPassageFillBlankQuestion[];
       if (existingQuestions.length < blankCount) {
@@ -3784,6 +3786,7 @@ export default function PaperIntake() {
       return {
         ...subsection,
         passageText: newPassageText,
+        sharedQuestionTags: sharedTags,
         questions: nextQuestions,
       };
     });
@@ -3797,7 +3800,7 @@ export default function PaperIntake() {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
-      const sharedTags = existingQuestions[0]?.tags;
+      const sharedTags = existingQuestions[0]?.tags ?? subsection.sharedQuestionTags;
 
       let nextQuestions: ManualPassageMCQQuestion[];
       if (existingQuestions.length < blankCount) {
@@ -3817,6 +3820,7 @@ export default function PaperIntake() {
       return {
         ...subsection,
         passageText: newPassageText,
+        sharedQuestionTags: sharedTags,
         questions: nextQuestions,
       };
     });
@@ -3826,7 +3830,12 @@ export default function PaperIntake() {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestion = subsection.questions.find(isManualPassageInlineWordChoiceQuestion);
-      const baseQuestion = existingQuestion ?? createPassageInlineWordChoiceQuestion();
+      const baseQuestion = existingQuestion
+        ? existingQuestion
+        : {
+            ...createPassageInlineWordChoiceQuestion(),
+            tags: subsection.sharedQuestionTags,
+          };
       const existingItems = baseQuestion.items ?? [];
 
       let nextItems = existingItems;
@@ -3849,6 +3858,7 @@ export default function PaperIntake() {
       return {
         ...subsection,
         passageText: newPassageText,
+        sharedQuestionTags: baseQuestion.tags,
         questions: blankCount > 0
           ? [{
               ...baseQuestion,
