@@ -4339,7 +4339,7 @@ export default function PaperIntake() {
                       </div>
                       <CardDescription>
                         {isQuestionBankMode
-                          ? "Record one tagged question at a time for the random question bank."
+                          ? "Record one shared question block at a time for the random question bank. Add questions inside the block to share the same instructions and image."
                           : isMathPaper
                           ? "Choose the part type, then add one or more question blocks below."
                           : "Choose the section type, then add one or more big questions below."}
@@ -6745,8 +6745,7 @@ export default function PaperIntake() {
                           </div>
 
                           {/* Add question/blank button — not shown for passage-based auto-synced types */}
-                          {!isQuestionBankMode
-                            && subsection.questionType !== "passage-fill-blank"
+                          {subsection.questionType !== "passage-fill-blank"
                             && subsection.questionType !== "passage-mcq"
                             && subsection.questionType !== "passage-inline-word-choice" && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
@@ -6796,7 +6795,7 @@ export default function PaperIntake() {
               isQuestionBankMode ? (
                 <Button type="button" variant="outline" onClick={addSection}>
                   <FilePlus2 className="mr-2 h-4 w-4" />
-                  Add Question
+                  Add Question Block
                 </Button>
               ) : (
                 <Button type="button" variant="outline" onClick={addSection} className="w-full">
