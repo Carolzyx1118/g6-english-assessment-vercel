@@ -5,7 +5,8 @@ export type EnglishExamTagAbility =
   | "语法"
   | "阅读理解"
   | "听力理解"
-  | "写作";
+  | "写作"
+  | "口语";
 export type EnglishExamTagDifficulty = "基础" | "中等" | "提高";
 
 export interface EnglishQuestionTagProfile {
@@ -74,6 +75,7 @@ export const ENGLISH_TAG_ABILITY_OPTIONS: EnglishExamTagAbility[] = [
   "阅读理解",
   "听力理解",
   "写作",
+  "口语",
 ];
 export const ENGLISH_TAG_DIFFICULTY_OPTIONS: EnglishExamTagDifficulty[] = ["基础", "中等", "提高"];
 export const DEFAULT_ENGLISH_EXAM_TAG_TRACK = "ket";

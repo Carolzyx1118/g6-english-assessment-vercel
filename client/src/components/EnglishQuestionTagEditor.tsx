@@ -21,6 +21,7 @@ function createDefaultProfile(
     if (sectionType === "grammar") return "语法";
     if (sectionType === "vocabulary") return "词汇";
     if (sectionType === "listening") return "听力理解";
+    if (sectionType === "speaking" || questionType === "speaking") return "口语";
     if (sectionType === "writing" || questionType === "writing") return "写作";
     return "阅读理解";
   })() as EnglishExamTagAbility;
@@ -43,10 +44,6 @@ function updateProfileValue(
   };
 }
 
-function isSpeakingUnsupported(sectionType: ManualSectionType, questionType: ManualQuestionType) {
-  return sectionType === "speaking" || questionType === "speaking";
-}
-
 interface EnglishQuestionTagEditorProps {
   value?: ManualQuestionTags;
   sectionType: ManualSectionType;
@@ -61,14 +58,6 @@ export default function EnglishQuestionTagEditor({
   onChange,
 }: EnglishQuestionTagEditorProps) {
   const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
-
-  if (isSpeakingUnsupported(sectionType, questionType)) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-        当前英语标签体系只覆盖词汇、语法、阅读、听力、写作题，口语题先不参与随机组卷。
-      </div>
-    );
-  }
 
   const rawProfile = value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack);
   const safeTrack = schemaEntries.some(([track]) => track === rawProfile.track) ? rawProfile.track : defaultTrack;

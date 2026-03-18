@@ -5729,6 +5729,8 @@ export default function PaperIntake() {
                                       <Plus className="mr-2 h-4 w-4" />
                                       Add Option
                                     </Button>
+
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5818,6 +5820,8 @@ export default function PaperIntake() {
                                       <Plus className="mr-2 h-4 w-4" />
                                       Add Item
                                     </Button>
+
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5902,6 +5906,8 @@ export default function PaperIntake() {
                                       <Plus className="mr-2 h-4 w-4" />
                                       Add Sentence
                                     </Button>
+
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6030,6 +6036,8 @@ export default function PaperIntake() {
                                       <Plus className="mr-2 h-4 w-4" />
                                       Add Sentence
                                     </Button>
+
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6118,6 +6126,8 @@ export default function PaperIntake() {
                                         </div>
                                       ))}
                                     </div>
+
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
