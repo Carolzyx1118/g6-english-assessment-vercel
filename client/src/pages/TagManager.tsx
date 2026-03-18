@@ -61,6 +61,53 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
   };
 }
 
+const PART_PREFIX_OPTIONS: Record<PaperSubject, string[]> = {
+  english: ["阅读", "听力", "写作", "口语", "语法", "词汇"],
+  math: ["选择", "填空", "计算", "应用", "几何", "代数", "统计", "综合"],
+  vocabulary: ["词义", "拼写", "词汇运用", "搭配", "词形", "选词填空"],
+};
+
+function clampPositiveInt(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.round(value));
+}
+
+function parseUnitNumber(value: string) {
+  const match = value.match(/(\d+)/);
+  return clampPositiveInt(match ? Number(match[1]) : 1);
+}
+
+function formatUnitNumber(value: number) {
+  return `Unit ${clampPositiveInt(value)}`;
+}
+
+function parseExamPart(value: string, fallbackPrefix: string) {
+  const partMatch = value.match(/^(.*?)\s*Part\s*(\d+)$/i);
+  if (partMatch) {
+    return {
+      prefix: partMatch[1].trim() || fallbackPrefix,
+      number: clampPositiveInt(Number(partMatch[2])),
+    };
+  }
+
+  const numberMatch = value.match(/(\d+)/);
+  if (numberMatch) {
+    return {
+      prefix: value.replace(numberMatch[0], "").replace(/Part/gi, "").trim() || fallbackPrefix,
+      number: clampPositiveInt(Number(numberMatch[0])),
+    };
+  }
+
+  return {
+    prefix: value.trim() || fallbackPrefix,
+    number: 1,
+  };
+}
+
+function formatExamPart(prefix: string, number: number) {
+  return `${prefix.trim() || "Part"} Part ${clampPositiveInt(number)}`;
+}
+
 export default function TagManager() {
   const search = useSearch();
   const [, navigate] = useLocation();
@@ -147,6 +194,39 @@ export default function TagManager() {
 
   const isSaving = saveEnglishMutation.isPending || saveMathMutation.isPending || saveVocabularyMutation.isPending;
   const systems = subjectFilter === "english" ? englishSystems : basicSystems;
+
+  const setUnitsForSystem = (systemId: string, nextUnits: string[]) => {
+    if (subjectFilter === "english") {
+      updateSystem(systemId, (current) => ({
+        ...current,
+        units: nextUnits,
+        grammarByUnit: Object.fromEntries(
+          Object.entries(current.grammarByUnit).filter(([unit]) => nextUnits.includes(unit)),
+        ),
+      }));
+      return;
+    }
+
+    updateBasicSystem(systemId, (current) => ({
+      ...current,
+      units: nextUnits,
+    }));
+  };
+
+  const setExamPartsForSystem = (systemId: string, nextExamParts: string[]) => {
+    if (subjectFilter === "english") {
+      updateSystem(systemId, (current) => ({
+        ...current,
+        examParts: nextExamParts,
+      }));
+      return;
+    }
+
+    updateBasicSystem(systemId, (current) => ({
+      ...current,
+      examParts: nextExamParts,
+    }));
+  };
 
   return (
     <TeacherToolsLayout activeTool="tag-manager" currentSubject={subjectFilter}>
@@ -290,53 +370,135 @@ export default function TagManager() {
 
                       <div className="space-y-2">
                         <Label>教材单元</Label>
-                        <Textarea
-                          rows={10}
-                          value={listToText(system.units)}
-                          onChange={(event) => {
-                            const nextUnits = textToList(event.target.value);
-                            if (subjectFilter === "english") {
-                              updateSystem(system.id, (current) => ({
-                                ...current,
-                                units: nextUnits,
-                                grammarByUnit: Object.fromEntries(
-                                  Object.entries(current.grammarByUnit).filter(([unit]) => nextUnits.includes(unit)),
-                                ),
-                              }));
-                              return;
-                            }
-                            updateBasicSystem(system.id, (current) => ({
-                              ...current,
-                              units: nextUnits,
-                            }));
-                          }}
-                          placeholder={"Unit 1\nUnit 2\nUnit 3"}
-                        />
-                        <p className="text-xs text-slate-500">每行一个教材单元。</p>
+                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          {system.units.map((unit, unitIndex) => (
+                            <div key={`${system.id}-unit-${unitIndex}`} className="flex flex-wrap items-center gap-3">
+                              <div className="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
+                                Unit
+                              </div>
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={parseUnitNumber(unit)}
+                                onChange={(event) => {
+                                  const nextUnits = [...system.units];
+                                  nextUnits[unitIndex] = formatUnitNumber(Number(event.target.value || 1));
+                                  setUnitsForSystem(system.id, nextUnits);
+                                }}
+                                className="w-28 bg-white"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => {
+                                  const nextUnits = system.units.filter((_, indexToKeep) => indexToKeep !== unitIndex);
+                                  setUnitsForSystem(system.id, nextUnits);
+                                }}
+                                disabled={system.units.length <= 1}
+                              >
+                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                删除
+                              </Button>
+                            </div>
+                          ))}
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-slate-200 bg-white"
+                            onClick={() => setUnitsForSystem(system.id, [...system.units, formatUnitNumber(system.units.length + 1)])}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            添加 Unit
+                          </Button>
+                        </div>
+                        <p className="text-xs text-slate-500">直接选择 Unit 后面的数字即可。</p>
                       </div>
 
                       <div className="space-y-2 lg:col-span-2">
                         <Label>考试 Part</Label>
-                        <Textarea
-                          rows={10}
-                          value={listToText(system.examParts)}
-                          onChange={(event) => {
-                            const nextExamParts = textToList(event.target.value);
-                            if (subjectFilter === "english") {
-                              updateSystem(system.id, (current) => ({
-                                ...current,
-                                examParts: nextExamParts,
-                              }));
-                              return;
-                            }
-                            updateBasicSystem(system.id, (current) => ({
-                              ...current,
-                              examParts: nextExamParts,
-                            }));
-                          }}
-                          placeholder={"阅读 Part 1\n阅读 Part 2\n听力 Part 1\n写作 Part 1"}
-                        />
-                        <p className="text-xs text-slate-500">每行一个 Part，录题页和组卷页都会读取这里。</p>
+                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          {system.examParts.map((examPart, examPartIndex) => {
+                            const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
+                            const parsedPart = parseExamPart(examPart, defaultPrefix);
+                            const partOptions = Array.from(
+                              new Set([
+                                ...PART_PREFIX_OPTIONS[subjectFilter],
+                                ...system.examParts.map((currentPart) => parseExamPart(currentPart, defaultPrefix).prefix),
+                              ]),
+                            );
+
+                            return (
+                              <div
+                                key={`${system.id}-part-${examPartIndex}`}
+                                className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
+                              >
+                                <select
+                                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                  value={parsedPart.prefix}
+                                  onChange={(event) => {
+                                    const nextExamParts = [...system.examParts];
+                                    nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
+                                    setExamPartsForSystem(system.id, nextExamParts);
+                                  }}
+                                >
+                                  {partOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600">
+                                  Part
+                                </div>
+
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={parsedPart.number}
+                                  onChange={(event) => {
+                                    const nextExamParts = [...system.examParts];
+                                    nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
+                                    setExamPartsForSystem(system.id, nextExamParts);
+                                  }}
+                                  className="bg-white"
+                                />
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  onClick={() => {
+                                    const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
+                                    setExamPartsForSystem(system.id, nextExamParts);
+                                  }}
+                                  disabled={system.examParts.length <= 1}
+                                >
+                                  <Trash2 className="mr-1.5 h-4 w-4" />
+                                  删除
+                                </Button>
+                              </div>
+                            );
+                          })}
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-slate-200 bg-white"
+                            onClick={() => {
+                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "阅读";
+                              setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
+                            }}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            添加 Part
+                          </Button>
+                        </div>
+                        <p className="text-xs text-slate-500">先选分区类型，再调整 Part 后面的数字。</p>
                       </div>
                     </CardContent>
                   </Card>
