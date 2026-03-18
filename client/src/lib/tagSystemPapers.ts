@@ -175,7 +175,6 @@ function buildAssessmentSections(
           track: system.id,
           examPart: part.examPart,
           questionTypes: [part.questionType as ManualQuestionType],
-          ...(subject === "english" ? { entries: ["Exam Bank"] } : {}),
         }),
       ],
     }));
@@ -204,7 +203,6 @@ function buildPracticeSections(
       rules: [
         createRule(`practice-${index + 1}-rule`, {
           track: system.id,
-          ...(subject === "english" ? { entries: ["Textbook Practice"] } : {}),
           ...(config.practiceMode === "unit" ? { unit: rule.filterValue } : {}),
           ...(config.practiceMode === "question-type" ? { questionTypes: [rule.filterValue as ManualQuestionType] } : {}),
           ...(config.practiceMode === "skill" && subject === "english"

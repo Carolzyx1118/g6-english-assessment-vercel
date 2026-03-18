@@ -2,7 +2,6 @@ import type { ManualQuestionTags, ManualQuestionType, ManualSectionType } from "
 import {
   ENGLISH_TAG_ABILITY_OPTIONS,
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
-  ENGLISH_TAG_ENTRY_OPTIONS,
   getEnglishExamTagSchema,
   normalizeEnglishQuestionTagProfile,
   type EnglishExamTagAbility,
@@ -102,27 +101,7 @@ export default function EnglishQuestionTagEditor({
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {ENGLISH_TAG_ENTRY_OPTIONS.map((entry) => {
-          const checked = profile.entries.includes(entry);
-          return (
-            <label key={entry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => {
-                  toggleArrayValue(profile.entries, entry, (entries) => {
-                    handleProfileChange((current) => ({ ...current, entries: entries as typeof profile.entries }));
-                  });
-                }}
-              />
-              <span>{entry}</span>
-            </label>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Exam System</Label>
           <select
@@ -187,7 +166,7 @@ export default function EnglishQuestionTagEditor({
               }));
             }}
           >
-            <option value="">Unassigned</option>
+            <option value="">N/A</option>
             {schema.units.map((unit) => (
               <option key={unit} value={unit}>{unit}</option>
             ))}
@@ -207,7 +186,7 @@ export default function EnglishQuestionTagEditor({
               }));
             }}
           >
-            <option value="">未设置</option>
+            <option value="">N/A</option>
             {schema.examParts.map((part) => (
               <option key={part} value={part}>{part}</option>
             ))}
