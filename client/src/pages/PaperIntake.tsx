@@ -201,6 +201,74 @@ function getLockedMathQuestionType(sectionType: ManualSectionType): ManualQuesti
   return getDefaultQuestionTypeForSectionType(sectionType);
 }
 
+function getEnglishSectionTypeFromAbility(ability?: string): ManualSectionType | null {
+  if (!ability) return null;
+  if (ability === "语法") return "grammar";
+  if (ability === "词汇") return "vocabulary";
+  if (ability === "听力理解") return "listening";
+  if (ability === "口语") return "speaking";
+  if (ability === "写作") return "writing";
+  if (ability === "阅读理解") return "reading";
+  return null;
+}
+
+function inferQuestionBankSectionType(
+  section: ManualSection,
+  subsection: ManualSubsection,
+  paperSubject: PaperSubject,
+): ManualSectionType {
+  if (paperSubject === "vocabulary") {
+    return "vocabulary";
+  }
+
+  if (paperSubject === "math") {
+    if (subsection.questionType === "mcq") {
+      return "math-multiple-choice";
+    }
+
+    return section.sectionType === "math-application" ? "math-application" : "math-short-answer";
+  }
+
+  if (subsection.questionType === "speaking") {
+    return "speaking";
+  }
+
+  if (subsection.questionType === "writing") {
+    return "writing";
+  }
+
+  const taggedAbility = subsection.questions.find((question) => question.tags?.english?.ability)?.tags?.english?.ability;
+  const taggedSectionType = getEnglishSectionTypeFromAbility(taggedAbility);
+  if (taggedSectionType) {
+    return taggedSectionType;
+  }
+
+  if (subsection.audio) {
+    return "listening";
+  }
+
+  if (ENGLISH_SECTION_TYPES.includes(section.sectionType)) {
+    return section.sectionType;
+  }
+
+  return "reading";
+}
+
+function normalizeQuestionBankSection(
+  section: ManualSection,
+  paperSubject: PaperSubject,
+): ManualSection {
+  const subsection = section.subsections[0];
+  if (!subsection) {
+    return section;
+  }
+
+  return {
+    ...section,
+    sectionType: inferQuestionBankSectionType(section, subsection, paperSubject),
+  };
+}
+
 function getPaperBuilderDraftKey(editPaperId: string, paperSubject: PaperSubject) {
   return `${PAPER_BUILDER_DRAFT_STORAGE_PREFIX}:${editPaperId || `__new__:${paperSubject}`}`;
 }
@@ -834,11 +902,18 @@ function normalizeSectionsForQuestionBankMode(
       ? section.subsections
       : [createSubsection(getDefaultQuestionTypeForSectionType(sectionType))];
 
-    return subsections.map((subsection) => ({
-      id: createLocalId(),
-      sectionType,
-      subsections: [normalizeLoadedSubsection(subsection, paperSubject, sectionType)],
-    }));
+    return subsections.map((subsection) => {
+      const normalizedSection = normalizeQuestionBankSection(
+        {
+          id: createLocalId(),
+          sectionType,
+          subsections: [normalizeLoadedSubsection(subsection, paperSubject, sectionType)],
+        },
+        paperSubject,
+      );
+
+      return normalizedSection;
+    });
   });
 
   return flattened.length > 0 ? flattened : [createSection(fallbackSectionType)];
@@ -2422,7 +2497,14 @@ export default function PaperIntake() {
   };
 
   const updateSection = (sectionId: string, updater: (section: ManualSection) => ManualSection) => {
-    setSections((prev) => prev.map((section) => (section.id === sectionId ? updater(section) : section)));
+    setSections((prev) => prev.map((section) => {
+      if (section.id !== sectionId) {
+        return section;
+      }
+
+      const nextSection = updater(section);
+      return isQuestionBankMode ? normalizeQuestionBankSection(nextSection, paperSubject) : nextSection;
+    }));
   };
 
   const updateSubsection = (
@@ -4208,47 +4290,49 @@ export default function PaperIntake() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  <div className="space-y-2">
-                    <Label>{isQuestionBankMode ? "Section Type" : `Part ${sectionIndex + 1} Type`}</Label>
-                    <select
-                      value={section.sectionType}
-                      onChange={(event) =>
-                        updateSection(section.id, (currentSection) => {
-                          const nextSectionType = event.target.value as ManualSectionType;
-                          if (!isMathPaper) {
+                  {!isQuestionBankMode ? (
+                    <div className="space-y-2">
+                      <Label>{`Part ${sectionIndex + 1} Type`}</Label>
+                      <select
+                        value={section.sectionType}
+                        onChange={(event) =>
+                          updateSection(section.id, (currentSection) => {
+                            const nextSectionType = event.target.value as ManualSectionType;
+                            if (!isMathPaper) {
+                              return {
+                                ...currentSection,
+                                sectionType: nextSectionType,
+                              };
+                            }
+
+                            const nextQuestionType = getLockedMathQuestionType(nextSectionType);
                             return {
                               ...currentSection,
                               sectionType: nextSectionType,
+                              subsections: currentSection.subsections.map((subsection) => {
+                                const nextSubsection = createSubsection(nextQuestionType);
+                                return {
+                                  ...subsection,
+                                  questionType: nextQuestionType,
+                                  wordBank: nextSubsection.wordBank,
+                                  questions: nextSubsection.questions,
+                                  passageText: nextSubsection.passageText,
+                                  matchingDescriptions: nextSubsection.matchingDescriptions,
+                                };
+                              }),
                             };
-                          }
-
-                          const nextQuestionType = getLockedMathQuestionType(nextSectionType);
-                          return {
-                            ...currentSection,
-                            sectionType: nextSectionType,
-                            subsections: currentSection.subsections.map((subsection) => {
-                              const nextSubsection = createSubsection(nextQuestionType);
-                              return {
-                                ...subsection,
-                                questionType: nextQuestionType,
-                                wordBank: nextSubsection.wordBank,
-                                questions: nextSubsection.questions,
-                                passageText: nextSubsection.passageText,
-                                matchingDescriptions: nextSubsection.matchingDescriptions,
-                              };
-                            }),
-                          };
-                        })
-                      }
-                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                    >
-                      {availableSectionTypes.map((value) => (
-                        <option key={value} value={value}>
-                          {MANUAL_SECTION_TYPE_LABELS[value]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                      >
+                        {availableSectionTypes.map((value) => (
+                          <option key={value} value={value}>
+                            {MANUAL_SECTION_TYPE_LABELS[value]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
 
                   <div className="space-y-4">
                     {section.subsections.map((subsection, subsectionIndex) => (
