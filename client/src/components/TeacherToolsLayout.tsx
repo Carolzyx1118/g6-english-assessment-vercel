@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  Database,
   FilePlus2,
   Home,
   Layers3,
@@ -20,6 +21,7 @@ type TeacherToolKey =
   | "home"
   | "history"
   | "paper-intake"
+  | "question-bank"
   | "tag-manager"
   | "paper-manager"
   | "paper-composer"
@@ -217,6 +219,14 @@ export default function TeacherToolsLayout({
               icon={<FilePlus2 className="h-4 w-4" />}
               label="Paper Intake"
               active={activeTool === "paper-intake"}
+              collapsed={collapsed}
+            />
+
+            <PrimaryLink
+              href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
+              icon={<Database className="h-4 w-4" />}
+              label="Question Bank"
+              active={activeTool === "question-bank"}
               collapsed={collapsed}
             />
 

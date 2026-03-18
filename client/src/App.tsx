@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import PaperComposer from "./pages/PaperComposer";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
+import QuestionBank from "./pages/QuestionBank";
 import Register from "./pages/Register";
 import TagManager from "./pages/TagManager";
 import UserManager from "./pages/UserManager";
@@ -41,6 +42,13 @@ function Router() {
         <AuthGuard>
           <TeacherGuard>
             <PaperIntake />
+          </TeacherGuard>
+        </AuthGuard>
+      </Route>
+      <Route path={"/question-bank"}>
+        <AuthGuard>
+          <TeacherGuard>
+            <QuestionBank />
           </TeacherGuard>
         </AuthGuard>
       </Route>

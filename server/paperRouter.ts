@@ -194,6 +194,38 @@ export const paperRouter = router({
     }));
   }),
 
+  listQuestionBankPapers: publicProcedure.query(async () => {
+    const papers = await getAllManualPapers();
+    return papers.flatMap((p) => {
+      try {
+        const parsedBlueprint = JSON.parse(p.blueprintJson);
+        if (
+          getBlueprintBuildMode(parsedBlueprint) !== "fixed"
+          || getBlueprintVisibilityMode(parsedBlueprint) !== "question-bank"
+        ) {
+          return [];
+        }
+
+        return [{
+          id: p.id,
+          paperId: p.paperId,
+          title: p.title,
+          description: p.description,
+          subject: p.subject,
+          category: p.category,
+          published: p.published === 1,
+          totalQuestions: p.totalQuestions,
+          itemCount: Array.isArray(parsedBlueprint.sections) ? parsedBlueprint.sections.length : 0,
+          blueprintJson: p.blueprintJson,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        }];
+      } catch {
+        return [];
+      }
+    });
+  }),
+
   getEnglishTagSystems: publicProcedure.query(async () => {
     return getEnglishTagSystems();
   }),

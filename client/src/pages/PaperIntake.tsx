@@ -13,6 +13,7 @@ import {
 } from "@/lib/imageUtils";
 import { trpc } from "@/lib/trpc";
 import { renderTextWithFractions } from "@/lib/renderTextWithFractions";
+import { formatQuestionBankItemId } from "@/lib/questionBankItem";
 import {
   buildWordCompletionAnswer,
   getPictureSpellingCharacters,
@@ -2085,11 +2086,13 @@ export default function PaperIntake() {
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
   const isMathPaper = paperSubject === "math";
   const isEnglishPaper = paperSubject === "english";
-  const managerHref = `/paper-manager?subject=${paperSubject}`;
   const publishedManualPapersQuery = trpc.papers.listManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
   const isQuestionBankMode = buildMode === "fixed" && visibilityMode === "question-bank";
+  const managerHref = isQuestionBankMode
+    ? `/question-bank?subject=${paperSubject}`
+    : `/paper-manager?subject=${paperSubject}`;
   const isLegacyGeneratedMode = isEditing && isEnglishPaper && buildMode === "generated";
   const showPreviewActionCard = buildMode === "fixed";
   const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
@@ -2157,6 +2160,8 @@ export default function PaperIntake() {
     [sections],
   );
   const isStickyPreviewMode = buildMode === "fixed";
+  const getQuestionBankDisplayId = (section: ManualSection) =>
+    formatQuestionBankItemId(paperSubject, section.subsections[0]?.id ?? section.id);
 
   useEffect(() => {
     if (!isEditing) {
@@ -4175,7 +4180,14 @@ export default function PaperIntake() {
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <CardTitle>{isQuestionBankMode ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`}</CardTitle>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle>{isQuestionBankMode ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`}</CardTitle>
+                        {isQuestionBankMode ? (
+                          <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                            {getQuestionBankDisplayId(section)}
+                          </span>
+                        ) : null}
+                      </div>
                       <CardDescription>
                         {isQuestionBankMode
                           ? "Record one tagged question at a time for the random question bank."
@@ -6663,9 +6675,16 @@ export default function PaperIntake() {
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-800">
-                              {`Question ${subsectionIndex + 1}`}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-slate-800">
+                                {`Question ${subsectionIndex + 1}`}
+                              </p>
+                              {isQuestionBankMode ? (
+                                <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                                  {getQuestionBankDisplayId(section)}
+                                </span>
+                              ) : null}
+                            </div>
                             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                               {MANUAL_QUESTION_TYPE_LABELS[subsection.questionType]}
                             </span>
