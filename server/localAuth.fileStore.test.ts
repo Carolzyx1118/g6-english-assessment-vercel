@@ -120,4 +120,46 @@ describe("localAuth file fallback", () => {
       }),
     ).rejects.toThrow("该账号已停用");
   });
+
+  it("allows a teacher to reset a user's password in file mode", async () => {
+    const { ctx: teacherCtx } = createPublicContext();
+    const teacherCaller = localAuthRouter.createCaller(teacherCtx);
+
+    const teacherRegister = await teacherCaller.register({
+      username: "teacher_reset",
+      password: "password123",
+      inviteCode: "TEACHER2026",
+    });
+
+    const studentRegister = await teacherCaller.register({
+      username: "student_reset",
+      password: "password123",
+      inviteCode: "ENGVOC2026",
+    });
+
+    const { ctx: manageCtx } = createPublicContext(`Bearer ${teacherRegister.token}`);
+    const manageCaller = localAuthRouter.createCaller(manageCtx);
+
+    const resetResult = await manageCaller.resetUserPassword({
+      id: studentRegister.user.id,
+    });
+
+    expect(resetResult.success).toBe(true);
+    expect(resetResult.temporaryPassword).toMatch(/^Pureon-/);
+
+    await expect(
+      teacherCaller.login({
+        username: "student_reset",
+        password: "password123",
+      }),
+    ).rejects.toThrow("用户名或密码错误");
+
+    const loginWithTemporaryPassword = await teacherCaller.login({
+      username: "student_reset",
+      password: resetResult.temporaryPassword,
+    });
+
+    expect(loginWithTemporaryPassword.success).toBe(true);
+    expect(loginWithTemporaryPassword.user.username).toBe("student_reset");
+  });
 });

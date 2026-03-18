@@ -560,4 +560,64 @@ describe("localAuth user management", () => {
     expect(result).toEqual({ success: true });
     expect(db.deleteLocalUser).toHaveBeenCalledWith(41);
   });
+
+  it("resets a target user's password and returns a temporary password", async () => {
+    const { ctx: loginCtx } = createPublicContext();
+    const loginCaller = appRouter.createCaller(loginCtx);
+
+    const bcrypt = await import("bcryptjs");
+    const teacherHash = await bcrypt.hash("teacherpass", 10);
+
+    vi.mocked(db.getLocalUserByUsername).mockResolvedValueOnce({
+      id: 50,
+      username: "teacher",
+      passwordHash: teacherHash,
+      inviteCode: "TEACHER2026::english|math|vocabulary",
+      displayName: "Teacher",
+      role: "user",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    });
+
+    const loginResult = await loginCaller.localAuth.login({
+      username: "teacher",
+      password: "teacherpass",
+    });
+
+    const { ctx } = createPublicContext(`Bearer ${loginResult.token}`);
+    const caller = appRouter.createCaller(ctx);
+
+    vi.mocked(db.getLocalUserById)
+      .mockResolvedValueOnce({
+        id: 50,
+        username: "teacher",
+        passwordHash: teacherHash,
+        inviteCode: "TEACHER2026::english|math|vocabulary",
+        displayName: "Teacher",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        id: 51,
+        username: "student",
+        passwordHash: "hash",
+        inviteCode: "ENGVOC2026::english|vocabulary",
+        displayName: "Student",
+        role: "user",
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      });
+
+    const result = await caller.localAuth.resetUserPassword({ id: 51 });
+
+    expect(result.success).toBe(true);
+    expect(result.temporaryPassword).toMatch(/^Pureon-/);
+    expect(db.updateLocalUser).toHaveBeenCalledWith(
+      51,
+      expect.objectContaining({
+        passwordHash: expect.any(String),
+      }),
+    );
+  });
 });

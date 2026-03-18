@@ -799,7 +799,7 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
 
 export async function updateLocalUser(
   id: number,
-  data: Partial<Pick<LocalUser, "displayName" | "inviteCode" | "role">>,
+  data: Partial<Pick<LocalUser, "displayName" | "inviteCode" | "role" | "passwordHash">>,
 ): Promise<void> {
   const db = await getDb();
   if (!db) {

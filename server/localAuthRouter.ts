@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { ENV } from "./_core/env";
@@ -165,6 +166,10 @@ async function requireTeacherLocalUser(req: any) {
   }
 
   return user;
+}
+
+function createTemporaryPassword() {
+  return `Pureon-${randomBytes(4).toString("hex")}`;
 }
 
 function getJwtSecret() {
@@ -424,6 +429,43 @@ export const localAuthRouter = router({
 
       return {
         success: true,
+      };
+    }),
+
+  resetUserPassword: publicProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = await requireTeacherLocalUser(ctx.req);
+
+      if (currentUser.id === input.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot reset the password of the account you are currently using",
+        });
+      }
+
+      const target = await getLocalUserById(input.id);
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      const temporaryPassword = createTemporaryPassword();
+      const passwordHash = await bcrypt.hash(temporaryPassword, SALT_ROUNDS);
+
+      await updateLocalUser(target.id, {
+        passwordHash,
+      });
+
+      return {
+        success: true,
+        temporaryPassword,
       };
     }),
 
