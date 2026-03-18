@@ -6782,11 +6782,18 @@ export default function PaperIntake() {
               </Card>
             ))}
 
-            {buildMode === "fixed" && !isQuestionBankMode ? (
-              <Button type="button" variant="outline" onClick={addSection} className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Section
-              </Button>
+            {buildMode === "fixed" ? (
+              isQuestionBankMode ? (
+                <Button type="button" variant="outline" onClick={addSection}>
+                  <FilePlus2 className="mr-2 h-4 w-4" />
+                  Add Question
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={addSection} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Section
+                </Button>
+              )
             ) : null}
           </div>
 
