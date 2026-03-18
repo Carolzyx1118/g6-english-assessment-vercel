@@ -12,11 +12,14 @@ import { trpc } from "@/lib/trpc";
 import { MANUAL_QUESTION_TYPE_LABELS } from "@shared/manualPaperBlueprint";
 import {
   buildGeneratedPaperConfig,
+  getGeneratedPracticeValueOptions,
   getGeneratedQuestionTypeOptions,
   normalizeEnglishTagSystems,
   normalizeSubjectTagSystems,
   type EnglishExamTagSystem,
   type SubjectTagSystem,
+  type TagSystemMode,
+  type TagSystemPracticeMode,
 } from "@shared/englishQuestionTags";
 import {
   PAPER_SUBJECT_LABELS,
@@ -34,12 +37,13 @@ function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
   return {
     id: `custom-${suffix}`,
     label: "",
+    systemMode: "assessment",
     units: [formatUnitNumber(1)],
     examParts: [],
-    abilities: ["词汇", "语法", "阅读理解", "听力理解", "写作"],
+    abilities: ["词汇", "语法", "阅读理解", "听力理解", "写作", "口语"],
     difficulties: ["基础", "中等", "提高"],
     grammarByUnit: {},
-    generatedPaper: { title: "", description: "", parts: [] },
+    generatedPaper: { title: "", description: "", practiceMode: "unit", parts: [], practiceRules: [] },
   };
 }
 
@@ -48,9 +52,10 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
   return {
     id: `${subject}-${suffix}`,
     label: "",
+    systemMode: "assessment",
     units: [formatUnitNumber(1)],
     examParts: [],
-    generatedPaper: { title: "", description: "", parts: [] },
+    generatedPaper: { title: "", description: "", practiceMode: "unit", parts: [], practiceRules: [] },
   };
 }
 
@@ -110,6 +115,16 @@ function formatExamPart(prefix: string, number: number) {
   return `${prefix.trim() || "Part"} Part ${clampPositiveInt(number)}`;
 }
 
+const SYSTEM_MODE_LABELS: Record<TagSystemMode, string> = {
+  assessment: "Assessment",
+  "textbook-practice": "Textbook Practice",
+};
+
+const PRACTICE_MODE_LABELS: Record<TagSystemPracticeMode, string> = {
+  unit: "By Unit",
+  "question-type": "By Question Type",
+};
+
 export default function TagManager() {
   const search = useSearch();
   const utils = trpc.useUtils();
@@ -155,7 +170,8 @@ export default function TagManager() {
     return systems.every((system) => {
       if (!system.label.trim()) return false;
       if (system.units.length === 0) return false;
-      if (system.examParts.length === 0) return false;
+      const systemMode = system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
+      if (systemMode === "assessment" && system.examParts.length === 0) return false;
       return true;
     });
   }, [basicSystems, englishSystems, subjectFilter]);
@@ -221,7 +237,14 @@ export default function TagManager() {
       updateSystem(systemId, (current) => ({
         ...current,
         examParts: nextExamParts,
-        generatedPaper: buildGeneratedPaperConfig("english", current.label, nextExamParts, current.generatedPaper),
+        generatedPaper: buildGeneratedPaperConfig(
+          "english",
+          current.label,
+          nextExamParts,
+          current.generatedPaper,
+          current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+          current.units,
+        ),
       }));
       return;
     }
@@ -229,7 +252,14 @@ export default function TagManager() {
     updateBasicSystem(systemId, (current) => ({
       ...current,
       examParts: nextExamParts,
-      generatedPaper: buildGeneratedPaperConfig(subjectFilter as "math" | "vocabulary", current.label, nextExamParts, current.generatedPaper),
+      generatedPaper: buildGeneratedPaperConfig(
+        subjectFilter as "math" | "vocabulary",
+        current.label,
+        nextExamParts,
+        current.generatedPaper,
+        current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+        current.units,
+      ),
     }));
   };
 
@@ -240,7 +270,16 @@ export default function TagManager() {
     if (subjectFilter === "english") {
       updateSystem(systemId, (current) => ({
         ...current,
-        generatedPaper: updater(buildGeneratedPaperConfig("english", current.label, current.examParts, current.generatedPaper)),
+        generatedPaper: updater(
+          buildGeneratedPaperConfig(
+            "english",
+            current.label,
+            current.examParts,
+            current.generatedPaper,
+            current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+            current.units,
+          ),
+        ),
       }));
       return;
     }
@@ -248,7 +287,45 @@ export default function TagManager() {
     updateBasicSystem(systemId, (current) => ({
       ...current,
       generatedPaper: updater(
-        buildGeneratedPaperConfig(subjectFilter as "math" | "vocabulary", current.label, current.examParts, current.generatedPaper),
+        buildGeneratedPaperConfig(
+          subjectFilter as "math" | "vocabulary",
+          current.label,
+          current.examParts,
+          current.generatedPaper,
+          current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+          current.units,
+        ),
+      ),
+    }));
+  };
+
+  const setSystemMode = (systemId: string, nextMode: TagSystemMode) => {
+    if (subjectFilter === "english") {
+      updateSystem(systemId, (current) => ({
+        ...current,
+        systemMode: nextMode,
+        generatedPaper: buildGeneratedPaperConfig(
+          "english",
+          current.label,
+          current.examParts,
+          current.generatedPaper,
+          nextMode,
+          current.units,
+        ),
+      }));
+      return;
+    }
+
+    updateBasicSystem(systemId, (current) => ({
+      ...current,
+      systemMode: nextMode,
+      generatedPaper: buildGeneratedPaperConfig(
+        subjectFilter as "math" | "vocabulary",
+        current.label,
+        current.examParts,
+        current.generatedPaper,
+        nextMode,
+        current.units,
       ),
     }));
   };
@@ -368,6 +445,9 @@ export default function TagManager() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
+                        <Badge className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 hover:bg-indigo-50">
+                          {SYSTEM_MODE_LABELS[system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"]}
+                        </Badge>
                         <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
                           {getUnitCount(system.units)} Units
                         </Badge>
@@ -379,6 +459,18 @@ export default function TagManager() {
 
                     {expandedSystemIds.includes(system.id) ? (
                       <CardContent className="grid gap-5 lg:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>System Type</Label>
+                          <select
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                            value={system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"}
+                            onChange={(event) => setSystemMode(system.id, event.target.value as TagSystemMode)}
+                          >
+                            <option value="assessment">Assessment</option>
+                            <option value="textbook-practice">Textbook Practice</option>
+                          </select>
+                        </div>
+
                         <div className="space-y-2">
                           <Label>Exam System Name</Label>
                           <Input
@@ -422,7 +514,14 @@ export default function TagManager() {
                         <div className="space-y-2">
                           <Label>Paper Name</Label>
                           <Input
-                            value={buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).title}
+                            value={buildGeneratedPaperConfig(
+                              subjectFilter,
+                              system.label,
+                              system.examParts,
+                              system.generatedPaper,
+                              system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                              system.units,
+                            ).title}
                             onChange={(event) =>
                               updateGeneratedPaper(system.id, (current) => ({
                                 ...current,
@@ -436,7 +535,14 @@ export default function TagManager() {
                         <div className="space-y-2">
                           <Label>Description</Label>
                           <Input
-                            value={buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).description}
+                            value={buildGeneratedPaperConfig(
+                              subjectFilter,
+                              system.label,
+                              system.examParts,
+                              system.generatedPaper,
+                              system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                              system.units,
+                            ).description}
                             onChange={(event) =>
                               updateGeneratedPaper(system.id, (current) => ({
                                 ...current,
@@ -447,150 +553,302 @@ export default function TagManager() {
                           />
                         </div>
 
-                        <div className="space-y-2 lg:col-span-2">
-                          <Label>Exam Parts</Label>
-                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                            {system.examParts.map((examPart, examPartIndex) => {
-                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
-                              const parsedPart = parseExamPart(examPart, defaultPrefix);
-                              const partOptions = Array.from(
-                                new Set([
-                                  ...PART_PREFIX_OPTIONS[subjectFilter],
-                                  ...system.examParts.map((currentPart) => parseExamPart(currentPart, defaultPrefix).prefix),
-                                ]),
-                              );
-
-                              return (
-                                <div
-                                  key={`${system.id}-part-${examPartIndex}`}
-                                  className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
-                                >
+                        {system.systemMode === "textbook-practice" ? (
+                          <>
+                            <div className="space-y-2 lg:col-span-2">
+                              <Label>Textbook Practice Setup</Label>
+                              <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="space-y-2 md:max-w-xs">
+                                  <Label className="text-xs uppercase tracking-[0.18em] text-slate-400">Practice Filter</Label>
                                   <select
-                                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                    value={parsedPart.prefix}
-                                    onChange={(event) => {
-                                      const nextExamParts = [...system.examParts];
-                                      nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
-                                      setExamPartsForSystem(system.id, nextExamParts);
-                                    }}
-                                  >
-                                    {partOptions.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
-                                      </option>
-                                    ))}
-                                  </select>
-
-                                  <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600">
-                                    Part
-                                  </div>
-
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    step={1}
-                                    value={parsedPart.number}
-                                    onChange={(event) => {
-                                      const nextExamParts = [...system.examParts];
-                                      nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
-                                      setExamPartsForSystem(system.id, nextExamParts);
-                                    }}
-                                    className="bg-white"
-                                  />
-
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    onClick={() => {
-                                      const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
-                                      setExamPartsForSystem(system.id, nextExamParts);
-                                    }}
-                                    disabled={system.examParts.length <= 1}
-                                  >
-                                    <Trash2 className="mr-1.5 h-4 w-4" />
-                                    Delete
-                                  </Button>
-                                </div>
-                              );
-                            })}
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="border-slate-200 bg-white"
-                              onClick={() => {
-                                const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
-                                setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Add Part
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 lg:col-span-2">
-                          <Label>Random Paper Setup</Label>
-                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                            {buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).parts.map((partConfig, partIndex) => {
-                              const questionTypeOptions = getGeneratedQuestionTypeOptions(subjectFilter, partConfig.examPart);
-
-                              return (
-                                <div
-                                  key={`${system.id}-generated-${partConfig.examPart}-${partIndex}`}
-                                  className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]"
-                                >
-                                  <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
-                                    {partConfig.examPart}
-                                  </div>
-
-                                  <select
-                                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                    value={partConfig.questionType}
+                                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                    value={buildGeneratedPaperConfig(
+                                      subjectFilter,
+                                      system.label,
+                                      system.examParts,
+                                      system.generatedPaper,
+                                      "textbook-practice",
+                                      system.units,
+                                    ).practiceMode}
                                     onChange={(event) =>
                                       updateGeneratedPaper(system.id, (current) => ({
                                         ...current,
-                                        parts: current.parts.map((item) =>
-                                          item.examPart === partConfig.examPart
-                                            ? { ...item, questionType: event.target.value }
-                                            : item,
-                                        ),
+                                        practiceMode: event.target.value as TagSystemPracticeMode,
                                       }))
                                     }
                                   >
-                                    {questionTypeOptions.map((option) => (
-                                      <option key={option} value={option}>
-                                        {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
-                                      </option>
-                                    ))}
+                                    <option value="unit">{PRACTICE_MODE_LABELS.unit}</option>
+                                    <option value="question-type">{PRACTICE_MODE_LABELS["question-type"]}</option>
                                   </select>
-
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={1}
-                                    value={partConfig.totalQuestions}
-                                    onChange={(event) =>
-                                      updateGeneratedPaper(system.id, (current) => ({
-                                        ...current,
-                                        parts: current.parts.map((item) =>
-                                          item.examPart === partConfig.examPart
-                                            ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
-                                            : item,
-                                        ),
-                                      }))
-                                    }
-                                    className="bg-white text-center"
-                                  />
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+
+                                {(() => {
+                                  const generatedConfig = buildGeneratedPaperConfig(
+                                    subjectFilter,
+                                    system.label,
+                                    system.examParts,
+                                    system.generatedPaper,
+                                    "textbook-practice",
+                                    system.units,
+                                  );
+                                  const practiceValueOptions = getGeneratedPracticeValueOptions(
+                                    subjectFilter,
+                                    generatedConfig.practiceMode,
+                                    system.units,
+                                  );
+
+                                  return (
+                                    <div className="space-y-3">
+                                      {generatedConfig.practiceRules.map((rule, ruleIndex) => (
+                                        <div
+                                          key={`${system.id}-practice-rule-${rule.id}-${ruleIndex}`}
+                                          className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_120px_auto]"
+                                        >
+                                          <select
+                                            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                            value={rule.filterValue}
+                                            onChange={(event) =>
+                                              updateGeneratedPaper(system.id, (current) => ({
+                                                ...current,
+                                                practiceRules: current.practiceRules.map((item) =>
+                                                  item.id === rule.id
+                                                    ? { ...item, filterValue: event.target.value }
+                                                    : item,
+                                                ),
+                                              }))
+                                            }
+                                          >
+                                            {practiceValueOptions.map((option) => (
+                                              <option key={option} value={option}>
+                                                {generatedConfig.practiceMode === "question-type"
+                                                  ? (MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option)
+                                                  : option}
+                                              </option>
+                                            ))}
+                                          </select>
+
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={rule.totalQuestions}
+                                            onChange={(event) =>
+                                              updateGeneratedPaper(system.id, (current) => ({
+                                                ...current,
+                                                practiceRules: current.practiceRules.map((item) =>
+                                                  item.id === rule.id
+                                                    ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                                    : item,
+                                                ),
+                                              }))
+                                            }
+                                            className="bg-white text-center"
+                                          />
+
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                            onClick={() =>
+                                              updateGeneratedPaper(system.id, (current) => ({
+                                                ...current,
+                                                practiceRules: current.practiceRules.filter((item) => item.id !== rule.id),
+                                              }))
+                                            }
+                                            disabled={generatedConfig.practiceRules.length <= 1}
+                                          >
+                                            <Trash2 className="mr-1.5 h-4 w-4" />
+                                            Delete
+                                          </Button>
+                                        </div>
+                                      ))}
+
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="border-slate-200 bg-white"
+                                        onClick={() =>
+                                          updateGeneratedPaper(system.id, (current) => ({
+                                            ...current,
+                                            practiceRules: [
+                                              ...current.practiceRules,
+                                              {
+                                                id: `${generatedConfig.practiceMode}-${current.practiceRules.length + 1}`,
+                                                filterValue: practiceValueOptions[0] ?? "",
+                                                totalQuestions: 0,
+                                              },
+                                            ],
+                                          }))
+                                        }
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Practice Rule
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="space-y-2 lg:col-span-2">
+                              <Label>Exam Parts</Label>
+                              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                {system.examParts.map((examPart, examPartIndex) => {
+                                  const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
+                                  const parsedPart = parseExamPart(examPart, defaultPrefix);
+                                  const partOptions = Array.from(
+                                    new Set([
+                                      ...PART_PREFIX_OPTIONS[subjectFilter],
+                                      ...system.examParts.map((currentPart) => parseExamPart(currentPart, defaultPrefix).prefix),
+                                    ]),
+                                  );
+
+                                  return (
+                                    <div
+                                      key={`${system.id}-part-${examPartIndex}`}
+                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_auto]"
+                                    >
+                                      <select
+                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                        value={parsedPart.prefix}
+                                        onChange={(event) => {
+                                          const nextExamParts = [...system.examParts];
+                                          nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
+                                          setExamPartsForSystem(system.id, nextExamParts);
+                                        }}
+                                      >
+                                        {partOptions.map((option) => (
+                                          <option key={option} value={option}>
+                                            {option}
+                                          </option>
+                                        ))}
+                                      </select>
+
+                                      <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600">
+                                        Part
+                                      </div>
+
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        value={parsedPart.number}
+                                        onChange={(event) => {
+                                          const nextExamParts = [...system.examParts];
+                                          nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
+                                          setExamPartsForSystem(system.id, nextExamParts);
+                                        }}
+                                        className="bg-white"
+                                      />
+
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                        onClick={() => {
+                                          const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
+                                          setExamPartsForSystem(system.id, nextExamParts);
+                                        }}
+                                        disabled={system.examParts.length <= 1}
+                                      >
+                                        <Trash2 className="mr-1.5 h-4 w-4" />
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="border-slate-200 bg-white"
+                                  onClick={() => {
+                                    const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
+                                    setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
+                                  }}
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add Part
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 lg:col-span-2">
+                              <Label>Assessment Builder Setup</Label>
+                              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                {buildGeneratedPaperConfig(
+                                  subjectFilter,
+                                  system.label,
+                                  system.examParts,
+                                  system.generatedPaper,
+                                  "assessment",
+                                  system.units,
+                                ).parts.map((partConfig, partIndex) => {
+                                  const questionTypeOptions = getGeneratedQuestionTypeOptions(subjectFilter, partConfig.examPart);
+
+                                  return (
+                                    <div
+                                      key={`${system.id}-generated-${partConfig.examPart}-${partIndex}`}
+                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]"
+                                    >
+                                      <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                                        {partConfig.examPart}
+                                      </div>
+
+                                      <select
+                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                        value={partConfig.questionType}
+                                        onChange={(event) =>
+                                          updateGeneratedPaper(system.id, (current) => ({
+                                            ...current,
+                                            parts: current.parts.map((item) =>
+                                              item.examPart === partConfig.examPart
+                                                ? { ...item, questionType: event.target.value }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                      >
+                                        {questionTypeOptions.map((option) => (
+                                          <option key={option} value={option}>
+                                            {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
+                                          </option>
+                                        ))}
+                                      </select>
+
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={partConfig.totalQuestions}
+                                        onChange={(event) =>
+                                          updateGeneratedPaper(system.id, (current) => ({
+                                            ...current,
+                                            parts: current.parts.map((item) =>
+                                              item.examPart === partConfig.examPart
+                                                ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                        className="bg-white text-center"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        )}
 
                         <div className="flex flex-wrap items-end justify-between gap-3 lg:col-span-2">
-                          <p className="text-xs text-slate-500">Choose the part type first, then adjust the part number.</p>
+                          <p className="text-xs text-slate-500">
+                            {system.systemMode === "textbook-practice"
+                              ? "Textbook practice can be filtered by unit or question type."
+                              : "Choose the part type first, then adjust the part number."}
+                          </p>
                           <Button
                             type="button"
                             className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F]"

@@ -31,16 +31,25 @@ import { normalizeEnglishTagSystems, normalizeSubjectTagSystems } from "../share
 const englishTagSystemInputSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
+  systemMode: z.enum(["assessment", "textbook-practice"]).default("assessment"),
   units: z.array(z.string()),
   examParts: z.array(z.string()),
   grammarByUnit: z.record(z.string(), z.array(z.string())).default({}),
   generatedPaper: z.object({
     title: z.string().default(""),
     description: z.string().default(""),
+    practiceMode: z.enum(["unit", "question-type"]).default("unit"),
     parts: z.array(
       z.object({
         examPart: z.string().min(1),
         questionType: z.string().min(1),
+        totalQuestions: z.number().int().min(0).default(0),
+      }),
+    ).default([]),
+    practiceRules: z.array(
+      z.object({
+        id: z.string().default(""),
+        filterValue: z.string().default(""),
         totalQuestions: z.number().int().min(0).default(0),
       }),
     ).default([]),
@@ -50,15 +59,24 @@ const englishTagSystemInputSchema = z.object({
 const basicTagSystemInputSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
+  systemMode: z.enum(["assessment", "textbook-practice"]).default("assessment"),
   units: z.array(z.string()),
   examParts: z.array(z.string()),
   generatedPaper: z.object({
     title: z.string().default(""),
     description: z.string().default(""),
+    practiceMode: z.enum(["unit", "question-type"]).default("unit"),
     parts: z.array(
       z.object({
         examPart: z.string().min(1),
         questionType: z.string().min(1),
+        totalQuestions: z.number().int().min(0).default(0),
+      }),
+    ).default([]),
+    practiceRules: z.array(
+      z.object({
+        id: z.string().default(""),
+        filterValue: z.string().default(""),
         totalQuestions: z.number().int().min(0).default(0),
       }),
     ).default([]),

@@ -35,14 +35,26 @@ export interface TagSystemGeneratedPartConfig {
   totalQuestions: number;
 }
 
+export type TagSystemMode = "assessment" | "textbook-practice";
+export type TagSystemPracticeMode = "unit" | "question-type";
+
+export interface TagSystemPracticeRuleConfig {
+  id: string;
+  filterValue: string;
+  totalQuestions: number;
+}
+
 export interface TagSystemGeneratedPaperConfig {
   title: string;
   description: string;
+  practiceMode: TagSystemPracticeMode;
   parts: TagSystemGeneratedPartConfig[];
+  practiceRules: TagSystemPracticeRuleConfig[];
 }
 
 export interface EnglishExamTagSystem extends EnglishExamTagSchema {
   id: EnglishExamTagTrack;
+  systemMode?: TagSystemMode;
   generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
@@ -65,6 +77,7 @@ export interface SubjectTagSystem {
   label: string;
   units: string[];
   examParts: string[];
+  systemMode?: TagSystemMode;
   generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
@@ -77,7 +90,7 @@ export interface SubjectTagSchemaStore {
 export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
 export type EnglishExamTagSystemInput = Pick<
   EnglishExamTagSystem,
-  "id" | "label" | "units" | "examParts" | "generatedPaper"
+  "id" | "label" | "units" | "examParts" | "systemMode" | "generatedPaper"
 > & {
   grammarByUnit?: Record<string, string[]>;
 };
@@ -181,11 +194,35 @@ export function getGeneratedQuestionTypeOptions(
   return BASIC_GENERATED_QUESTION_TYPE_OPTIONS[subject];
 }
 
+export function getSubjectQuestionTypeOptions(subject: ConfigurableTagSubject) {
+  if (subject === "english") {
+    return Array.from(
+      new Set(Object.values(ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS).flat()),
+    );
+  }
+
+  return BASIC_GENERATED_QUESTION_TYPE_OPTIONS[subject];
+}
+
+export function getGeneratedPracticeValueOptions(
+  subject: ConfigurableTagSubject,
+  practiceMode: TagSystemPracticeMode,
+  units: string[],
+) {
+  if (practiceMode === "question-type") {
+    return getSubjectQuestionTypeOptions(subject);
+  }
+
+  return dedupeStrings(units);
+}
+
 export function buildGeneratedPaperConfig(
   subject: ConfigurableTagSubject,
   label: string,
   examParts: string[],
   current?: TagSystemGeneratedPaperConfig,
+  systemMode: TagSystemMode = "assessment",
+  units: string[] = [],
 ): TagSystemGeneratedPaperConfig {
   const partMap = new Map((current?.parts ?? []).map((part) => [part.examPart, part]));
   const normalizedParts = examParts.map((examPart) => {
@@ -202,13 +239,41 @@ export function buildGeneratedPaperConfig(
   });
 
   const normalizedLabel = label.trim() || "Untitled Assessment";
+  const practiceMode = current?.practiceMode === "question-type" ? "question-type" : "unit";
+  const practiceValueOptions = getGeneratedPracticeValueOptions(subject, practiceMode, units);
+  const normalizedPracticeRules = (current?.practiceRules ?? [])
+    .map((rule, index) => ({
+      id: (rule.id || "").trim() || `${practiceMode}-${index + 1}`,
+      filterValue:
+        rule.filterValue && practiceValueOptions.includes(rule.filterValue)
+          ? rule.filterValue
+          : (practiceValueOptions[0] ?? ""),
+      totalQuestions: Math.max(0, Number(rule.totalQuestions ?? 0)),
+    } satisfies TagSystemPracticeRuleConfig))
+    .filter((rule, index, rules) => rules.findIndex((candidate) => candidate.id === rule.id) === index);
+
+  if (normalizedPracticeRules.length === 0) {
+    normalizedPracticeRules.push({
+      id: `${practiceMode}-1`,
+      filterValue: practiceValueOptions[0] ?? "",
+      totalQuestions: 0,
+    });
+  }
 
   return {
-    title: current?.title?.trim() || `${normalizedLabel} Random Assessment`,
+    title:
+      current?.title?.trim()
+      || (systemMode === "textbook-practice"
+        ? `${normalizedLabel} Textbook Practice`
+        : `${normalizedLabel} Assessment`),
     description:
       current?.description?.trim()
-      || `Auto-generated from tagged ${normalizedLabel} question bank items.`,
+      || (systemMode === "textbook-practice"
+        ? `Build textbook practice papers from tagged ${normalizedLabel} question bank items.`
+        : `Build assessment papers from tagged ${normalizedLabel} question bank items.`),
+    practiceMode,
     parts: normalizedParts,
+    practiceRules: normalizedPracticeRules,
   };
 }
 
@@ -216,6 +281,7 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
   {
     id: "ket",
     label: "KET / A2 Key",
+    systemMode: "assessment",
     units: KET_UNITS,
     examParts: [
       "Reading Part 1",
@@ -262,11 +328,12 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
       "Listening Part 5",
       "Writing Part 6",
       "Writing Part 7",
-    ]),
+    ], undefined, "assessment", KET_UNITS),
   },
   {
     id: "pet",
     label: "PET / B1 Preliminary",
+    systemMode: "assessment",
     units: PET_UNITS,
     examParts: [
       "Reading Part 1",
@@ -331,7 +398,7 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
       "Listening Part 4",
       "Writing Part 1",
       "Writing Part 2",
-    ]),
+    ], undefined, "assessment", PET_UNITS),
   },
 ];
 
@@ -339,9 +406,10 @@ export const DEFAULT_MATH_TAG_SYSTEMS: SubjectTagSystem[] = [
   {
     id: "school-math",
     label: "School Math",
+    systemMode: "assessment",
     units: MATH_UNITS,
     examParts: ["选择题", "填空题", "应用题"],
-    generatedPaper: buildGeneratedPaperConfig("math", "School Math", ["选择题", "填空题", "应用题"]),
+    generatedPaper: buildGeneratedPaperConfig("math", "School Math", ["选择题", "填空题", "应用题"], undefined, "assessment", MATH_UNITS),
   },
 ];
 
@@ -349,9 +417,10 @@ export const DEFAULT_VOCABULARY_TAG_SYSTEMS: SubjectTagSystem[] = [
   {
     id: "core-vocabulary",
     label: "Core Vocabulary",
+    systemMode: "assessment",
     units: VOCABULARY_UNITS,
     examParts: ["词义匹配", "拼写", "词汇运用"],
-    generatedPaper: buildGeneratedPaperConfig("vocabulary", "Core Vocabulary", ["词义匹配", "拼写", "词汇运用"]),
+    generatedPaper: buildGeneratedPaperConfig("vocabulary", "Core Vocabulary", ["词义匹配", "拼写", "词汇运用"], undefined, "assessment", VOCABULARY_UNITS),
   },
 ];
 
@@ -402,12 +471,20 @@ export function normalizeEnglishTagSystems(
       return {
         id,
         label: (system.label || "").trim() || id,
+        systemMode: system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
         units,
         examParts,
         abilities: ENGLISH_TAG_ABILITY_OPTIONS,
         difficulties: ENGLISH_TAG_DIFFICULTY_OPTIONS,
         grammarByUnit,
-        generatedPaper: buildGeneratedPaperConfig("english", (system.label || "").trim() || id, examParts, system.generatedPaper),
+        generatedPaper: buildGeneratedPaperConfig(
+          "english",
+          (system.label || "").trim() || id,
+          examParts,
+          system.generatedPaper,
+          system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+          units,
+        ),
       } satisfies EnglishExamTagSystem;
     })
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
@@ -468,6 +545,7 @@ export function normalizeSubjectTagSystems(
     .map((system, index) => ({
       id: (system.id || "").trim() || `${subject}-system-${index + 1}`,
       label: (system.label || "").trim() || `${subject}-system-${index + 1}`,
+      systemMode: system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
       units: dedupeStrings(system.units),
       examParts: dedupeStrings(system.examParts),
       generatedPaper: buildGeneratedPaperConfig(
@@ -475,8 +553,10 @@ export function normalizeSubjectTagSystems(
         (system.label || "").trim() || `${subject}-system-${index + 1}`,
         dedupeStrings(system.examParts),
         system.generatedPaper,
+        system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+        dedupeStrings(system.units),
       ),
-    }))
+    } satisfies SubjectTagSystem))
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
 
   return systems.length > 0 ? systems : getDefaultSubjectTagSystems(subject);
