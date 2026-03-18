@@ -448,9 +448,11 @@ export default function TagManager() {
                         <Badge className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 hover:bg-indigo-50">
                           {SYSTEM_MODE_LABELS[system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"]}
                         </Badge>
-                        <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                          {getUnitCount(system.units)} Units
-                        </Badge>
+                        {system.systemMode === "textbook-practice" ? (
+                          <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
+                            {getUnitCount(system.units)} Units
+                          </Badge>
+                        ) : null}
                         <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
                           {system.examParts.length} Parts
                         </Badge>
