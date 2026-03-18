@@ -203,66 +203,83 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       {isTeacher ? (
         <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject} headerOffset>
           <div className="bg-[#FAFBFD]">
-            <div className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
-              <div className="absolute inset-0 opacity-5" style={{
-                backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
-                backgroundSize: '40px 40px'
-              }} />
-              <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
-
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-20 relative z-10">
-                <div className="grid lg:grid-cols-2 gap-12 items-center">
-                  <motion.div
-                    initial={{ opacity: 0, x: -30 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A84B]/15 border border-[#D4A84B]/25 mb-6">
-                      <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
-                      <span className="text-xs font-medium text-[#D4A84B]">
-                        Teacher Workspace · English / Math / Vocabulary
-                      </span>
-                    </div>
-                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-                      Manage
-                      <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876]">
-                        Assessments
-                      </span>
-                      <span className="block text-white/90">by Subject</span>
-                    </h1>
-                    <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
-                      Open a subject workspace to review papers, update content, manage what students see, and access your history, intake, and paper management tools.
-                    </p>
-                    {hasSingleSubjectAccess && (
-                      <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
-                        <span className="text-[#D4A84B]">Access</span>
-                        <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
-                      </div>
-                    )}
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, x: 30 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.6, delay: 0.2 }}
-                    className="hidden lg:block"
-                  >
-                    <div className="relative">
-                      <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
-                      <img
-                        src={dashboardHeroImage}
-                        alt={dashboardHeroAlt}
-                        className="relative w-full rounded-2xl opacity-90"
-                      />
-                    </div>
-                  </motion.div>
-                </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-[-18rem] hidden w-[calc(100%+18rem)] md:block">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
+                <div className="absolute inset-0 opacity-5" style={{
+                  backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
+                  backgroundSize: '40px 40px'
+                }} />
+                <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
               </div>
 
-              <div className="absolute bottom-[-1px] left-0 right-0 leading-none">
-                <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
+              <div className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
+                <div className="absolute inset-0 opacity-5" style={{
+                  backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
+                  backgroundSize: '40px 40px'
+                }} />
+                <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
+
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-20 relative z-10">
+                  <div className="grid lg:grid-cols-2 gap-12 items-center">
+                    <motion.div
+                      initial={{ opacity: 0, x: -30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.6 }}
+                    >
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A84B]/15 border border-[#D4A84B]/25 mb-6">
+                        <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
+                        <span className="text-xs font-medium text-[#D4A84B]">
+                          Teacher Workspace · English / Math / Vocabulary
+                        </span>
+                      </div>
+                      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                        Manage
+                        <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876]">
+                          Assessments
+                        </span>
+                        <span className="block text-white/90">by Subject</span>
+                      </h1>
+                      <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
+                        Open a subject workspace to review papers, update content, manage what students see, and access your history, intake, and paper management tools.
+                      </p>
+                      {hasSingleSubjectAccess && (
+                        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
+                          <span className="text-[#D4A84B]">Access</span>
+                          <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
+                        </div>
+                      )}
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.6, delay: 0.2 }}
+                      className="hidden lg:block"
+                    >
+                      <div className="relative">
+                        <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
+                        <img
+                          src={dashboardHeroImage}
+                          alt={dashboardHeroAlt}
+                          className="relative w-full rounded-2xl opacity-90"
+                        />
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-[-1px] left-0 right-0 leading-none">
+                  <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
+                    <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
+                  </svg>
+                </div>
+              </div>
+              <div className="pointer-events-none absolute bottom-0 left-[-18rem] hidden h-[60px] w-[calc(100%+18rem)] md:block">
+                <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full block">
                   <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
                 </svg>
               </div>
