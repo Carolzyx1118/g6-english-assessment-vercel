@@ -2577,29 +2577,10 @@ export default function PaperIntake() {
     question: ManualQuestion,
     sectionType: ManualSectionType,
   ) => {
-    if (isQuestionBankMode) return null;
-
-    if (paperSubject === "english") {
-      return (
-        <EnglishQuestionTagEditor
-          value={question.tags}
-          sectionType={sectionType}
-          questionType={question.type}
-          onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
-        />
-      );
-    }
-
-    if (paperSubject === "math" || paperSubject === "vocabulary") {
-      return (
-        <SubjectQuestionTagEditor
-          subject={paperSubject}
-          value={question.tags}
-          onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
-        />
-      );
-    }
-
+    void sectionId;
+    void subsectionId;
+    void question;
+    void sectionType;
     return null;
   };
 
