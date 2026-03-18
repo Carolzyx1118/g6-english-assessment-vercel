@@ -2083,12 +2083,13 @@ export default function PaperIntake() {
   const availableSectionTypes = useMemo(() => getAvailableSectionTypesForSubject(paperSubject), [paperSubject]);
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
   const isMathPaper = paperSubject === "math";
+  const isEnglishPaper = paperSubject === "english";
   const managerHref = `/paper-manager?subject=${paperSubject}`;
   const publishedManualPapersQuery = trpc.papers.listManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
-  const isQuestionBankMode = paperSubject === "english" && buildMode === "fixed" && visibilityMode === "question-bank";
-  const isLegacyGeneratedMode = isEditing && paperSubject === "english" && buildMode === "generated";
+  const isQuestionBankMode = buildMode === "fixed" && visibilityMode === "question-bank";
+  const isLegacyGeneratedMode = isEditing && isEnglishPaper && buildMode === "generated";
   const showPreviewActionCard = buildMode === "fixed";
   const effectiveTitle = isQuestionBankMode ? (title.trim() || getDefaultQuestionBankTitle(paperSubject)) : title;
   const effectiveDescription = isQuestionBankMode ? "" : description;
@@ -4038,64 +4039,62 @@ export default function PaperIntake() {
               </CardContent>
             </Card>
 
-            {paperSubject === "english" ? (
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader>
-                  <CardTitle>Paper Mode</CardTitle>
-                  <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Mode</Label>
-                    <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                      <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle>Paper Mode</CardTitle>
+                <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Mode</Label>
+                  <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                    <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={buildMode === "fixed" && visibilityMode === "student"}
+                        onChange={activateFixedMode}
+                      />
+                      <span className="font-medium text-slate-900">固定套卷</span>
+                      <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 或 part 组织整套卷子，学生直接做这一整张卷。</span>
+                    </label>
+                    <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={isQuestionBankMode}
+                        onChange={activateQuestionBankMode}
+                      />
+                      <span className="font-medium text-slate-900">题库随机</span>
+                      <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示外层 section，后面可作为随机抽题来源。</span>
+                    </label>
+                    {buildMode === "generated" ? (
+                      <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
                         <input
                           type="radio"
                           className="mr-2"
-                          checked={buildMode === "fixed" && visibilityMode === "student"}
-                          onChange={activateFixedMode}
+                          checked
+                          onChange={() => {
+                            setBuildMode("generated");
+                            setVisibilityMode("student");
+                          }}
                         />
-                        <span className="font-medium text-slate-900">固定套卷</span>
-                        <span className="mt-1 block text-xs text-slate-500">像以前一样按 section 组织整套卷子，学生直接做这一整张卷。</span>
+                        <span className="font-medium text-slate-900">随机组卷模板</span>
+                        <span className="mt-1 block text-xs text-slate-500">按考试体系和标签规则组合 Part，再从题库里随机抽题生成一张新卷。</span>
                       </label>
-                      <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                        <input
-                          type="radio"
-                          className="mr-2"
-                          checked={isQuestionBankMode}
-                          onChange={activateQuestionBankMode}
-                        />
-                        <span className="font-medium text-slate-900">题库随机</span>
-                        <span className="mt-1 block text-xs text-slate-500">按一道一道题录入题库，不显示 section，后面可作为随机抽题来源。</span>
-                      </label>
-                      {buildMode === "generated" ? (
-                        <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
-                          <input
-                            type="radio"
-                            className="mr-2"
-                            checked
-                            onChange={() => {
-                              setBuildMode("generated");
-                              setVisibilityMode("student");
-                            }}
-                          />
-                          <span className="font-medium text-slate-900">随机组卷模板</span>
-                          <span className="mt-1 block text-xs text-slate-500">按考试体系和标签规则组合 Part，再从题库里随机抽题生成一张新卷。</span>
-                        </label>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
+                </div>
 
-                  {isLegacyGeneratedMode ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                      当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ) : null}
+                {isLegacyGeneratedMode ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    当前这张卷子是旧版随机组卷模板，下面仍会显示规则编辑器。新建题库请直接使用上面的“题库随机”模式。
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
 
-            {paperSubject !== "english" || !isQuestionBankMode ? (
+            {!isQuestionBankMode ? (
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader>
                   <CardTitle>Paper Info</CardTitle>
@@ -4108,7 +4107,13 @@ export default function PaperIntake() {
                       id="paper-title"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
-                      placeholder={isMathPaper ? "e.g. Grade 5 Math Practice" : "e.g. PET English Assessment"}
+                      placeholder={
+                        isMathPaper
+                          ? "e.g. Grade 5 Math Practice"
+                          : paperSubject === "vocabulary"
+                            ? "e.g. Unit 4 Vocabulary Review"
+                            : "e.g. PET English Assessment"
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -4125,7 +4130,7 @@ export default function PaperIntake() {
               </Card>
             ) : null}
 
-            {paperSubject === "english" && buildMode === "generated" ? (
+            {isEnglishPaper && buildMode === "generated" ? (
               <GeneratedPaperConfigEditor
                 value={generationConfig}
                 sourcePapers={publishedEnglishSourcePapers}
