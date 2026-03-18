@@ -394,23 +394,21 @@ export default function TagManager() {
 
                         <div className="space-y-2">
                           <Label>教材单元</Label>
-                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
-                                Unit 1 -
-                              </div>
-                              <Input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={getUnitCount(system.units)}
-                                onChange={(event) => {
-                                  setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
-                                }}
-                                className="w-32 bg-white"
-                              />
-                              <span className="text-sm text-slate-500">个单元</span>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
+                              Unit 1 -
                             </div>
+                            <Input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={getUnitCount(system.units)}
+                              onChange={(event) => {
+                                setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
+                              }}
+                              className="w-32 bg-white"
+                            />
+                            <span className="text-sm text-slate-500">个单元</span>
                           </div>
                         </div>
 
