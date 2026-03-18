@@ -84,6 +84,31 @@ const KET_UNITS = Array.from({ length: 14 }, (_, index) => `Unit ${index + 1}`);
 const PET_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
 const MATH_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
 const VOCABULARY_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
+const LEGACY_ENGLISH_PART_PREFIX_MAP: Record<string, string> = {
+  "阅读": "Reading",
+  "阅读理解": "Reading",
+  "听力": "Listening",
+  "听力理解": "Listening",
+  "写作": "Writing",
+  "口语": "Speaking",
+  "语法": "Grammar",
+  "词汇": "Vocabulary",
+};
+
+function normalizeEnglishExamPartLabel(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  const partMatch = trimmed.match(/^(.*?)\s*Part\s*(\d+)$/i);
+  if (partMatch) {
+    const rawPrefix = partMatch[1].trim();
+    const normalizedPrefix = LEGACY_ENGLISH_PART_PREFIX_MAP[rawPrefix] ?? rawPrefix;
+    return `${normalizedPrefix} Part ${partMatch[2]}`;
+  }
+
+  const normalizedPrefix = LEGACY_ENGLISH_PART_PREFIX_MAP[trimmed];
+  return normalizedPrefix ?? trimmed;
+}
 
 export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
   {
@@ -91,18 +116,18 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
     label: "KET / A2 Key",
     units: KET_UNITS,
     examParts: [
-      "阅读 Part 1",
-      "阅读 Part 2",
-      "阅读 Part 3",
-      "阅读 Part 4",
-      "阅读 Part 5",
-      "听力 Part 1",
-      "听力 Part 2",
-      "听力 Part 3",
-      "听力 Part 4",
-      "听力 Part 5",
-      "写作 Part 6",
-      "写作 Part 7",
+      "Reading Part 1",
+      "Reading Part 2",
+      "Reading Part 3",
+      "Reading Part 4",
+      "Reading Part 5",
+      "Listening Part 1",
+      "Listening Part 2",
+      "Listening Part 3",
+      "Listening Part 4",
+      "Listening Part 5",
+      "Writing Part 6",
+      "Writing Part 7",
     ],
     abilities: ENGLISH_TAG_ABILITY_OPTIONS,
     difficulties: ENGLISH_TAG_DIFFICULTY_OPTIONS,
@@ -128,18 +153,18 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
     label: "PET / B1 Preliminary",
     units: PET_UNITS,
     examParts: [
-      "阅读 Part 1",
-      "阅读 Part 2",
-      "阅读 Part 3",
-      "阅读 Part 4",
-      "阅读 Part 5",
-      "阅读 Part 6",
-      "听力 Part 1",
-      "听力 Part 2",
-      "听力 Part 3",
-      "听力 Part 4",
-      "写作 Part 1",
-      "写作 Part 2",
+      "Reading Part 1",
+      "Reading Part 2",
+      "Reading Part 3",
+      "Reading Part 4",
+      "Reading Part 5",
+      "Reading Part 6",
+      "Listening Part 1",
+      "Listening Part 2",
+      "Listening Part 3",
+      "Listening Part 4",
+      "Writing Part 1",
+      "Writing Part 2",
     ],
     abilities: ENGLISH_TAG_ABILITY_OPTIONS,
     difficulties: ENGLISH_TAG_DIFFICULTY_OPTIONS,
@@ -234,7 +259,7 @@ export function normalizeEnglishTagSystems(
     .map((system, index) => {
       const id = (system.id || "").trim() || `system-${index + 1}`;
       const units = dedupeStrings(system.units);
-      const examParts = dedupeStrings(system.examParts);
+      const examParts = dedupeStrings(dedupeStrings(system.examParts).map(normalizeEnglishExamPartLabel));
       const grammarByUnit = Object.fromEntries(
         Object.entries(system.grammarByUnit ?? {}).map(([unit, points]) => [
           unit,
