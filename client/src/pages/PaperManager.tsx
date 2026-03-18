@@ -259,11 +259,7 @@ export default function PaperManager() {
 
                       <div className="flex flex-wrap items-center gap-4">
                         <Link
-                          href={
-                            paper.buildMode === "generated"
-                              ? `/paper-composer?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`
-                              : `/paper-intake?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`
-                          }
+                          href={`/paper-intake?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`}
                         >
                           <Button
                             type="button"

@@ -34,6 +34,17 @@ const englishTagSystemInputSchema = z.object({
   units: z.array(z.string()),
   examParts: z.array(z.string()),
   grammarByUnit: z.record(z.string(), z.array(z.string())).default({}),
+  generatedPaper: z.object({
+    title: z.string().default(""),
+    description: z.string().default(""),
+    parts: z.array(
+      z.object({
+        examPart: z.string().min(1),
+        questionType: z.string().min(1),
+        totalQuestions: z.number().int().min(0).default(0),
+      }),
+    ).default([]),
+  }).optional(),
 });
 
 const basicTagSystemInputSchema = z.object({
@@ -41,6 +52,17 @@ const basicTagSystemInputSchema = z.object({
   label: z.string().min(1),
   units: z.array(z.string()),
   examParts: z.array(z.string()),
+  generatedPaper: z.object({
+    title: z.string().default(""),
+    description: z.string().default(""),
+    parts: z.array(
+      z.object({
+        examPart: z.string().min(1),
+        questionType: z.string().min(1),
+        totalQuestions: z.number().int().min(0).default(0),
+      }),
+    ).default([]),
+  }).optional(),
 });
 
 export const paperRouter = router({
@@ -145,7 +167,13 @@ export const paperRouter = router({
 
   /** List all published manual papers (for the home page) */
   listManualPapers: publicProcedure.query(async () => {
-    const papers = await getPublishedManualPapers();
+    const papers = (await getPublishedManualPapers()).filter((paper) => {
+      try {
+        return getBlueprintBuildMode(JSON.parse(paper.blueprintJson)) !== "generated";
+      } catch {
+        return true;
+      }
+    });
     return papers.map((p) => ({
       id: p.id,
       paperId: p.paperId,
@@ -163,7 +191,13 @@ export const paperRouter = router({
 
   /** List all manual papers for the management page */
   listAllManualPapers: publicProcedure.query(async () => {
-    const papers = await getAllManualPapers();
+    const papers = (await getAllManualPapers()).filter((paper) => {
+      try {
+        return getBlueprintBuildMode(JSON.parse(paper.blueprintJson)) !== "generated";
+      } catch {
+        return true;
+      }
+    });
     return papers.map((p) => ({
       ...(() => {
         try {

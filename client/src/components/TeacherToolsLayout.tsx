@@ -10,7 +10,6 @@ import {
   Database,
   FilePlus2,
   Home,
-  Layers3,
   Tags,
   Users,
 } from "lucide-react";
@@ -229,16 +228,6 @@ export default function TeacherToolsLayout({
               active={activeTool === "question-bank"}
               collapsed={collapsed}
             />
-
-            {allowedSubjects.includes("english") ? (
-              <PrimaryLink
-                href="/paper-composer?subject=english"
-                icon={<Layers3 className="h-4 w-4" />}
-                label="Generated Papers"
-                active={activeTool === "paper-composer"}
-                collapsed={collapsed}
-              />
-            ) : null}
 
             {!collapsed ? (
               <div className="space-y-1">

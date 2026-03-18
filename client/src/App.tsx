@@ -10,7 +10,6 @@ import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Login from "./pages/Login";
-import PaperComposer from "./pages/PaperComposer";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
 import QuestionBank from "./pages/QuestionBank";
@@ -56,13 +55,6 @@ function Router() {
         <AuthGuard>
           <TeacherGuard>
             <TagManager />
-          </TeacherGuard>
-        </AuthGuard>
-      </Route>
-      <Route path={"/paper-composer"}>
-        <AuthGuard>
-          <TeacherGuard>
-            <PaperComposer />
           </TeacherGuard>
         </AuthGuard>
       </Route>

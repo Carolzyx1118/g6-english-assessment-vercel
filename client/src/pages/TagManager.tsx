@@ -9,7 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
+import { MANUAL_QUESTION_TYPE_LABELS } from "@shared/manualPaperBlueprint";
 import {
+  buildGeneratedPaperConfig,
+  getGeneratedQuestionTypeOptions,
   normalizeEnglishTagSystems,
   normalizeSubjectTagSystems,
   type EnglishExamTagSystem,
@@ -36,6 +39,7 @@ function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
     abilities: ["词汇", "语法", "阅读理解", "听力理解", "写作"],
     difficulties: ["基础", "中等", "提高"],
     grammarByUnit: {},
+    generatedPaper: { title: "", description: "", parts: [] },
   };
 }
 
@@ -46,6 +50,7 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
     label: "",
     units: [formatUnitNumber(1)],
     examParts: [],
+    generatedPaper: { title: "", description: "", parts: [] },
   };
 }
 
@@ -185,7 +190,7 @@ export default function TagManager() {
         await saveVocabularyMutation.mutateAsync({ systems: normalized });
       }
 
-      toast.success("Tag systems saved. Paper intake and random builder now use the updated settings.");
+      toast.success("Tag systems saved. Paper intake and tag-based paper setup now use the updated settings.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save tag systems.");
     }
@@ -217,6 +222,7 @@ export default function TagManager() {
       updateSystem(systemId, (current) => ({
         ...current,
         examParts: nextExamParts,
+        generatedPaper: buildGeneratedPaperConfig("english", current.label, nextExamParts, current.generatedPaper),
       }));
       return;
     }
@@ -224,6 +230,27 @@ export default function TagManager() {
     updateBasicSystem(systemId, (current) => ({
       ...current,
       examParts: nextExamParts,
+      generatedPaper: buildGeneratedPaperConfig(subjectFilter as "math" | "vocabulary", current.label, nextExamParts, current.generatedPaper),
+    }));
+  };
+
+  const updateGeneratedPaper = (
+    systemId: string,
+    updater: (current: NonNullable<EnglishExamTagSystem["generatedPaper"]>) => NonNullable<EnglishExamTagSystem["generatedPaper"]>,
+  ) => {
+    if (subjectFilter === "english") {
+      updateSystem(systemId, (current) => ({
+        ...current,
+        generatedPaper: updater(buildGeneratedPaperConfig("english", current.label, current.examParts, current.generatedPaper)),
+      }));
+      return;
+    }
+
+    updateBasicSystem(systemId, (current) => ({
+      ...current,
+      generatedPaper: updater(
+        buildGeneratedPaperConfig(subjectFilter as "math" | "vocabulary", current.label, current.examParts, current.generatedPaper),
+      ),
     }));
   };
 
@@ -247,7 +274,7 @@ export default function TagManager() {
               </Link>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Tag Manager</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Manage exam systems, parts, and unit ranges here. Paper intake and the random builder will read these settings directly.
+                Manage exam systems, parts, unit ranges, and random paper setup here. Paper intake and tag-based paper setup will read these settings directly.
               </p>
             </div>
 
@@ -388,7 +415,7 @@ export default function TagManager() {
                             }}
                             placeholder={subjectFilter === "english" ? "e.g. FCE / B2 First" : "e.g. School Sync / Competition Math / Core Vocabulary"}
                           />
-                          <p className="text-xs text-slate-500">This name appears directly in paper intake and the random builder.</p>
+                          <p className="text-xs text-slate-500">This name appears directly in paper intake and tag-based paper setup.</p>
                         </div>
 
                         <div className="space-y-2">
@@ -406,6 +433,34 @@ export default function TagManager() {
                             />
                             <span className="text-sm text-slate-500">units from Unit 1</span>
                           </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Paper Name</Label>
+                          <Input
+                            value={buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).title}
+                            onChange={(event) =>
+                              updateGeneratedPaper(system.id, (current) => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                            }
+                            placeholder="e.g. KET Random Assessment"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Description</Label>
+                          <Input
+                            value={buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).description}
+                            onChange={(event) =>
+                              updateGeneratedPaper(system.id, (current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder="Describe what this random paper is for."
+                          />
                         </div>
 
                         <div className="space-y-2 lg:col-span-2">
@@ -460,48 +515,108 @@ export default function TagManager() {
                                   />
 
                                   <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    type="button"
+                                    variant="outline"
+                                    className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
                                     onClick={() => {
                                       const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
                                       setExamPartsForSystem(system.id, nextExamParts);
                                     }}
-                                  disabled={system.examParts.length <= 1}
-                                >
-                                  <Trash2 className="mr-1.5 h-4 w-4" />
-                                  Delete
-                                </Button>
-                              </div>
-                            );
-                          })}
+                                    disabled={system.examParts.length <= 1}
+                                  >
+                                    <Trash2 className="mr-1.5 h-4 w-4" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              );
+                            })}
 
                             <Button
                               type="button"
-                            variant="outline"
-                            className="border-slate-200 bg-white"
-                            onClick={() => {
-                              const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
-                              setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
-                            }}
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Part
-                          </Button>
+                              variant="outline"
+                              className="border-slate-200 bg-white"
+                              onClick={() => {
+                                const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
+                                setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
+                              }}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add Part
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-end justify-between gap-3">
+
+                        <div className="space-y-2 lg:col-span-2">
+                          <Label>Random Paper Setup</Label>
+                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                            {buildGeneratedPaperConfig(subjectFilter, system.label, system.examParts, system.generatedPaper).parts.map((partConfig, partIndex) => {
+                              const questionTypeOptions = getGeneratedQuestionTypeOptions(subjectFilter, partConfig.examPart);
+
+                              return (
+                                <div
+                                  key={`${system.id}-generated-${partConfig.examPart}-${partIndex}`}
+                                  className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]"
+                                >
+                                  <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                                    {partConfig.examPart}
+                                  </div>
+
+                                  <select
+                                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                    value={partConfig.questionType}
+                                    onChange={(event) =>
+                                      updateGeneratedPaper(system.id, (current) => ({
+                                        ...current,
+                                        parts: current.parts.map((item) =>
+                                          item.examPart === partConfig.examPart
+                                            ? { ...item, questionType: event.target.value }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    {questionTypeOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={partConfig.totalQuestions}
+                                    onChange={(event) =>
+                                      updateGeneratedPaper(system.id, (current) => ({
+                                        ...current,
+                                        parts: current.parts.map((item) =>
+                                          item.examPart === partConfig.examPart
+                                            ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                    className="bg-white text-center"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-end justify-between gap-3 lg:col-span-2">
                           <p className="text-xs text-slate-500">Choose the part type first, then adjust the part number.</p>
                           <Button
                             type="button"
                             className="h-11 bg-[#1E3A5F] px-5 text-white hover:bg-[#17324F]"
-                              onClick={handleSave}
-                              disabled={!canSave || isSaving}
+                            onClick={handleSave}
+                            disabled={!canSave || isSaving}
                           >
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                             Save Tag Configuration
                           </Button>
                         </div>
-                      </div>
                       </CardContent>
                     ) : null}
                   </Card>

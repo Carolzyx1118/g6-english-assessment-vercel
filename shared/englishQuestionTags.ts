@@ -29,8 +29,21 @@ export interface EnglishExamTagSchema {
   grammarByUnit: Record<string, string[]>;
 }
 
+export interface TagSystemGeneratedPartConfig {
+  examPart: string;
+  questionType: string;
+  totalQuestions: number;
+}
+
+export interface TagSystemGeneratedPaperConfig {
+  title: string;
+  description: string;
+  parts: TagSystemGeneratedPartConfig[];
+}
+
 export interface EnglishExamTagSystem extends EnglishExamTagSchema {
   id: EnglishExamTagTrack;
+  generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
 export interface EnglishTagSchemaStore {
@@ -52,6 +65,7 @@ export interface SubjectTagSystem {
   label: string;
   units: string[];
   examParts: string[];
+  generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
 export interface SubjectTagSchemaStore {
@@ -63,7 +77,7 @@ export interface SubjectTagSchemaStore {
 export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
 export type EnglishExamTagSystemInput = Pick<
   EnglishExamTagSystem,
-  "id" | "label" | "units" | "examParts"
+  "id" | "label" | "units" | "examParts" | "generatedPaper"
 > & {
   grammarByUnit?: Record<string, string[]>;
 };
@@ -95,6 +109,45 @@ const LEGACY_ENGLISH_PART_PREFIX_MAP: Record<string, string> = {
   "词汇": "Vocabulary",
 };
 
+const ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS: Record<string, string[]> = {
+  Speaking: ["speaking"],
+  Writing: ["writing"],
+  Listening: ["mcq", "typed-fill-blank", "true-false", "checkbox", "ordering"],
+  Grammar: ["mcq", "typed-fill-blank", "fill-blank", "sentence-reorder", "inline-word-choice"],
+  Vocabulary: ["mcq", "fill-blank", "typed-fill-blank", "inline-word-choice", "picture-spelling", "word-completion"],
+  Reading: [
+    "mcq",
+    "passage-mcq",
+    "typed-fill-blank",
+    "passage-open-ended",
+    "true-false",
+    "heading-match",
+    "checkbox",
+    "ordering",
+    "sentence-reorder",
+    "passage-matching",
+    "fill-blank",
+    "passage-fill-blank",
+    "inline-word-choice",
+    "passage-inline-word-choice",
+  ],
+};
+
+const BASIC_GENERATED_QUESTION_TYPE_OPTIONS: Record<Exclude<ConfigurableTagSubject, "english">, string[]> = {
+  math: ["mcq", "typed-fill-blank", "passage-open-ended", "ordering"],
+  vocabulary: [
+    "mcq",
+    "fill-blank",
+    "typed-fill-blank",
+    "inline-word-choice",
+    "passage-inline-word-choice",
+    "picture-spelling",
+    "word-completion",
+    "checkbox",
+    "ordering",
+  ],
+};
+
 function normalizeEnglishExamPartLabel(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
@@ -108,6 +161,55 @@ function normalizeEnglishExamPartLabel(value: string) {
 
   const normalizedPrefix = LEGACY_ENGLISH_PART_PREFIX_MAP[trimmed];
   return normalizedPrefix ?? trimmed;
+}
+
+function getEnglishPartPrefix(examPart: string) {
+  const normalized = normalizeEnglishExamPartLabel(examPart);
+  const partMatch = normalized.match(/^(.*?)\s*Part\s*\d+$/i);
+  return partMatch?.[1]?.trim() || normalized.trim() || "Reading";
+}
+
+export function getGeneratedQuestionTypeOptions(
+  subject: ConfigurableTagSubject,
+  examPart: string,
+) {
+  if (subject === "english") {
+    const prefix = getEnglishPartPrefix(examPart);
+    return ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS[prefix] ?? ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS.Reading;
+  }
+
+  return BASIC_GENERATED_QUESTION_TYPE_OPTIONS[subject];
+}
+
+export function buildGeneratedPaperConfig(
+  subject: ConfigurableTagSubject,
+  label: string,
+  examParts: string[],
+  current?: TagSystemGeneratedPaperConfig,
+): TagSystemGeneratedPaperConfig {
+  const partMap = new Map((current?.parts ?? []).map((part) => [part.examPart, part]));
+  const normalizedParts = examParts.map((examPart) => {
+    const existing = partMap.get(examPart);
+    const questionTypeOptions = getGeneratedQuestionTypeOptions(subject, examPart);
+    return {
+      examPart,
+      questionType:
+        existing?.questionType && questionTypeOptions.includes(existing.questionType)
+          ? existing.questionType
+          : questionTypeOptions[0],
+      totalQuestions: Math.max(0, Number(existing?.totalQuestions ?? 0)),
+    } satisfies TagSystemGeneratedPartConfig;
+  });
+
+  const normalizedLabel = label.trim() || "Untitled Assessment";
+
+  return {
+    title: current?.title?.trim() || `${normalizedLabel} Random Assessment`,
+    description:
+      current?.description?.trim()
+      || `Auto-generated from tagged ${normalizedLabel} question bank items.`,
+    parts: normalizedParts,
+  };
 }
 
 export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
@@ -147,6 +249,20 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
       "Unit 13": ["现在完成时 for/since", "may/might 可能性"],
       "Unit 14": ["被动语态", "现在完成时 just/already/yet"],
     },
+    generatedPaper: buildGeneratedPaperConfig("english", "KET / A2 Key", [
+      "Reading Part 1",
+      "Reading Part 2",
+      "Reading Part 3",
+      "Reading Part 4",
+      "Reading Part 5",
+      "Listening Part 1",
+      "Listening Part 2",
+      "Listening Part 3",
+      "Listening Part 4",
+      "Listening Part 5",
+      "Writing Part 6",
+      "Writing Part 7",
+    ]),
   },
   {
     id: "pet",
@@ -202,6 +318,20 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
       "Unit 11": ["被动语态 现在时与过去时", "比较级与最高级副词"],
       "Unit 12": ["间接引语与间接命令", "间接疑问句", "间接问句"],
     },
+    generatedPaper: buildGeneratedPaperConfig("english", "PET / B1 Preliminary", [
+      "Reading Part 1",
+      "Reading Part 2",
+      "Reading Part 3",
+      "Reading Part 4",
+      "Reading Part 5",
+      "Reading Part 6",
+      "Listening Part 1",
+      "Listening Part 2",
+      "Listening Part 3",
+      "Listening Part 4",
+      "Writing Part 1",
+      "Writing Part 2",
+    ]),
   },
 ];
 
@@ -211,6 +341,7 @@ export const DEFAULT_MATH_TAG_SYSTEMS: SubjectTagSystem[] = [
     label: "School Math",
     units: MATH_UNITS,
     examParts: ["选择题", "填空题", "应用题"],
+    generatedPaper: buildGeneratedPaperConfig("math", "School Math", ["选择题", "填空题", "应用题"]),
   },
 ];
 
@@ -220,6 +351,7 @@ export const DEFAULT_VOCABULARY_TAG_SYSTEMS: SubjectTagSystem[] = [
     label: "Core Vocabulary",
     units: VOCABULARY_UNITS,
     examParts: ["词义匹配", "拼写", "词汇运用"],
+    generatedPaper: buildGeneratedPaperConfig("vocabulary", "Core Vocabulary", ["词义匹配", "拼写", "词汇运用"]),
   },
 ];
 
@@ -275,6 +407,7 @@ export function normalizeEnglishTagSystems(
         abilities: ENGLISH_TAG_ABILITY_OPTIONS,
         difficulties: ENGLISH_TAG_DIFFICULTY_OPTIONS,
         grammarByUnit,
+        generatedPaper: buildGeneratedPaperConfig("english", (system.label || "").trim() || id, examParts, system.generatedPaper),
       } satisfies EnglishExamTagSystem;
     })
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
@@ -337,6 +470,12 @@ export function normalizeSubjectTagSystems(
       label: (system.label || "").trim() || `${subject}-system-${index + 1}`,
       units: dedupeStrings(system.units),
       examParts: dedupeStrings(system.examParts),
+      generatedPaper: buildGeneratedPaperConfig(
+        subject,
+        (system.label || "").trim() || `${subject}-system-${index + 1}`,
+        dedupeStrings(system.examParts),
+        system.generatedPaper,
+      ),
     }))
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
 
