@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import EnglishQuestionTagEditor from "@/components/EnglishQuestionTagEditor";
+import SubjectQuestionTagEditor from "@/components/SubjectQuestionTagEditor";
 import GeneratedPaperConfigEditor, { type GeneratedSourcePaperOption } from "@/components/GeneratedPaperConfigEditor";
 import type {
   ManualAudioFile,
@@ -2458,6 +2459,36 @@ export default function PaperIntake() {
     }));
   };
 
+  const renderQuestionTagEditor = (
+    sectionId: string,
+    subsectionId: string,
+    question: ManualQuestion,
+    sectionType: ManualSectionType,
+  ) => {
+    if (paperSubject === "english") {
+      return (
+        <EnglishQuestionTagEditor
+          value={question.tags}
+          sectionType={sectionType}
+          questionType={question.type}
+          onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
+        />
+      );
+    }
+
+    if (paperSubject === "math" || paperSubject === "vocabulary") {
+      return (
+        <SubjectQuestionTagEditor
+          subject={paperSubject}
+          value={question.tags}
+          onChange={(nextTags) => updateQuestionTags(sectionId, subsectionId, question.id, nextTags)}
+        />
+      );
+    }
+
+    return null;
+  };
+
   const toggleImageBlock = (subsectionId: string, currentValue: boolean) => {
     setExpandedImageBlocks((prev) => ({
       ...prev,
@@ -4871,14 +4902,7 @@ export default function PaperIntake() {
                                       </p>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -4956,14 +4980,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5040,14 +5057,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5152,14 +5162,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5283,14 +5286,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5356,14 +5352,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5429,14 +5418,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -5551,14 +5533,7 @@ export default function PaperIntake() {
                                       Add Statement
                                     </Button>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -5619,14 +5594,7 @@ export default function PaperIntake() {
                                     </div>
                                   </div>
 
-                                  {paperSubject === "english" ? (
-                                    <EnglishQuestionTagEditor
-                                      value={question.tags}
-                                      sectionType={section.sectionType}
-                                      questionType={question.type}
-                                      onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                    />
-                                  ) : null}
+                                  {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                 </div>
                               ))}
 
@@ -6306,14 +6274,7 @@ export default function PaperIntake() {
                                       />
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6440,14 +6401,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ))}
@@ -6539,14 +6493,7 @@ export default function PaperIntake() {
                                       </div>
                                     </div>
 
-                                    {paperSubject === "english" ? (
-                                      <EnglishQuestionTagEditor
-                                        value={question.tags}
-                                        sectionType={section.sectionType}
-                                        questionType={question.type}
-                                        onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                      />
-                                    ) : null}
+                                    {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
                                   </div>
                                 </div>
                               ));
@@ -6596,16 +6543,9 @@ export default function PaperIntake() {
                                           ))}
                                         </select>
 
-                                        {paperSubject === "english" ? (
-                                          <div className="mt-3">
-                                            <EnglishQuestionTagEditor
-                                              value={question.tags}
-                                              sectionType={section.sectionType}
-                                              questionType={question.type}
-                                              onChange={(nextTags) => updateQuestionTags(section.id, subsection.id, question.id, nextTags)}
-                                            />
-                                          </div>
-                                        ) : null}
+                                        <div className="mt-3">
+                                          {renderQuestionTagEditor(section.id, subsection.id, question, section.sectionType)}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>

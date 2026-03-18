@@ -12,13 +12,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
   normalizeEnglishTagSystems,
+  normalizeSubjectTagSystems,
   type EnglishExamTagSystem,
+  type SubjectTagSystem,
 } from "@shared/englishQuestionTags";
 import {
   PAPER_SUBJECT_LABELS,
   PAPER_SUBJECT_ORDER,
   type PaperSubject,
 } from "@/data/papers";
+import { useSubjectTagSystems } from "@/hooks/useSubjectTagSystems";
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
@@ -35,7 +38,7 @@ function textToList(value: string) {
     .filter(Boolean);
 }
 
-function createEmptySystem(index: number): EnglishExamTagSystem {
+function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
   const suffix = `${Date.now().toString(36)}-${index + 1}`;
   return {
     id: `custom-${suffix}`,
@@ -48,6 +51,16 @@ function createEmptySystem(index: number): EnglishExamTagSystem {
   };
 }
 
+function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabulary">, index: number): SubjectTagSystem {
+  const suffix = `${Date.now().toString(36)}-${index + 1}`;
+  return {
+    id: `${subject}-${suffix}`,
+    label: "",
+    units: [],
+    examParts: [],
+  };
+}
+
 export default function TagManager() {
   const search = useSearch();
   const [, navigate] = useLocation();
@@ -56,57 +69,84 @@ export default function TagManager() {
     const value = new URLSearchParams(search).get("subject");
     return isPaperSubjectValue(value) ? value : "english";
   }, [search]);
-  const [systems, setSystems] = useState<EnglishExamTagSystem[]>([]);
+  const [englishSystems, setEnglishSystems] = useState<EnglishExamTagSystem[]>([]);
+  const [basicSystems, setBasicSystems] = useState<SubjectTagSystem[]>([]);
 
-  const query = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
-    enabled: subjectFilter === "english",
-    staleTime: 30_000,
-  });
+  const query = useSubjectTagSystems(subjectFilter);
 
-  const saveMutation = trpc.papers.saveEnglishTagSystems.useMutation({
+  const saveEnglishMutation = trpc.papers.saveEnglishTagSystems.useMutation({
     onSuccess: async () => {
       await utils.papers.getEnglishTagSystems.invalidate();
     },
   });
+  const saveMathMutation = trpc.papers.saveMathTagSystems.useMutation({
+    onSuccess: async () => {
+      await utils.papers.getMathTagSystems.invalidate();
+    },
+  });
+  const saveVocabularyMutation = trpc.papers.saveVocabularyTagSystems.useMutation({
+    onSuccess: async () => {
+      await utils.papers.getVocabularyTagSystems.invalidate();
+    },
+  });
 
   useEffect(() => {
-    if (subjectFilter !== "english") return;
     if (!query.data) return;
-    setSystems(query.data);
+    if (subjectFilter === "english") {
+      setEnglishSystems(query.systems as EnglishExamTagSystem[]);
+      return;
+    }
+    setBasicSystems(query.systems as SubjectTagSystem[]);
   }, [query.data, subjectFilter]);
 
   const canSave = useMemo(() => {
-    if (subjectFilter !== "english") return false;
+    const systems = subjectFilter === "english" ? englishSystems : basicSystems;
     if (systems.length === 0) return false;
     return systems.every((system) => {
       if (!system.label.trim()) return false;
       if (textToList(listToText(system.units)).length === 0) return false;
-      if (textToList(listToText(system.examParts)).length === 0) return false;
+        if (textToList(listToText(system.examParts)).length === 0) return false;
       return true;
     });
-  }, [subjectFilter, systems]);
+  }, [basicSystems, englishSystems, subjectFilter]);
 
   const updateSystem = (id: string, updater: (current: EnglishExamTagSystem) => EnglishExamTagSystem) => {
-    setSystems((current) => current.map((system) => (system.id === id ? updater(system) : system)));
+    setEnglishSystems((current) => current.map((system) => (system.id === id ? updater(system) : system)));
+  };
+
+  const updateBasicSystem = (id: string, updater: (current: SubjectTagSystem) => SubjectTagSystem) => {
+    setBasicSystems((current) => current.map((system) => (system.id === id ? updater(system) : system)));
   };
 
   const handleSave = async () => {
     try {
-      const normalized = normalizeEnglishTagSystems(
-        systems.map((system) => ({
-          ...system,
-          label: system.label.trim(),
-          units: [...system.units],
-          examParts: [...system.examParts],
-        })),
-      );
+      if (subjectFilter === "english") {
+        const normalized = normalizeEnglishTagSystems(
+          englishSystems.map((system) => ({
+            ...system,
+            label: system.label.trim(),
+            units: [...system.units],
+            examParts: [...system.examParts],
+          })),
+        );
 
-      await saveMutation.mutateAsync({ systems: normalized });
-      toast.success("标签体系已保存。录题页和随机组卷页会使用新的考试体系。");
+        await saveEnglishMutation.mutateAsync({ systems: normalized });
+      } else if (subjectFilter === "math") {
+        const normalized = normalizeSubjectTagSystems("math", basicSystems);
+        await saveMathMutation.mutateAsync({ systems: normalized });
+      } else {
+        const normalized = normalizeSubjectTagSystems("vocabulary", basicSystems);
+        await saveVocabularyMutation.mutateAsync({ systems: normalized });
+      }
+
+      toast.success("标签体系已保存。录题页会直接读取这里的配置。");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败，请稍后重试。");
     }
   };
+
+  const isSaving = saveEnglishMutation.isPending || saveMathMutation.isPending || saveVocabularyMutation.isPending;
+  const systems = subjectFilter === "english" ? englishSystems : basicSystems;
 
   return (
     <TeacherToolsLayout activeTool="tag-manager" currentSubject={subjectFilter}>
@@ -140,14 +180,7 @@ export default function TagManager() {
             </div>
           </div>
 
-          {subjectFilter !== "english" ? (
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader>
-                <CardTitle>{PAPER_SUBJECT_LABELS[subjectFilter]} 标签管理</CardTitle>
-                <CardDescription>这个科目的自定义标签体系还没接入。当前先支持 English。</CardDescription>
-              </CardHeader>
-            </Card>
-          ) : query.isLoading ? (
+          {query.isLoading ? (
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -162,7 +195,7 @@ export default function TagManager() {
                     {systems.length} 个考试体系
                   </Badge>
                   <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                    English Question Tags
+                    {PAPER_SUBJECT_LABELS[subjectFilter]} Question Tags
                   </Badge>
                 </div>
 
@@ -171,7 +204,16 @@ export default function TagManager() {
                     type="button"
                     variant="outline"
                     className="border-slate-200"
-                    onClick={() => setSystems((current) => [...current, createEmptySystem(current.length)])}
+                    onClick={() => {
+                      if (subjectFilter === "english") {
+                        setEnglishSystems((current) => [...current, createEmptyEnglishSystem(current.length)]);
+                        return;
+                      }
+                      setBasicSystems((current) => [
+                        ...current,
+                        createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", current.length),
+                      ]);
+                    }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     新增考试体系
@@ -180,9 +222,9 @@ export default function TagManager() {
                     type="button"
                     className="bg-[#1E3A5F] text-white hover:bg-[#17324F]"
                     onClick={handleSave}
-                    disabled={!canSave || saveMutation.isPending}
+                    disabled={!canSave || isSaving}
                   >
-                    {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     保存标签配置
                   </Button>
                 </div>
@@ -207,7 +249,13 @@ export default function TagManager() {
                           type="button"
                           variant="outline"
                           className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => setSystems((current) => current.filter((item) => item.id !== system.id))}
+                          onClick={() => {
+                            if (subjectFilter === "english") {
+                              setEnglishSystems((current) => current.filter((item) => item.id !== system.id));
+                              return;
+                            }
+                            setBasicSystems((current) => current.filter((item) => item.id !== system.id));
+                          }}
                           disabled={systems.length <= 1}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
@@ -223,12 +271,19 @@ export default function TagManager() {
                           value={system.label}
                           onChange={(event) => {
                             const nextLabel = event.target.value;
-                            updateSystem(system.id, (current) => ({
+                            if (subjectFilter === "english") {
+                              updateSystem(system.id, (current) => ({
+                                ...current,
+                                label: nextLabel,
+                              }));
+                              return;
+                            }
+                            updateBasicSystem(system.id, (current) => ({
                               ...current,
                               label: nextLabel,
                             }));
                           }}
-                          placeholder="例如：FCE / B2 First"
+                          placeholder={subjectFilter === "english" ? "例如：FCE / B2 First" : "例如：校内同步 / 竞赛数学 / 核心词汇"}
                         />
                         <p className="text-xs text-slate-500">这里的名称会直接显示在录题页和随机组卷页。</p>
                       </div>
@@ -238,17 +293,23 @@ export default function TagManager() {
                         <Textarea
                           rows={10}
                           value={listToText(system.units)}
-                          onChange={(event) =>
-                            updateSystem(system.id, (current) => ({
-                              ...current,
-                              units: textToList(event.target.value),
-                              grammarByUnit: Object.fromEntries(
-                                Object.entries(current.grammarByUnit).filter(([unit]) =>
-                                  textToList(event.target.value).includes(unit),
+                          onChange={(event) => {
+                            const nextUnits = textToList(event.target.value);
+                            if (subjectFilter === "english") {
+                              updateSystem(system.id, (current) => ({
+                                ...current,
+                                units: nextUnits,
+                                grammarByUnit: Object.fromEntries(
+                                  Object.entries(current.grammarByUnit).filter(([unit]) => nextUnits.includes(unit)),
                                 ),
-                              ),
-                            }))
-                          }
+                              }));
+                              return;
+                            }
+                            updateBasicSystem(system.id, (current) => ({
+                              ...current,
+                              units: nextUnits,
+                            }));
+                          }}
                           placeholder={"Unit 1\nUnit 2\nUnit 3"}
                         />
                         <p className="text-xs text-slate-500">每行一个教材单元。</p>
@@ -259,15 +320,23 @@ export default function TagManager() {
                         <Textarea
                           rows={10}
                           value={listToText(system.examParts)}
-                          onChange={(event) =>
-                            updateSystem(system.id, (current) => ({
+                          onChange={(event) => {
+                            const nextExamParts = textToList(event.target.value);
+                            if (subjectFilter === "english") {
+                              updateSystem(system.id, (current) => ({
+                                ...current,
+                                examParts: nextExamParts,
+                              }));
+                              return;
+                            }
+                            updateBasicSystem(system.id, (current) => ({
                               ...current,
-                              examParts: textToList(event.target.value),
-                            }))
-                          }
+                              examParts: nextExamParts,
+                            }));
+                          }}
                           placeholder={"阅读 Part 1\n阅读 Part 2\n听力 Part 1\n写作 Part 1"}
                         />
-                        <p className="text-xs text-slate-500">每行一个 Part，随机组卷和题目标签都会读取这里。</p>
+                        <p className="text-xs text-slate-500">每行一个 Part，录题页和组卷页都会读取这里。</p>
                       </div>
                     </CardContent>
                   </Card>

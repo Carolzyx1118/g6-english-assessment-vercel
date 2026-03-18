@@ -4,6 +4,7 @@ import type {
   EnglishExamTagEntry,
   EnglishExamTagTrack,
   EnglishQuestionTagProfile,
+  SubjectQuestionTagProfile,
 } from "./englishQuestionTags";
 
 export type ManualSectionType =
@@ -107,6 +108,8 @@ export interface ManualOptionImage {
 
 export interface ManualQuestionTags {
   english?: EnglishQuestionTagProfile;
+  math?: SubjectQuestionTagProfile;
+  vocabulary?: SubjectQuestionTagProfile;
 }
 
 interface ManualQuestionBase {

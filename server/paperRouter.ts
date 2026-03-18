@@ -13,7 +13,11 @@ import {
   deleteManualPaper,
   updateManualPaper as persistManualPaperUpdate,
   getEnglishTagSystems,
+  getMathTagSystems,
+  getVocabularyTagSystems,
   saveEnglishTagSystems,
+  saveMathTagSystems,
+  saveVocabularyTagSystems,
 } from "./db";
 import {
   countBlueprintQuestions,
@@ -22,7 +26,7 @@ import {
 } from "../shared/blueprintToPaper";
 import { getBlueprintBuildMode, getBlueprintVisibilityMode } from "../shared/taggedPaperGenerator";
 import { z } from "zod";
-import { normalizeEnglishTagSystems } from "../shared/englishQuestionTags";
+import { normalizeEnglishTagSystems, normalizeSubjectTagSystems } from "../shared/englishQuestionTags";
 
 const englishTagSystemInputSchema = z.object({
   id: z.string().min(1),
@@ -30,6 +34,13 @@ const englishTagSystemInputSchema = z.object({
   units: z.array(z.string()),
   examParts: z.array(z.string()),
   grammarByUnit: z.record(z.string(), z.array(z.string())).default({}),
+});
+
+const basicTagSystemInputSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  units: z.array(z.string()),
+  examParts: z.array(z.string()),
 });
 
 export const paperRouter = router({
@@ -187,6 +198,14 @@ export const paperRouter = router({
     return getEnglishTagSystems();
   }),
 
+  getMathTagSystems: publicProcedure.query(async () => {
+    return getMathTagSystems();
+  }),
+
+  getVocabularyTagSystems: publicProcedure.query(async () => {
+    return getVocabularyTagSystems();
+  }),
+
   saveEnglishTagSystems: publicProcedure
     .input(z.object({ systems: z.array(englishTagSystemInputSchema).min(1) }))
     .mutation(async ({ input }) => {
@@ -197,6 +216,34 @@ export const paperRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: err instanceof Error ? err.message : "Failed to save English tag systems.",
+        });
+      }
+    }),
+
+  saveMathTagSystems: publicProcedure
+    .input(z.object({ systems: z.array(basicTagSystemInputSchema).min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        await saveMathTagSystems(normalizeSubjectTagSystems("math", input.systems));
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Failed to save Math tag systems.",
+        });
+      }
+    }),
+
+  saveVocabularyTagSystems: publicProcedure
+    .input(z.object({ systems: z.array(basicTagSystemInputSchema).min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        await saveVocabularyTagSystems(normalizeSubjectTagSystems("vocabulary", input.systems));
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Failed to save Vocabulary tag systems.",
         });
       }
     }),

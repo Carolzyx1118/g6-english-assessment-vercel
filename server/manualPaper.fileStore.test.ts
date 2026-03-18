@@ -255,4 +255,40 @@ describe("manual paper file fallback", () => {
     expect(systems[0].label).toBe("FCE / B2 First");
     expect(allPapers).toHaveLength(0);
   });
+
+  it("stores Math and Vocabulary tag systems without exposing them as normal papers", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    await caller.papers.saveMathTagSystems({
+      systems: [
+        {
+          id: "school-math",
+          label: "School Math",
+          units: ["Unit 1", "Unit 2"],
+          examParts: ["选择题", "应用题"],
+        },
+      ],
+    });
+
+    await caller.papers.saveVocabularyTagSystems({
+      systems: [
+        {
+          id: "core-vocabulary",
+          label: "Core Vocabulary",
+          units: ["Unit 1", "Unit 2"],
+          examParts: ["词义匹配", "拼写"],
+        },
+      ],
+    });
+
+    const mathSystems = await caller.papers.getMathTagSystems();
+    const vocabularySystems = await caller.papers.getVocabularyTagSystems();
+    const allPapers = await caller.papers.listAllManualPapers();
+
+    expect(mathSystems).toHaveLength(1);
+    expect(mathSystems[0].label).toBe("School Math");
+    expect(vocabularySystems).toHaveLength(1);
+    expect(vocabularySystems[0].label).toBe("Core Vocabulary");
+    expect(allPapers).toHaveLength(0);
+  });
 });

@@ -38,6 +38,27 @@ export interface EnglishTagSchemaStore {
   systems: EnglishExamTagSystem[];
 }
 
+export type ConfigurableTagSubject = "english" | "math" | "vocabulary";
+
+export interface SubjectQuestionTagProfile {
+  track: string;
+  unit?: string;
+  examPart?: string;
+}
+
+export interface SubjectTagSystem {
+  id: string;
+  label: string;
+  units: string[];
+  examParts: string[];
+}
+
+export interface SubjectTagSchemaStore {
+  version: 1;
+  subject: Exclude<ConfigurableTagSubject, "english">;
+  systems: SubjectTagSystem[];
+}
+
 export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
 export type EnglishExamTagSystemInput = Pick<
   EnglishExamTagSystem,
@@ -59,6 +80,8 @@ export const DEFAULT_ENGLISH_EXAM_TAG_TRACK = "ket";
 
 const KET_UNITS = Array.from({ length: 14 }, (_, index) => `Unit ${index + 1}`);
 const PET_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
+const MATH_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
+const VOCABULARY_UNITS = Array.from({ length: 12 }, (_, index) => `Unit ${index + 1}`);
 
 export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
   {
@@ -155,6 +178,24 @@ export const DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS: EnglishExamTagSystem[] = [
   },
 ];
 
+export const DEFAULT_MATH_TAG_SYSTEMS: SubjectTagSystem[] = [
+  {
+    id: "school-math",
+    label: "School Math",
+    units: MATH_UNITS,
+    examParts: ["选择题", "填空题", "应用题"],
+  },
+];
+
+export const DEFAULT_VOCABULARY_TAG_SYSTEMS: SubjectTagSystem[] = [
+  {
+    id: "core-vocabulary",
+    label: "Core Vocabulary",
+    units: VOCABULARY_UNITS,
+    examParts: ["词义匹配", "拼写", "词汇运用"],
+  },
+];
+
 function dedupeStrings(values: string[] | undefined) {
   return Array.from(
     new Set(
@@ -239,4 +280,38 @@ export function getEnglishExamTagSchema(
     ?? schemas[defaultTrack]
     ?? ENGLISH_EXAM_TAG_SCHEMAS[DEFAULT_ENGLISH_EXAM_TAG_TRACK]
   );
+}
+
+export function getDefaultSubjectTagSystems(
+  subject: Exclude<ConfigurableTagSubject, "english">,
+) {
+  return subject === "math"
+    ? [...DEFAULT_MATH_TAG_SYSTEMS]
+    : [...DEFAULT_VOCABULARY_TAG_SYSTEMS];
+}
+
+export function createDefaultSubjectTagSchemaStore(
+  subject: Exclude<ConfigurableTagSubject, "english">,
+): SubjectTagSchemaStore {
+  return {
+    version: 1,
+    subject,
+    systems: normalizeSubjectTagSystems(subject, getDefaultSubjectTagSystems(subject)),
+  };
+}
+
+export function normalizeSubjectTagSystems(
+  subject: Exclude<ConfigurableTagSubject, "english">,
+  input: SubjectTagSystem[] | undefined | null,
+) {
+  const systems = (input ?? [])
+    .map((system, index) => ({
+      id: (system.id || "").trim() || `${subject}-system-${index + 1}`,
+      label: (system.label || "").trim() || `${subject}-system-${index + 1}`,
+      units: dedupeStrings(system.units),
+      examParts: dedupeStrings(system.examParts),
+    }))
+    .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
+
+  return systems.length > 0 ? systems : getDefaultSubjectTagSystems(subject);
 }

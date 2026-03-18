@@ -188,7 +188,7 @@ export default function TeacherToolsLayout({
             />
 
             <PrimaryLink
-              href="/tag-manager?subject=english"
+              href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
               icon={<Tags className="h-4 w-4" />}
               label="Tag Manager"
               active={activeTool === "tag-manager"}

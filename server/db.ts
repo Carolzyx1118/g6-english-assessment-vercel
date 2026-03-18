@@ -4,10 +4,15 @@ import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import {
+  createDefaultSubjectTagSchemaStore,
   createDefaultEnglishTagSchemaStore,
+  normalizeSubjectTagSystems,
   normalizeEnglishTagSystems,
+  type ConfigurableTagSubject,
   type EnglishExamTagSystem,
   type EnglishTagSchemaStore,
+  type SubjectTagSchemaStore,
+  type SubjectTagSystem,
 } from "../shared/englishQuestionTags";
 import { ENV } from './_core/env';
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
@@ -20,6 +25,10 @@ let hasLoggedEphemeralPersistenceWarning = false;
 const RESERVED_MANUAL_PAPER_PREFIX = "__system:";
 const ENGLISH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}english-tag-schemas`;
 const ENGLISH_TAG_SCHEMA_STORE_TITLE = "__English Tag Schemas__";
+const MATH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}math-tag-schemas`;
+const MATH_TAG_SCHEMA_STORE_TITLE = "__Math Tag Schemas__";
+const VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}vocabulary-tag-schemas`;
+const VOCABULARY_TAG_SCHEMA_STORE_TITLE = "__Vocabulary Tag Schemas__";
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
@@ -116,6 +125,50 @@ function parseEnglishTagSchemaStore(raw: string | null | undefined): EnglishTagS
   } catch {
     return createDefaultEnglishTagSchemaStore();
   }
+}
+
+function parseSubjectTagSchemaStore(
+  subject: Exclude<ConfigurableTagSubject, "english">,
+  raw: string | null | undefined,
+): SubjectTagSchemaStore {
+  if (!raw) {
+    return createDefaultSubjectTagSchemaStore(subject);
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<SubjectTagSchemaStore>;
+    return {
+      version: 1,
+      subject,
+      systems: normalizeSubjectTagSystems(subject, parsed.systems as SubjectTagSystem[] | undefined),
+    };
+  } catch {
+    return createDefaultSubjectTagSchemaStore(subject);
+  }
+}
+
+function getTagSchemaStoreMeta(subject: ConfigurableTagSubject) {
+  if (subject === "english") {
+    return {
+      paperId: ENGLISH_TAG_SCHEMA_STORE_PAPER_ID,
+      title: ENGLISH_TAG_SCHEMA_STORE_TITLE,
+      description: "Reserved system record for English tag schemas.",
+    };
+  }
+
+  if (subject === "math") {
+    return {
+      paperId: MATH_TAG_SCHEMA_STORE_PAPER_ID,
+      title: MATH_TAG_SCHEMA_STORE_TITLE,
+      description: "Reserved system record for Math tag schemas.",
+    };
+  }
+
+  return {
+    paperId: VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID,
+    title: VOCABULARY_TAG_SCHEMA_STORE_TITLE,
+    description: "Reserved system record for Vocabulary tag schemas.",
+  };
 }
 
 function normalizeTestResultRecord(raw: any): TestResult {
@@ -601,6 +654,74 @@ export async function saveEnglishTagSystems(systems: EnglishExamTagSystem[]): Pr
       subject: "english",
       systems: normalizedSystems,
     } satisfies EnglishTagSchemaStore),
+    totalQuestions: 0,
+    hasListening: 0,
+    hasWriting: 0,
+  } satisfies InsertManualPaper;
+
+  if (!store) {
+    await saveManualPaper(payload);
+    return;
+  }
+
+  await updateManualPaper(store.id, payload);
+}
+
+export async function getMathTagSystems(): Promise<SubjectTagSystem[]> {
+  const store = await getManualPaperByPaperId(MATH_TAG_SCHEMA_STORE_PAPER_ID);
+  return parseSubjectTagSchemaStore("math", store?.blueprintJson).systems;
+}
+
+export async function saveMathTagSystems(systems: SubjectTagSystem[]): Promise<void> {
+  const normalizedSystems = normalizeSubjectTagSystems("math", systems);
+  const meta = getTagSchemaStoreMeta("math");
+  const store = await getManualPaperByPaperId(meta.paperId);
+  const payload = {
+    paperId: meta.paperId,
+    title: meta.title,
+    description: meta.description,
+    subject: "math",
+    category: "assessment",
+    published: 0,
+    blueprintJson: JSON.stringify({
+      version: 1,
+      subject: "math",
+      systems: normalizedSystems,
+    } satisfies SubjectTagSchemaStore),
+    totalQuestions: 0,
+    hasListening: 0,
+    hasWriting: 0,
+  } satisfies InsertManualPaper;
+
+  if (!store) {
+    await saveManualPaper(payload);
+    return;
+  }
+
+  await updateManualPaper(store.id, payload);
+}
+
+export async function getVocabularyTagSystems(): Promise<SubjectTagSystem[]> {
+  const store = await getManualPaperByPaperId(VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID);
+  return parseSubjectTagSchemaStore("vocabulary", store?.blueprintJson).systems;
+}
+
+export async function saveVocabularyTagSystems(systems: SubjectTagSystem[]): Promise<void> {
+  const normalizedSystems = normalizeSubjectTagSystems("vocabulary", systems);
+  const meta = getTagSchemaStoreMeta("vocabulary");
+  const store = await getManualPaperByPaperId(meta.paperId);
+  const payload = {
+    paperId: meta.paperId,
+    title: meta.title,
+    description: meta.description,
+    subject: "vocabulary",
+    category: "assessment",
+    published: 0,
+    blueprintJson: JSON.stringify({
+      version: 1,
+      subject: "vocabulary",
+      systems: normalizedSystems,
+    } satisfies SubjectTagSchemaStore),
     totalQuestions: 0,
     hasListening: 0,
     hasWriting: 0,
