@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +116,7 @@ export default function TagManager() {
   }, [search]);
   const [englishSystems, setEnglishSystems] = useState<EnglishExamTagSystem[]>([]);
   const [basicSystems, setBasicSystems] = useState<SubjectTagSystem[]>([]);
+  const [expandedSystemIds, setExpandedSystemIds] = useState<string[]>([]);
 
   const query = useSubjectTagSystems(subjectFilter);
 
@@ -139,9 +140,10 @@ export default function TagManager() {
     if (!query.data) return;
     if (subjectFilter === "english") {
       setEnglishSystems(query.systems as EnglishExamTagSystem[]);
-      return;
+    } else {
+      setBasicSystems(query.systems as SubjectTagSystem[]);
     }
-    setBasicSystems(query.systems as SubjectTagSystem[]);
+    setExpandedSystemIds([]);
   }, [query.data, subjectFilter]);
 
   const canSave = useMemo(() => {
@@ -226,6 +228,14 @@ export default function TagManager() {
     }));
   };
 
+  const toggleSystemExpanded = (systemId: string) => {
+    setExpandedSystemIds((current) =>
+      current.includes(systemId)
+        ? current.filter((id) => id !== systemId)
+        : [...current, systemId],
+    );
+  };
+
   return (
     <TeacherToolsLayout activeTool="tag-manager" currentSubject={subjectFilter}>
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
@@ -284,13 +294,14 @@ export default function TagManager() {
                     className="border-slate-200"
                     onClick={() => {
                       if (subjectFilter === "english") {
-                        setEnglishSystems((current) => [...current, createEmptyEnglishSystem(current.length)]);
-                        return;
+                        const nextSystem = createEmptyEnglishSystem(englishSystems.length);
+                        setEnglishSystems((current) => [...current, nextSystem]);
+                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
+                      } else {
+                        const nextSystem = createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", basicSystems.length);
+                        setBasicSystems((current) => [...current, nextSystem]);
+                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
                       }
-                      setBasicSystems((current) => [
-                        ...current,
-                        createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", current.length),
-                      ]);
                     }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -323,26 +334,52 @@ export default function TagManager() {
                           </div>
                         </div>
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => {
-                            if (subjectFilter === "english") {
-                              setEnglishSystems((current) => current.filter((item) => item.id !== system.id));
-                              return;
-                            }
-                            setBasicSystems((current) => current.filter((item) => item.id !== system.id));
-                          }}
-                          disabled={systems.length <= 1}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          删除
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-slate-200"
+                            onClick={() => toggleSystemExpanded(system.id)}
+                          >
+                            {expandedSystemIds.includes(system.id) ? (
+                              <ChevronUp className="mr-2 h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="mr-2 h-4 w-4" />
+                            )}
+                            {expandedSystemIds.includes(system.id) ? "收起" : "展开"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => {
+                              setExpandedSystemIds((current) => current.filter((id) => id !== system.id));
+                              if (subjectFilter === "english") {
+                                setEnglishSystems((current) => current.filter((item) => item.id !== system.id));
+                                return;
+                              }
+                              setBasicSystems((current) => current.filter((item) => item.id !== system.id));
+                            }}
+                            disabled={systems.length <= 1}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            删除
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
+                          {getUnitCount(system.units)} 个单元
+                        </Badge>
+                        <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
+                          {system.examParts.length} 个 Part
+                        </Badge>
                       </div>
                     </CardHeader>
 
-                    <CardContent className="grid gap-5 lg:grid-cols-2">
+                    {expandedSystemIds.includes(system.id) ? (
+                      <CardContent className="grid gap-5 lg:grid-cols-2">
                       <div className="space-y-2">
                         <Label>考试体系名称</Label>
                         <Input
@@ -476,7 +513,8 @@ export default function TagManager() {
                         </div>
                         <p className="text-xs text-slate-500">先选分区类型，再调整 Part 后面的数字。</p>
                       </div>
-                    </CardContent>
+                      </CardContent>
+                    ) : null}
                   </Card>
                 ))}
               </div>
