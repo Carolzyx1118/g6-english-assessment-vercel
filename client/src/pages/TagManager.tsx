@@ -212,6 +212,60 @@ export default function TagManager() {
     }
   };
 
+  const handleDeleteSystem = async (systemId: string) => {
+    if (systems.length <= 1) return;
+
+    const previousExpandedIds = expandedSystemIds;
+    setExpandedSystemIds((current) => current.filter((id) => id !== systemId));
+
+    try {
+      if (subjectFilter === "english") {
+        const previousSystems = englishSystems;
+        const nextSystems = previousSystems.filter((item) => item.id !== systemId);
+        setEnglishSystems(nextSystems);
+
+        const normalized = normalizeEnglishTagSystems(
+          nextSystems.map((system) => ({
+            ...system,
+            label: system.label.trim(),
+            units: [...system.units],
+            examParts: [...system.examParts],
+          })),
+        );
+
+        await saveEnglishMutation.mutateAsync({ systems: normalized });
+      } else if (subjectFilter === "math") {
+        const previousSystems = basicSystems;
+        const nextSystems = previousSystems.filter((item) => item.id !== systemId);
+        setBasicSystems(nextSystems);
+
+        const normalized = normalizeSubjectTagSystems("math", nextSystems);
+        await saveMathMutation.mutateAsync({ systems: normalized });
+      } else {
+        const previousSystems = basicSystems;
+        const nextSystems = previousSystems.filter((item) => item.id !== systemId);
+        setBasicSystems(nextSystems);
+
+        const normalized = normalizeSubjectTagSystems("vocabulary", nextSystems);
+        await saveVocabularyMutation.mutateAsync({ systems: normalized });
+      }
+
+      toast.success("Exam system deleted.");
+    } catch (error) {
+      setExpandedSystemIds(previousExpandedIds);
+
+      if (subjectFilter === "english") {
+        await utils.papers.getEnglishTagSystems.invalidate();
+      } else if (subjectFilter === "math") {
+        await utils.papers.getMathTagSystems.invalidate();
+      } else {
+        await utils.papers.getVocabularyTagSystems.invalidate();
+      }
+
+      toast.error(error instanceof Error ? error.message : "Failed to delete exam system.");
+    }
+  };
+
   const isSaving = saveEnglishMutation.isPending || saveMathMutation.isPending || saveVocabularyMutation.isPending;
   const systems = subjectFilter === "english" ? englishSystems : basicSystems;
 
@@ -430,14 +484,9 @@ export default function TagManager() {
                             variant="outline"
                             className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                             onClick={() => {
-                              setExpandedSystemIds((current) => current.filter((id) => id !== system.id));
-                              if (subjectFilter === "english") {
-                                setEnglishSystems((current) => current.filter((item) => item.id !== system.id));
-                                return;
-                              }
-                              setBasicSystems((current) => current.filter((item) => item.id !== system.id));
+                              void handleDeleteSystem(system.id);
                             }}
-                            disabled={systems.length <= 1}
+                            disabled={systems.length <= 1 || isSaving}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
