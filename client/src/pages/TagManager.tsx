@@ -27,23 +27,12 @@ function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
 }
 
-function listToText(values: string[]) {
-  return values.join("\n");
-}
-
-function textToList(value: string) {
-  return value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
   const suffix = `${Date.now().toString(36)}-${index + 1}`;
   return {
     id: `custom-${suffix}`,
     label: "",
-    units: [],
+    units: [formatUnitNumber(1)],
     examParts: [],
     abilities: ["词汇", "语法", "阅读理解", "听力理解", "写作"],
     difficulties: ["基础", "中等", "提高"],
@@ -56,7 +45,7 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
   return {
     id: `${subject}-${suffix}`,
     label: "",
-    units: [],
+    units: [formatUnitNumber(1)],
     examParts: [],
   };
 }
@@ -79,6 +68,15 @@ function parseUnitNumber(value: string) {
 
 function formatUnitNumber(value: number) {
   return `Unit ${clampPositiveInt(value)}`;
+}
+
+function getUnitCount(units: string[]) {
+  if (units.length === 0) return 1;
+  return Math.max(...units.map((unit) => parseUnitNumber(unit)), 1);
+}
+
+function buildUnitRange(count: number) {
+  return Array.from({ length: clampPositiveInt(count) }, (_, index) => formatUnitNumber(index + 1));
 }
 
 function parseExamPart(value: string, fallbackPrefix: string) {
@@ -151,8 +149,8 @@ export default function TagManager() {
     if (systems.length === 0) return false;
     return systems.every((system) => {
       if (!system.label.trim()) return false;
-      if (textToList(listToText(system.units)).length === 0) return false;
-        if (textToList(listToText(system.examParts)).length === 0) return false;
+      if (system.units.length === 0) return false;
+      if (system.examParts.length === 0) return false;
       return true;
     });
   }, [basicSystems, englishSystems, subjectFilter]);
@@ -371,50 +369,28 @@ export default function TagManager() {
                       <div className="space-y-2">
                         <Label>教材单元</Label>
                         <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                          {system.units.map((unit, unitIndex) => (
-                            <div key={`${system.id}-unit-${unitIndex}`} className="flex flex-wrap items-center gap-3">
-                              <div className="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
-                                Unit
-                              </div>
-                              <Input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={parseUnitNumber(unit)}
-                                onChange={(event) => {
-                                  const nextUnits = [...system.units];
-                                  nextUnits[unitIndex] = formatUnitNumber(Number(event.target.value || 1));
-                                  setUnitsForSystem(system.id, nextUnits);
-                                }}
-                                className="w-28 bg-white"
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                onClick={() => {
-                                  const nextUnits = system.units.filter((_, indexToKeep) => indexToKeep !== unitIndex);
-                                  setUnitsForSystem(system.id, nextUnits);
-                                }}
-                                disabled={system.units.length <= 1}
-                              >
-                                <Trash2 className="mr-1.5 h-4 w-4" />
-                                删除
-                              </Button>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="inline-flex h-11 min-w-[120px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600">
+                              Unit 1 -
                             </div>
-                          ))}
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-slate-200 bg-white"
-                            onClick={() => setUnitsForSystem(system.id, [...system.units, formatUnitNumber(system.units.length + 1)])}
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            添加 Unit
-                          </Button>
+                            <Input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={getUnitCount(system.units)}
+                              onChange={(event) => {
+                                setUnitsForSystem(system.id, buildUnitRange(Number(event.target.value || 1)));
+                              }}
+                              className="w-32 bg-white"
+                            />
+                            <span className="text-sm text-slate-500">个单元</span>
+                          </div>
+                          <div className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-500">
+                            系统会自动生成 <span className="font-medium text-slate-700">Unit 1</span> 到{" "}
+                            <span className="font-medium text-slate-700">Unit {getUnitCount(system.units)}</span>。
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-500">直接选择 Unit 后面的数字即可。</p>
+                        <p className="text-xs text-slate-500">这里只设置总单元数，不再逐条罗列每个 Unit。</p>
                       </div>
 
                       <div className="space-y-2 lg:col-span-2">
