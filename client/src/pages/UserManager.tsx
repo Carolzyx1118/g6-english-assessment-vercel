@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, KeyRound, Loader2, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -62,8 +61,6 @@ export default function UserManager() {
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
   const [savingUserIds, setSavingUserIds] = useState<Record<number, boolean>>({});
   const [savedUserIds, setSavedUserIds] = useState<Record<number, boolean>>({});
-  const [resettingUserId, setResettingUserId] = useState<number | null>(null);
-  const [temporaryPasswords, setTemporaryPasswords] = useState<Record<number, string>>({});
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
 
   const listQuery = trpc.localAuth.listUsers.useQuery(undefined, {
@@ -88,8 +85,6 @@ export default function UserManager() {
       ]);
     },
   });
-
-  const resetPasswordMutation = trpc.localAuth.resetUserPassword.useMutation();
 
   useEffect(() => {
     if (!listQuery.data) return;
@@ -183,22 +178,6 @@ export default function UserManager() {
     await persistDraft(managedUser, nextDraft);
   };
 
-  const handleResetPassword = async (managedUser: ManagedUser) => {
-    try {
-      setResettingUserId(managedUser.id);
-      const result = await resetPasswordMutation.mutateAsync({ id: managedUser.id });
-      setTemporaryPasswords((current) => ({
-        ...current,
-        [managedUser.id]: result.temporaryPassword,
-      }));
-      toast.success(`Temporary password generated for ${managedUser.username}.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Password reset failed. Please try again.");
-    } finally {
-      setResettingUserId(null);
-    }
-  };
-
   const handleDelete = async () => {
     if (!deleteTarget) return;
 
@@ -282,9 +261,7 @@ export default function UserManager() {
                 const isSelf = managedUser.id === user?.id;
                 const hasFullAccess = draft.allowedSubjects.length === PAPER_SUBJECT_ORDER.length;
                 const isSaving = savingUserIds[managedUser.id] === true;
-                const isResetting = resettingUserId === managedUser.id;
                 const isDeleting = deletingUserId === managedUser.id;
-                const temporaryPassword = temporaryPasswords[managedUser.id];
 
                 return (
                   <Card key={managedUser.id} className="border-slate-200 shadow-sm">
@@ -369,46 +346,17 @@ export default function UserManager() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-end justify-between gap-4">
-                        <div className="min-w-[260px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">Temporary Password</p>
-                              <p className="text-xs text-slate-500">
-                                Existing passwords cannot be shown. Reset to generate a new visible password.
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void handleResetPassword(managedUser)}
-                              disabled={isSelf || isResetting || isDeleting}
-                            >
-                              {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                              Reset Password
-                            </Button>
-                          </div>
-
-                          <Input
-                            className="mt-3"
-                            readOnly
-                            value={temporaryPassword || ""}
-                            placeholder="No temporary password generated yet"
-                          />
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
                             variant="outline"
                             className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                             onClick={() => setDeleteTarget(managedUser)}
-                            disabled={isSelf || isSaving || isDeleting || isResetting}
+                            disabled={isSelf || isSaving || isDeleting}
                           >
                             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                             Delete User
                           </Button>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
