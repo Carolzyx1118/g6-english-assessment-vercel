@@ -72,7 +72,7 @@ function BrandHeader() {
 
   return (
     <div className="bg-[#1E3A5F] text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img src={PUREON_LOGO} alt="璞源教育" className="w-10 h-10 object-contain" />
           <div className="leading-tight">

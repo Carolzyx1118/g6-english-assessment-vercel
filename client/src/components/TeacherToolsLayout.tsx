@@ -158,30 +158,39 @@ export default function TeacherToolsLayout({
   return (
     <div className="min-h-screen bg-[#F6F8FB] md:flex">
       <aside
-        className={`hidden shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur md:sticky md:flex md:flex-col ${
+        className={`hidden shrink-0 md:sticky md:flex md:flex-col ${
           headerOffset ? "md:top-16 md:h-[calc(100vh-4rem)]" : "md:top-0 md:h-screen"
         } ${
           collapsed ? "md:w-20" : "md:w-72"
+        } ${
+          headerOffset ? "bg-transparent" : "border-r border-slate-200 bg-white/95 backdrop-blur"
         }`}
       >
-        <div className={`flex items-center border-b border-slate-200 px-4 py-4 ${collapsed ? "justify-center" : "justify-between"}`}>
-          {!collapsed ? (
-            <div>
-              <p className="text-sm font-semibold text-[#1E3A5F]">Teacher Tools</p>
-              <p className="text-xs text-slate-400">Workspace navigation</p>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setCollapsed((current) => !current)}
-            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-slate-800"
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
-        </div>
+        <div
+          className={`flex h-full flex-col ${
+            headerOffset
+              ? "mr-4 rounded-r-[28px] border-r border-y border-slate-200/80 bg-white/94 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur"
+              : "h-full"
+          }`}
+        >
+          <div className={`flex items-center border-b border-slate-200 px-4 py-4 ${collapsed ? "justify-center" : "justify-between"}`}>
+            {!collapsed ? (
+              <div>
+                <p className="text-sm font-semibold text-[#1E3A5F]">Teacher Tools</p>
+                <p className="text-xs text-slate-400">Workspace navigation</p>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setCollapsed((current) => !current)}
+              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-slate-800"
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
 
-        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+          <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
           <div className="space-y-1">
             {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Overview</p> : null}
             <PrimaryLink
@@ -311,7 +320,8 @@ export default function TeacherToolsLayout({
               />
             )}
           </div>
-        </nav>
+          </nav>
+        </div>
       </aside>
 
       <div className="min-w-0 flex-1">{children}</div>
