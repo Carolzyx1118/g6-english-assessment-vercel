@@ -4451,9 +4451,18 @@ export default function PaperIntake() {
                           </div>
                         ) : null}
 
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Question Type</Label>
+	                        <div className="space-y-4">
+                          {isQuestionBankMode
+                            ? renderSharedQuestionBlockTagEditor(
+                                section.id,
+                                subsection.id,
+                                subsection,
+                                section.sectionType,
+                              )
+                            : null}
+
+	                          <div className="space-y-2">
+	                            <Label>Question Type</Label>
                             {isMathPaper ? (
                               (() => {
                                 const lockedQuestionType = getLockedMathQuestionType(section.sectionType);
@@ -4525,16 +4534,7 @@ export default function PaperIntake() {
                             />
                           </div>
 
-                          {isQuestionBankMode
-                            ? renderSharedQuestionBlockTagEditor(
-                                section.id,
-                                subsection.id,
-                                subsection,
-                                section.sectionType,
-                              )
-                            : null}
-
-                          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+	                          <div className="rounded-2xl border border-slate-200 bg-white p-4">
                             <button
                               type="button"
                               onClick={() => toggleImageBlock(subsection.id, isImageBlockExpanded)}
