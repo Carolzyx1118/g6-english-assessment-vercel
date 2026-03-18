@@ -7461,58 +7461,53 @@ export default function PaperIntake() {
             </Card>
 
             {showPreviewActionCard ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                <div className="flex flex-wrap items-center gap-2.5 text-sm">
-                  <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                    {currentPublished ? "Status: Published" : "Status: Draft"}
-                  </div>
-                  {saveFeedback ? (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
-                      <Check className="h-4 w-4" />
-                      <span className="font-medium">{saveFeedback}</span>
-                    </div>
-                  ) : null}
+              <div className="flex flex-wrap items-center gap-3 px-1">
+                <div className={`rounded-full px-3 py-1 text-sm font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {currentPublished ? "Status: Published" : "Status: Draft"}
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {isEditing ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={isPersisting || !editingPaperMeta}
-                      onClick={handleSaveAsCopy}
-                      className="gap-2 border-slate-200 px-4"
-                    >
-                      <FilePlus2 className="h-4 w-4" />
-                      Save as Copy
-                    </Button>
-                  ) : null}
-
+                {saveFeedback ? (
+                  <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+                    <Check className="h-4 w-4" />
+                    <span className="font-medium">{saveFeedback}</span>
+                  </div>
+                ) : null}
+                {isEditing ? (
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={saveDisabled}
-                    onClick={handleSaveDraft}
+                    disabled={isPersisting || !editingPaperMeta}
+                    onClick={handleSaveAsCopy}
                     className="gap-2 border-slate-200 px-4"
                   >
-                    {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-                    {draftActionLabel}
+                    <FilePlus2 className="h-4 w-4" />
+                    Save as Copy
                   </Button>
+                ) : null}
 
-                  <Button
-                    type="button"
-                    disabled={saveDisabled}
-                    onClick={handlePublishPaper}
-                    className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
-                  >
-                    {isPersisting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="h-4 w-4" />
-                    )}
-                    {publishActionLabel}
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saveDisabled}
+                  onClick={handleSaveDraft}
+                  className="gap-2 border-slate-200 px-4"
+                >
+                  {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
+                  {draftActionLabel}
+                </Button>
+
+                <Button
+                  type="button"
+                  disabled={saveDisabled}
+                  onClick={handlePublishPaper}
+                  className="gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+                >
+                  {isPersisting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {publishActionLabel}
+                </Button>
               </div>
             ) : null}
           </div>
@@ -7520,67 +7515,56 @@ export default function PaperIntake() {
 
         {/* ── Confirm / Save Button ── */}
         {buildMode !== "fixed" ? (
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <div className={`rounded-full px-3 py-1 font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-              {currentPublished ? "Status: Published" : "Status: Draft"}
-            </div>
-            {saveFeedback ? (
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
-                <Check className="h-4 w-4" />
-                <span className="font-medium">{saveFeedback}</span>
-              </div>
-            ) : (
-              <span className="text-slate-500">
-                {isQuestionBankMode
-                  ? "Question bank items stay hidden until you publish the bank."
-                  : "Drafts stay hidden until you publish the paper."}
-              </span>
-            )}
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className={`rounded-full px-3 py-1 text-sm font-semibold ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            {currentPublished ? "Status: Published" : "Status: Draft"}
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {isEditing ? (
-              <Button
-                type="button"
-                size="lg"
-                variant="outline"
-                disabled={isPersisting || !editingPaperMeta}
-                onClick={handleSaveAsCopy}
-                className="gap-2 border-slate-200"
-              >
-                <FilePlus2 className="h-4 w-4" />
-                Save as Copy
-              </Button>
-            ) : null}
-
+          {saveFeedback ? (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700">
+              <Check className="h-4 w-4" />
+              <span className="font-medium">{saveFeedback}</span>
+            </div>
+          ) : null}
+          {isEditing ? (
             <Button
               type="button"
               size="lg"
               variant="outline"
-              disabled={saveDisabled}
-              onClick={handleSaveDraft}
+              disabled={isPersisting || !editingPaperMeta}
+              onClick={handleSaveAsCopy}
               className="gap-2 border-slate-200"
             >
-              {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
-              {draftActionLabel}
+              <FilePlus2 className="h-4 w-4" />
+              Save as Copy
             </Button>
+          ) : null}
 
-            <Button
-              type="button"
-              size="lg"
-              disabled={saveDisabled}
-              onClick={handlePublishPaper}
-              className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
-            >
-              {isPersisting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              {publishActionLabel}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            size="lg"
+            variant="outline"
+            disabled={saveDisabled}
+            onClick={handleSaveDraft}
+            className="gap-2 border-slate-200"
+          >
+            {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
+            {draftActionLabel}
+          </Button>
+
+          <Button
+            type="button"
+            size="lg"
+            disabled={saveDisabled}
+            onClick={handlePublishPaper}
+            className="gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all hover:bg-[#2a4f7a] hover:shadow-xl"
+          >
+            {isPersisting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            {publishActionLabel}
+          </Button>
         </div>
         ) : null}
         </div>
