@@ -31,6 +31,7 @@ import { normalizeEnglishTagSystems, normalizeSubjectTagSystems } from "../share
 const englishTagSystemInputSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
+  published: z.boolean().optional(),
   systemMode: z.enum(["assessment", "textbook-practice"]).default("assessment"),
   units: z.array(z.string()),
   examParts: z.array(z.string()),
@@ -59,6 +60,7 @@ const englishTagSystemInputSchema = z.object({
 const basicTagSystemInputSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
+  published: z.boolean().optional(),
   systemMode: z.enum(["assessment", "textbook-practice"]).default("assessment"),
   units: z.array(z.string()),
   examParts: z.array(z.string()),

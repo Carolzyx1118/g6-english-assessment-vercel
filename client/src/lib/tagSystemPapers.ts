@@ -29,6 +29,9 @@ type TagSystemPaperSource = {
 };
 
 type TagSystemConfig = EnglishExamTagSystem | SubjectTagSystem;
+type BuildTagSystemPaperOptions = {
+  includeHidden?: boolean;
+};
 
 const DEFAULT_SECTION_TYPE_BY_SUBJECT: Record<PaperSubject, ManualSectionType> = {
   english: "reading",
@@ -307,6 +310,7 @@ function buildTagSystemPaper(
       system.label,
     ],
     isGeneratedPaper: true,
+    hiddenFromStudentSelection: system.published === false,
     generationWarnings: generated.warnings,
     configuredSectionsCount,
     configuredQuestionsCount,
@@ -345,6 +349,7 @@ function buildFallbackTagSystemPaper(
       system.label,
     ],
     isGeneratedPaper: true,
+    hiddenFromStudentSelection: system.published === false,
     generationWarnings: error instanceof Error ? [error.message] : [],
   } as Paper;
 }
@@ -353,8 +358,13 @@ export function buildTagSystemPapers(
   subject: PaperSubject,
   systems: TagSystemConfig[],
   sourcePapers: TagSystemPaperSource[],
+  options: BuildTagSystemPaperOptions = {},
 ): Paper[] {
-  return systems.map((system) => {
+  const visibleSystems = options.includeHidden
+    ? systems
+    : systems.filter((system) => system.published !== false);
+
+  return visibleSystems.map((system) => {
     try {
       return buildTagSystemPaper(subject, system, sourcePapers);
     } catch (error) {

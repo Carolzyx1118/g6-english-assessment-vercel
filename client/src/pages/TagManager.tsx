@@ -37,6 +37,7 @@ function createEmptyEnglishSystem(index: number): EnglishExamTagSystem {
   return {
     id: `custom-${suffix}`,
     label: "",
+    published: true,
     systemMode: "assessment",
     units: [formatUnitNumber(1)],
     examParts: [],
@@ -52,6 +53,7 @@ function createEmptyBasicSystem(subject: Extract<PaperSubject, "math" | "vocabul
   return {
     id: `${subject}-${suffix}`,
     label: "",
+    published: true,
     systemMode: "assessment",
     units: [formatUnitNumber(1)],
     examParts: [],

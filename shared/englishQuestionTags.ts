@@ -60,6 +60,7 @@ export interface TagSystemGeneratedPaperConfig {
 
 export interface EnglishExamTagSystem extends EnglishExamTagSchema {
   id: EnglishExamTagTrack;
+  published?: boolean;
   systemMode?: TagSystemMode;
   generatedPaper?: TagSystemGeneratedPaperConfig;
 }
@@ -81,6 +82,7 @@ export interface SubjectQuestionTagProfile {
 export interface SubjectTagSystem {
   id: string;
   label: string;
+  published?: boolean;
   units: string[];
   examParts: string[];
   systemMode?: TagSystemMode;
@@ -96,7 +98,7 @@ export interface SubjectTagSchemaStore {
 export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
 export type EnglishExamTagSystemInput = Pick<
   EnglishExamTagSystem,
-  "id" | "label" | "units" | "examParts" | "systemMode" | "generatedPaper"
+  "id" | "label" | "published" | "units" | "examParts" | "systemMode" | "generatedPaper"
 > & {
   grammarByUnit?: Record<string, string[]>;
 };
@@ -551,6 +553,7 @@ export function normalizeEnglishTagSystems(
       return {
         id,
         label: (system.label || "").trim() || id,
+        published: system.published !== false,
         systemMode: system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
         units,
         examParts,
@@ -625,6 +628,7 @@ export function normalizeSubjectTagSystems(
     .map((system, index) => ({
       id: (system.id || "").trim() || `${subject}-system-${index + 1}`,
       label: (system.label || "").trim() || `${subject}-system-${index + 1}`,
+      published: system.published !== false,
       systemMode: system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
       units: dedupeStrings(system.units),
       examParts: dedupeStrings(system.examParts),
