@@ -465,7 +465,7 @@ export default function QuestionBank() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Teacher Home
               </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
+              <h1 className="mt-3 text-2xl font-bold tracking-tight text-[#1E3A5F] sm:text-3xl">
                 {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question Bank`}
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
@@ -478,13 +478,13 @@ export default function QuestionBank() {
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription>Question Bank Papers</CardDescription>
-                <CardTitle className="text-2xl">{summary.totalBanks}</CardTitle>
+                <CardTitle className="text-xl">{summary.totalBanks}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription>Question Bank Items</CardDescription>
-                <CardTitle className="text-2xl text-sky-700">{summary.totalItems}</CardTitle>
+                <CardTitle className="text-xl text-sky-700">{summary.totalItems}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -515,7 +515,7 @@ export default function QuestionBank() {
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle className="text-xl text-[#1E3A5F]">{paper.title}</CardTitle>
+                            <CardTitle className="text-lg text-[#1E3A5F] sm:text-xl">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
                               {paper.itemCount} items
