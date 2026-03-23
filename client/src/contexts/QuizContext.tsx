@@ -255,7 +255,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           const subject = PAPER_SUBJECT_ORDER.includes(paper.subject as PaperSubject)
             ? (paper.subject as PaperSubject)
             : "english";
-          if (!allowedSubjects.includes(subject) || !paper.published) {
+          if (!allowedSubjects.includes(subject)) {
             return [];
           }
 
