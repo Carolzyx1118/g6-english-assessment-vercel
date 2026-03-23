@@ -14,6 +14,7 @@ import DragDropFillBlank from '@/components/DragDropFillBlank';
 import AudioRecorder from '@/components/AudioRecorder';
 import { isPersistedAudioUrl } from '@/lib/audioStorage';
 import { renderTextWithFractions } from '@/lib/renderTextWithFractions';
+import { buildInlineClozeGapEntries } from '@/lib/inlineCloze';
 import {
   buildWordCompletionAnswer,
   getPictureSpellingCharacters,
@@ -1433,17 +1434,22 @@ function InlineClozeMCQSection({
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, value: number) => void;
 }) {
-  const gapEntries = questions
-    .map((question) => {
-      const match = question.question.match(/(\d+)/);
-      const gapNumber = match ? Number.parseInt(match[1], 10) : null;
-      return gapNumber ? { gapNumber, question } : null;
-    })
-    .filter((item): item is { gapNumber: number; question: MCQQuestion } => item !== null);
+  const gapEntries = buildInlineClozeGapEntries(section.passage, questions);
 
   const gapMap = new Map(gapEntries.map((entry) => [entry.gapNumber, entry.question]));
   const [selectedGap, setSelectedGap] = useState<number | null>(gapEntries[0]?.gapNumber ?? null);
   const activeQuestion = selectedGap ? gapMap.get(selectedGap) : undefined;
+
+  useEffect(() => {
+    if (gapEntries.length === 0) {
+      setSelectedGap(null);
+      return;
+    }
+
+    if (selectedGap === null || !gapMap.has(selectedGap)) {
+      setSelectedGap(gapEntries[0]?.gapNumber ?? null);
+    }
+  }, [gapEntries, gapMap, selectedGap]);
 
   const renderGap = (gapNumber: number) => {
     const question = gapMap.get(gapNumber);
