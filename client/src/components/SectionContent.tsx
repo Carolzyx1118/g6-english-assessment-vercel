@@ -1323,47 +1323,59 @@ function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: n
   );
 }
 
-// ========== WRITING (HuaZhong) ==========
+// ========== WRITING ==========
 
 function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: string; onAnswer: (v: string) => void }) {
-  const wordCount = typeof answer === 'string' ? answer.trim().split(/\s+/).filter(Boolean).length : 0;
+  const normalizedAnswer = typeof answer === 'string' ? answer : '';
+  const wordCount = normalizedAnswer.trim().split(/\s+/).filter(Boolean).length;
+  const minWords = typeof q.minWords === 'number' ? q.minWords : undefined;
+  const maxWords = typeof q.maxWords === 'number' ? q.maxWords : undefined;
+  const wordCountLabel = minWords && maxWords
+    ? `${minWords}-${maxWords} words`
+    : minWords
+      ? `At least ${minWords} words`
+      : maxWords
+        ? `Up to ${maxWords} words`
+        : q.wordCount;
+  const withinMinimum = minWords === undefined || wordCount >= minWords;
+  const withinMaximum = maxWords === undefined || wordCount <= maxWords;
+  const counterClass = wordCount === 0
+    ? 'bg-slate-100 text-slate-400'
+    : withinMinimum && withinMaximum
+      ? 'bg-emerald-100 text-emerald-600'
+      : 'bg-amber-100 text-amber-600';
+  const promptText = q.instructions || q.topic || q.prompts[0] || '';
 
   return (
     <div className="space-y-4">
-      <div className="p-5 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200">
-        <h3 className="font-bold text-lg text-slate-800 mb-2">Topic: {q.topic}</h3>
-        <p className="whitespace-pre-wrap break-words text-base text-slate-600 mb-3">{q.instructions}</p>
-        <p className="text-base text-slate-500 mb-2">You may include:</p>
-        <ul className="list-disc list-inside text-base text-slate-500 space-y-1">
-          {q.prompts.map((p, i) => (
-            <li key={i} className="whitespace-pre-wrap break-words">{p}</li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs font-medium text-slate-400">Word count: {q.wordCount}</p>
-      </div>
       {q.imageUrl && (
         <div className="flex justify-center">
           <img
             src={q.imageUrl}
-            alt={q.topic}
-            className="max-h-72 object-contain rounded-xl border border-slate-200 bg-white"
+            alt={promptText || 'Writing prompt'}
+            className="max-h-72 w-full object-contain rounded-xl border border-slate-200 bg-white"
             loading="lazy"
           />
         </div>
       )}
+      <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700">Writing Prompt</p>
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+          {promptText || 'Writing prompt goes here.'}
+        </p>
+        {wordCountLabel ? (
+          <p className="mt-2 text-xs text-slate-500">Word count: {wordCountLabel}</p>
+        ) : null}
+      </div>
       <div className="relative">
         <textarea
-          value={typeof answer === 'string' ? answer : ''}
+          value={normalizedAnswer}
           onChange={(e) => onAnswer(e.target.value)}
           className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-base text-slate-700 resize-none transition-all leading-relaxed"
           rows={12}
           placeholder="Write your composition here..."
         />
-        <div className={`absolute bottom-3 right-3 text-xs font-medium px-2 py-1 rounded-md ${
-          wordCount >= 200 && wordCount <= 250 ? 'bg-emerald-100 text-emerald-600' :
-          wordCount > 250 ? 'bg-amber-100 text-amber-600' :
-          'bg-slate-100 text-slate-400'
-        }`}>
+        <div className={`absolute bottom-3 right-3 rounded-md px-2 py-1 text-xs font-medium ${counterClass}`}>
           {wordCount} words
         </div>
       </div>
