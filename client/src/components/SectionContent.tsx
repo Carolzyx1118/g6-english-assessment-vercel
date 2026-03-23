@@ -1360,7 +1360,7 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
       )}
       <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
         <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-rose-700">Writing Prompt</p>
-        <p className="whitespace-pre-wrap break-words text-[1.3rem] leading-9 text-slate-700">
+        <p className="whitespace-pre-wrap break-words text-[1.15rem] leading-8 text-slate-700">
           {promptText || 'Writing prompt goes here.'}
         </p>
         {wordCountLabel ? (
