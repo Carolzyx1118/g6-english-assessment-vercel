@@ -722,9 +722,11 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
 
     return (
       <div className="space-y-4">
-        <div className="text-base whitespace-pre-wrap break-words text-slate-700">
-          <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-          {q.question}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+            {q.question}
+          </p>
         </div>
         {normalizedSubs.map((sub, idx) => (
           <div key={`q${q.id}-sub-${idx}`} className="ml-4 space-y-2">
@@ -746,10 +748,12 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
 
   return (
     <div className="space-y-3">
-      <p className="whitespace-pre-wrap break-words text-base text-slate-700">
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
-        {q.question}
-      </p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+          {q.question}
+        </p>
+      </div>
       {q.imageUrl && (
         <div className="flex justify-center">
           <img
@@ -2022,8 +2026,8 @@ function SectionQuestionBody({
 
           {section.sectionType === 'speaking' && section.taskDescription && (
             <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-4">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700">Task Description</p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+              <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-sky-700">Task Description</p>
+              <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-700">
                 {section.taskDescription}
               </p>
             </div>
