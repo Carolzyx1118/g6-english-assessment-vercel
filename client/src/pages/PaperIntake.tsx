@@ -1052,6 +1052,73 @@ function isManualQuestionTypeValue(value: unknown): value is ManualQuestionType 
   return typeof value === "string" && MANUAL_QUESTION_TYPES.includes(value as ManualQuestionType);
 }
 
+function normalizeAssetUrl(value?: string) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (
+    trimmed.startsWith("data:")
+    || trimmed.startsWith("blob:")
+    || trimmed.startsWith("http://")
+    || trimmed.startsWith("https://")
+  ) {
+    return trimmed;
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      return new URL(trimmed, window.location.origin).toString();
+    } catch {
+      return trimmed;
+    }
+  }
+
+  return trimmed;
+}
+
+function normalizeOptionImageAsset(image?: ManualOptionImage): ManualOptionImage | undefined {
+  if (!image) return undefined;
+  return {
+    ...image,
+    dataUrl: normalizeAssetUrl(image.dataUrl) ?? image.dataUrl,
+    previewUrl: normalizeAssetUrl(image.previewUrl),
+  };
+}
+
+function normalizeAudioAsset(audio?: ManualAudioFile): ManualAudioFile | undefined {
+  if (!audio) return undefined;
+  return {
+    ...audio,
+    dataUrl: normalizeAssetUrl(audio.dataUrl) ?? audio.dataUrl,
+    previewUrl: normalizeAssetUrl(audio.previewUrl),
+  };
+}
+
+function normalizeQuestionAssetUrls(question: ManualQuestion): ManualQuestion {
+  if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") {
+    return {
+      ...question,
+      options: question.options.map((option) => (
+        "image" in option
+          ? {
+              ...option,
+              image: normalizeOptionImageAsset(option.image),
+            }
+          : option
+      )),
+    };
+  }
+
+  if (question.type === "picture-spelling" || question.type === "word-completion" || question.type === "writing" || question.type === "speaking") {
+    return {
+      ...question,
+      image: normalizeOptionImageAsset(question.image),
+    };
+  }
+
+  return question;
+}
+
 function normalizeLoadedSubsection(
   rawSubsection: Partial<ManualSubsection> | undefined,
   paperSubject: PaperSubject,
@@ -1086,7 +1153,7 @@ function normalizeLoadedSubsection(
     }
 
     if (rawQuestionType === questionType) {
-      return rawSubsection.questions.filter(Boolean) as ManualQuestion[];
+      return rawSubsection.questions.filter(Boolean).map((question) => normalizeQuestionAssetUrls(question as ManualQuestion));
     }
 
     return baseSubsection.questions;
@@ -1115,8 +1182,8 @@ function normalizeLoadedSubsection(
     matchingDescriptions: Array.isArray(rawSubsection?.matchingDescriptions)
       ? rawSubsection.matchingDescriptions
       : baseSubsection.matchingDescriptions,
-    sceneImage: rawSubsection?.sceneImage,
-    audio: rawSubsection?.audio,
+    sceneImage: normalizeOptionImageAsset(rawSubsection?.sceneImage),
+    audio: normalizeAudioAsset(rawSubsection?.audio),
   };
 }
 
@@ -2624,9 +2691,14 @@ export default function PaperIntake() {
   };
 
   const getDurableAssetUrl = (value?: string) => {
-    if (!value) return undefined;
-    if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/")) {
-      return value;
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized) return undefined;
+    if (
+      normalized.startsWith("http://")
+      || normalized.startsWith("https://")
+      || normalized.startsWith("/")
+    ) {
+      return normalized;
     }
     return undefined;
   };
@@ -2660,8 +2732,15 @@ export default function PaperIntake() {
           sceneImage: stripImage(sub.sceneImage),
           audio: stripAudio(sub.audio),
           questions: sub.questions.map((q) => {
-            if (q.type === "mcq") {
-              return { ...q, options: q.options.map((opt) => ({ ...opt, image: stripImage(opt.image) })) };
+            if (q.type === "mcq" || q.type === "checkbox" || q.type === "passage-mcq") {
+              return {
+                ...q,
+                options: q.options.map((opt) => (
+                  "image" in opt
+                    ? { ...opt, image: stripImage(opt.image) }
+                    : opt
+                )),
+              };
             }
             if (q.type === "writing" && (q as ManualWritingQuestion).image) {
               return { ...q, image: stripImage((q as ManualWritingQuestion).image) };
@@ -3420,7 +3499,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -3468,7 +3547,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -3516,7 +3595,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to local preview when upload is unavailable.
       }
@@ -3564,7 +3643,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to local preview when upload is unavailable.
       }
@@ -4095,7 +4174,7 @@ export default function PaperIntake() {
           contentType: normalizedImage.mimeType,
           fileBase64: normalizedImage.dataUrl.split(",")[1] ?? "",
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -4141,7 +4220,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -4187,7 +4266,7 @@ export default function PaperIntake() {
           contentType: file.type,
           fileBase64,
         });
-        previewUrl = uploaded.url;
+        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
