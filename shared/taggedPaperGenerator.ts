@@ -208,10 +208,11 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
 
   for (const sourcePaper of sourcePapers) {
     if (!isFixedBlueprint(sourcePaper.blueprint)) continue;
+    const sourceIsQuestionBank = isQuestionBankOnlyBlueprint(sourcePaper.blueprint);
 
     for (const section of sourcePaper.blueprint.sections) {
       for (const subsection of section.subsections) {
-        if (SHARED_BLOCK_TYPES.has(subsection.questionType)) {
+        if (sourceIsQuestionBank || SHARED_BLOCK_TYPES.has(subsection.questionType)) {
           const profiles = getCandidateProfiles(subsection);
           candidates.push({
             id: `${sourcePaper.paperId}:${section.id}:${subsection.id}`,
@@ -219,7 +220,7 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
             sourcePaperTitle: sourcePaper.title,
             sectionType: section.sectionType,
             questionType: subsection.questionType,
-            questionCount: subsection.questions.length,
+            questionCount: sourceIsQuestionBank ? 1 : subsection.questions.length,
             subsection: cloneDeep(subsection),
             questionProfiles: profiles,
           });

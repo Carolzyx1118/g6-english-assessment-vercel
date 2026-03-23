@@ -155,6 +155,78 @@ function makePassageOpenEndedBlueprint(id: string): ManualPaperBlueprint {
   };
 }
 
+function makeSentenceReorderBlueprint(id: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 7",
+        sectionType: "reading",
+        subsections: [
+          {
+            id: `${id}-subsection`,
+            title: "",
+            instructions: "",
+            questionType: "sentence-reorder",
+            questions: [
+              {
+                id: `${id}-question-1`,
+                type: "sentence-reorder",
+                prompt: "",
+                items: [
+                  {
+                    id: `${id}-item-1`,
+                    label: "1",
+                    scrambledWords: "always / morning / she / exercises / the / in",
+                    correctAnswer: "She always exercises in the morning",
+                  },
+                ],
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 7",
+                    grammarPoints: [],
+                  },
+                },
+              },
+              {
+                id: `${id}-question-2`,
+                type: "sentence-reorder",
+                prompt: "",
+                items: [
+                  {
+                    id: `${id}-item-2`,
+                    label: "1",
+                    scrambledWords: "important / it / is / enough / get / to / sleep",
+                    correctAnswer: "It is important to get enough sleep",
+                  },
+                ],
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 7",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function makeMathFixedBlueprint(id: string, prompt: string, examPart: string): ManualPaperBlueprint {
   return {
     id,
@@ -476,5 +548,50 @@ describe("tagged random paper generation", () => {
       "Question one",
       "Question two",
     ]);
+  });
+
+  it("keeps question-bank sentence reorder blocks together instead of splitting each saved question", () => {
+    const source = makeSentenceReorderBlueprint("english-sentence-reorder");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-sentence-reorder-paper",
+      title: "Generated Sentence Reorder Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-sentence-reorder"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 7",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-part-7",
+                label: "Reading Part 7",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 7",
+                  questionTypes: ["sentence-reorder"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-sentence-reorder", title: "English Sentence Reorder", blueprint: source },
+    ]);
+
+    expect(result.blueprint.sections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections[0]?.questions).toHaveLength(2);
+    expect(result.blueprint.sections[0].subsections[0]?.questionType).toBe("sentence-reorder");
   });
 });
