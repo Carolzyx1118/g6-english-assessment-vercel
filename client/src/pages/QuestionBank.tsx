@@ -1,12 +1,24 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
-import { formatQuestionBankItemId } from "@/lib/questionBankItem";
+import { formatQuestionBankItemId, getQuestionBankItemSummary } from "@/lib/questionBankItem";
 import { trpc } from "@/lib/trpc";
 import {
   normalizeEnglishQuestionTagProfile,
@@ -14,6 +26,7 @@ import {
   type SubjectQuestionTagProfile,
 } from "@shared/englishQuestionTags";
 import {
+  MANUAL_QUESTION_TYPE_LABELS,
   type ManualAudioFile,
   type ManualCheckboxOption,
   type ManualInlineWordChoiceItem,
@@ -23,9 +36,59 @@ import {
   type ManualPaperBlueprint,
   type ManualPassageInlineWordChoiceItem,
   type ManualPassageMCQOption,
+  type ManualQuestionType,
   type ManualQuestion,
+  type ManualSection,
   type ManualSubsection,
 } from "@shared/manualPaperBlueprint";
+
+type QuestionBankPaperRecord = {
+  id: number;
+  paperId: string;
+  title: string;
+  description: string | null;
+  subject: string;
+  category: string;
+  published: boolean;
+  totalQuestions: number;
+  itemCount: number;
+  blueprintJson: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+type QuestionBankItemRecord = {
+  section: ManualSection;
+  previewSubsections: ManualSubsection[];
+  itemId: string;
+  displayTags: string[];
+  filterTags: string[];
+  examParts: string[];
+  questionTypes: ManualQuestionType[];
+  searchText: string;
+};
+
+type QuestionBankPaperView = {
+  paper: QuestionBankPaperRecord;
+  blueprint: ManualPaperBlueprint | null;
+  items: QuestionBankItemRecord[];
+};
+
+type DeleteTarget =
+  | {
+    kind: "paper";
+    key: string;
+    paper: QuestionBankPaperRecord;
+  }
+  | {
+    kind: "item";
+    key: string;
+    paper: QuestionBankPaperRecord;
+    blueprint: ManualPaperBlueprint;
+    sectionId: string;
+    itemId: string;
+    remainingItemCount: number;
+  };
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
@@ -58,6 +121,10 @@ function isVisibleTagValue(value: string | undefined | null) {
   return trimmed.toUpperCase() !== "N/A" && trimmed !== "未设置";
 }
 
+function toVisibleTagStrings(values: Array<string | undefined | null>) {
+  return values.filter((value): value is string => isVisibleTagValue(value)).map((value) => value.trim());
+}
+
 function getSubsectionTagValues(subject: PaperSubject, subsection: ManualSubsection) {
   const sharedTags = subsection.sharedQuestionTags?.[subject];
   const firstQuestionTags = subsection.questions.find((question) => question.tags?.[subject])?.tags?.[subject];
@@ -68,13 +135,100 @@ function getSubsectionTagValues(subject: PaperSubject, subsection: ManualSubsect
     const normalized = normalizeEnglishQuestionTagProfile(tags as EnglishQuestionTagProfile);
     return Array.from(
       new Set(
-        [normalized.track, normalized.ability, normalized.unit, normalized.examPart].filter(isVisibleTagValue),
+        toVisibleTagStrings([normalized.track, normalized.ability, normalized.unit, normalized.examPart]),
       ),
     );
   }
 
   const normalized = tags as SubjectQuestionTagProfile;
-  return Array.from(new Set([normalized.track, normalized.unit, normalized.examPart].filter(isVisibleTagValue)));
+  return Array.from(new Set(toVisibleTagStrings([normalized.track, normalized.unit, normalized.examPart])));
+}
+
+function getSubsectionFilterMetadata(subject: PaperSubject, subsection: ManualSubsection) {
+  const sharedTags = subsection.sharedQuestionTags?.[subject];
+  const firstQuestionTags = subsection.questions.find((question) => question.tags?.[subject])?.tags?.[subject];
+  const tags = sharedTags ?? firstQuestionTags;
+  if (!tags) {
+    return {
+      examPart: "",
+      filterTags: [] as string[],
+    };
+  }
+
+  if (subject === "english") {
+    const normalized = normalizeEnglishQuestionTagProfile(tags as EnglishQuestionTagProfile);
+    return {
+      examPart: typeof normalized.examPart === "string" && isVisibleTagValue(normalized.examPart) ? normalized.examPart.trim() : "",
+      filterTags: Array.from(
+        new Set(toVisibleTagStrings([normalized.track, normalized.ability, normalized.unit])),
+      ),
+    };
+  }
+
+  const normalized = tags as SubjectQuestionTagProfile;
+  return {
+    examPart: typeof normalized.examPart === "string" && isVisibleTagValue(normalized.examPart) ? normalized.examPart.trim() : "",
+    filterTags: Array.from(new Set(toVisibleTagStrings([normalized.track, normalized.unit]))),
+  };
+}
+
+function getQuestionSearchChunks(question: ManualQuestion): string[] {
+  const chunks: Array<string | undefined> = (() => {
+    switch (question.type) {
+    case "mcq":
+    case "passage-mcq":
+      return [
+        question.prompt,
+        ...question.options.map((option) => option.text),
+      ];
+    case "checkbox":
+      return [
+        question.prompt,
+        ...question.options.map((option) => option.text),
+      ];
+    case "fill-blank":
+    case "passage-fill-blank":
+    case "typed-fill-blank":
+    case "passage-open-ended":
+    case "writing":
+    case "speaking":
+    case "passage-matching":
+    case "heading-match":
+    case "picture-spelling":
+      return [question.prompt];
+    case "word-completion":
+      return [question.prompt, question.wordPattern];
+    case "true-false":
+      return [question.prompt, ...question.statements.map((statement) => statement.statement)];
+    case "ordering":
+      return [question.prompt, ...question.items.map((item) => item.text)];
+    case "sentence-reorder":
+      return [question.prompt, ...question.items.map((item) => `${item.scrambledWords} ${item.correctAnswer}`)];
+    case "inline-word-choice":
+      return [
+        question.prompt,
+        ...question.items.flatMap((item) => [
+          item.sentenceText,
+          item.beforeText,
+          item.afterText,
+          ...item.options.map((option) => option.text),
+        ]),
+      ];
+    case "passage-inline-word-choice":
+      return [
+        question.prompt,
+        ...question.items.flatMap((item) => item.options.map((option) => option.text)),
+      ];
+    default:
+      return [];
+    }
+  })();
+
+  return toVisibleTagStrings(chunks);
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function PreviewImage({ image, className = "h-36 w-full max-w-xs" }: { image?: ManualOptionImage; className?: string }) {
@@ -427,7 +581,14 @@ function SubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
 
 export default function QuestionBank() {
   const search = useSearch();
+  const utils = trpc.useUtils();
   const [expandedPaperIds, setExpandedPaperIds] = useState<number[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [selectedExamPart, setSelectedExamPart] = useState("all");
+  const [selectedQuestionType, setSelectedQuestionType] = useState("all");
+  const [selectedTag, setSelectedTag] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get("subject");
     return isPaperSubjectValue(value) ? value : "english";
@@ -436,16 +597,166 @@ export default function QuestionBank() {
   const listQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
+  const updateMutation = trpc.papers.updateManualPaper.useMutation();
+  const deleteMutation = trpc.papers.deleteManualPaper.useMutation();
+
+  const subjectPapers = useMemo(
+    () => ((listQuery.data ?? []) as QuestionBankPaperRecord[]).filter((paper) => paper.subject === subjectFilter),
+    [listQuery.data, subjectFilter],
+  );
+
+  const paperViews = useMemo<QuestionBankPaperView[]>(() => {
+    return subjectPapers.map((paper) => {
+      const blueprint = parseBlueprint(paper.blueprintJson);
+      const items = (blueprint?.sections ?? []).flatMap((section) => {
+        const previewSubsections = section.subsections.filter(Boolean);
+        if (previewSubsections.length === 0) return [];
+
+        const displayTags = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionTagValues(subjectFilter, subsection))));
+        const filterTagValues = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).filterTags)));
+        const examParts = Array.from(new Set(previewSubsections.map((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).examPart).filter(Boolean)));
+        const questionTypes = Array.from(new Set(previewSubsections.map((subsection) => subsection.questionType)));
+        const itemId = formatQuestionBankItemId(subjectFilter, section.id);
+        const searchChunks = [
+          paper.title,
+          paper.paperId,
+          itemId,
+          ...displayTags,
+          ...filterTagValues,
+          ...examParts,
+          ...questionTypes.map((questionType) => MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType),
+          ...previewSubsections.flatMap((subsection) => [
+            subsection.title,
+            subsection.instructions,
+            subsection.taskDescription,
+            subsection.passageText,
+            getQuestionBankItemSummary(subsection),
+            ...subsection.questions.flatMap(getQuestionSearchChunks),
+          ]),
+        ];
+
+        return [{
+          section,
+          previewSubsections,
+          itemId,
+          displayTags,
+          filterTags: filterTagValues,
+          examParts,
+          questionTypes,
+          searchText: normalizeSearchText(searchChunks.filter(Boolean).join(" ")),
+        }];
+      });
+
+      return {
+        paper,
+        blueprint,
+        items,
+      };
+    });
+  }, [subjectFilter, subjectPapers]);
+
+  const filterOptions = useMemo(() => {
+    const examPartSet = new Set<string>();
+    const questionTypeSet = new Set<ManualQuestionType>();
+    const tagSet = new Set<string>();
+
+    paperViews.forEach((paper) => {
+      paper.items.forEach((item) => {
+        item.examParts.forEach((examPart) => examPartSet.add(examPart));
+        item.questionTypes.forEach((questionType) => questionTypeSet.add(questionType));
+        item.filterTags.forEach((tag) => tagSet.add(tag));
+      });
+    });
+
+    return {
+      examParts: Array.from(examPartSet).sort((left, right) => left.localeCompare(right)),
+      questionTypes: Array.from(questionTypeSet).sort((left, right) =>
+        (MANUAL_QUESTION_TYPE_LABELS[left] ?? left).localeCompare(MANUAL_QUESTION_TYPE_LABELS[right] ?? right),
+      ),
+      tags: Array.from(tagSet).sort((left, right) => left.localeCompare(right)),
+    };
+  }, [paperViews]);
+
+  const hasActiveFilters = Boolean(searchText.trim()) || selectedExamPart !== "all" || selectedQuestionType !== "all" || selectedTag !== "all";
 
   const filteredPapers = useMemo(() => {
-    const papers = listQuery.data ?? [];
-    return papers.filter((paper) => paper.subject === subjectFilter);
-  }, [listQuery.data, subjectFilter]);
+    const keyword = normalizeSearchText(searchText);
+    return paperViews
+      .map((paper) => {
+        const filteredItems = paper.items.filter((item) => {
+          if (keyword && !item.searchText.includes(keyword)) return false;
+          if (selectedExamPart !== "all" && !item.examParts.includes(selectedExamPart)) return false;
+          if (selectedQuestionType !== "all" && !item.questionTypes.includes(selectedQuestionType as ManualQuestionType)) return false;
+          if (selectedTag !== "all" && !item.filterTags.includes(selectedTag)) return false;
+          return true;
+        });
+
+        return {
+          ...paper,
+          filteredItems,
+        };
+      })
+      .filter((paper) => (hasActiveFilters ? paper.filteredItems.length > 0 : true));
+  }, [hasActiveFilters, paperViews, searchText, selectedExamPart, selectedQuestionType, selectedTag]);
 
   const summary = useMemo(() => ({
     totalBanks: filteredPapers.length,
-    totalItems: filteredPapers.reduce((sum, paper) => sum + paper.itemCount, 0),
-  }), [filteredPapers]);
+    totalItems: filteredPapers.reduce((sum, paper) => sum + (hasActiveFilters ? paper.filteredItems.length : paper.items.length), 0),
+  }), [filteredPapers, hasActiveFilters]);
+
+  const refreshQuestionBankQueries = async () => {
+    await Promise.all([
+      utils.papers.listQuestionBankPapers.invalidate(),
+      utils.papers.listAllManualPapers.invalidate(),
+    ]);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setPendingDeleteKey(deleteTarget.key);
+
+    try {
+      if (deleteTarget.kind === "paper") {
+        await deleteMutation.mutateAsync({ id: deleteTarget.paper.id });
+        setExpandedPaperIds((current) => current.filter((id) => id !== deleteTarget.paper.id));
+        toast.success("Question bank deleted.");
+      } else if (deleteTarget.remainingItemCount <= 1) {
+        await deleteMutation.mutateAsync({ id: deleteTarget.paper.id });
+        setExpandedPaperIds((current) => current.filter((id) => id !== deleteTarget.paper.id));
+        toast.success("Question item deleted.");
+      } else {
+        const nextBlueprint: ManualPaperBlueprint = {
+          ...deleteTarget.blueprint,
+          sections: deleteTarget.blueprint.sections.filter((section) => section.id !== deleteTarget.sectionId),
+        };
+
+        await updateMutation.mutateAsync({
+          id: deleteTarget.paper.id,
+          title: deleteTarget.paper.title,
+          description: deleteTarget.paper.description ?? "",
+          subject: deleteTarget.paper.subject,
+          category: deleteTarget.paper.category,
+          published: deleteTarget.paper.published,
+          blueprintJson: JSON.stringify(nextBlueprint),
+        });
+        toast.success("Question item deleted.");
+      }
+
+      await refreshQuestionBankQueries();
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete the question bank entry.");
+    } finally {
+      setPendingDeleteKey(null);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearchText("");
+    setSelectedExamPart("all");
+    setSelectedQuestionType("all");
+    setSelectedTag("all");
+  };
 
   const toggleExpanded = (paperId: number) => {
     setExpandedPaperIds((current) =>
@@ -477,17 +788,82 @@ export default function QuestionBank() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>Question Bank Papers</CardDescription>
+                <CardDescription>{hasActiveFilters ? "Matching Question Bank Papers" : "Question Bank Papers"}</CardDescription>
                 <CardTitle className="text-xl">{summary.totalBanks}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>Question Bank Items</CardDescription>
+                <CardDescription>{hasActiveFilters ? "Matching Question Bank Items" : "Question Bank Items"}</CardDescription>
                 <CardTitle className="text-xl text-sky-700">{summary.totalItems}</CardTitle>
               </CardHeader>
             </Card>
           </div>
+
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base text-[#1E3A5F]">Filters</CardTitle>
+              <CardDescription>Search by bank ID, item ID, prompt text, or narrow the list by exam part, question type, and saved tags.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">Keyword</p>
+                <Input
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Search ID, prompt, title..."
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">Exam Part</p>
+                <select
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  value={selectedExamPart}
+                  onChange={(event) => setSelectedExamPart(event.target.value)}
+                >
+                  <option value="all">All Exam Parts</option>
+                  {filterOptions.examParts.map((examPart) => (
+                    <option key={examPart} value={examPart}>{examPart}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">Question Type</p>
+                <select
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  value={selectedQuestionType}
+                  onChange={(event) => setSelectedQuestionType(event.target.value)}
+                >
+                  <option value="all">All Question Types</option>
+                  {filterOptions.questionTypes.map((questionType) => (
+                    <option key={questionType} value={questionType}>
+                      {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">Tag</p>
+                <select
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  value={selectedTag}
+                  onChange={(event) => setSelectedTag(event.target.value)}
+                >
+                  <option value="all">All Tags</option>
+                  {filterOptions.tags.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+              {hasActiveFilters ? (
+                <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+                  <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
+                    Clear Filters
+                  </Button>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
           {listQuery.isLoading ? (
             <Card className="border-slate-200 shadow-sm">
@@ -499,15 +875,20 @@ export default function QuestionBank() {
           ) : filteredPapers.length === 0 ? (
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="py-16 text-center text-sm text-slate-500">
-                No question-bank papers have been recorded for this subject yet. Add some from Question Intake first.
+                {hasActiveFilters
+                  ? "No question-bank items match the current filters."
+                  : "No question-bank papers have been recorded for this subject yet. Add some from Question Intake first."}
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredPapers.map((paper) => {
-                const blueprint = parseBlueprint(paper.blueprintJson);
-                const items = blueprint?.sections ?? [];
+              {filteredPapers.map((paperView) => {
+                const { paper, blueprint } = paperView;
+                const items = hasActiveFilters ? paperView.filteredItems : paperView.items;
                 const expanded = expandedPaperIds.includes(paper.id);
+                const itemCountLabel = hasActiveFilters && items.length !== paperView.items.length
+                  ? `${items.length} of ${paperView.items.length} items`
+                  : `${paperView.items.length} items`;
 
                 return (
                   <Card key={paper.id} className="border-slate-200 shadow-sm">
@@ -518,7 +899,7 @@ export default function QuestionBank() {
                             <CardTitle className="text-base text-[#1E3A5F] sm:text-lg">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                              {paper.itemCount} items
+                              {itemCountLabel}
                             </Badge>
                           </div>
                           <CardDescription>
@@ -533,6 +914,26 @@ export default function QuestionBank() {
                               Edit
                             </Button>
                           </Link>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            disabled={Boolean(pendingDeleteKey)}
+                            onClick={() =>
+                              setDeleteTarget({
+                                kind: "paper",
+                                key: `paper-${paper.id}`,
+                                paper,
+                              })
+                            }
+                          >
+                            {pendingDeleteKey === `paper-${paper.id}` && deleteMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-2 h-4 w-4" />
+                            )}
+                            Delete Bank
+                          </Button>
                           <Button
                             type="button"
                             variant="outline"
@@ -554,36 +955,44 @@ export default function QuestionBank() {
                       <CardContent className="space-y-3">
                         {items.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                            There are no visible items in this question bank paper yet.
+                            {hasActiveFilters
+                              ? "This bank has no items that match the current filters."
+                              : "There are no visible items in this question bank paper yet."}
                           </div>
                         ) : (
-                          items.map((section) => {
-                            const previewSubsections = section.subsections.filter(Boolean);
-                            const primarySubsection = previewSubsections[0];
+                          items.map((item) => {
+                            const primarySubsection = item.previewSubsections[0];
                             if (!primarySubsection) return null;
-                            const tagValues = getSubsectionTagValues(paper.subject as PaperSubject, primarySubsection);
 
                             return (
                               <div
-                                key={`${paper.paperId}-${section.id}`}
+                                key={`${paper.paperId}-${item.section.id}`}
                                 className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
                               >
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                   <div className="space-y-2">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <Badge className="rounded-full bg-[#1E3A5F] px-3 py-1 text-white hover:bg-[#1E3A5F]">
-                                        {formatQuestionBankItemId(paper.subject as PaperSubject, section.id)}
+                                        {item.itemId}
                                       </Badge>
-                                      {tagValues.map((tag) => (
-                                        <Badge key={`${section.id}-${tag}`} variant="outline">
+                                      {item.questionTypes.map((questionType) => (
+                                        <Badge key={`${item.section.id}-${questionType}`} className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
+                                          {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}
+                                        </Badge>
+                                      ))}
+                                      {item.displayTags.map((tag) => (
+                                        <Badge key={`${item.section.id}-${tag}`} variant="outline">
                                           {tag}
                                         </Badge>
                                       ))}
                                     </div>
+                                    <p className="text-sm text-slate-500">
+                                      {getQuestionBankItemSummary(primarySubsection)}
+                                    </p>
                                     <div className="space-y-4">
-                                      {previewSubsections.map((subsection, subsectionIndex) => (
+                                      {item.previewSubsections.map((subsection, subsectionIndex) => (
                                         <div key={subsection.id} className="space-y-3">
-                                          {previewSubsections.length > 1 ? (
+                                          {item.previewSubsections.length > 1 ? (
                                             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
                                               Block {subsectionIndex + 1}
                                             </p>
@@ -593,6 +1002,31 @@ export default function QuestionBank() {
                                       ))}
                                     </div>
                                   </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    disabled={Boolean(pendingDeleteKey) || !blueprint}
+                                    onClick={() => {
+                                      if (!blueprint) return;
+                                      setDeleteTarget({
+                                        kind: "item",
+                                        key: `item-${paper.id}-${item.section.id}`,
+                                        paper,
+                                        blueprint,
+                                        sectionId: item.section.id,
+                                        itemId: item.itemId,
+                                        remainingItemCount: paperView.items.length,
+                                      });
+                                    }}
+                                  >
+                                    {pendingDeleteKey === `item-${paper.id}-${item.section.id}` && (deleteMutation.isPending || updateMutation.isPending) ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Delete Item
+                                  </Button>
                                 </div>
                               </div>
                             );
@@ -607,6 +1041,39 @@ export default function QuestionBank() {
           )}
         </div>
       </div>
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && !pendingDeleteKey && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.kind === "item" ? "Delete this question item?" : "Delete this question bank?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.kind === "item"
+                ? `This will permanently remove ${deleteTarget.itemId} from "${deleteTarget.paper.title}". This action cannot be undone.`
+                : deleteTarget
+                  ? `This will permanently delete "${deleteTarget.paper.title}" and all saved question-bank items inside it. This action cannot be undone.`
+                  : "This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(pendingDeleteKey)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={Boolean(pendingDeleteKey)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {pendingDeleteKey ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TeacherToolsLayout>
   );
 }
