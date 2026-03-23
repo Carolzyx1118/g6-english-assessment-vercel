@@ -724,7 +724,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
       <div className="space-y-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700">
+          <p className="whitespace-pre-wrap break-words text-[1.3rem] leading-9 text-slate-700">
             {q.question}
           </p>
         </div>
@@ -750,7 +750,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
     <div className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700">
+        <p className="whitespace-pre-wrap break-words text-[1.3rem] leading-9 text-slate-700">
           {q.question}
         </p>
       </div>
@@ -1360,7 +1360,7 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
       )}
       <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700">Writing Prompt</p>
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700">
+        <p className="whitespace-pre-wrap break-words text-[1.3rem] leading-9 text-slate-700">
           {promptText || 'Writing prompt goes here.'}
         </p>
         {wordCountLabel ? (
