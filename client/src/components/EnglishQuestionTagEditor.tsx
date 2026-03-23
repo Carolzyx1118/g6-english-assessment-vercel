@@ -2,6 +2,7 @@ import type { ManualQuestionTags, ManualQuestionType, ManualSectionType } from "
 import {
   ENGLISH_TAG_ABILITY_OPTIONS,
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
+  getEnglishAbilityFromExamPart,
   getEnglishExamTagSchema,
   normalizeEnglishQuestionTagProfile,
   type EnglishExamTagAbility,
@@ -63,8 +64,17 @@ export default function EnglishQuestionTagEditor({
     value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack),
   );
   const safeTrack = schemaEntries.some(([track]) => track === rawProfile.track) ? rawProfile.track : defaultTrack;
-  const profile = safeTrack === rawProfile.track ? rawProfile : { ...rawProfile, track: safeTrack };
-  const schema = getEnglishExamTagSchema(profile.track, schemas);
+  const schema = getEnglishExamTagSchema(safeTrack, schemas);
+  const systemMode = schema.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
+  const profileBase = safeTrack === rawProfile.track ? rawProfile : { ...rawProfile, track: safeTrack };
+  const profile = (
+    systemMode === "assessment"
+      ? {
+          ...profileBase,
+          ability: getEnglishAbilityFromExamPart(profileBase.examPart) ?? profileBase.ability,
+        }
+      : profileBase
+  ) satisfies EnglishQuestionTagProfile;
   const grammarUnit = profile.grammarUnit || profile.unit;
   const grammarOptions = grammarUnit ? (schema.grammarByUnit[grammarUnit] ?? []) : [];
 
@@ -110,15 +120,35 @@ export default function EnglishQuestionTagEditor({
             onChange={(event) => {
               const nextTrack = event.target.value as EnglishExamTagTrack;
               const nextSchema = getEnglishExamTagSchema(nextTrack, schemas);
+              const nextSystemMode = nextSchema.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
               handleProfileChange((current) => ({
                 ...current,
                 track: nextTrack,
-                unit: nextSchema.units.includes(current.unit || "") ? current.unit : undefined,
-                examPart: nextSchema.examParts.includes(current.examPart || "") ? current.examPart : undefined,
-                grammarUnit: nextSchema.units.includes(current.grammarUnit || "") ? current.grammarUnit : undefined,
-                grammarPoints: (current.grammarPoints ?? []).filter((point) =>
-                  Object.values(nextSchema.grammarByUnit).some((points) => points.includes(point)),
-                ),
+                unit:
+                  nextSystemMode === "textbook-practice" && nextSchema.units.includes(current.unit || "")
+                    ? current.unit
+                    : undefined,
+                examPart:
+                  nextSystemMode === "assessment" && nextSchema.examParts.includes(current.examPart || "")
+                    ? current.examPart
+                    : undefined,
+                ability:
+                  nextSystemMode === "assessment"
+                    ? getEnglishAbilityFromExamPart(
+                        nextSchema.examParts.includes(current.examPart || "") ? current.examPart : undefined,
+                      ) ?? current.ability
+                    : current.ability,
+                grammarUnit:
+                  nextSystemMode === "textbook-practice" && nextSchema.units.includes(current.grammarUnit || "")
+                    ? current.grammarUnit
+                    : undefined,
+                grammarPoints:
+                  nextSystemMode === "textbook-practice"
+                    ? (current.grammarPoints ?? []).filter((point) =>
+                        Object.values(nextSchema.grammarByUnit).some((points) => points.includes(point)),
+                      )
+                    : [],
+                difficulty: nextSystemMode === "textbook-practice" ? current.difficulty : undefined,
               }));
             }}
           >
@@ -128,73 +158,85 @@ export default function EnglishQuestionTagEditor({
           </select>
         </div>
 
-        <div className="space-y-2">
-          <Label>Skill</Label>
-          <select
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={profile.ability}
-            onChange={(event) => {
-              const nextAbility = event.target.value as EnglishExamTagAbility;
-              handleProfileChange((current) => ({
-                ...current,
-                ability: nextAbility,
-                grammarPoints: nextAbility === "Grammar" ? current.grammarPoints ?? [] : [],
-                difficulty: nextAbility === "Grammar" ? current.difficulty : undefined,
-              }));
-            }}
-          >
-            {ENGLISH_TAG_ABILITY_OPTIONS.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
+        {systemMode === "assessment" ? (
+          <div className="space-y-2">
+            <Label>Exam Part</Label>
+            <select
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={profile.examPart || ""}
+              onChange={(event) => {
+                const nextPart = event.target.value || undefined;
+                handleProfileChange((current) => ({
+                  ...current,
+                  examPart: nextPart,
+                  unit: undefined,
+                  ability: getEnglishAbilityFromExamPart(nextPart) ?? current.ability,
+                  grammarUnit: undefined,
+                  grammarPoints: [],
+                  difficulty: undefined,
+                }));
+              }}
+            >
+              <option value="">N/A</option>
+              {schema.examParts.map((part) => (
+                <option key={part} value={part}>{part}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label>Skill</Label>
+              <select
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={profile.ability}
+                onChange={(event) => {
+                  const nextAbility = event.target.value as EnglishExamTagAbility;
+                  handleProfileChange((current) => ({
+                    ...current,
+                    examPart: undefined,
+                    ability: nextAbility,
+                    grammarPoints: nextAbility === "Grammar" ? current.grammarPoints ?? [] : [],
+                    difficulty: nextAbility === "Grammar" ? current.difficulty : undefined,
+                  }));
+                }}
+              >
+                {ENGLISH_TAG_ABILITY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
 
-        <div className="space-y-2">
-          <Label>Unit</Label>
-          <select
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={profile.unit || ""}
-            onChange={(event) => {
-              const nextUnit = event.target.value || undefined;
-              handleProfileChange((current) => ({
-                ...current,
-                unit: nextUnit,
-                grammarUnit: current.ability === "Grammar" ? (nextUnit || current.grammarUnit) : current.grammarUnit,
-                grammarPoints: current.ability === "Grammar" && nextUnit && current.grammarUnit !== nextUnit
-                  ? []
-                  : current.grammarPoints ?? [],
-              }));
-            }}
-          >
-            <option value="">N/A</option>
-            {schema.units.map((unit) => (
-              <option key={unit} value={unit}>{unit}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Exam Part</Label>
-          <select
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={profile.examPart || ""}
-            onChange={(event) => {
-              const nextPart = event.target.value || undefined;
-              handleProfileChange((current) => ({
-                ...current,
-                examPart: nextPart,
-              }));
-            }}
-          >
-            <option value="">N/A</option>
-            {schema.examParts.map((part) => (
-              <option key={part} value={part}>{part}</option>
-            ))}
-          </select>
-        </div>
+            <div className="space-y-2">
+              <Label>Unit</Label>
+              <select
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={profile.unit || ""}
+                onChange={(event) => {
+                  const nextUnit = event.target.value || undefined;
+                  handleProfileChange((current) => ({
+                    ...current,
+                    unit: nextUnit,
+                    examPart: undefined,
+                    grammarUnit: current.ability === "Grammar" ? (nextUnit || current.grammarUnit) : current.grammarUnit,
+                    grammarPoints:
+                      current.ability === "Grammar" && nextUnit && current.grammarUnit !== nextUnit
+                        ? []
+                        : current.grammarPoints ?? [],
+                  }));
+                }}
+              >
+                <option value="">N/A</option>
+                {schema.units.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
-      {profile.ability === "Grammar" ? (
+      {systemMode === "textbook-practice" && profile.ability === "Grammar" ? (
         <div className="space-y-4 rounded-xl border border-amber-100 bg-white/90 p-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
