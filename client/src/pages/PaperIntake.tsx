@@ -995,6 +995,8 @@ function normalizeSectionsForQuestionBankMode(
 
 const MANUAL_SECTION_TYPES = Object.keys(MANUAL_SECTION_TYPE_LABELS) as ManualSectionType[];
 const MANUAL_QUESTION_TYPES = Object.keys(MANUAL_QUESTION_TYPE_LABELS) as ManualQuestionType[];
+const DEFAULT_PAPER_BUILD_MODE: ManualPaperBuildMode = "fixed";
+const DEFAULT_PAPER_VISIBILITY_MODE: ManualPaperVisibilityMode = "question-bank";
 
 function isManualSectionTypeValue(value: unknown): value is ManualSectionType {
   return typeof value === "string" && MANUAL_SECTION_TYPES.includes(value as ManualSectionType);
@@ -2219,8 +2221,8 @@ export default function PaperIntake() {
   const [createdAt, setCreatedAt] = useState(() => new Date().toISOString());
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [buildMode, setBuildMode] = useState<ManualPaperBuildMode>("fixed");
-  const [visibilityMode, setVisibilityMode] = useState<ManualPaperVisibilityMode>("student");
+  const [buildMode, setBuildMode] = useState<ManualPaperBuildMode>(DEFAULT_PAPER_BUILD_MODE);
+  const [visibilityMode, setVisibilityMode] = useState<ManualPaperVisibilityMode>(DEFAULT_PAPER_VISIBILITY_MODE);
   const [generationConfig, setGenerationConfig] = useState<ManualPaperGenerationConfig>(() => createGenerationConfig());
   const [sections, setSections] = useState<ManualSection[]>([createSection(getDefaultSectionTypeForSubject(requestedSubject))]);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
@@ -2394,8 +2396,8 @@ export default function PaperIntake() {
     setCreatedAt(new Date().toISOString());
     setTitle("");
     setDescription("");
-    setBuildMode("fixed");
-    setVisibilityMode("student");
+    setBuildMode(DEFAULT_PAPER_BUILD_MODE);
+    setVisibilityMode(DEFAULT_PAPER_VISIBILITY_MODE);
     setGenerationConfig(createGenerationConfig());
     setSections([nextSection]);
     setExpandedImageBlocks(buildExpandedImageBlockState([nextSection]));
@@ -4368,15 +4370,6 @@ export default function PaperIntake() {
                 <div className="space-y-2">
                   <Label>Mode</Label>
                   <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                    <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                      <input
-                        type="radio"
-                        className="mr-2"
-                        checked={buildMode === "fixed" && visibilityMode === "student"}
-                        onChange={activateFixedMode}
-                      />
-                      <span className="font-medium text-slate-900">固定套卷</span>
-                    </label>
                     <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
                       <input
                         type="radio"
@@ -4385,6 +4378,15 @@ export default function PaperIntake() {
                         onChange={activateQuestionBankMode}
                       />
                       <span className="font-medium text-slate-900">题库随机</span>
+                    </label>
+                    <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={buildMode === "fixed" && visibilityMode === "student"}
+                        onChange={activateFixedMode}
+                      />
+                      <span className="font-medium text-slate-900">固定套卷</span>
                     </label>
                     {buildMode === "generated" ? (
                       <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
