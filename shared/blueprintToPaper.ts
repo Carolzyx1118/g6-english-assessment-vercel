@@ -176,7 +176,7 @@ function convertSingleQuestion(
     const prompt = "prompt" in q && typeof q.prompt === "string" && q.prompt.trim()
       ? q.prompt
       : subsection.instructions?.trim() || "Record your answer.";
-    const imageUrl = ("image" in q && q.image ? getAssetUrl(q.image) : undefined) || getAssetUrl(subsection.sceneImage);
+    const imageUrl = "image" in q && q.image ? getAssetUrl(q.image) : undefined;
 
     return {
       id,
