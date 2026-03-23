@@ -137,6 +137,7 @@ export default function PaperManager() {
       await Promise.all([
         utils.papers.listAllManualPapers.invalidate(),
         utils.papers.listManualPapers.invalidate(),
+        utils.papers.listQuestionBankPapers.invalidate(),
       ]);
     },
   });
@@ -145,6 +146,7 @@ export default function PaperManager() {
       await Promise.all([
         utils.papers.listAllManualPapers.invalidate(),
         utils.papers.listManualPapers.invalidate(),
+        utils.papers.listQuestionBankPapers.invalidate(),
       ]);
     },
   });
@@ -153,6 +155,7 @@ export default function PaperManager() {
       await Promise.all([
         utils.papers.listAllManualPapers.invalidate(),
         utils.papers.listManualPapers.invalidate(),
+        utils.papers.listQuestionBankPapers.invalidate(),
       ]);
     },
   });

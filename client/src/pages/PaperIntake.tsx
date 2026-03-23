@@ -4090,6 +4090,7 @@ export default function PaperIntake() {
         await Promise.all([
           utils.papers.listManualPapers.invalidate(),
           utils.papers.listAllManualPapers.invalidate(),
+          utils.papers.listQuestionBankPapers.invalidate(),
           utils.papers.getManualPaperDetail.invalidate({ paperId: editingPaperMeta.paperId }),
         ]);
         autosavePausedRef.current = true;
@@ -4113,6 +4114,7 @@ export default function PaperIntake() {
       await Promise.all([
         utils.papers.listManualPapers.invalidate(),
         utils.papers.listAllManualPapers.invalidate(),
+        utils.papers.listQuestionBankPapers.invalidate(),
       ]);
       autosavePausedRef.current = true;
       clearPaperBuilderDraft(draftStorageKey);
@@ -4159,6 +4161,7 @@ export default function PaperIntake() {
       await Promise.all([
         utils.papers.listManualPapers.invalidate(),
         utils.papers.listAllManualPapers.invalidate(),
+        utils.papers.listQuestionBankPapers.invalidate(),
       ]);
       toast.success("Draft copy created.");
       setTimeout(() => navigate(managerHref), 1200);

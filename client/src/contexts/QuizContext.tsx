@@ -426,18 +426,27 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, [allPapers, selectedPaper]);
 
   useEffect(() => {
-    if (!selectedPaper || isStarted) return;
+    if (!selectedPaper) return;
 
     const latestPaper = allPapers.find((paper) => paper.id === selectedPaper.id);
     if (!latestPaper || latestPaper === selectedPaper) return;
 
+    const canRefreshWhileStarted =
+      selectedPaper.isGeneratedPaper === true
+      && isStarted
+      && !state.submitted
+      && Object.keys(state.answers).length === 0;
+
+    if (isStarted && !canRefreshWhileStarted) return;
+
     setSelectedPaper(latestPaper);
-    currentSectionIdRef.current = latestPaper.sections[0]?.id || '';
     setState((prev) => ({
       ...prev,
       currentSectionIndex: Math.min(prev.currentSectionIndex, Math.max(latestPaper.sections.length - 1, 0)),
     }));
-  }, [allPapers, isStarted, selectedPaper]);
+    const nextSectionIndex = Math.min(state.currentSectionIndex, Math.max(latestPaper.sections.length - 1, 0));
+    currentSectionIdRef.current = latestPaper.sections[nextSectionIndex]?.id || latestPaper.sections[0]?.id || '';
+  }, [allPapers, isStarted, selectedPaper, state.answers, state.currentSectionIndex, state.submitted]);
 
   useEffect(() => {
     if (!isStarted || state.submitted || !selectedPaper) return;
