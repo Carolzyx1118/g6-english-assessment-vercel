@@ -177,7 +177,9 @@ export default function EnglishQuestionTagEditor({
                 }));
               }}
             >
-              <option value="">N/A</option>
+              <option value="" disabled>
+                Select Exam Part
+              </option>
               {schema.examParts.map((part) => (
                 <option key={part} value={part}>{part}</option>
               ))}
@@ -226,7 +228,9 @@ export default function EnglishQuestionTagEditor({
                   }));
                 }}
               >
-                <option value="">N/A</option>
+                <option value="" disabled>
+                  Select Unit
+                </option>
                 {schema.units.map((unit) => (
                   <option key={unit} value={unit}>{unit}</option>
                 ))}
