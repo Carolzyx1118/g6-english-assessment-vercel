@@ -6315,7 +6315,8 @@ export default function PaperIntake() {
                                   <div className="space-y-2">
                                     <Label>Main Task Description <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
                                     <Textarea
-                                      rows={3}
+                                      rows={10}
+                                      className="min-h-[24rem] resize-y [field-sizing:fixed]"
                                       value={subsection.taskDescription ?? ""}
                                       onChange={(event) =>
                                         updateSubsection(section.id, subsection.id, (currentSubsection) => ({
