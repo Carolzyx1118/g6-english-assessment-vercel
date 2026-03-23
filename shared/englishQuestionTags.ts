@@ -28,6 +28,7 @@ export interface EnglishQuestionTagProfile {
 
 export interface EnglishExamTagSchema {
   label: string;
+  systemMode: TagSystemMode;
   units: string[];
   examParts: string[];
   abilities: EnglishExamTagAbility[];
@@ -61,7 +62,7 @@ export interface TagSystemGeneratedPaperConfig {
 export interface EnglishExamTagSystem extends EnglishExamTagSchema {
   id: EnglishExamTagTrack;
   published?: boolean;
-  systemMode?: TagSystemMode;
+  systemMode: TagSystemMode;
   generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
@@ -85,7 +86,7 @@ export interface SubjectTagSystem {
   published?: boolean;
   units: string[];
   examParts: string[];
-  systemMode?: TagSystemMode;
+  systemMode: TagSystemMode;
   generatedPaper?: TagSystemGeneratedPaperConfig;
 }
 
@@ -98,8 +99,9 @@ export interface SubjectTagSchemaStore {
 export type EnglishExamTagSchemaMap = Record<EnglishExamTagTrack, EnglishExamTagSchema>;
 export type EnglishExamTagSystemInput = Pick<
   EnglishExamTagSystem,
-  "id" | "label" | "published" | "units" | "examParts" | "systemMode" | "generatedPaper"
+  "id" | "label" | "published" | "units" | "examParts" | "generatedPaper"
 > & {
+  systemMode?: TagSystemMode;
   grammarByUnit?: Record<string, string[]>;
 };
 
@@ -245,6 +247,26 @@ function getEnglishPartPrefix(examPart: string) {
   const normalized = normalizeEnglishExamPartLabel(examPart);
   const partMatch = normalized.match(/^(.*?)\s*Part\s*\d+$/i);
   return partMatch?.[1]?.trim() || normalized.trim() || "Reading";
+}
+
+export function getEnglishAbilityFromExamPart(
+  examPart?: string,
+): "Vocabulary" | "Grammar" | "Reading" | "Listening" | "Writing" | "Speaking" | undefined {
+  if (!examPart) return undefined;
+
+  const prefix = getEnglishPartPrefix(examPart);
+  if (
+    prefix === "Vocabulary"
+    || prefix === "Grammar"
+    || prefix === "Reading"
+    || prefix === "Listening"
+    || prefix === "Writing"
+    || prefix === "Speaking"
+  ) {
+    return prefix;
+  }
+
+  return undefined;
 }
 
 export function getGeneratedQuestionTypeOptions(

@@ -85,7 +85,10 @@ import {
   getBlueprintBuildMode,
   getBlueprintVisibilityMode,
 } from "@shared/taggedPaperGenerator";
-import { normalizeEnglishTagAbility } from "@shared/englishQuestionTags";
+import {
+  getEnglishAbilityFromExamPart,
+  normalizeEnglishTagAbility,
+} from "@shared/englishQuestionTags";
 import { toast } from "sonner";
 import PassageMCQPreview from "@/components/PassageMCQPreview";
 
@@ -239,7 +242,19 @@ function inferQuestionBankSectionType(
     return "writing";
   }
 
-  const taggedAbility = subsection.questions.find((question) => question.tags?.english?.ability)?.tags?.english?.ability;
+  const sharedEnglishTags = subsection.sharedQuestionTags?.english;
+  const firstQuestionEnglishTags = subsection.questions.find((question) => question.tags?.english)?.tags?.english;
+
+  const taggedExamPart =
+    sharedEnglishTags?.examPart ?? firstQuestionEnglishTags?.examPart;
+  const abilityFromExamPart = getEnglishAbilityFromExamPart(taggedExamPart);
+  const taggedExamPartSectionType = getEnglishSectionTypeFromAbility(abilityFromExamPart);
+  if (taggedExamPartSectionType) {
+    return taggedExamPartSectionType;
+  }
+
+  const taggedAbility =
+    sharedEnglishTags?.ability ?? firstQuestionEnglishTags?.ability;
   const taggedSectionType = getEnglishSectionTypeFromAbility(taggedAbility);
   if (taggedSectionType) {
     return taggedSectionType;
