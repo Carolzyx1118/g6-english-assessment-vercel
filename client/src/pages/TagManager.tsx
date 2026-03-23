@@ -611,14 +611,17 @@ export default function TagManager() {
                         <div className="space-y-2">
                           <Label>Paper Name</Label>
                           <Input
-                            value={buildGeneratedPaperConfig(
-                              subjectFilter,
-                              system.label,
-                              system.examParts,
-                              system.generatedPaper,
-                              system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
-                              system.units,
-                            ).title}
+                            value={
+                              system.generatedPaper?.title
+                              ?? buildGeneratedPaperConfig(
+                                subjectFilter,
+                                system.label,
+                                system.examParts,
+                                system.generatedPaper,
+                                system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                                system.units,
+                              ).title
+                            }
                             onChange={(event) => {
                               const nextTitle = event.target.value;
                               if (subjectFilter === "english") {
@@ -663,14 +666,17 @@ export default function TagManager() {
                         <div className="space-y-2">
                           <Label>Description</Label>
                           <Input
-                            value={buildGeneratedPaperConfig(
-                              subjectFilter,
-                              system.label,
-                              system.examParts,
-                              system.generatedPaper,
-                              system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
-                              system.units,
-                            ).description}
+                            value={
+                              system.generatedPaper?.description
+                              ?? buildGeneratedPaperConfig(
+                                subjectFilter,
+                                system.label,
+                                system.examParts,
+                                system.generatedPaper,
+                                system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                                system.units,
+                              ).description
+                            }
                             onChange={(event) =>
                               updateGeneratedPaper(system.id, (current) => ({
                                 ...current,
