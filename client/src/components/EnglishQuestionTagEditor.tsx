@@ -1,4 +1,10 @@
-import type { ManualQuestionTags, ManualQuestionType, ManualSectionType } from "@shared/manualPaperBlueprint";
+import { useEffect } from "react";
+import {
+  MANUAL_QUESTION_TYPE_LABELS,
+  type ManualQuestionTags,
+  type ManualQuestionType,
+  type ManualSectionType,
+} from "@shared/manualPaperBlueprint";
 import {
   ENGLISH_TAG_ABILITY_OPTIONS,
   ENGLISH_TAG_DIFFICULTY_OPTIONS,
@@ -58,7 +64,7 @@ export default function EnglishQuestionTagEditor({
   questionType,
   onChange,
 }: EnglishQuestionTagEditorProps) {
-  const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
+  const { data: systems, schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
 
   const rawProfile = normalizeEnglishQuestionTagProfile(
     value?.english ?? createDefaultProfile(sectionType, questionType, defaultTrack),
@@ -66,6 +72,7 @@ export default function EnglishQuestionTagEditor({
   const safeTrack = schemaEntries.some(([track]) => track === rawProfile.track) ? rawProfile.track : defaultTrack;
   const schema = getEnglishExamTagSchema(safeTrack, schemas);
   const systemMode = schema.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
+  const selectedSystem = systems?.find((system) => system.id === safeTrack);
   const profileBase = safeTrack === rawProfile.track ? rawProfile : { ...rawProfile, track: safeTrack };
   const profile = (
     systemMode === "assessment"
@@ -77,6 +84,22 @@ export default function EnglishQuestionTagEditor({
   ) satisfies EnglishQuestionTagProfile;
   const grammarUnit = profile.grammarUnit || profile.unit;
   const grammarOptions = grammarUnit ? (schema.grammarByUnit[grammarUnit] ?? []) : [];
+  const questionTypeLabel = MANUAL_QUESTION_TYPE_LABELS[questionType];
+  const compatibleExamParts = systemMode === "assessment"
+    ? schema.examParts.filter((part) => {
+        const configuredQuestionType = selectedSystem?.generatedPaper?.parts.find((item) => item.examPart === part)?.questionType;
+        return !configuredQuestionType || configuredQuestionType === questionType;
+      })
+    : [];
+  const selectedExamPartQuestionType = profile.examPart
+    ? selectedSystem?.generatedPaper?.parts.find((item) => item.examPart === profile.examPart)?.questionType
+    : undefined;
+  const hasExamPartQuestionTypeConflict = Boolean(
+    systemMode === "assessment"
+    && profile.examPart
+    && selectedExamPartQuestionType
+    && selectedExamPartQuestionType !== questionType,
+  );
 
   const handleProfileChange = (updater: (profile: EnglishQuestionTagProfile) => EnglishQuestionTagProfile) => {
     onChange(updateProfileValue(value, updater(profile)));
@@ -93,6 +116,16 @@ export default function EnglishQuestionTagEditor({
       : [...values, targetValue];
     updater(nextValues);
   };
+
+  useEffect(() => {
+    if (systemMode !== "assessment" || !profile.examPart) return;
+    if (compatibleExamParts.includes(profile.examPart)) return;
+
+    onChange(updateProfileValue(value, {
+      ...profile,
+      examPart: undefined,
+    }));
+  }, [compatibleExamParts, onChange, profile, systemMode, value]);
 
   return (
     <div className="space-y-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
@@ -163,7 +196,7 @@ export default function EnglishQuestionTagEditor({
             <Label>Exam Part</Label>
             <select
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={profile.examPart || ""}
+              value={compatibleExamParts.includes(profile.examPart || "") ? (profile.examPart || "") : ""}
               onChange={(event) => {
                 const nextPart = event.target.value || undefined;
                 handleProfileChange((current) => ({
@@ -180,10 +213,23 @@ export default function EnglishQuestionTagEditor({
               <option value="" disabled>
                 Select Exam Part
               </option>
-              {schema.examParts.map((part) => (
+              {compatibleExamParts.map((part) => (
                 <option key={part} value={part}>{part}</option>
               ))}
             </select>
+            {compatibleExamParts.length === 0 ? (
+              <p className="text-xs text-amber-600">
+                No exam parts in this system are configured for `{questionTypeLabel}`. Update Paper Structure or change this block type.
+              </p>
+            ) : hasExamPartQuestionTypeConflict ? (
+              <p className="text-xs text-amber-600">
+                This block is `{questionTypeLabel}`, but `{profile.examPart}` is configured for `{MANUAL_QUESTION_TYPE_LABELS[selectedExamPartQuestionType as ManualQuestionType] ?? selectedExamPartQuestionType}`.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Only exam parts configured for `{questionTypeLabel}` are available here.
+              </p>
+            )}
           </div>
         ) : (
           <>
