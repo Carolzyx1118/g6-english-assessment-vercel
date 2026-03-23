@@ -16,6 +16,11 @@ export interface StudentInfo {
   grade: string;
 }
 
+interface PersistedSelectedPaperMeta {
+  id: string;
+  title: string;
+}
+
 type QuizAnswerValue = string | number | number[];
 
 interface QuizState {
@@ -30,6 +35,7 @@ interface PersistedQuizSession {
   version: 1;
   username: string;
   selectedPaperId: string | null;
+  selectedPaperMeta: PersistedSelectedPaperMeta | null;
   state: QuizState;
   isStarted: boolean;
   studentInfo: StudentInfo | null;
@@ -132,7 +138,7 @@ function sentenceReorderAnswerToString(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-function readPersistedQuizSession(): PersistedQuizSession | null {
+export function readPersistedQuizSession(): PersistedQuizSession | null {
   if (typeof window === 'undefined') return null;
 
   try {
@@ -146,6 +152,12 @@ function readPersistedQuizSession(): PersistedQuizSession | null {
       version: 1,
       username: parsed.username,
       selectedPaperId: typeof parsed.selectedPaperId === 'string' ? parsed.selectedPaperId : null,
+      selectedPaperMeta: parsed.selectedPaperMeta && typeof parsed.selectedPaperMeta === 'object'
+        ? {
+            id: typeof parsed.selectedPaperMeta.id === 'string' ? parsed.selectedPaperMeta.id : '',
+            title: typeof parsed.selectedPaperMeta.title === 'string' ? parsed.selectedPaperMeta.title : '',
+          }
+        : null,
       state: {
         currentSectionIndex: typeof parsed.state?.currentSectionIndex === 'number' ? parsed.state.currentSectionIndex : 0,
         answers: parsed.state?.answers && typeof parsed.state.answers === 'object' ? parsed.state.answers : {},
@@ -396,6 +408,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       version: 1,
       username: user.username,
       selectedPaperId: selectedPaper?.id ?? null,
+      selectedPaperMeta: selectedPaper
+        ? {
+            id: selectedPaper.id,
+            title: selectedPaper.title,
+          }
+        : null,
       state,
       isStarted,
       studentInfo,

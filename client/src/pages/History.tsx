@@ -40,6 +40,7 @@ import { getAudioSourceType, isLikelyAudioUrl } from '@/lib/audioStorage';
 import { getGeneratedPaperSubjectFromPaperId } from '@/lib/historySubjects';
 import {
   getPaperById,
+  papers as staticPapers,
   type Paper,
   type PaperCategory,
   PAPER_SUBJECT_LABELS,
@@ -162,6 +163,10 @@ function formatSectionLabel(sectionId: string) {
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === 'string' && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
+}
+
+function normalizePaperTitleKey(value: string | null | undefined) {
+  return (value || '').trim().toLowerCase();
 }
 
 function getGradeInfo(correct: number, total: number) {
@@ -452,6 +457,15 @@ function HistoryContent() {
   const manualPapersQuery = trpc.papers.listAllManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
+  const { data: englishTagSystemsData } = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
+    staleTime: 5_000,
+  });
+  const { data: mathTagSystemsData } = trpc.papers.getMathTagSystems.useQuery(undefined, {
+    staleTime: 5_000,
+  });
+  const { data: vocabularyTagSystemsData } = trpc.papers.getVocabularyTagSystems.useQuery(undefined, {
+    staleTime: 5_000,
+  });
   const deleteMutation = trpc.results.delete.useMutation({
     onSuccess: async (_data, variables) => {
       await refetch();
@@ -492,7 +506,43 @@ function HistoryContent() {
     );
   }, [manualPapersQuery.data]);
 
-  const getResultSubject = (paperId: string): PaperSubject | null => {
+  const paperTitleSubjectMap = useMemo(() => {
+    const entries: Array<[string, PaperSubject]> = [];
+    const addEntry = (title: string | null | undefined, subject: PaperSubject) => {
+      const key = normalizePaperTitleKey(title);
+      if (!key) return;
+      entries.push([key, subject]);
+    };
+
+    staticPapers.forEach((paper) => {
+      if (isPaperSubjectValue(paper.subject)) {
+        addEntry(paper.title, paper.subject);
+      }
+    });
+    (manualPapersQuery.data ?? []).forEach((paper) => {
+      if (isPaperSubjectValue(paper.subject)) {
+        addEntry(paper.title, paper.subject);
+      }
+    });
+    (englishTagSystemsData ?? []).forEach((system) => {
+      addEntry(system.generatedPaper?.title?.trim() || system.label, 'english');
+    });
+    (mathTagSystemsData ?? []).forEach((system) => {
+      addEntry(system.generatedPaper?.title?.trim() || system.label, 'math');
+    });
+    (vocabularyTagSystemsData ?? []).forEach((system) => {
+      addEntry(system.generatedPaper?.title?.trim() || system.label, 'vocabulary');
+    });
+
+    return new Map(entries);
+  }, [
+    englishTagSystemsData,
+    manualPapersQuery.data,
+    mathTagSystemsData,
+    vocabularyTagSystemsData,
+  ]);
+
+  const getResultSubject = (paperId: string, paperTitle: string): PaperSubject | null => {
     const staticPaper = getPaperById(paperId);
     if (staticPaper && isPaperSubjectValue(staticPaper.subject)) {
       return staticPaper.subject;
@@ -502,14 +552,19 @@ function HistoryContent() {
       return generatedSubject;
     }
     const manualSubject = manualPaperSubjectMap.get(paperId);
-    return isPaperSubjectValue(manualSubject) ? manualSubject : null;
+    if (isPaperSubjectValue(manualSubject)) {
+      return manualSubject;
+    }
+
+    const titleSubject = paperTitleSubjectMap.get(normalizePaperTitleKey(paperTitle));
+    return isPaperSubjectValue(titleSubject) ? titleSubject : null;
   };
 
   const filteredResults = useMemo(() => {
     if (!results) return [];
     if (!subjectFilter) return results;
-    return results.filter((result) => getResultSubject(result.paperId) === subjectFilter);
-  }, [results, subjectFilter, manualPaperSubjectMap]);
+    return results.filter((result) => getResultSubject(result.paperId, result.paperTitle) === subjectFilter);
+  }, [paperTitleSubjectMap, results, subjectFilter, manualPaperSubjectMap]);
   const historySummary = useMemo(() => {
     const total = filteredResults.length;
     const reportReady = filteredResults.filter((result) => result.hasReport).length;
@@ -904,7 +959,7 @@ function HistoryContent() {
                     const gradeInfo = getGradeInfo(r.totalCorrect, r.totalQuestions);
                     const isExpanded = selectedId === r.id;
                     const currentDetail = isExpanded && detail?.id === r.id ? detail : null;
-                    const resultSubject = getResultSubject(r.paperId);
+                    const resultSubject = getResultSubject(r.paperId, r.paperTitle);
 
                     return (
                       <motion.div
