@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mic, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
@@ -31,6 +31,7 @@ import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import EnglishQuestionTagEditor from "@/components/EnglishQuestionTagEditor";
 import SubjectQuestionTagEditor from "@/components/SubjectQuestionTagEditor";
 import GeneratedPaperConfigEditor, { type GeneratedSourcePaperOption } from "@/components/GeneratedPaperConfigEditor";
+import { useEnglishTagSchemas } from "@/hooks/useEnglishTagSchemas";
 import type {
   ManualAudioFile,
   ManualCheckboxOption,
@@ -362,6 +363,62 @@ const manualQuestionTypeOptionMap = new Map(
 
 function getDisplayedQuestionType(questionType: ManualQuestionType): ManualQuestionType {
   return questionType === "heading-match" ? "passage-matching" : questionType;
+}
+
+function getStoredQuestionTagsForSubsection(subsection: ManualSubsection) {
+  return subsection.sharedQuestionTags
+    ?? subsection.questions.find((question) => question.tags)?.tags;
+}
+
+function applySharedQuestionTags<T extends ManualQuestion>(
+  question: T,
+  tags: ManualQuestionTags | undefined,
+): T {
+  return {
+    ...question,
+    tags,
+  };
+}
+
+function replaceSubsectionQuestionType(
+  subsection: ManualSubsection,
+  nextQuestionType: ManualQuestionType,
+  sharedTags: ManualQuestionTags | undefined,
+): ManualSubsection {
+  if (getDisplayedQuestionType(subsection.questionType) === nextQuestionType) {
+    return {
+      ...subsection,
+      sharedQuestionTags: sharedTags,
+      questions: subsection.questions.map((question) => ({
+        ...question,
+        tags: sharedTags,
+      })),
+    };
+  }
+
+  const nextSubsection = createSubsection(nextQuestionType);
+  return {
+    ...subsection,
+    questionType: nextQuestionType,
+    wordBank: nextSubsection.wordBank,
+    questions: nextSubsection.questions.map((question) => applySharedQuestionTags(question, sharedTags)),
+    passageText: nextSubsection.passageText,
+    matchingDescriptions: nextSubsection.matchingDescriptions,
+    sharedQuestionTags: sharedTags,
+  };
+}
+
+function filterQuestionTypeGroupsByAllowedTypes(
+  groups: Array<{ label: string; values: ManualQuestionType[] }>,
+  allowedTypes: ManualQuestionType[],
+) {
+  const allowed = new Set(allowedTypes);
+  return groups
+    .map((group) => ({
+      ...group,
+      values: group.values.filter((value) => allowed.has(value)),
+    }))
+    .filter((group) => group.values.length > 0);
 }
 
 function relabelOptions(options: ManualMCQOption[]) {
@@ -2179,6 +2236,7 @@ export default function PaperIntake() {
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
   const isMathPaper = paperSubject === "math";
   const isEnglishPaper = paperSubject === "english";
+  const { data: englishTagSystemsData } = useEnglishTagSchemas();
   const publishedManualPapersQuery = trpc.papers.listManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
@@ -2196,6 +2254,70 @@ export default function PaperIntake() {
   const publishActionLabel = isQuestionBankMode
     ? (isEditing && currentPublished ? "Update Question" : "Submit Question")
     : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper");
+
+  const getConfiguredEnglishQuestionTypeForTags = useCallback((tags: ManualQuestionTags | undefined) => {
+    if (!isQuestionBankMode || paperSubject !== "english") return undefined;
+
+    const englishTags = tags?.english;
+    if (!englishTags?.track || !englishTags.examPart) return undefined;
+
+    const system = englishTagSystemsData?.find((candidate) => candidate.id === englishTags.track);
+    const configuredQuestionType = system?.generatedPaper?.parts.find(
+      (part) => part.examPart === englishTags.examPart,
+    )?.questionType;
+
+    return isManualQuestionTypeValue(configuredQuestionType) ? configuredQuestionType : undefined;
+  }, [englishTagSystemsData, isQuestionBankMode, paperSubject]);
+
+  const getConfiguredEnglishQuestionTypeForSubsection = useCallback((subsection: ManualSubsection) => (
+    getConfiguredEnglishQuestionTypeForTags(getStoredQuestionTagsForSubsection(subsection))
+  ), [getConfiguredEnglishQuestionTypeForTags]);
+
+  const getQuestionTypeGroupsForSubsection = useCallback((subsection: ManualSubsection) => {
+    const configuredQuestionType = getConfiguredEnglishQuestionTypeForSubsection(subsection);
+    if (!configuredQuestionType) {
+      return questionTypeGroups;
+    }
+
+    const filteredGroups = filterQuestionTypeGroupsByAllowedTypes(questionTypeGroups, [configuredQuestionType]);
+    return filteredGroups.length > 0 ? filteredGroups : questionTypeGroups;
+  }, [getConfiguredEnglishQuestionTypeForSubsection, questionTypeGroups]);
+
+  useEffect(() => {
+    if (!isQuestionBankMode || paperSubject !== "english") return;
+
+    setSections((prev) => {
+      let hasChanges = false;
+      const nextSections = prev.map((section) => {
+        let sectionChanged = false;
+        const nextSubsections = section.subsections.map((subsection) => {
+          const configuredQuestionType = getConfiguredEnglishQuestionTypeForSubsection(subsection);
+          if (!configuredQuestionType || getDisplayedQuestionType(subsection.questionType) === configuredQuestionType) {
+            return subsection;
+          }
+
+          sectionChanged = true;
+          return replaceSubsectionQuestionType(
+            subsection,
+            configuredQuestionType,
+            getStoredQuestionTagsForSubsection(subsection),
+          );
+        });
+
+        if (!sectionChanged) {
+          return section;
+        }
+
+        hasChanges = true;
+        return normalizeQuestionBankSection({
+          ...section,
+          subsections: nextSubsections,
+        }, paperSubject);
+      });
+
+      return hasChanges ? nextSections : prev;
+    });
+  }, [getConfiguredEnglishQuestionTypeForSubsection, isQuestionBankMode, paperSubject]);
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: editPaperId },
@@ -2569,23 +2691,25 @@ export default function PaperIntake() {
     subsectionId: string,
     tags: ManualQuestionTags | undefined,
   ) => {
-    updateSubsection(sectionId, subsectionId, (subsection) => ({
-      ...subsection,
-      sharedQuestionTags: tags,
-      questions: subsection.questions.map((question) => ({
-        ...question,
-        tags,
-      })),
-    }));
-  };
+    updateSubsection(sectionId, subsectionId, (subsection) => {
+      const configuredQuestionType = getConfiguredEnglishQuestionTypeForTags(tags);
+      if (
+        configuredQuestionType
+        && getDisplayedQuestionType(subsection.questionType) !== configuredQuestionType
+      ) {
+        return replaceSubsectionQuestionType(subsection, configuredQuestionType, tags);
+      }
 
-  const applySharedQuestionTags = <T extends ManualQuestion>(
-    question: T,
-    tags: ManualQuestionTags | undefined,
-  ): T => ({
-    ...question,
-    tags,
-  });
+      return {
+        ...subsection,
+        sharedQuestionTags: tags,
+        questions: subsection.questions.map((question) => ({
+          ...question,
+          tags,
+        })),
+      };
+    });
+  };
 
   const renderQuestionTagEditor = (
     sectionId: string,
@@ -3451,17 +3575,7 @@ export default function PaperIntake() {
         return subsection;
       }
 
-      const nextSubsection = createSubsection(nextQuestionType);
-
-      return {
-        ...subsection,
-        questionType: nextQuestionType,
-        wordBank: nextSubsection.wordBank,
-        questions: nextSubsection.questions.map((question) => applySharedQuestionTags(question, subsection.sharedQuestionTags)),
-        passageText: nextSubsection.passageText,
-        matchingDescriptions: nextSubsection.matchingDescriptions,
-        sharedQuestionTags: subsection.sharedQuestionTags,
-      };
+      return replaceSubsectionQuestionType(subsection, nextQuestionType, subsection.sharedQuestionTags);
     });
   };
 
@@ -4486,8 +4600,19 @@ export default function PaperIntake() {
                               })()
                             ) : (
                               <>
+                                {(() => {
+                                  const availableQuestionTypeGroups = getQuestionTypeGroupsForSubsection(subsection);
+                                  const configuredQuestionType = getConfiguredEnglishQuestionTypeForSubsection(subsection);
+                                  const configuredExamPart = getStoredQuestionTagsForSubsection(subsection)?.english?.examPart;
+                                  const currentQuestionType = getDisplayedQuestionType(subsection.questionType);
+                                  const helperText = configuredQuestionType && configuredExamPart
+                                    ? `\`${configuredExamPart}\` only uses \`${MANUAL_QUESTION_TYPE_LABELS[configuredQuestionType]}\`.`
+                                    : manualQuestionTypeOptionMap.get(currentQuestionType)?.description;
+
+                                  return (
+                                    <>
                                 <select
-                                  value={getDisplayedQuestionType(subsection.questionType)}
+                                  value={currentQuestionType}
                                   onChange={(event) =>
                                     changeSubsectionQuestionType(
                                       section.id,
@@ -4497,7 +4622,7 @@ export default function PaperIntake() {
                                   }
                                   className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                                 >
-                                  {questionTypeGroups.map((group) => (
+                                  {availableQuestionTypeGroups.map((group) => (
                                     <optgroup key={group.label} label={group.label}>
                                       {group.values.map((value) => {
                                         const option = manualQuestionTypeOptionMap.get(value);
@@ -4513,8 +4638,11 @@ export default function PaperIntake() {
                                   ))}
                                 </select>
                                 <p className="text-xs text-slate-500">
-                                  {manualQuestionTypeOptionMap.get(getDisplayedQuestionType(subsection.questionType))?.description}
+                                  {helperText}
                                 </p>
+                                    </>
+                                  );
+                                })()}
                               </>
                             )}
                           </div>

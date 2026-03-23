@@ -84,22 +84,10 @@ export default function EnglishQuestionTagEditor({
   ) satisfies EnglishQuestionTagProfile;
   const grammarUnit = profile.grammarUnit || profile.unit;
   const grammarOptions = grammarUnit ? (schema.grammarByUnit[grammarUnit] ?? []) : [];
-  const questionTypeLabel = MANUAL_QUESTION_TYPE_LABELS[questionType];
-  const compatibleExamParts = systemMode === "assessment"
-    ? schema.examParts.filter((part) => {
-        const configuredQuestionType = selectedSystem?.generatedPaper?.parts.find((item) => item.examPart === part)?.questionType;
-        return !configuredQuestionType || configuredQuestionType === questionType;
-      })
-    : [];
+  const availableExamParts = systemMode === "assessment" ? schema.examParts : [];
   const selectedExamPartQuestionType = profile.examPart
     ? selectedSystem?.generatedPaper?.parts.find((item) => item.examPart === profile.examPart)?.questionType
     : undefined;
-  const hasExamPartQuestionTypeConflict = Boolean(
-    systemMode === "assessment"
-    && profile.examPart
-    && selectedExamPartQuestionType
-    && selectedExamPartQuestionType !== questionType,
-  );
 
   const handleProfileChange = (updater: (profile: EnglishQuestionTagProfile) => EnglishQuestionTagProfile) => {
     onChange(updateProfileValue(value, updater(profile)));
@@ -119,13 +107,13 @@ export default function EnglishQuestionTagEditor({
 
   useEffect(() => {
     if (systemMode !== "assessment" || !profile.examPart) return;
-    if (compatibleExamParts.includes(profile.examPart)) return;
+    if (availableExamParts.includes(profile.examPart)) return;
 
     onChange(updateProfileValue(value, {
       ...profile,
       examPart: undefined,
     }));
-  }, [compatibleExamParts, onChange, profile, systemMode, value]);
+  }, [availableExamParts, onChange, profile, systemMode, value]);
 
   return (
     <div className="space-y-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
@@ -196,7 +184,7 @@ export default function EnglishQuestionTagEditor({
             <Label>Exam Part</Label>
             <select
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={compatibleExamParts.includes(profile.examPart || "") ? (profile.examPart || "") : ""}
+              value={availableExamParts.includes(profile.examPart || "") ? (profile.examPart || "") : ""}
               onChange={(event) => {
                 const nextPart = event.target.value || undefined;
                 handleProfileChange((current) => ({
@@ -213,21 +201,21 @@ export default function EnglishQuestionTagEditor({
               <option value="" disabled>
                 Select Exam Part
               </option>
-              {compatibleExamParts.map((part) => (
+              {availableExamParts.map((part) => (
                 <option key={part} value={part}>{part}</option>
               ))}
             </select>
-            {compatibleExamParts.length === 0 ? (
+            {availableExamParts.length === 0 ? (
               <p className="text-xs text-amber-600">
-                No exam parts in this system are configured for `{questionTypeLabel}`. Update Paper Structure or change this block type.
+                No exam parts are configured for this system yet. Update Paper Structure first.
               </p>
-            ) : hasExamPartQuestionTypeConflict ? (
+            ) : profile.examPart && selectedExamPartQuestionType ? (
               <p className="text-xs text-amber-600">
-                This block is `{questionTypeLabel}`, but `{profile.examPart}` is configured for `{MANUAL_QUESTION_TYPE_LABELS[selectedExamPartQuestionType as ManualQuestionType] ?? selectedExamPartQuestionType}`.
+                `{profile.examPart}` is configured for `{MANUAL_QUESTION_TYPE_LABELS[selectedExamPartQuestionType as ManualQuestionType] ?? selectedExamPartQuestionType}`. The Question Type below will follow this part.
               </p>
             ) : (
               <p className="text-xs text-slate-500">
-                Only exam parts configured for `{questionTypeLabel}` are available here.
+                Choose the exam part first. The Question Type options below will update to match it.
               </p>
             )}
           </div>
