@@ -291,4 +291,48 @@ describe("manual paper file fallback", () => {
     expect(vocabularySystems[0].label).toBe("Core Vocabulary");
     expect(allPapers).toHaveLength(0);
   });
+
+  it("persists empty tag-system lists when the last generator is deleted", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    await caller.papers.saveEnglishTagSystems({
+      systems: [
+        {
+          id: "ket",
+          label: "KET",
+          units: ["Unit 1"],
+          examParts: ["Reading Part 1"],
+          grammarByUnit: {},
+        },
+      ],
+    });
+    await caller.papers.saveMathTagSystems({
+      systems: [
+        {
+          id: "school-math",
+          label: "School Math",
+          units: ["Unit 1"],
+          examParts: ["选择题"],
+        },
+      ],
+    });
+    await caller.papers.saveVocabularyTagSystems({
+      systems: [
+        {
+          id: "core-vocabulary",
+          label: "Core Vocabulary",
+          units: ["Unit 1"],
+          examParts: ["词义匹配"],
+        },
+      ],
+    });
+
+    await caller.papers.saveEnglishTagSystems({ systems: [] });
+    await caller.papers.saveMathTagSystems({ systems: [] });
+    await caller.papers.saveVocabularyTagSystems({ systems: [] });
+
+    expect(await caller.papers.getEnglishTagSystems()).toEqual([]);
+    expect(await caller.papers.getMathTagSystems()).toEqual([]);
+    expect(await caller.papers.getVocabularyTagSystems()).toEqual([]);
+  });
 });

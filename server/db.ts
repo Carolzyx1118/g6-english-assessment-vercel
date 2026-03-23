@@ -10,6 +10,7 @@ import {
   normalizeEnglishTagSystems,
   type ConfigurableTagSubject,
   type EnglishExamTagSystem,
+  type EnglishExamTagSystemInput,
   type EnglishTagSchemaStore,
   type SubjectTagSchemaStore,
   type SubjectTagSystem,
@@ -120,7 +121,9 @@ function parseEnglishTagSchemaStore(raw: string | null | undefined): EnglishTagS
     return {
       version: 1,
       subject: "english",
-      systems: normalizeEnglishTagSystems(parsed.systems as EnglishExamTagSystem[] | undefined),
+      systems: normalizeEnglishTagSystems(parsed.systems as EnglishExamTagSystem[] | undefined, {
+        fallbackToDefaults: false,
+      }),
     };
   } catch {
     return createDefaultEnglishTagSchemaStore();
@@ -140,7 +143,9 @@ function parseSubjectTagSchemaStore(
     return {
       version: 1,
       subject,
-      systems: normalizeSubjectTagSystems(subject, parsed.systems as SubjectTagSystem[] | undefined),
+      systems: normalizeSubjectTagSystems(subject, parsed.systems as SubjectTagSystem[] | undefined, {
+        fallbackToDefaults: false,
+      }),
     };
   } catch {
     return createDefaultSubjectTagSchemaStore(subject);
@@ -639,8 +644,8 @@ export async function getEnglishTagSystems(): Promise<EnglishExamTagSystem[]> {
   return parseEnglishTagSchemaStore(store?.blueprintJson).systems;
 }
 
-export async function saveEnglishTagSystems(systems: EnglishExamTagSystem[]): Promise<void> {
-  const normalizedSystems = normalizeEnglishTagSystems(systems);
+export async function saveEnglishTagSystems(systems: EnglishExamTagSystemInput[]): Promise<void> {
+  const normalizedSystems = normalizeEnglishTagSystems(systems, { fallbackToDefaults: false });
   const store = await getManualPaperByPaperId(ENGLISH_TAG_SCHEMA_STORE_PAPER_ID);
   const payload = {
     paperId: ENGLISH_TAG_SCHEMA_STORE_PAPER_ID,
@@ -673,7 +678,7 @@ export async function getMathTagSystems(): Promise<SubjectTagSystem[]> {
 }
 
 export async function saveMathTagSystems(systems: SubjectTagSystem[]): Promise<void> {
-  const normalizedSystems = normalizeSubjectTagSystems("math", systems);
+  const normalizedSystems = normalizeSubjectTagSystems("math", systems, { fallbackToDefaults: false });
   const meta = getTagSchemaStoreMeta("math");
   const store = await getManualPaperByPaperId(meta.paperId);
   const payload = {
@@ -707,7 +712,7 @@ export async function getVocabularyTagSystems(): Promise<SubjectTagSystem[]> {
 }
 
 export async function saveVocabularyTagSystems(systems: SubjectTagSystem[]): Promise<void> {
-  const normalizedSystems = normalizeSubjectTagSystems("vocabulary", systems);
+  const normalizedSystems = normalizeSubjectTagSystems("vocabulary", systems, { fallbackToDefaults: false });
   const meta = getTagSchemaStoreMeta("vocabulary");
   const store = await getManualPaperByPaperId(meta.paperId);
   const payload = {

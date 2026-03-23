@@ -558,7 +558,9 @@ export function createDefaultEnglishTagSchemaStore(): EnglishTagSchemaStore {
 
 export function normalizeEnglishTagSystems(
   input: EnglishExamTagSystemInput[] | undefined | null,
+  options?: { fallbackToDefaults?: boolean },
 ) {
+  const fallbackToDefaults = options?.fallbackToDefaults !== false;
   const systems = (input ?? [])
     .map((system, index) => {
       const id = (system.id || "").trim() || `system-${index + 1}`;
@@ -593,7 +595,8 @@ export function normalizeEnglishTagSystems(
     })
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
 
-  return systems.length > 0 ? systems : [...DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS];
+  if (systems.length > 0) return systems;
+  return fallbackToDefaults ? [...DEFAULT_ENGLISH_EXAM_TAG_SYSTEMS] : [];
 }
 
 export function getEnglishExamTagEntries(
@@ -644,7 +647,9 @@ export function createDefaultSubjectTagSchemaStore(
 export function normalizeSubjectTagSystems(
   subject: Exclude<ConfigurableTagSubject, "english">,
   input: SubjectTagSystem[] | undefined | null,
+  options?: { fallbackToDefaults?: boolean },
 ) {
+  const fallbackToDefaults = options?.fallbackToDefaults !== false;
   const systems = (input ?? [])
     .map((system, index) => ({
       id: (system.id || "").trim() || `${subject}-system-${index + 1}`,
@@ -664,5 +669,6 @@ export function normalizeSubjectTagSystems(
     } satisfies SubjectTagSystem))
     .filter((system, index, current) => current.findIndex((item) => item.id === system.id) === index);
 
-  return systems.length > 0 ? systems : getDefaultSubjectTagSystems(subject);
+  if (systems.length > 0) return systems;
+  return fallbackToDefaults ? getDefaultSubjectTagSystems(subject) : [];
 }

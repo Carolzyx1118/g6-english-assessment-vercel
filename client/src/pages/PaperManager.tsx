@@ -40,8 +40,6 @@ import {
 import { buildTagSystemPapers } from "@/lib/tagSystemPapers";
 import type { ManualPaperBlueprint } from "@shared/manualPaperBlueprint";
 import {
-  normalizeEnglishTagSystems,
-  normalizeSubjectTagSystems,
   type EnglishExamTagSystem,
   type SubjectTagSystem,
 } from "@shared/englishQuestionTags";
@@ -297,7 +295,7 @@ export default function PaperManager() {
   ) => {
     if (subject === "english") {
       await saveEnglishSystemsMutation.mutateAsync({
-        systems: normalizeEnglishTagSystems(nextSystems as EnglishExamTagSystem[]),
+        systems: nextSystems as EnglishExamTagSystem[],
       });
       await utils.papers.getEnglishTagSystems.invalidate();
       return;
@@ -305,14 +303,14 @@ export default function PaperManager() {
 
     if (subject === "math") {
       await saveMathSystemsMutation.mutateAsync({
-        systems: normalizeSubjectTagSystems("math", nextSystems as SubjectTagSystem[]),
+        systems: nextSystems as SubjectTagSystem[],
       });
       await utils.papers.getMathTagSystems.invalidate();
       return;
     }
 
     await saveVocabularySystemsMutation.mutateAsync({
-      systems: normalizeSubjectTagSystems("vocabulary", nextSystems as SubjectTagSystem[]),
+      systems: nextSystems as SubjectTagSystem[],
     });
     await utils.papers.getVocabularyTagSystems.invalidate();
   };

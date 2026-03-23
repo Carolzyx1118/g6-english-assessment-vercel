@@ -26,7 +26,6 @@ import {
 } from "../shared/blueprintToPaper";
 import { getBlueprintBuildMode, getBlueprintVisibilityMode } from "../shared/taggedPaperGenerator";
 import { z } from "zod";
-import { normalizeEnglishTagSystems, normalizeSubjectTagSystems } from "../shared/englishQuestionTags";
 
 const englishTagSystemInputSchema = z.object({
   id: z.string().min(1),
@@ -293,10 +292,10 @@ export const paperRouter = router({
   }),
 
   saveEnglishTagSystems: publicProcedure
-    .input(z.object({ systems: z.array(englishTagSystemInputSchema).min(1) }))
+    .input(z.object({ systems: z.array(englishTagSystemInputSchema) }))
     .mutation(async ({ input }) => {
       try {
-        await saveEnglishTagSystems(normalizeEnglishTagSystems(input.systems));
+        await saveEnglishTagSystems(input.systems);
         return { success: true };
       } catch (err) {
         throw new TRPCError({
@@ -307,10 +306,10 @@ export const paperRouter = router({
     }),
 
   saveMathTagSystems: publicProcedure
-    .input(z.object({ systems: z.array(basicTagSystemInputSchema).min(1) }))
+    .input(z.object({ systems: z.array(basicTagSystemInputSchema) }))
     .mutation(async ({ input }) => {
       try {
-        await saveMathTagSystems(normalizeSubjectTagSystems("math", input.systems));
+        await saveMathTagSystems(input.systems);
         return { success: true };
       } catch (err) {
         throw new TRPCError({
@@ -321,10 +320,10 @@ export const paperRouter = router({
     }),
 
   saveVocabularyTagSystems: publicProcedure
-    .input(z.object({ systems: z.array(basicTagSystemInputSchema).min(1) }))
+    .input(z.object({ systems: z.array(basicTagSystemInputSchema) }))
     .mutation(async ({ input }) => {
       try {
-        await saveVocabularyTagSystems(normalizeSubjectTagSystems("vocabulary", input.systems));
+        await saveVocabularyTagSystems(input.systems);
         return { success: true };
       } catch (err) {
         throw new TRPCError({
