@@ -2363,7 +2363,7 @@ export default function PaperIntake() {
 
       return hasChanges ? nextSections : prev;
     });
-  }, [getConfiguredEnglishQuestionTypeForSubsection, isQuestionBankMode, paperSubject]);
+  }, [getConfiguredEnglishQuestionTypeForSubsection, isQuestionBankMode, paperSubject, sections]);
 
   const editPaperQuery = trpc.papers.getManualPaperDetail.useQuery(
     { paperId: editPaperId },
@@ -2779,8 +2779,8 @@ export default function PaperIntake() {
     if (!isQuestionBankMode) return null;
 
     const sourceQuestion = subsection.questions[0];
-    const sharedTags = sourceQuestion?.tags ?? subsection.sharedQuestionTags;
-    const sharedQuestionType = sourceQuestion?.type ?? subsection.questionType;
+    const sharedTags = subsection.sharedQuestionTags ?? sourceQuestion?.tags;
+    const sharedQuestionType = subsection.questionType;
 
     if (paperSubject === "english") {
       return (
@@ -4651,6 +4651,12 @@ export default function PaperIntake() {
                                   const configuredQuestionType = getConfiguredEnglishQuestionTypeForSubsection(subsection);
                                   const configuredExamPart = getStoredQuestionTagsForSubsection(subsection)?.english?.examPart;
                                   const currentQuestionType = getDisplayedQuestionType(subsection.questionType);
+                                  const availableQuestionTypes = availableQuestionTypeGroups.flatMap((group) => group.values);
+                                  const selectValue = availableQuestionTypes.includes(currentQuestionType)
+                                    ? currentQuestionType
+                                    : configuredQuestionType && availableQuestionTypes.includes(configuredQuestionType)
+                                      ? configuredQuestionType
+                                      : availableQuestionTypes[0] ?? currentQuestionType;
                                   const helperText = configuredQuestionType && configuredExamPart
                                     ? `\`${configuredExamPart}\` only uses \`${MANUAL_QUESTION_TYPE_LABELS[configuredQuestionType]}\`.`
                                     : manualQuestionTypeOptionMap.get(currentQuestionType)?.description;
@@ -4658,7 +4664,7 @@ export default function PaperIntake() {
                                   return (
                                     <>
                                 <select
-                                  value={currentQuestionType}
+                                  value={selectValue}
                                   onChange={(event) =>
                                     changeSubsectionQuestionType(
                                       section.id,
