@@ -1235,7 +1235,7 @@ function PassageInlineWordChoiceCard({
             const parts = paragraph.split(/___/g);
 
             return (
-              <p key={`passage-paragraph-${paragraphIndex}`} className="text-base leading-8 text-slate-700">
+              <p key={`passage-paragraph-${paragraphIndex}`} className="text-base leading-[2.45] text-slate-700">
                 {parts.map((part, partIndex) => {
                   const item = partIndex < parts.length - 1 ? q.items[blankIndex++] : undefined;
                   const selectedIndex = item ? getSerializedAnswerIndex(parsed, item.label) : undefined;
@@ -1484,7 +1484,7 @@ function InlineClozeMCQSection({
   const renderParagraph = (paragraph: string, index: number) => {
     const parts = paragraph.split(/(\(\d+\) ___)/g);
     return (
-      <p key={index} className="whitespace-pre-wrap break-words text-base text-slate-700 leading-[2.2]">
+      <p key={index} className="whitespace-pre-wrap break-words text-base text-slate-700 leading-[2.5]">
         {parts.map((part, partIndex) => {
           const match = part.match(/\((\d+)\) ___/);
           if (!match) {
@@ -1508,7 +1508,7 @@ function InlineClozeMCQSection({
       {section.passage && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 font-bold text-sm uppercase tracking-wider text-indigo-700">Passage</div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {section.passage.split('\n\n').filter(Boolean).map(renderParagraph)}
           </div>
         </div>
