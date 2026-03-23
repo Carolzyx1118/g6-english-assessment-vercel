@@ -167,7 +167,6 @@ function buildAssessmentSections(
   if (!config) return [];
 
   return config.parts
-    .filter((part) => Math.max(0, Number(part.totalQuestions || 0)) > 0)
     .map((part, index) => ({
       id: `part-${index + 1}`,
       title: part.examPart,
