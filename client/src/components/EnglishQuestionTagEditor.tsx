@@ -211,7 +211,9 @@ export default function EnglishQuestionTagEditor({
               </p>
             ) : profile.examPart && selectedExamPartQuestionType ? (
               <p className="text-xs text-amber-600">
-                `{profile.examPart}` is configured for `{MANUAL_QUESTION_TYPE_LABELS[selectedExamPartQuestionType as ManualQuestionType] ?? selectedExamPartQuestionType}`. The Question Type below will follow this part.
+                {profile.examPart} uses{" "}
+                {MANUAL_QUESTION_TYPE_LABELS[selectedExamPartQuestionType as ManualQuestionType] ?? selectedExamPartQuestionType}
+                . The Question Type below will update automatically.
               </p>
             ) : (
               <p className="text-xs text-slate-500">
@@ -350,7 +352,8 @@ export default function EnglishQuestionTagEditor({
 
       {systemMode === "textbook-practice" && (profile.ability === "Writing" || profile.ability === "Speaking") ? (
         <p className="text-xs text-amber-600">
-          `{profile.ability}` skill will lock the Question Type below to `{MANUAL_QUESTION_TYPE_LABELS[(profile.ability === "Writing" ? "writing" : "speaking") as ManualQuestionType]}`.
+          Selecting the {profile.ability} skill locks the Question Type below to{" "}
+          {MANUAL_QUESTION_TYPE_LABELS[(profile.ability === "Writing" ? "writing" : "speaking") as ManualQuestionType]}.
         </p>
       ) : null}
     </div>
