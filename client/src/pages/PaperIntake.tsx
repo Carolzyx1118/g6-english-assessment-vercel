@@ -4247,12 +4247,17 @@ export default function PaperIntake() {
           published,
           blueprintJson: JSON.stringify(preparedBlueprint),
         });
-        await Promise.all([
+        void Promise.allSettled([
           utils.papers.listManualPapers.invalidate(),
           utils.papers.listAllManualPapers.invalidate(),
           utils.papers.listQuestionBankPapers.invalidate(),
           utils.papers.getManualPaperDetail.invalidate({ paperId: editingPaperMeta.paperId }),
-        ]);
+        ]).then((results) => {
+          const rejected = results.filter((result) => result.status === "rejected");
+          if (rejected.length > 0) {
+            console.error("[PaperIntake] Post-save invalidation failed:", rejected);
+          }
+        });
         autosavePausedRef.current = true;
         clearPaperBuilderDraft(draftStorageKey);
         setCurrentPublished(published);
@@ -4271,11 +4276,16 @@ export default function PaperIntake() {
         published,
         blueprintJson: JSON.stringify(preparedBlueprint),
       });
-      await Promise.all([
+      void Promise.allSettled([
         utils.papers.listManualPapers.invalidate(),
         utils.papers.listAllManualPapers.invalidate(),
         utils.papers.listQuestionBankPapers.invalidate(),
-      ]);
+      ]).then((results) => {
+        const rejected = results.filter((result) => result.status === "rejected");
+        if (rejected.length > 0) {
+          console.error("[PaperIntake] Post-save invalidation failed:", rejected);
+        }
+      });
       autosavePausedRef.current = true;
       clearPaperBuilderDraft(draftStorageKey);
       setCurrentPublished(published);
