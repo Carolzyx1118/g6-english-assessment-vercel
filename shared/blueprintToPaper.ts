@@ -563,7 +563,7 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
         displayNumber: subsectionIndex + 1,
         questionType: subsection.questionType,
         instructions: subsection.instructions?.trim() || undefined,
-        taskDescription: subsection.questionType === "speaking"
+        taskDescription: subsection.questionType === "speaking" || subsection.questionType === "writing"
           ? subsection.taskDescription?.trim() || undefined
           : undefined,
         questionIds: convertedQuestions.map((question) => question.id),

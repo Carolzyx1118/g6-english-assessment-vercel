@@ -1284,6 +1284,7 @@ function buildBlueprint(
         if (subsection.questionType === "writing") {
           return {
             ...subsection,
+            taskDescription: subsection.taskDescription?.trim() || undefined,
             questions: subsection.questions.filter(isManualWritingQuestion),
           };
         }
@@ -6308,8 +6309,29 @@ export default function PaperIntake() {
                               ))}
 
                             {/* Writing questions editor */}
-                            {subsection.questionType === "writing" &&
-                              subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
+                            {subsection.questionType === "writing" && (
+                              <div className="space-y-4">
+                                <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4">
+                                  <div className="space-y-2">
+                                    <Label>Main Task Description <span className="text-xs font-normal text-slate-400">(optional)</span></Label>
+                                    <Textarea
+                                      rows={3}
+                                      value={subsection.taskDescription ?? ""}
+                                      onChange={(event) =>
+                                        updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                          ...currentSubsection,
+                                          taskDescription: event.target.value || undefined,
+                                        }))
+                                      }
+                                      placeholder="e.g. Look at the pictures and read the notes below. Think about what you want to write before you start."
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                      This is the overall writing task description shown above all prompts in this big question.
+                                    </p>
+                                  </div>
+                                </div>
+
+                              {subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
@@ -6475,6 +6497,8 @@ export default function PaperIntake() {
                                   </div>
                                 </div>
                               ))}
+                              </div>
+                            )}
 
                             {/* Speaking questions editor */}
                             {subsection.questionType === "speaking" && (
@@ -7353,8 +7377,17 @@ export default function PaperIntake() {
                               <PassageInlineWordChoiceSubsectionPreview subsection={subsection} />
                             )}
 
-                            {subsection.questionType === "writing" &&
-                              subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
+                            {subsection.questionType === "writing" && (
+                              <div className="space-y-4">
+                              {subsection.taskDescription && (
+                                <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
+                                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rose-700">Main Task Description</p>
+                                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                                    {subsection.taskDescription}
+                                  </p>
+                                </div>
+                              )}
+                              {subsection.questions.filter(isManualWritingQuestion).map((question, questionIndex) => (
                                 <div key={question.id} className="rounded-xl border border-white bg-white p-4">
                                   <div className="flex items-center gap-2 mb-3">
                                     <PenLine className="h-4 w-4 text-rose-600" />
@@ -7396,6 +7429,8 @@ export default function PaperIntake() {
                                   )}
                                 </div>
                               ))}
+                              </div>
+                            )}
 
                             {subsection.questionType === "speaking" && (
                               <div className="space-y-4">

@@ -2024,9 +2024,17 @@ function SectionQuestionBody({
             <MatchingDescriptionsBlock items={section.matchingDescriptions} />
           )}
 
-          {section.sectionType === 'speaking' && section.taskDescription && (
-            <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-4">
-              <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-sky-700">Task Description</p>
+          {section.taskDescription && (section.sectionType === 'speaking' || section.sectionType === 'writing') && (
+            <div className={`rounded-xl p-4 ${
+              section.sectionType === 'writing'
+                ? 'border border-rose-100 bg-rose-50/40'
+                : 'border border-sky-100 bg-sky-50/40'
+            }`}>
+              <p className={`mb-2 text-sm font-semibold uppercase tracking-wide ${
+                section.sectionType === 'writing' ? 'text-rose-700' : 'text-sky-700'
+              }`}>
+                Task Description
+              </p>
               <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-700">
                 {section.taskDescription}
               </p>
