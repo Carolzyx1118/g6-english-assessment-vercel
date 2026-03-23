@@ -774,6 +774,8 @@ export default function TagManager() {
                                   const examPart = partConfig.examPart;
                                   const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
                                   const parsedPart = parseExamPart(examPart, defaultPrefix);
+                                  const questionTypeOptions = getGeneratedQuestionTypeOptions(subjectFilter, examPart);
+                                  const isLockedQuestionType = questionTypeOptions.length === 1;
                                   const partOptions = Array.from(
                                     new Set([
                                       ...PART_PREFIX_OPTIONS[subjectFilter],
@@ -820,8 +822,9 @@ export default function TagManager() {
                                       />
 
                                       <select
-                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                                         value={partConfig.questionType}
+                                        disabled={isLockedQuestionType}
                                         onChange={(event) =>
                                           updateGeneratedPaper(system.id, (current) => ({
                                             ...current,
@@ -833,7 +836,7 @@ export default function TagManager() {
                                           }))
                                         }
                                       >
-                                        {getGeneratedQuestionTypeOptions(subjectFilter, examPart).map((option) => (
+                                        {questionTypeOptions.map((option) => (
                                           <option key={option} value={option}>
                                             {MANUAL_QUESTION_TYPE_LABELS[option as keyof typeof MANUAL_QUESTION_TYPE_LABELS] ?? option}
                                           </option>

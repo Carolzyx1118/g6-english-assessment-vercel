@@ -189,29 +189,25 @@ const LEGACY_ENGLISH_PART_PREFIX_MAP: Record<string, string> = {
   "词汇": "Vocabulary",
 };
 
-const ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS: Record<string, string[]> = {
+const FIXED_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS: Record<string, string[]> = {
   Speaking: ["speaking"],
   Writing: ["writing"],
-  Listening: ["mcq", "typed-fill-blank", "true-false", "checkbox", "ordering"],
-  Grammar: ["mcq", "typed-fill-blank", "fill-blank", "sentence-reorder", "inline-word-choice"],
-  Vocabulary: ["mcq", "fill-blank", "typed-fill-blank", "inline-word-choice", "picture-spelling", "word-completion"],
-  Reading: [
-    "mcq",
-    "passage-mcq",
-    "typed-fill-blank",
-    "passage-open-ended",
-    "true-false",
-    "heading-match",
-    "checkbox",
-    "ordering",
-    "sentence-reorder",
-    "passage-matching",
-    "fill-blank",
-    "passage-fill-blank",
-    "inline-word-choice",
-    "passage-inline-word-choice",
-  ],
 };
+
+const FLEXIBLE_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS = [
+  "mcq",
+  "passage-mcq",
+  "inline-word-choice",
+  "passage-inline-word-choice",
+  "true-false",
+  "fill-blank",
+  "typed-fill-blank",
+  "passage-fill-blank",
+  "passage-matching",
+  "ordering",
+  "sentence-reorder",
+  "passage-open-ended",
+];
 
 const BASIC_GENERATED_QUESTION_TYPE_OPTIONS: Record<Exclude<ConfigurableTagSubject, "english">, string[]> = {
   math: ["mcq", "typed-fill-blank", "passage-open-ended", "ordering"],
@@ -275,7 +271,7 @@ export function getGeneratedQuestionTypeOptions(
 ) {
   if (subject === "english") {
     const prefix = getEnglishPartPrefix(examPart);
-    return ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS[prefix] ?? ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS.Reading;
+    return FIXED_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS[prefix] ?? FLEXIBLE_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS;
   }
 
   return BASIC_GENERATED_QUESTION_TYPE_OPTIONS[subject];
@@ -284,7 +280,10 @@ export function getGeneratedQuestionTypeOptions(
 export function getSubjectQuestionTypeOptions(subject: ConfigurableTagSubject) {
   if (subject === "english") {
     return Array.from(
-      new Set(Object.values(ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS).flat()),
+      new Set([
+        ...FLEXIBLE_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS,
+        ...Object.values(FIXED_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS).flat(),
+      ]),
     );
   }
 
