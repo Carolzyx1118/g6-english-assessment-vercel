@@ -1069,29 +1069,45 @@ function normalizeAssetUrl(value?: string) {
     try {
       return new URL(trimmed, window.location.origin).toString();
     } catch {
-      return trimmed;
+      return undefined;
     }
   }
 
-  return trimmed;
+  return undefined;
+}
+
+function sanitizeAssetUrls(dataUrl?: string, previewUrl?: string) {
+  const normalizedDataUrl = normalizeAssetUrl(dataUrl);
+  const normalizedPreviewUrl = normalizeAssetUrl(previewUrl);
+
+  return {
+    dataUrl: normalizedDataUrl ?? normalizedPreviewUrl ?? "",
+    previewUrl: normalizedPreviewUrl,
+  };
 }
 
 function normalizeOptionImageAsset(image?: ManualOptionImage): ManualOptionImage | undefined {
   if (!image) return undefined;
+  const sanitized = sanitizeAssetUrls(image.dataUrl, image.previewUrl);
   return {
     ...image,
-    dataUrl: normalizeAssetUrl(image.dataUrl) ?? image.dataUrl,
-    previewUrl: normalizeAssetUrl(image.previewUrl),
+    dataUrl: sanitized.dataUrl,
+    previewUrl: sanitized.previewUrl,
   };
 }
 
 function normalizeAudioAsset(audio?: ManualAudioFile): ManualAudioFile | undefined {
   if (!audio) return undefined;
+  const sanitized = sanitizeAssetUrls(audio.dataUrl, audio.previewUrl);
   return {
     ...audio,
-    dataUrl: normalizeAssetUrl(audio.dataUrl) ?? audio.dataUrl,
-    previewUrl: normalizeAssetUrl(audio.previewUrl),
+    dataUrl: sanitized.dataUrl,
+    previewUrl: sanitized.previewUrl,
   };
+}
+
+function getUploadedPreviewUrl(uploadedUrl: string | undefined, fallbackPreviewUrl: string) {
+  return normalizeAssetUrl(uploadedUrl) ?? fallbackPreviewUrl;
 }
 
 function normalizeQuestionAssetUrls(question: ManualQuestion): ManualQuestion {
@@ -3499,7 +3515,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -3547,7 +3563,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -3595,7 +3611,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to local preview when upload is unavailable.
       }
@@ -3643,7 +3659,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to local preview when upload is unavailable.
       }
@@ -4174,7 +4190,7 @@ export default function PaperIntake() {
           contentType: normalizedImage.mimeType,
           fileBase64: normalizedImage.dataUrl.split(",")[1] ?? "",
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -4220,7 +4236,7 @@ export default function PaperIntake() {
           contentType: compressedFile.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
@@ -4266,7 +4282,7 @@ export default function PaperIntake() {
           contentType: file.type,
           fileBase64,
         });
-        previewUrl = normalizeAssetUrl(uploaded.url) ?? uploaded.url;
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
       } catch {
         // Fall back to the in-browser preview URL when upload is unavailable.
       }
