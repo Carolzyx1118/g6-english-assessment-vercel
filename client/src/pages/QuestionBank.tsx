@@ -104,7 +104,36 @@ function AudioPreview({ audio }: { audio?: ManualAudioFile }) {
   );
 }
 
-function OptionPill({ label, text }: { label?: string; text: string }) {
+function hasVisibleText(value?: string | null) {
+  return Boolean(value?.trim());
+}
+
+function hasOptionContent(
+  option: ManualMCQOption | ManualPassageMCQOption | ManualCheckboxOption,
+) {
+  const image = "image" in option ? option.image : undefined;
+  return hasVisibleText(option.text) || Boolean(image);
+}
+
+function getOptionImage(
+  option: ManualMCQOption | ManualPassageMCQOption | ManualCheckboxOption,
+) {
+  return "image" in option ? option.image : undefined;
+}
+
+function OptionPill({
+  label,
+  text,
+  image,
+}: {
+  label?: string;
+  text?: string;
+  image?: ManualOptionImage;
+}) {
+  const showText = hasVisibleText(text);
+  const showImage = Boolean(image);
+  if (!showText && !showImage) return null;
+
   return (
     <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
       {label ? (
@@ -112,7 +141,10 @@ function OptionPill({ label, text }: { label?: string; text: string }) {
           {label}
         </span>
       ) : null}
-      <span className="text-sm leading-6 text-slate-700">{text || "No content yet."}</span>
+      <div className="min-w-0 flex-1 space-y-2">
+        {showText ? <p className="text-sm leading-6 text-slate-700">{text}</p> : null}
+        {showImage ? <PreviewImage image={image} className="h-28 w-28 max-w-none object-contain" /> : null}
+      </div>
     </div>
   );
 }
@@ -122,12 +154,13 @@ function OptionList({
 }: {
   options: Array<ManualMCQOption | ManualPassageMCQOption | ManualCheckboxOption>;
 }) {
-  if (options.length === 0) return null;
+  const visibleOptions = options.filter(hasOptionContent);
+  if (visibleOptions.length === 0) return null;
 
   return (
     <div className="space-y-2">
-      {options.map((option) => (
-        <OptionPill key={option.id} label={option.label} text={option.text} />
+      {visibleOptions.map((option) => (
+        <OptionPill key={option.id} label={option.label} text={option.text} image={getOptionImage(option)} />
       ))}
     </div>
   );
@@ -181,6 +214,7 @@ function MatchingDescriptionsPreview({ descriptions }: { descriptions?: ManualMa
 function InlineChoiceLine({ item }: { item: ManualInlineWordChoiceItem }) {
   const optionsText = item.options.map((option) => option.text).filter(Boolean).join(" / ");
   const sentenceText = item.sentenceText?.trim();
+  if (!sentenceText && !item.beforeText?.trim() && !item.afterText?.trim() && !optionsText) return null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -205,9 +239,10 @@ function InlineChoiceLine({ item }: { item: ManualInlineWordChoiceItem }) {
 
 function PassageInlineChoiceLine({ item }: { item: ManualPassageInlineWordChoiceItem }) {
   const optionsText = item.options.map((option) => `${option.label}. ${option.text}`).join(" / ");
+  if (!optionsText) return null;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
-      <span className="font-semibold text-slate-900">{item.label}.</span> {optionsText || "No choices yet."}
+      <span className="font-semibold text-slate-900">{item.label}.</span> {optionsText}
     </div>
   );
 }
@@ -337,10 +372,29 @@ function QuestionPreview({ question }: { question: ManualQuestion }) {
 function SubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
   const hasQuestionCards = subsection.questions.some((question) => {
     if ("prompt" in question && typeof question.prompt === "string" && question.prompt.trim()) return true;
-    if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") return question.options.length > 0;
-    if (question.type === "true-false") return question.statements.length > 0;
-    if (question.type === "ordering" || question.type === "sentence-reorder") return question.items.length > 0;
-    if (question.type === "inline-word-choice" || question.type === "passage-inline-word-choice") return question.items.length > 0;
+    if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") {
+      return question.options.some(hasOptionContent);
+    }
+    if (question.type === "true-false") {
+      return question.statements.some((statement) => hasVisibleText(statement.statement));
+    }
+    if (question.type === "ordering") {
+      return question.items.some((item) => hasVisibleText(item.text));
+    }
+    if (question.type === "sentence-reorder") {
+      return question.items.some((item) => hasVisibleText(item.scrambledWords) || hasVisibleText(item.correctAnswer));
+    }
+    if (question.type === "inline-word-choice") {
+      return question.items.some((item) =>
+        hasVisibleText(item.sentenceText) ||
+        hasVisibleText(item.beforeText) ||
+        hasVisibleText(item.afterText) ||
+        item.options.some((option) => hasVisibleText(option.text)),
+      );
+    }
+    if (question.type === "passage-inline-word-choice") {
+      return question.items.some((item) => item.options.some((option) => hasVisibleText(option.text)));
+    }
     if (question.type === "picture-spelling" || question.type === "word-completion" || question.type === "writing" || question.type === "speaking") {
       return Boolean(question.image || ("wordPattern" in question && question.wordPattern));
     }
