@@ -874,9 +874,9 @@ export default function TagManager() {
                                         event.preventDefault();
                                       }}
                                       onDrop={() => handleAssessmentPartDrop(system.id, examPartIndex)}
-                                      className={`grid gap-3 rounded-xl border border-slate-200 bg-white p-3 ${
+                                      className={`grid items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 ${
                                         subjectFilter === "english"
-                                          ? "md:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_120px_auto]"
+                                          ? "md:grid-cols-[auto_minmax(180px,1fr)_auto_96px_minmax(220px,1fr)_120px_auto]"
                                           : "md:grid-cols-[minmax(0,1fr)_auto_120px_minmax(0,1fr)_120px_auto]"
                                       } ${draggingAssessmentPart?.systemId === system.id && draggingAssessmentPart.index === examPartIndex ? "opacity-70" : ""}`}
                                     >
