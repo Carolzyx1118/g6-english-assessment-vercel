@@ -25,6 +25,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 type SelectableAnswer = number | number[] | undefined;
 const PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-base text-slate-700 leading-relaxed';
 const PROMPT_HEADING_CLASS = 'whitespace-pre-wrap break-words text-base font-medium text-slate-700 leading-relaxed';
+const SPEAKING_WRITING_PROMPT_LABEL_CLASS = 'mb-2 text-[15px] font-bold uppercase tracking-[0.12em]';
+const SPEAKING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[1.05rem] leading-[1.9] text-slate-700';
+const WRITING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[1rem] leading-[1.85] text-slate-700';
 
 function getCorrectIndexes(question: MCQQuestion | PictureMCQ | ListeningMCQ) {
   if (question.correctAnswers && question.correctAnswers.length > 0) {
@@ -723,8 +726,8 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
     return (
       <div className="space-y-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
-          <p className="whitespace-pre-wrap break-words text-[1.18rem] leading-8 text-slate-700">
+          <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-slate-600`}>Question Prompt</p>
+          <p className={SPEAKING_PROMPT_TEXT_CLASS}>
             {q.question}
           </p>
         </div>
@@ -749,8 +752,8 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Question Prompt</p>
-        <p className="whitespace-pre-wrap break-words text-[1.18rem] leading-8 text-slate-700">
+        <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-slate-600`}>Question Prompt</p>
+        <p className={SPEAKING_PROMPT_TEXT_CLASS}>
           {q.question}
         </p>
       </div>
@@ -1359,8 +1362,8 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
         </div>
       )}
       <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
-        <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-rose-700">Writing Prompt</p>
-        <p className="whitespace-pre-wrap break-words text-[1.08rem] leading-7 text-slate-700">
+        <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-rose-700`}>Writing Prompt</p>
+        <p className={WRITING_PROMPT_TEXT_CLASS}>
           {promptText || 'Writing prompt goes here.'}
         </p>
         {wordCountLabel ? (
