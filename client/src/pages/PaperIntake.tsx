@@ -218,6 +218,55 @@ function getEnglishSectionTypeFromAbility(ability?: string): ManualSectionType |
   return null;
 }
 
+function getEnglishTagsForSubsection(subsection: ManualSubsection) {
+  return subsection.sharedQuestionTags?.english
+    ?? subsection.questions.find((question) => question.tags?.english)?.tags?.english;
+}
+
+function getInferredEnglishSectionTypeForSubsection(subsection: ManualSubsection): ManualSectionType | null {
+  if (subsection.questionType === "speaking") {
+    return "speaking";
+  }
+
+  if (subsection.questionType === "writing") {
+    return "writing";
+  }
+
+  const englishTags = getEnglishTagsForSubsection(subsection);
+  const abilityFromExamPart = getEnglishAbilityFromExamPart(englishTags?.examPart);
+  const taggedExamPartSectionType = getEnglishSectionTypeFromAbility(abilityFromExamPart);
+  if (taggedExamPartSectionType) {
+    return taggedExamPartSectionType;
+  }
+
+  const taggedSectionType = getEnglishSectionTypeFromAbility(englishTags?.ability);
+  if (taggedSectionType) {
+    return taggedSectionType;
+  }
+
+  if (subsection.audio) {
+    return "listening";
+  }
+
+  return null;
+}
+
+function shouldShowListeningAudioUpload(
+  sectionType: ManualSectionType,
+  subsection: ManualSubsection,
+  paperSubject: PaperSubject,
+) {
+  if (sectionType === "listening" || subsection.audio) {
+    return true;
+  }
+
+  if (paperSubject !== "english") {
+    return false;
+  }
+
+  return getInferredEnglishSectionTypeForSubsection(subsection) === "listening";
+}
+
 function inferQuestionBankSectionType(
   section: ManualSection,
   subsection: ManualSubsection,
@@ -235,34 +284,9 @@ function inferQuestionBankSectionType(
     return section.sectionType === "math-application" ? "math-application" : "math-short-answer";
   }
 
-  if (subsection.questionType === "speaking") {
-    return "speaking";
-  }
-
-  if (subsection.questionType === "writing") {
-    return "writing";
-  }
-
-  const sharedEnglishTags = subsection.sharedQuestionTags?.english;
-  const firstQuestionEnglishTags = subsection.questions.find((question) => question.tags?.english)?.tags?.english;
-
-  const taggedExamPart =
-    sharedEnglishTags?.examPart ?? firstQuestionEnglishTags?.examPart;
-  const abilityFromExamPart = getEnglishAbilityFromExamPart(taggedExamPart);
-  const taggedExamPartSectionType = getEnglishSectionTypeFromAbility(abilityFromExamPart);
-  if (taggedExamPartSectionType) {
-    return taggedExamPartSectionType;
-  }
-
-  const taggedAbility =
-    sharedEnglishTags?.ability ?? firstQuestionEnglishTags?.ability;
-  const taggedSectionType = getEnglishSectionTypeFromAbility(taggedAbility);
-  if (taggedSectionType) {
-    return taggedSectionType;
-  }
-
-  if (subsection.audio) {
-    return "listening";
+  const inferredEnglishSectionType = getInferredEnglishSectionTypeForSubsection(subsection);
+  if (inferredEnglishSectionType) {
+    return inferredEnglishSectionType;
   }
 
   if (ENGLISH_SECTION_TYPES.includes(section.sectionType)) {
@@ -276,14 +300,36 @@ function normalizeQuestionBankSection(
   section: ManualSection,
   paperSubject: PaperSubject,
 ): ManualSection {
-  const subsection = section.subsections[0];
-  if (!subsection) {
-    return section;
-  }
+  const inferredSectionType = (() => {
+    if (paperSubject === "vocabulary") {
+      return "vocabulary" as const;
+    }
+
+    if (paperSubject === "math") {
+      const firstSubsection = section.subsections[0];
+      return firstSubsection
+        ? inferQuestionBankSectionType(section, firstSubsection, paperSubject)
+        : section.sectionType;
+    }
+
+    const taggedEnglishSectionType = section.subsections
+      .map((subsection) => getInferredEnglishSectionTypeForSubsection(subsection))
+      .find((value): value is ManualSectionType => Boolean(value));
+
+    if (taggedEnglishSectionType) {
+      return taggedEnglishSectionType;
+    }
+
+    if (ENGLISH_SECTION_TYPES.includes(section.sectionType)) {
+      return section.sectionType;
+    }
+
+    return "reading" as const;
+  })();
 
   return {
     ...section,
-    sectionType: inferQuestionBankSectionType(section, subsection, paperSubject),
+    sectionType: inferredSectionType ?? section.sectionType,
   };
 }
 
@@ -4744,8 +4790,8 @@ export default function PaperIntake() {
                             )}
                           </div>
 
-                          {/* Audio upload — shown only when section type is listening */}
-                          {section.sectionType === "listening" && (
+                          {/* Audio upload — shown for listening sections or blocks tagged to a listening exam part */}
+                          {shouldShowListeningAudioUpload(section.sectionType, subsection, paperSubject) && (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
                               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                                 <div className="space-y-2">
