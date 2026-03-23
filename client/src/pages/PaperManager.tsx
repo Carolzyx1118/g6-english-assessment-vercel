@@ -458,8 +458,8 @@ export default function PaperManager() {
 
                   return (
                     <div key={paper.key} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-3">
+                      <div className="flex items-start gap-6">
+                        <div className="min-w-0 flex-1 space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-lg font-semibold text-slate-800">{paper.title}</h2>
                             <Badge variant={paper.published ? "default" : "outline"}>
@@ -505,7 +505,7 @@ export default function PaperManager() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-4">
+                        <div className="shrink-0 flex flex-wrap items-center justify-end gap-4 self-start">
                           {paper.kind === "manual" ? (
                             <>
                               <Link href={`/paper-intake?edit=${encodeURIComponent(paper.paperId)}&subject=${paper.subject}`}>
