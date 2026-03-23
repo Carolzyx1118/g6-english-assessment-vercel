@@ -37,6 +37,7 @@ import TeacherToolsLayout from '@/components/TeacherToolsLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 import { getAudioSourceType, isLikelyAudioUrl } from '@/lib/audioStorage';
+import { getGeneratedPaperSubjectFromPaperId } from '@/lib/historySubjects';
 import {
   getPaperById,
   type Paper,
@@ -495,6 +496,10 @@ function HistoryContent() {
     const staticPaper = getPaperById(paperId);
     if (staticPaper && isPaperSubjectValue(staticPaper.subject)) {
       return staticPaper.subject;
+    }
+    const generatedSubject = getGeneratedPaperSubjectFromPaperId(paperId);
+    if (generatedSubject) {
+      return generatedSubject;
     }
     const manualSubject = manualPaperSubjectMap.get(paperId);
     return isPaperSubjectValue(manualSubject) ? manualSubject : null;
