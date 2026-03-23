@@ -2058,7 +2058,6 @@ function SectionQuestionBody({
               questions={questions.filter(q => q.type === 'fill-blank') as FillBlankQuestion[]}
               wordBank={section.wordBank!}
               grammarPassage={section.grammarPassage}
-              sceneImageUrl={section.sceneImageUrl}
               sectionId={answerSectionId}
               getAnswer={getAnswer}
               setAnswer={setAnswer}

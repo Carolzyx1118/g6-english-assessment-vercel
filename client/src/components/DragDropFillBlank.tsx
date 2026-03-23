@@ -25,7 +25,6 @@ interface DragDropFillBlankProps {
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
   grammarPassage?: string;
-  sceneImageUrl?: string;
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
@@ -35,7 +34,6 @@ export default function DragDropFillBlank({
   questions,
   wordBank,
   grammarPassage,
-  sceneImageUrl,
   sectionId,
   getAnswer,
   setAnswer,
@@ -48,7 +46,6 @@ export default function DragDropFillBlank({
         questions={questions}
         wordBank={wordBank}
         grammarPassage={grammarPassage!}
-        sceneImageUrl={sceneImageUrl}
         sectionId={sectionId}
         getAnswer={getAnswer}
         setAnswer={setAnswer}
@@ -60,7 +57,6 @@ export default function DragDropFillBlank({
     <SentenceModeFillBlank
       questions={questions}
       wordBank={wordBank}
-      sceneImageUrl={sceneImageUrl}
       sectionId={sectionId}
       getAnswer={getAnswer}
       setAnswer={setAnswer}
@@ -76,7 +72,6 @@ function PassageModeFillBlank({
   questions,
   wordBank,
   grammarPassage,
-  sceneImageUrl,
   sectionId,
   getAnswer,
   setAnswer,
@@ -84,7 +79,6 @@ function PassageModeFillBlank({
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
   grammarPassage: string;
-  sceneImageUrl?: string;
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
@@ -195,17 +189,6 @@ function PassageModeFillBlank({
 
   return (
     <div className="space-y-6">
-      {sceneImageUrl && (
-        <div className="flex justify-center">
-          <img
-            src={sceneImageUrl}
-            alt="Scene for fill-in-the-blank"
-            className="max-h-56 object-contain rounded-xl border border-slate-200 shadow-sm"
-            loading="lazy"
-          />
-        </div>
-      )}
-
       {/* Word Bank */}
       <div className="p-5 rounded-xl bg-amber-50/50 border border-amber-200" style={{ marginBottom: '10px' }}>
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
@@ -296,14 +279,12 @@ function PassageModeFillBlank({
 function SentenceModeFillBlank({
   questions,
   wordBank,
-  sceneImageUrl,
   sectionId,
   getAnswer,
   setAnswer,
 }: {
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
-  sceneImageUrl?: string;
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;

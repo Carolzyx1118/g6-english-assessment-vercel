@@ -14,13 +14,11 @@ import type { ManualPassageMCQQuestion } from "@shared/manualPaperBlueprint";
 interface PassageMCQPreviewProps {
   passageText: string;
   questions: ManualPassageMCQQuestion[];
-  sceneImageUrl?: string;
 }
 
 export default function PassageMCQPreview({
   passageText,
   questions,
-  sceneImageUrl,
 }: PassageMCQPreviewProps) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [openBlank, setOpenBlank] = useState<number | null>(null);
@@ -37,12 +35,6 @@ export default function PassageMCQPreview({
 
   return (
     <div className="space-y-4">
-      {sceneImageUrl && (
-        <div className="flex justify-center rounded-2xl border border-slate-200 bg-white p-3">
-          <img src={sceneImageUrl} alt="Scene" className="max-h-60 w-full object-contain" />
-        </div>
-      )}
-
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
           Click each blank to choose an answer

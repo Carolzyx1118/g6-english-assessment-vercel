@@ -2050,7 +2050,6 @@ function FillBlankSubsectionPreview({ subsection }: { subsection: ManualSubsecti
         questions={previewQuestions}
         wordBank={wordBank.map((item) => ({ letter: item.letter, word: item.word || "Untitled word" }))}
         grammarPassage={buildFillBlankPreviewPassage(questions)}
-        sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
         sectionId={`manual-fillblank-preview-${subsection.id}`}
         getAnswer={(_, id) => answers[id]}
         setAnswer={(_, id, value) => {
@@ -2135,7 +2134,6 @@ function PassageFillBlankSubsectionPreview({ subsection }: { subsection: ManualS
         questions={previewQuestions}
         wordBank={wordBank.map((item) => ({ letter: item.letter, word: item.word || "Untitled word" }))}
         grammarPassage={buildPassageFillBlankPreviewPassage(passageText)}
-        sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
         sectionId={`manual-passage-fillblank-preview-${subsection.id}`}
         getAnswer={(_, id) => answers[id]}
         setAnswer={(_, id, value) => {
@@ -7177,7 +7175,6 @@ export default function PaperIntake() {
                               <PassageMCQPreview
                                 passageText={subsection.passageText ?? ""}
                                 questions={subsection.questions.filter(isManualPassageMCQQuestion)}
-                                sceneImageUrl={subsection.sceneImage?.previewUrl || subsection.sceneImage?.dataUrl}
                               />
                             )}
 
