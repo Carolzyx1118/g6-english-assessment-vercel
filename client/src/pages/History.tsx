@@ -910,33 +910,30 @@ function HistoryContent() {
                       <motion.div
                         key={r.id}
                         layout
-                        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                       >
                         <div className="cursor-pointer p-4 sm:p-5" onClick={() => setSelectedId(isExpanded ? null : r.id)}>
-                          <div className="flex items-start gap-4">
-                            <div className={`flex h-14 w-14 items-center justify-center rounded-xl border text-2xl font-bold ${gradeInfo.color}`}>
-                              {gradeInfo.grade}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="truncate font-semibold text-slate-800">{r.paperTitle}</h3>
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1 space-y-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-base font-semibold text-[#1E3A5F] sm:text-lg">{r.paperTitle}</h3>
+                                <Badge className={`rounded-full px-3 py-1 text-xs font-semibold ${gradeInfo.color}`}>
+                                  {lang === 'en' ? `Grade ${gradeInfo.grade}` : `等级 ${gradeInfo.grade}`}
+                                </Badge>
                                 {resultSubject ? (
-                                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
-                                    {PAPER_SUBJECT_LABELS[resultSubject]}
-                                  </span>
+                                  <Badge variant="secondary">{PAPER_SUBJECT_LABELS[resultSubject]}</Badge>
                                 ) : null}
                                 {r.hasReport ? (
-                                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                                  <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700 hover:bg-emerald-100">
                                     {lang === 'en' ? 'Report Ready' : '报告已生成'}
-                                  </span>
+                                  </Badge>
                                 ) : (
-                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                                  <Badge className="rounded-full bg-amber-100 px-3 py-1 text-amber-700 hover:bg-amber-100">
                                     {lang === 'en' ? 'No Report Yet' : '未生成报告'}
-                                  </span>
+                                  </Badge>
                                 )}
                               </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                                 <span className="flex items-center gap-1">
                                   <User className="h-3.5 w-3.5" />
                                   {r.studentName}
@@ -953,7 +950,7 @@ function HistoryContent() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -967,19 +964,21 @@ function HistoryContent() {
                                 {lang === 'en' ? 'Delete' : '删除'}
                               </Button>
 
-                              <button
+                              <Button
                                 type="button"
-                                className="inline-flex items-center gap-2 text-right transition hover:text-slate-600"
+                                size="sm"
+                                variant="outline"
+                                className="border-slate-200"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   setSelectedId(isExpanded ? null : r.id);
                                 }}
                               >
-                                <div className="text-lg font-bold text-slate-800">
+                                <span className="text-base font-semibold text-slate-800">
                                   {r.totalCorrect}/{r.totalQuestions}
-                                </div>
+                                </span>
                                 {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         </div>
