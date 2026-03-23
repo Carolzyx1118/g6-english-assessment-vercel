@@ -6974,6 +6974,7 @@ export default function PaperIntake() {
                           {/* Add question/blank button — not shown for passage-based auto-synced types */}
                           {subsection.questionType !== "passage-fill-blank"
                             && subsection.questionType !== "passage-mcq"
+                            && subsection.questionType !== "inline-word-choice"
                             && subsection.questionType !== "passage-inline-word-choice" && (
                             <Button type="button" variant="outline" onClick={() => addQuestion(section.id, subsection.id)}>
                               <FilePlus2 className="mr-2 h-4 w-4" />
@@ -6987,8 +6988,6 @@ export default function PaperIntake() {
                                       ? "Add Match Prompt"
                                       : subsection.questionType === "sentence-reorder"
                                         ? "Add Sentence Set"
-                                      : subsection.questionType === "inline-word-choice"
-                                        ? "Add Click-Word Set"
                                       : subsection.questionType === "heading-match"
                                         ? "Add Paragraph Match"
                                       : subsection.questionType === "true-false"
