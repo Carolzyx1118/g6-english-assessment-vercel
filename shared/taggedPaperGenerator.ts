@@ -45,7 +45,7 @@ type SelectedCandidate = {
   rule: ManualPaperGenerationRule | null;
 };
 
-const MULTI_BLANK_BLOCK_TYPES = new Set<ManualQuestionType>(["passage-fill-blank", "passage-mcq"]);
+const SHARED_BLOCK_TYPES = new Set<ManualQuestionType>(["passage-fill-blank", "passage-mcq", "passage-open-ended"]);
 
 function cloneDeep<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -211,7 +211,7 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
 
     for (const section of sourcePaper.blueprint.sections) {
       for (const subsection of section.subsections) {
-        if (MULTI_BLANK_BLOCK_TYPES.has(subsection.questionType)) {
+        if (SHARED_BLOCK_TYPES.has(subsection.questionType)) {
           const profiles = getCandidateProfiles(subsection);
           candidates.push({
             id: `${sourcePaper.paperId}:${section.id}:${subsection.id}`,

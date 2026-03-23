@@ -96,6 +96,65 @@ function makeAssessmentFallbackBlueprint(id: string, prompt: string): ManualPape
   };
 }
 
+function makePassageOpenEndedBlueprint(id: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 2",
+        sectionType: "reading",
+        subsections: [
+          {
+            id: `${id}-subsection`,
+            title: "",
+            instructions: "",
+            questionType: "passage-open-ended",
+            passageText: "Shared passage",
+            questions: [
+              {
+                id: `${id}-question-1`,
+                type: "passage-open-ended",
+                prompt: "Question one",
+                referenceAnswer: "",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 2",
+                    grammarPoints: [],
+                  },
+                },
+              },
+              {
+                id: `${id}-question-2`,
+                type: "passage-open-ended",
+                prompt: "Question two",
+                referenceAnswer: "",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 2",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function makeMathFixedBlueprint(id: string, prompt: string, examPart: string): ManualPaperBlueprint {
   return {
     id,
@@ -369,5 +428,53 @@ describe("tagged random paper generation", () => {
     expect(result.blueprint.sections).toHaveLength(1);
     expect(result.blueprint.sections[0].subsections).toHaveLength(0);
     expect(result.warnings.some((warning) => warning.includes('only assembled 0/1'))).toBe(true);
+  });
+
+  it("keeps all passage open-ended questions together when one shared block is selected", () => {
+    const source = makePassageOpenEndedBlueprint("english-open-ended");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-shared-open-ended-paper",
+      title: "Generated Shared Open-Ended Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-open-ended"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 2",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-part-2",
+                label: "Reading Part 2",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 2",
+                  questionTypes: ["passage-open-ended"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-open-ended", title: "English Open Ended", blueprint: source },
+    ]);
+
+    expect(result.blueprint.sections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections[0]?.questions).toHaveLength(2);
+    expect(result.blueprint.sections[0].subsections[0]?.questions.map((question) => question.prompt)).toEqual([
+      "Question one",
+      "Question two",
+    ]);
   });
 });
