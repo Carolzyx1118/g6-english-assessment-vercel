@@ -488,7 +488,7 @@ export default function TagManager() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Teacher Home
               </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Structure</h1>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Generator</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Manage paper names, system types, parts, and practice filters here. Question intake reads these settings directly.
               </p>
@@ -499,7 +499,7 @@ export default function TagManager() {
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Loading paper structures...
+                Loading paper generator...
               </CardContent>
             </Card>
           ) : (

@@ -7037,7 +7037,7 @@ export default function PaperIntake() {
                     ? "Preview of the random paper assembled from your current tag rules."
                     : isQuestionBankMode
                       ? "Quick preview of the question bank items you are recording one by one."
-                    : "Quick student-facing preview of the paper structure you are building."}
+                    : "Quick student-facing preview of the paper you are building."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

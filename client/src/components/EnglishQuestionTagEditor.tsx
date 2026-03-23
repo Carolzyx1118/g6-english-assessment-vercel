@@ -207,7 +207,7 @@ export default function EnglishQuestionTagEditor({
             </select>
             {availableExamParts.length === 0 ? (
               <p className="text-xs text-amber-600">
-                No exam parts are configured for this system yet. Update Paper Structure first.
+                No exam parts are configured for this system yet. Update Paper Generator first.
               </p>
             ) : profile.examPart && selectedExamPartQuestionType ? (
               <p className="text-xs text-amber-600">

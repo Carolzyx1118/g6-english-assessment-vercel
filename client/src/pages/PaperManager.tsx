@@ -443,7 +443,7 @@ export default function PaperManager() {
             <CardHeader>
               <CardTitle>Student Papers</CardTitle>
               <CardDescription>
-                Toggle visibility, delete obsolete papers, or jump into Paper Structure / Question Intake to edit content.
+                Toggle visibility, delete obsolete papers, or jump into Paper Generator / Question Intake to edit content.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -469,7 +469,7 @@ export default function PaperManager() {
                             </Badge>
                             <Badge variant="secondary">{subjectLabel}</Badge>
                             <Badge variant="outline">{categoryLabel}</Badge>
-                            {paper.kind === "system" && <Badge variant="outline">Paper Structure</Badge>}
+                            {paper.kind === "system" && <Badge variant="outline">Paper Generator</Badge>}
                           </div>
                           <p className="text-sm text-slate-500">{paper.description || "No description."}</p>
                           <div className="flex flex-wrap gap-4 text-xs text-slate-500">
@@ -536,7 +536,7 @@ export default function PaperManager() {
                             <Link href={`/tag-manager?subject=${paper.subject}`}>
                               <Button type="button" variant="outline" disabled={isPending} className="border-slate-200">
                                 <Settings2 className="mr-2 h-4 w-4" />
-                                Edit Structure
+                                Edit Generator
                               </Button>
                             </Link>
                           )}
@@ -591,8 +591,8 @@ export default function PaperManager() {
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
                   {subjectFilter
-                    ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} student-facing papers yet. Add one from Paper Structure or Question Intake first.`
-                    : "No student-facing papers yet. Add one from Paper Structure or Question Intake first."}
+                    ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} student-facing papers yet. Add one from Paper Generator or Question Intake first.`
+                    : "No student-facing papers yet. Add one from Paper Generator or Question Intake first."}
                 </div>
               )}
             </CardContent>
