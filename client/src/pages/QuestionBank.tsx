@@ -62,8 +62,7 @@ type QuestionBankItemRecord = {
   previewSubsections: ManualSubsection[];
   itemId: string;
   displayTags: string[];
-  filterTags: string[];
-  examParts: string[];
+  systemIds: string[];
   questionTypes: ManualQuestionType[];
   searchText: string;
 };
@@ -151,7 +150,7 @@ function getSubsectionFilterMetadata(subject: PaperSubject, subsection: ManualSu
   if (!tags) {
     return {
       examPart: "",
-      filterTags: [] as string[],
+      systemId: "",
     };
   }
 
@@ -159,16 +158,14 @@ function getSubsectionFilterMetadata(subject: PaperSubject, subsection: ManualSu
     const normalized = normalizeEnglishQuestionTagProfile(tags as EnglishQuestionTagProfile);
     return {
       examPart: typeof normalized.examPart === "string" && isVisibleTagValue(normalized.examPart) ? normalized.examPart.trim() : "",
-      filterTags: Array.from(
-        new Set(toVisibleTagStrings([normalized.track, normalized.ability, normalized.unit])),
-      ),
+      systemId: typeof normalized.track === "string" && isVisibleTagValue(normalized.track) ? normalized.track.trim() : "",
     };
   }
 
   const normalized = tags as SubjectQuestionTagProfile;
   return {
     examPart: typeof normalized.examPart === "string" && isVisibleTagValue(normalized.examPart) ? normalized.examPart.trim() : "",
-    filterTags: Array.from(new Set(toVisibleTagStrings([normalized.track, normalized.unit]))),
+    systemId: typeof normalized.track === "string" && isVisibleTagValue(normalized.track) ? normalized.track.trim() : "",
   };
 }
 
@@ -584,9 +581,8 @@ export default function QuestionBank() {
   const utils = trpc.useUtils();
   const [expandedPaperIds, setExpandedPaperIds] = useState<number[]>([]);
   const [searchText, setSearchText] = useState("");
-  const [selectedExamPart, setSelectedExamPart] = useState("all");
+  const [selectedExamSystem, setSelectedExamSystem] = useState("all");
   const [selectedQuestionType, setSelectedQuestionType] = useState("all");
-  const [selectedTag, setSelectedTag] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
   const subjectFilter = useMemo(() => {
@@ -597,8 +593,23 @@ export default function QuestionBank() {
   const listQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
+  const englishSystemsQuery = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const mathSystemsQuery = trpc.papers.getMathTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const vocabularySystemsQuery = trpc.papers.getVocabularyTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+  });
   const updateMutation = trpc.papers.updateManualPaper.useMutation();
   const deleteMutation = trpc.papers.deleteManualPaper.useMutation();
+
+  const systemLabelBySubject = useMemo(() => ({
+    english: Object.fromEntries((englishSystemsQuery.data ?? []).map((system) => [system.id, system.label])),
+    math: Object.fromEntries((mathSystemsQuery.data ?? []).map((system) => [system.id, system.label])),
+    vocabulary: Object.fromEntries((vocabularySystemsQuery.data ?? []).map((system) => [system.id, system.label])),
+  }), [englishSystemsQuery.data, mathSystemsQuery.data, vocabularySystemsQuery.data]);
 
   const subjectPapers = useMemo(
     () => ((listQuery.data ?? []) as QuestionBankPaperRecord[]).filter((paper) => paper.subject === subjectFilter),
@@ -613,8 +624,7 @@ export default function QuestionBank() {
         if (previewSubsections.length === 0) return [];
 
         const displayTags = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionTagValues(subjectFilter, subsection))));
-        const filterTagValues = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).filterTags)));
-        const examParts = Array.from(new Set(previewSubsections.map((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).examPart).filter(Boolean)));
+        const systemIds = Array.from(new Set(previewSubsections.map((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).systemId).filter(Boolean)));
         const questionTypes = Array.from(new Set(previewSubsections.map((subsection) => subsection.questionType)));
         const itemId = formatQuestionBankItemId(subjectFilter, section.id);
         const searchChunks = [
@@ -622,8 +632,7 @@ export default function QuestionBank() {
           paper.paperId,
           itemId,
           ...displayTags,
-          ...filterTagValues,
-          ...examParts,
+          ...systemIds.map((systemId) => systemLabelBySubject[subjectFilter][systemId] ?? systemId),
           ...questionTypes.map((questionType) => MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType),
           ...previewSubsections.flatMap((subsection) => [
             subsection.title,
@@ -640,8 +649,7 @@ export default function QuestionBank() {
           previewSubsections,
           itemId,
           displayTags,
-          filterTags: filterTagValues,
-          examParts,
+          systemIds,
           questionTypes,
           searchText: normalizeSearchText(searchChunks.filter(Boolean).join(" ")),
         }];
@@ -653,31 +661,33 @@ export default function QuestionBank() {
         items,
       };
     });
-  }, [subjectFilter, subjectPapers]);
+  }, [subjectFilter, subjectPapers, systemLabelBySubject]);
 
   const filterOptions = useMemo(() => {
-    const examPartSet = new Set<string>();
+    const systemIdSet = new Set<string>();
     const questionTypeSet = new Set<ManualQuestionType>();
-    const tagSet = new Set<string>();
 
     paperViews.forEach((paper) => {
       paper.items.forEach((item) => {
-        item.examParts.forEach((examPart) => examPartSet.add(examPart));
+        item.systemIds.forEach((systemId) => systemIdSet.add(systemId));
         item.questionTypes.forEach((questionType) => questionTypeSet.add(questionType));
-        item.filterTags.forEach((tag) => tagSet.add(tag));
       });
     });
 
     return {
-      examParts: Array.from(examPartSet).sort((left, right) => left.localeCompare(right)),
+      systems: Array.from(systemIdSet)
+        .map((systemId) => ({
+          id: systemId,
+          label: systemLabelBySubject[subjectFilter][systemId] ?? systemId,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
       questionTypes: Array.from(questionTypeSet).sort((left, right) =>
         (MANUAL_QUESTION_TYPE_LABELS[left] ?? left).localeCompare(MANUAL_QUESTION_TYPE_LABELS[right] ?? right),
       ),
-      tags: Array.from(tagSet).sort((left, right) => left.localeCompare(right)),
     };
-  }, [paperViews]);
+  }, [paperViews, subjectFilter, systemLabelBySubject]);
 
-  const hasActiveFilters = Boolean(searchText.trim()) || selectedExamPart !== "all" || selectedQuestionType !== "all" || selectedTag !== "all";
+  const hasActiveFilters = Boolean(searchText.trim()) || selectedExamSystem !== "all" || selectedQuestionType !== "all";
 
   const filteredPapers = useMemo(() => {
     const keyword = normalizeSearchText(searchText);
@@ -685,9 +695,8 @@ export default function QuestionBank() {
       .map((paper) => {
         const filteredItems = paper.items.filter((item) => {
           if (keyword && !item.searchText.includes(keyword)) return false;
-          if (selectedExamPart !== "all" && !item.examParts.includes(selectedExamPart)) return false;
+          if (selectedExamSystem !== "all" && !item.systemIds.includes(selectedExamSystem)) return false;
           if (selectedQuestionType !== "all" && !item.questionTypes.includes(selectedQuestionType as ManualQuestionType)) return false;
-          if (selectedTag !== "all" && !item.filterTags.includes(selectedTag)) return false;
           return true;
         });
 
@@ -697,7 +706,7 @@ export default function QuestionBank() {
         };
       })
       .filter((paper) => (hasActiveFilters ? paper.filteredItems.length > 0 : true));
-  }, [hasActiveFilters, paperViews, searchText, selectedExamPart, selectedQuestionType, selectedTag]);
+  }, [hasActiveFilters, paperViews, searchText, selectedExamSystem, selectedQuestionType]);
 
   const summary = useMemo(() => ({
     totalBanks: filteredPapers.length,
@@ -753,9 +762,8 @@ export default function QuestionBank() {
 
   const clearFilters = () => {
     setSearchText("");
-    setSelectedExamPart("all");
+    setSelectedExamSystem("all");
     setSelectedQuestionType("all");
-    setSelectedTag("all");
   };
 
   const toggleExpanded = (paperId: number) => {
@@ -803,9 +811,9 @@ export default function QuestionBank() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-base text-[#1E3A5F]">Filters</CardTitle>
-              <CardDescription>Search by bank ID, item ID, prompt text, or narrow the list by exam part, question type, and saved tags.</CardDescription>
+              <CardDescription>Search by keyword, or narrow the list by exam system and question type.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-700">Keyword</p>
                 <Input
@@ -815,15 +823,15 @@ export default function QuestionBank() {
                 />
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">Exam Part</p>
+                <p className="text-sm font-medium text-slate-700">Exam System</p>
                 <select
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={selectedExamPart}
-                  onChange={(event) => setSelectedExamPart(event.target.value)}
+                  value={selectedExamSystem}
+                  onChange={(event) => setSelectedExamSystem(event.target.value)}
                 >
-                  <option value="all">All Exam Parts</option>
-                  {filterOptions.examParts.map((examPart) => (
-                    <option key={examPart} value={examPart}>{examPart}</option>
+                  <option value="all">All Exam Systems</option>
+                  {filterOptions.systems.map((system) => (
+                    <option key={system.id} value={system.id}>{system.label}</option>
                   ))}
                 </select>
               </div>
@@ -842,21 +850,8 @@ export default function QuestionBank() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">Tag</p>
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={selectedTag}
-                  onChange={(event) => setSelectedTag(event.target.value)}
-                >
-                  <option value="all">All Tags</option>
-                  {filterOptions.tags.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
-              </div>
               {hasActiveFilters ? (
-                <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+                <div className="md:col-span-2 xl:col-span-3 flex justify-end">
                   <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
                     Clear Filters
                   </Button>
