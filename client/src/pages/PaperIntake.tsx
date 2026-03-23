@@ -1118,6 +1118,103 @@ function getUploadedPreviewUrl(uploadedUrl: string | undefined, fallbackPreviewU
   return normalizeAssetUrl(uploadedUrl) ?? fallbackPreviewUrl;
 }
 
+function guessAssetContentType(
+  kind: "image" | "audio",
+  fileName?: string,
+  fallback?: string,
+) {
+  if (fallback?.trim()) return fallback.trim();
+  const lowerName = fileName?.toLowerCase() ?? "";
+
+  if (kind === "audio") {
+    if (lowerName.endsWith(".mp3")) return "audio/mpeg";
+    if (lowerName.endsWith(".wav")) return "audio/wav";
+    if (lowerName.endsWith(".ogg")) return "audio/ogg";
+    if (lowerName.endsWith(".webm")) return "audio/webm";
+    if (lowerName.endsWith(".m4a")) return "audio/m4a";
+    if (lowerName.endsWith(".mp4")) return "audio/mp4";
+    if (lowerName.endsWith(".aac")) return "audio/aac";
+    return "audio/mpeg";
+  }
+
+  if (lowerName.endsWith(".png")) return "image/png";
+  if (lowerName.endsWith(".webp")) return "image/webp";
+  if (lowerName.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function guessAssetExtension(contentType: string, kind: "image" | "audio") {
+  const normalizedType = contentType.toLowerCase();
+
+  if (kind === "audio") {
+    if (normalizedType.includes("mpeg") || normalizedType.includes("mp3")) return "mp3";
+    if (normalizedType.includes("wav")) return "wav";
+    if (normalizedType.includes("ogg")) return "ogg";
+    if (normalizedType.includes("webm")) return "webm";
+    if (normalizedType.includes("mp4")) return "mp4";
+    if (normalizedType.includes("m4a")) return "m4a";
+    if (normalizedType.includes("aac")) return "aac";
+    return "bin";
+  }
+
+  if (normalizedType.includes("png")) return "png";
+  if (normalizedType.includes("webp")) return "webp";
+  if (normalizedType.includes("gif")) return "gif";
+  return "jpg";
+}
+
+function buildAssetUploadFileName(
+  kind: "image" | "audio",
+  fileName: string | undefined,
+  contentType: string,
+) {
+  const safeBaseName = (fileName?.trim() || `${kind}-${Date.now()}`)
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const fallbackName = safeBaseName || `${kind}-${Date.now()}`;
+  if (fallbackName.includes(".")) return fallbackName;
+  return `${fallbackName}.${guessAssetExtension(contentType, kind)}`;
+}
+
+function getDataUrlUploadPayload(dataUrl?: string) {
+  const normalized = normalizeAssetUrl(dataUrl);
+  if (!normalized?.startsWith("data:")) return null;
+
+  const match = normalized.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match) return null;
+
+  const contentType = match[1]?.trim() || "application/octet-stream";
+  const isBase64 = Boolean(match[2]);
+  const body = match[3] ?? "";
+
+  if (!body) return null;
+
+  if (isBase64) {
+    return {
+      contentType,
+      fileBase64: body,
+    };
+  }
+
+  try {
+    return {
+      contentType,
+      fileBase64: btoa(decodeURIComponent(body)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getFriendlyAssetErrorMessage(error: unknown, fallback: string) {
+  const rawMessage = error instanceof Error ? error.message : "";
+  if (rawMessage.includes("did not match the expected pattern")) {
+    return fallback;
+  }
+  return rawMessage || fallback;
+}
+
 function normalizeQuestionAssetUrls(question: ManualQuestion): ManualQuestion {
   if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") {
     return {
@@ -2736,61 +2833,95 @@ export default function PaperIntake() {
     return undefined;
   };
 
+  const persistAssetForSave = async <T extends ManualOptionImage | ManualAudioFile>(
+    asset: T | undefined,
+    kind: "image" | "audio",
+  ): Promise<T | undefined> => {
+    if (!asset) return undefined;
+
+    const durableUrl = getDurableAssetUrl(asset.previewUrl) ?? getDurableAssetUrl(asset.dataUrl);
+    const contentType = guessAssetContentType(kind, asset.fileName, asset.mimeType);
+
+    if (durableUrl) {
+      return {
+        ...asset,
+        dataUrl: durableUrl,
+        previewUrl: durableUrl,
+        mimeType: contentType,
+      };
+    }
+
+    const uploadPayload = getDataUrlUploadPayload(asset.dataUrl);
+    if (uploadPayload) {
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: buildAssetUploadFileName(kind, asset.fileName, uploadPayload.contentType || contentType),
+          contentType: uploadPayload.contentType || contentType,
+          fileBase64: uploadPayload.fileBase64,
+        });
+        const uploadedUrl = normalizeAssetUrl(uploaded.url);
+        if (uploadedUrl) {
+          return {
+            ...asset,
+            dataUrl: uploadedUrl,
+            previewUrl: uploadedUrl,
+            mimeType: uploadPayload.contentType || contentType,
+          };
+        }
+      } catch (error) {
+        console.error(`[PaperIntake] Failed to upload ${kind} asset before save:`, error);
+      }
+    }
+
+    const normalizedDataUrl = normalizeAssetUrl(asset.dataUrl) ?? asset.dataUrl;
+    return {
+      ...asset,
+      dataUrl: normalizedDataUrl,
+      previewUrl: undefined,
+      mimeType: contentType,
+    };
+  };
+
   /** Persist durable asset URLs when available, otherwise keep embedded data for reliability. */
-  const prepareBlueprintForSave = (bp: ManualPaperBlueprint): ManualPaperBlueprint => {
-    const stripImage = (img?: ManualOptionImage): ManualOptionImage | undefined => {
-      if (!img) return undefined;
-      const durableUrl = getDurableAssetUrl(img.previewUrl) ?? getDurableAssetUrl(img.dataUrl);
-      return {
-        ...img,
-        dataUrl: durableUrl ?? img.dataUrl,
-        previewUrl: durableUrl,
-      };
-    };
-    const stripAudio = (audio?: ManualAudioFile): ManualAudioFile | undefined => {
-      if (!audio) return undefined;
-      const durableUrl = getDurableAssetUrl(audio.previewUrl) ?? getDurableAssetUrl(audio.dataUrl);
-      return {
-        ...audio,
-        dataUrl: durableUrl ?? audio.dataUrl,
-        previewUrl: durableUrl,
-      };
-    };
+  const prepareBlueprintForSave = async (bp: ManualPaperBlueprint): Promise<ManualPaperBlueprint> => {
+    const stripImage = async (img?: ManualOptionImage) => persistAssetForSave(img, "image");
+    const stripAudio = async (audio?: ManualAudioFile) => persistAssetForSave(audio, "audio");
+
     return {
       ...bp,
-      sections: bp.sections.map((section) => ({
+      sections: await Promise.all(bp.sections.map(async (section) => ({
         ...section,
-        subsections: section.subsections.map((sub) => ({
+        subsections: await Promise.all(section.subsections.map(async (sub) => ({
           ...sub,
-          sceneImage: stripImage(sub.sceneImage),
-          audio: stripAudio(sub.audio),
-          questions: sub.questions.map((q) => {
+          sceneImage: await stripImage(sub.sceneImage),
+          audio: await stripAudio(sub.audio),
+          questions: await Promise.all(sub.questions.map(async (q) => {
             if (q.type === "mcq" || q.type === "checkbox" || q.type === "passage-mcq") {
               return {
                 ...q,
-                options: q.options.map((opt) => (
+                options: await Promise.all(q.options.map(async (opt) => (
                   "image" in opt
-                    ? { ...opt, image: stripImage(opt.image) }
+                    ? { ...opt, image: await stripImage(opt.image) }
                     : opt
-                )),
+                ))),
               };
             }
             if (q.type === "writing" && (q as ManualWritingQuestion).image) {
-              return { ...q, image: stripImage((q as ManualWritingQuestion).image) };
+              return { ...q, image: await stripImage((q as ManualWritingQuestion).image) };
             }
             if (q.type === "speaking" && (q as ManualSpeakingQuestion).image) {
-              return { ...q, image: stripImage((q as ManualSpeakingQuestion).image) };
+              return { ...q, image: await stripImage((q as ManualSpeakingQuestion).image) };
             }
             if (q.type === "picture-spelling" && (q as ManualPictureSpellingQuestion).image) {
-              return { ...q, image: stripImage((q as ManualPictureSpellingQuestion).image) };
+              return { ...q, image: await stripImage((q as ManualPictureSpellingQuestion).image) };
             }
             if (q.type === "word-completion" && (q as ManualWordCompletionQuestion).image) {
-              return { ...q, image: stripImage((q as ManualWordCompletionQuestion).image) };
+              return { ...q, image: await stripImage((q as ManualWordCompletionQuestion).image) };
             }
             return q;
-          }),
-        })),
-      })),
+          })),
+        }))),
+      }))),
     };
   };
 
@@ -4290,34 +4421,36 @@ export default function PaperIntake() {
 
     try {
       const fileBase64 = await fileToBase64(file);
-      const dataUrl = `data:${file.type};base64,${fileBase64}`;
-      let previewUrl = URL.createObjectURL(file);
+      const contentType = guessAssetContentType("audio", file.name, file.type);
+      const dataUrl = `data:${contentType};base64,${fileBase64}`;
+      let persistedUrl: string | undefined;
 
       try {
         const uploaded = await uploadFileMutation.mutateAsync({
-          fileName: `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
-          contentType: file.type,
+          fileName: buildAssetUploadFileName("audio", `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`, contentType),
+          contentType,
           fileBase64,
         });
-        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
-      } catch {
-        // Fall back to the in-browser preview URL when upload is unavailable.
+        persistedUrl = normalizeAssetUrl(uploaded.url);
+      } catch (error) {
+        console.warn("[PaperIntake] Audio upload failed, keeping embedded audio until save:", error);
       }
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,
         audio: {
-          dataUrl,
-          previewUrl,
+          dataUrl: persistedUrl ?? dataUrl,
+          previewUrl: persistedUrl,
           fileName: file.name,
-          mimeType: file.type,
+          mimeType: contentType,
           size: file.size,
         },
       }));
 
       toast.success("Audio file uploaded.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to process audio file");
+      console.error("[PaperIntake] Failed to process subsection audio:", error);
+      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the audio file. Please try another file or save again."));
     }
   };
 
@@ -4335,7 +4468,7 @@ export default function PaperIntake() {
       return;
     }
 
-    const preparedBlueprint = prepareBlueprintForSave(blueprint);
+    const preparedBlueprint = await prepareBlueprintForSave(blueprint);
     const trimmedTitle = effectiveTitle.trim();
     const trimmedDescription = effectiveDescription.trim() || undefined;
     const successFeedback = isQuestionBankMode
@@ -4405,7 +4538,12 @@ export default function PaperIntake() {
       toast.success(successToast);
       setTimeout(() => navigate(managerHref), 1200);
     } catch (err: any) {
-      toast.error(err?.message || (isQuestionBankMode ? "Failed to save the question bank. Please try again." : "Failed to save paper. Please try again."));
+      console.error("[PaperIntake] Failed to persist paper:", err);
+      const fallbackMessage = isQuestionBankMode ? "Failed to save the question bank. Please try again." : "Failed to save paper. Please try again.";
+      toast.error(getFriendlyAssetErrorMessage(
+        err,
+        "A listening asset link was invalid. The editor cleaned the file links automatically, but this save still failed. Please try saving once more.",
+      ) || fallbackMessage);
     }
   };
 
@@ -4427,7 +4565,7 @@ export default function PaperIntake() {
     const copyTitle = createCopyTitle(effectiveTitle);
     const copySeed = createLocalId();
     const copyCreatedAt = new Date().toISOString();
-    const copyBlueprint = prepareBlueprintForSave(
+    const copyBlueprint = await prepareBlueprintForSave(
       buildBlueprint(copySeed, copyCreatedAt, copyTitle, effectiveDescription, sections, buildMode, visibilityMode, generationConfig),
     );
 
