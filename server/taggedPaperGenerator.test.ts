@@ -326,4 +326,48 @@ describe("tagged random paper generation", () => {
     expect(result.blueprint.sections[0].subsections).toHaveLength(1);
     expect(result.blueprint.sections[0].subsections[0]?.questions[0]?.prompt).toBe("Fallback reading question");
   });
+
+  it("does not fall back to a different question type when an assessment part requires open-ended reading", () => {
+    const source = makeAssessmentFallbackBlueprint("english-a", "Fallback reading question");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-open-ended-paper",
+      title: "Generated Open-Ended Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-a"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 2",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-open-ended",
+                label: "Reading Part 2",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 2",
+                  questionTypes: ["passage-open-ended"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-a", title: "English A", blueprint: source },
+    ]);
+
+    expect(result.blueprint.sections).toHaveLength(1);
+    expect(result.blueprint.sections[0].subsections).toHaveLength(0);
+    expect(result.warnings.some((warning) => warning.includes('only assembled 0/1'))).toBe(true);
+  });
 });

@@ -123,11 +123,20 @@ function isFixedBlueprint(blueprint: ManualPaperBlueprint) {
 function matchesQuestionTagProfile(
   profile: QuestionTagProfile,
   rule: ManualPaperGenerationRule,
+  options: {
+    allowMissingExamPart?: boolean;
+  } = {},
 ) {
   const filters = rule.filters;
   if (filters.track && profile.track !== filters.track) return false;
   if (filters.unit && profile.unit !== filters.unit) return false;
-  if (filters.examPart && profile.examPart !== filters.examPart) return false;
+  if (filters.examPart) {
+    if (profile.examPart) {
+      if (profile.examPart !== filters.examPart) return false;
+    } else if (!options.allowMissingExamPart) {
+      return false;
+    }
+  }
 
   if (profile.kind === "english") {
     if (filters.entries && filters.entries.length > 0) {
@@ -168,6 +177,17 @@ function matchesQuestionTagProfile(
 }
 
 function matchesRule(candidate: GenerationCandidate, sectionType: ManualSectionType, rule: ManualPaperGenerationRule) {
+  return matchesRuleWithOptions(candidate, sectionType, rule);
+}
+
+function matchesRuleWithOptions(
+  candidate: GenerationCandidate,
+  sectionType: ManualSectionType,
+  rule: ManualPaperGenerationRule,
+  options: {
+    allowMissingExamPart?: boolean;
+  } = {},
+) {
   if (candidate.sectionType !== sectionType) return false;
   if (rule.filters.sectionTypes && rule.filters.sectionTypes.length > 0 && !rule.filters.sectionTypes.includes(candidate.sectionType)) {
     return false;
@@ -180,7 +200,7 @@ function matchesRule(candidate: GenerationCandidate, sectionType: ManualSectionT
     return true;
   }
 
-  return candidate.questionProfiles.some((profile) => matchesQuestionTagProfile(profile, rule));
+  return candidate.questionProfiles.some((profile) => matchesQuestionTagProfile(profile, rule, options));
 }
 
 function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
@@ -352,7 +372,11 @@ export function generatePaperFromTaggedSources(
 
     if (selectedQuestionCount < plan.totalQuestions) {
       const fallbackPool = shuffle(
-        candidates.filter((candidate) => !usedCandidateIds.has(candidate.id) && candidate.sectionType === plan.sectionType),
+        candidates.filter((candidate) => !usedCandidateIds.has(candidate.id) && (
+          plan.rules.length === 0
+            ? candidate.sectionType === plan.sectionType
+            : plan.rules.some((rule) => matchesRuleWithOptions(candidate, plan.sectionType, rule, { allowMissingExamPart: true }))
+        )),
       );
       while (fallbackPool.length > 0 && selectedQuestionCount < plan.totalQuestions) {
         const candidate = fallbackPool.shift();

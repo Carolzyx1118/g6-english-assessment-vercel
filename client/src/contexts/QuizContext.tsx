@@ -426,6 +426,20 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, [allPapers, selectedPaper]);
 
   useEffect(() => {
+    if (!selectedPaper || isStarted) return;
+
+    const latestPaper = allPapers.find((paper) => paper.id === selectedPaper.id);
+    if (!latestPaper || latestPaper === selectedPaper) return;
+
+    setSelectedPaper(latestPaper);
+    currentSectionIdRef.current = latestPaper.sections[0]?.id || '';
+    setState((prev) => ({
+      ...prev,
+      currentSectionIndex: Math.min(prev.currentSectionIndex, Math.max(latestPaper.sections.length - 1, 0)),
+    }));
+  }, [allPapers, isStarted, selectedPaper]);
+
+  useEffect(() => {
     if (!isStarted || state.submitted || !selectedPaper) return;
 
     const now = Date.now();
