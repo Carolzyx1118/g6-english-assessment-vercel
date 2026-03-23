@@ -35,8 +35,9 @@ type GenerationCandidate = {
   sourcePaperTitle: string;
   sectionType: ManualSectionType;
   questionType: ManualQuestionType;
+  questionTypes: ManualQuestionType[];
   questionCount: number;
-  subsection: ManualSubsection;
+  subsections: ManualSubsection[];
   questionProfiles: QuestionTagProfile[];
 };
 
@@ -110,6 +111,10 @@ function getQuestionProfiles(question: ManualQuestion) {
 
 function getCandidateProfiles(subsection: ManualSubsection) {
   return subsection.questions.flatMap((question) => getQuestionProfiles(question));
+}
+
+function getCandidateProfilesForSubsections(subsections: ManualSubsection[]) {
+  return subsections.flatMap((subsection) => getCandidateProfiles(subsection));
 }
 
 function isGeneratedBlueprint(blueprint: ManualPaperBlueprint) {
@@ -192,7 +197,12 @@ function matchesRuleWithOptions(
   if (rule.filters.sectionTypes && rule.filters.sectionTypes.length > 0 && !rule.filters.sectionTypes.includes(candidate.sectionType)) {
     return false;
   }
-  if (rule.filters.questionTypes && rule.filters.questionTypes.length > 0 && !rule.filters.questionTypes.includes(candidate.questionType)) {
+  const candidateQuestionTypes = candidate.questionTypes.length > 0 ? candidate.questionTypes : [candidate.questionType];
+  if (
+    rule.filters.questionTypes
+    && rule.filters.questionTypes.length > 0
+    && !rule.filters.questionTypes.some((questionType) => candidateQuestionTypes.includes(questionType))
+  ) {
     return false;
   }
 
@@ -211,8 +221,25 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
     const sourceIsQuestionBank = isQuestionBankOnlyBlueprint(sourcePaper.blueprint);
 
     for (const section of sourcePaper.blueprint.sections) {
+      if (sourceIsQuestionBank) {
+        const clonedSubsections = cloneDeep(section.subsections);
+        const questionTypes = Array.from(new Set(clonedSubsections.map((subsection) => subsection.questionType)));
+        candidates.push({
+          id: `${sourcePaper.paperId}:${section.id}`,
+          sourcePaperId: sourcePaper.paperId,
+          sourcePaperTitle: sourcePaper.title,
+          sectionType: section.sectionType,
+          questionType: questionTypes[0] ?? section.subsections[0]?.questionType ?? "mcq",
+          questionTypes,
+          questionCount: clonedSubsections.reduce((sum, subsection) => sum + subsection.questions.length, 0),
+          subsections: clonedSubsections,
+          questionProfiles: getCandidateProfilesForSubsections(clonedSubsections),
+        });
+        continue;
+      }
+
       for (const subsection of section.subsections) {
-        if (sourceIsQuestionBank || SHARED_BLOCK_TYPES.has(subsection.questionType)) {
+        if (SHARED_BLOCK_TYPES.has(subsection.questionType)) {
           const profiles = getCandidateProfiles(subsection);
           candidates.push({
             id: `${sourcePaper.paperId}:${section.id}:${subsection.id}`,
@@ -220,8 +247,9 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
             sourcePaperTitle: sourcePaper.title,
             sectionType: section.sectionType,
             questionType: subsection.questionType,
-            questionCount: sourceIsQuestionBank ? 1 : subsection.questions.length,
-            subsection: cloneDeep(subsection),
+            questionTypes: [subsection.questionType],
+            questionCount: subsection.questions.length,
+            subsections: [cloneDeep(subsection)],
             questionProfiles: profiles,
           });
           continue;
@@ -234,11 +262,12 @@ function buildGenerationCandidates(sourcePapers: GeneratorSourcePaper[]) {
             sourcePaperTitle: sourcePaper.title,
             sectionType: section.sectionType,
             questionType: subsection.questionType,
+            questionTypes: [subsection.questionType],
             questionCount: 1,
-            subsection: cloneDeep({
+            subsections: [cloneDeep({
               ...subsection,
               questions: [question],
-            }),
+            })],
             questionProfiles: getQuestionProfiles(question),
           });
         }
@@ -273,17 +302,24 @@ function allocateRuleTargets(totalQuestions: number, rules: ManualPaperGeneratio
   return baseTargets;
 }
 
-function cloneCandidateSubsection(selected: SelectedCandidate, sectionIndex: number, subsectionIndex: number) {
-  const subsection = cloneDeep(selected.candidate.subsection);
-  subsection.id = createGeneratedId(`generated-subsection-${sectionIndex + 1}`, subsectionIndex);
-  subsection.questions = subsection.questions.map((question, questionIndex) => ({
-    ...question,
-    id: createGeneratedId(`generated-question-${sectionIndex + 1}-${subsectionIndex + 1}`, questionIndex),
-  }));
-  if (!subsection.title?.trim()) {
-    subsection.title = selected.rule?.label?.trim() || selected.candidate.sourcePaperTitle;
-  }
-  return subsection;
+function cloneCandidateSubsections(
+  selected: SelectedCandidate,
+  sectionIndex: number,
+  startSubsectionIndex: number,
+) {
+  return selected.candidate.subsections.map((sourceSubsection, subsectionOffset) => {
+    const subsection = cloneDeep(sourceSubsection);
+    const subsectionIndex = startSubsectionIndex + subsectionOffset;
+    subsection.id = createGeneratedId(`generated-subsection-${sectionIndex + 1}`, subsectionIndex);
+    subsection.questions = subsection.questions.map((question, questionIndex) => ({
+      ...question,
+      id: createGeneratedId(`generated-question-${sectionIndex + 1}-${subsectionIndex + 1}`, questionIndex),
+    }));
+    if (!subsection.title?.trim()) {
+      subsection.title = selected.rule?.label?.trim() || selected.candidate.sourcePaperTitle;
+    }
+    return subsection;
+  });
 }
 
 export function getBlueprintBuildMode(blueprint: ManualPaperBlueprint): ManualPaperBuildMode {
@@ -392,17 +428,23 @@ export function generatePaperFromTaggedSources(
       warnings.push(`${sectionWarningsPrefix}: only assembled ${selectedQuestionCount}/${plan.totalQuestions} question(s).`);
     }
 
+    const generatedSubsections: ManualSubsection[] = [];
+
+    selected.forEach((candidate) => {
+      const clonedSubsections = cloneCandidateSubsections(candidate, sectionIndex, generatedSubsections.length);
+      clonedSubsections.forEach((subsection) => {
+        if (plan.instructions?.trim()) {
+          subsection.instructions = plan.instructions.trim();
+        }
+        generatedSubsections.push(subsection);
+      });
+    });
+
     generatedSections.push({
       id: createGeneratedId(`generated-section`, sectionIndex),
       sectionType: plan.sectionType,
       partLabel: `Part ${sectionIndex + 1}`,
-      subsections: selected.map((candidate, subsectionIndex) => {
-        const subsection = cloneCandidateSubsection(candidate, sectionIndex, subsectionIndex);
-        if (plan.instructions?.trim()) {
-          subsection.instructions = plan.instructions.trim();
-        }
-        return subsection;
-      }),
+      subsections: generatedSubsections,
     });
   });
 

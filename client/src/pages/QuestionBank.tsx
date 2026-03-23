@@ -558,9 +558,10 @@ export default function QuestionBank() {
                           </div>
                         ) : (
                           items.map((section) => {
-                            const subsection = section.subsections[0];
-                            if (!subsection) return null;
-                            const tagValues = getSubsectionTagValues(paper.subject as PaperSubject, subsection);
+                            const previewSubsections = section.subsections.filter(Boolean);
+                            const primarySubsection = previewSubsections[0];
+                            if (!primarySubsection) return null;
+                            const tagValues = getSubsectionTagValues(paper.subject as PaperSubject, primarySubsection);
 
                             return (
                               <div
@@ -571,15 +572,26 @@ export default function QuestionBank() {
                                   <div className="space-y-2">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <Badge className="rounded-full bg-[#1E3A5F] px-3 py-1 text-white hover:bg-[#1E3A5F]">
-                                        {formatQuestionBankItemId(paper.subject as PaperSubject, subsection.id)}
+                                        {formatQuestionBankItemId(paper.subject as PaperSubject, section.id)}
                                       </Badge>
                                       {tagValues.map((tag) => (
-                                        <Badge key={`${subsection.id}-${tag}`} variant="outline">
+                                        <Badge key={`${section.id}-${tag}`} variant="outline">
                                           {tag}
                                         </Badge>
                                       ))}
                                     </div>
-                                    <SubsectionPreview subsection={subsection} />
+                                    <div className="space-y-4">
+                                      {previewSubsections.map((subsection, subsectionIndex) => (
+                                        <div key={subsection.id} className="space-y-3">
+                                          {previewSubsections.length > 1 ? (
+                                            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                                              Block {subsectionIndex + 1}
+                                            </p>
+                                          ) : null}
+                                          <SubsectionPreview subsection={subsection} />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               </div>

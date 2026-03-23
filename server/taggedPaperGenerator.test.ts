@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countBlueprintQuestions } from "@shared/blueprintToPaper";
+import { blueprintToPaper, countBlueprintQuestions } from "@shared/blueprintToPaper";
 import { generatePaperFromTaggedSources, getBlueprintBuildMode } from "@shared/taggedPaperGenerator";
 import type { ManualPaperBlueprint } from "@shared/manualPaperBlueprint";
 
@@ -155,6 +155,72 @@ function makePassageOpenEndedBlueprint(id: string): ManualPaperBlueprint {
   };
 }
 
+function makeMultiQuestionMcqBlueprint(id: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 1",
+        sectionType: "reading",
+        subsections: [
+          {
+            id: `${id}-subsection`,
+            title: "",
+            instructions: "",
+            questionType: "mcq",
+            questions: [
+              {
+                id: `${id}-question-1`,
+                type: "mcq",
+                prompt: "Question one",
+                options: [
+                  { id: `${id}-q1-a`, label: "A", text: "A" },
+                  { id: `${id}-q1-b`, label: "B", text: "B" },
+                ],
+                correctAnswer: "A",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 1",
+                    grammarPoints: [],
+                  },
+                },
+              },
+              {
+                id: `${id}-question-2`,
+                type: "mcq",
+                prompt: "Question two",
+                options: [
+                  { id: `${id}-q2-a`, label: "A", text: "A" },
+                  { id: `${id}-q2-b`, label: "B", text: "B" },
+                ],
+                correctAnswer: "B",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 1",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function makeSentenceReorderBlueprint(id: string): ManualPaperBlueprint {
   return {
     id,
@@ -215,6 +281,80 @@ function makeSentenceReorderBlueprint(id: string): ManualPaperBlueprint {
                     entries: ["Exam Bank"],
                     ability: "Reading",
                     examPart: "Reading Part 7",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function makeMultiSubsectionMcqBlueprint(id: string): ManualPaperBlueprint {
+  return {
+    id,
+    title: id,
+    description: "Question bank source",
+    createdAt: "2026-03-17T00:00:00.000Z",
+    buildMode: "fixed",
+    visibilityMode: "question-bank",
+    sections: [
+      {
+        id: `${id}-section`,
+        partLabel: "Part 1",
+        sectionType: "reading",
+        subsections: [
+          {
+            id: `${id}-subsection-1`,
+            title: "",
+            instructions: "",
+            questionType: "mcq",
+            questions: [
+              {
+                id: `${id}-question-1`,
+                type: "mcq",
+                prompt: "Block question one",
+                options: [
+                  { id: `${id}-a1`, label: "A", text: "A" },
+                  { id: `${id}-b1`, label: "B", text: "B" },
+                ],
+                correctAnswer: "A",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 1",
+                    grammarPoints: [],
+                  },
+                },
+              },
+            ],
+          },
+          {
+            id: `${id}-subsection-2`,
+            title: "",
+            instructions: "",
+            questionType: "mcq",
+            questions: [
+              {
+                id: `${id}-question-2`,
+                type: "mcq",
+                prompt: "Block question two",
+                options: [
+                  { id: `${id}-a2`, label: "A", text: "A" },
+                  { id: `${id}-b2`, label: "B", text: "B" },
+                ],
+                correctAnswer: "B",
+                tags: {
+                  english: {
+                    track: "ket",
+                    entries: ["Exam Bank"],
+                    ability: "Reading",
+                    examPart: "Reading Part 1",
                     grammarPoints: [],
                   },
                 },
@@ -550,6 +690,56 @@ describe("tagged random paper generation", () => {
     ]);
   });
 
+  it("keeps question-bank mcq blocks together all the way into the runtime paper", () => {
+    const source = makeMultiQuestionMcqBlueprint("english-mcq-block");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-mcq-paper",
+      title: "Generated MCQ Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-mcq-block"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 1",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-part-1",
+                label: "Reading Part 1",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 1",
+                  questionTypes: ["mcq"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const generated = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-mcq-block", title: "English MCQ Block", blueprint: source },
+    ]);
+    const runtimePaper = blueprintToPaper(generated.blueprint, { subject: "english", category: "assessment" });
+
+    expect(generated.blueprint.sections).toHaveLength(1);
+    expect(generated.blueprint.sections[0].subsections).toHaveLength(1);
+    expect(generated.blueprint.sections[0].subsections[0]?.questions).toHaveLength(2);
+    expect(runtimePaper.sections[0]?.questions.map((question) => question.question)).toEqual([
+      "Question one",
+      "Question two",
+    ]);
+    expect(runtimePaper.sections[0]?.manualBlocks?.[0]?.questionIds).toEqual([1, 2]);
+  });
+
   it("keeps question-bank sentence reorder blocks together instead of splitting each saved question", () => {
     const source = makeSentenceReorderBlueprint("english-sentence-reorder");
     const generatedBlueprint: ManualPaperBlueprint = {
@@ -593,5 +783,58 @@ describe("tagged random paper generation", () => {
     expect(result.blueprint.sections[0].subsections).toHaveLength(1);
     expect(result.blueprint.sections[0].subsections[0]?.questions).toHaveLength(2);
     expect(result.blueprint.sections[0].subsections[0]?.questionType).toBe("sentence-reorder");
+  });
+
+  it("keeps an entire question-bank item together when it contains multiple subsections", () => {
+    const source = makeMultiSubsectionMcqBlueprint("english-multi-subsection");
+    const generatedBlueprint: ManualPaperBlueprint = {
+      id: "generated-multi-subsection-paper",
+      title: "Generated Multi Subsection Paper",
+      description: "Randomized from assessment structure",
+      createdAt: "2026-03-17T00:00:00.000Z",
+      buildMode: "generated",
+      visibilityMode: "student",
+      sections: [],
+      generationConfig: {
+        sourcePaperIds: ["english-multi-subsection"],
+        sections: [
+          {
+            id: "generated-reading-section",
+            title: "Reading Part 1",
+            sectionType: "reading",
+            totalQuestions: 1,
+            rules: [
+              {
+                id: "rule-reading-part-1",
+                label: "Reading Part 1",
+                weight: 1,
+                filters: {
+                  track: "ket",
+                  examPart: "Reading Part 1",
+                  questionTypes: ["mcq"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const generated = generatePaperFromTaggedSources(generatedBlueprint, [
+      { paperId: "english-multi-subsection", title: "English Multi Subsection", blueprint: source },
+    ]);
+    const runtimePaper = blueprintToPaper(generated.blueprint, { subject: "english", category: "assessment" });
+
+    expect(generated.blueprint.sections).toHaveLength(1);
+    expect(generated.blueprint.sections[0].subsections).toHaveLength(2);
+    expect(generated.blueprint.sections[0].subsections.map((subsection) => subsection.questions[0]?.prompt)).toEqual([
+      "Block question one",
+      "Block question two",
+    ]);
+    expect(runtimePaper.sections[0]?.questions.map((question) => question.question)).toEqual([
+      "Block question one",
+      "Block question two",
+    ]);
+    expect(runtimePaper.sections[0]?.manualBlocks).toHaveLength(2);
   });
 });
