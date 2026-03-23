@@ -218,6 +218,14 @@ function getEnglishSectionTypeFromAbility(ability?: string): ManualSectionType |
   return null;
 }
 
+function getLockedEnglishQuestionTypeFromAbility(ability?: string): ManualQuestionType | undefined {
+  if (!ability) return undefined;
+  const normalizedAbility = normalizeEnglishTagAbility(ability);
+  if (normalizedAbility === "Writing") return "writing";
+  if (normalizedAbility === "Speaking") return "speaking";
+  return undefined;
+}
+
 function getEnglishTagsForSubsection(subsection: ManualSubsection) {
   return subsection.sharedQuestionTags?.english
     ?? subsection.questions.find((question) => question.tags?.english)?.tags?.english;
@@ -2388,14 +2396,23 @@ export default function PaperIntake() {
     if (!isQuestionBankMode || paperSubject !== "english") return undefined;
 
     const englishTags = tags?.english;
-    if (!englishTags?.track || !englishTags.examPart) return undefined;
+    if (!englishTags) return undefined;
+
+    const lockedQuestionTypeFromSkill = getLockedEnglishQuestionTypeFromAbility(englishTags.ability);
+    if (!englishTags.track || !englishTags.examPart) {
+      return lockedQuestionTypeFromSkill;
+    }
 
     const system = englishTagSystemsData?.find((candidate) => candidate.id === englishTags.track);
     const configuredQuestionType = system?.generatedPaper?.parts.find(
       (part) => part.examPart === englishTags.examPart,
     )?.questionType;
 
-    return isManualQuestionTypeValue(configuredQuestionType) ? configuredQuestionType : undefined;
+    if (isManualQuestionTypeValue(configuredQuestionType)) {
+      return configuredQuestionType;
+    }
+
+    return lockedQuestionTypeFromSkill;
   }, [englishTagSystemsData, isQuestionBankMode, paperSubject]);
 
   const getConfiguredEnglishQuestionTypeForSubsection = useCallback((subsection: ManualSubsection) => (

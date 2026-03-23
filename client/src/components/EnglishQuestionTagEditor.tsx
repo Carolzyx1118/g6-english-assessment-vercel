@@ -347,6 +347,12 @@ export default function EnglishQuestionTagEditor({
           </div>
         </div>
       ) : null}
+
+      {systemMode === "textbook-practice" && (profile.ability === "Writing" || profile.ability === "Speaking") ? (
+        <p className="text-xs text-amber-600">
+          `{profile.ability}` skill will lock the Question Type below to `{MANUAL_QUESTION_TYPE_LABELS[(profile.ability === "Writing" ? "writing" : "speaking") as ManualQuestionType]}`.
+        </p>
+      ) : null}
     </div>
   );
 }
