@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { Link, useSearch } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, GripVertical, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +117,14 @@ function formatExamPart(prefix: string, number: number) {
   return `${prefix.trim() || "Part"} Part ${clampPositiveInt(number)}`;
 }
 
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex) return items;
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
+
 const SYSTEM_MODE_LABELS: Record<TagSystemMode, string> = {
   assessment: "Assessment",
   "textbook-practice": "Textbook Practice",
@@ -138,6 +146,7 @@ export default function TagManager() {
   const [englishSystems, setEnglishSystems] = useState<EnglishExamTagSystem[]>([]);
   const [basicSystems, setBasicSystems] = useState<SubjectTagSystem[]>([]);
   const [expandedSystemIds, setExpandedSystemIds] = useState<string[]>([]);
+  const [draggingAssessmentPart, setDraggingAssessmentPart] = useState<{ systemId: string; index: number } | null>(null);
 
   const query = useSubjectTagSystems(subjectFilter);
 
@@ -318,6 +327,80 @@ export default function TagManager() {
         current.units,
       ),
     }));
+  };
+
+  const updateEnglishAssessmentParts = (
+    systemId: string,
+    updater: (
+      current: Array<{ prefix: string; questionType: string; totalQuestions: number }>,
+      system: EnglishExamTagSystem,
+    ) => Array<{ prefix: string; questionType: string; totalQuestions: number }>,
+  ) => {
+    updateSystem(systemId, (current) => {
+      const defaultPrefix = PART_PREFIX_OPTIONS.english[0] || "Reading";
+      const generatedConfig = buildGeneratedPaperConfig(
+        "english",
+        current.label,
+        current.examParts,
+        current.generatedPaper,
+        current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+        current.units,
+      );
+      const currentRows = generatedConfig.parts.map((part) => {
+        const parsedPart = parseExamPart(part.examPart, defaultPrefix);
+        return {
+          prefix: parsedPart.prefix,
+          questionType: part.questionType,
+          totalQuestions: Math.max(0, Number(part.totalQuestions) || 0),
+        };
+      });
+      const nextRows = updater(currentRows, current).map((row) => ({
+        prefix: row.prefix.trim() || defaultPrefix,
+        questionType: row.questionType,
+        totalQuestions: Math.max(0, Number(row.totalQuestions) || 0),
+      }));
+      const nextExamParts = nextRows.map((row, index) => formatExamPart(row.prefix, index + 1));
+      const nextGeneratedPaper = buildGeneratedPaperConfig(
+        "english",
+        current.label,
+        nextExamParts,
+        current.generatedPaper,
+        current.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+        current.units,
+      );
+
+      return {
+        ...current,
+        examParts: nextExamParts,
+        generatedPaper: {
+          ...nextGeneratedPaper,
+          parts: nextRows.map((row, index) => {
+            const examPart = nextExamParts[index];
+            const questionTypeOptions = getGeneratedQuestionTypeOptions("english", examPart);
+            return {
+              examPart,
+              questionType: questionTypeOptions.includes(row.questionType)
+                ? row.questionType
+                : questionTypeOptions[0],
+              totalQuestions: row.totalQuestions,
+            };
+          }),
+        },
+      };
+    });
+  };
+
+  const handleAssessmentPartDragStart = (systemId: string, index: number) => {
+    setDraggingAssessmentPart({ systemId, index });
+  };
+
+  const handleAssessmentPartDrop = (systemId: string, targetIndex: number) => {
+    if (!draggingAssessmentPart || draggingAssessmentPart.systemId !== systemId) return;
+
+    updateEnglishAssessmentParts(systemId, (currentRows) =>
+      moveItem(currentRows, draggingAssessmentPart.index, targetIndex),
+    );
+    setDraggingAssessmentPart(null);
   };
 
   const updateGeneratedPaper = (
@@ -786,12 +869,44 @@ export default function TagManager() {
                                   return (
                                     <div
                                       key={`${system.id}-part-${examPartIndex}`}
-                                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto_120px_minmax(0,1fr)_120px_auto]"
+                                      onDragOver={(event: DragEvent<HTMLDivElement>) => {
+                                        if (!draggingAssessmentPart || draggingAssessmentPart.systemId !== system.id) return;
+                                        event.preventDefault();
+                                      }}
+                                      onDrop={() => handleAssessmentPartDrop(system.id, examPartIndex)}
+                                      className={`grid gap-3 rounded-xl border border-slate-200 bg-white p-3 ${
+                                        subjectFilter === "english"
+                                          ? "md:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_120px_auto]"
+                                          : "md:grid-cols-[minmax(0,1fr)_auto_120px_minmax(0,1fr)_120px_auto]"
+                                      } ${draggingAssessmentPart?.systemId === system.id && draggingAssessmentPart.index === examPartIndex ? "opacity-70" : ""}`}
                                     >
+                                      {subjectFilter === "english" ? (
+                                        <div
+                                          draggable
+                                          onDragStart={() => handleAssessmentPartDragStart(system.id, examPartIndex)}
+                                          onDragEnd={() => setDraggingAssessmentPart(null)}
+                                          className="flex h-11 cursor-grab items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-400"
+                                          title="Drag to reorder"
+                                        >
+                                          <GripVertical className="h-4 w-4" />
+                                        </div>
+                                      ) : null}
+
                                       <select
                                         className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
                                         value={parsedPart.prefix}
                                         onChange={(event) => {
+                                          if (subjectFilter === "english") {
+                                            updateEnglishAssessmentParts(system.id, (currentRows) =>
+                                              currentRows.map((row, rowIndex) =>
+                                                rowIndex === examPartIndex
+                                                  ? { ...row, prefix: event.target.value }
+                                                  : row,
+                                              ),
+                                            );
+                                            return;
+                                          }
+
                                           const nextExamParts = [...system.examParts];
                                           nextExamParts[examPartIndex] = formatExamPart(event.target.value, parsedPart.number);
                                           setExamPartsForSystem(system.id, nextExamParts);
@@ -808,32 +923,46 @@ export default function TagManager() {
                                         Part
                                       </div>
 
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        step={1}
-                                        value={parsedPart.number}
-                                        onChange={(event) => {
-                                          const nextExamParts = [...system.examParts];
-                                          nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
-                                          setExamPartsForSystem(system.id, nextExamParts);
-                                        }}
-                                        className="bg-white"
-                                      />
+                                      {subjectFilter === "english" ? (
+                                        <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700">
+                                          {examPartIndex + 1}
+                                        </div>
+                                      ) : (
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          step={1}
+                                          value={parsedPart.number}
+                                          onChange={(event) => {
+                                            const nextExamParts = [...system.examParts];
+                                            nextExamParts[examPartIndex] = formatExamPart(parsedPart.prefix, Number(event.target.value || 1));
+                                            setExamPartsForSystem(system.id, nextExamParts);
+                                          }}
+                                          className="bg-white"
+                                        />
+                                      )}
 
                                       <select
                                         className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                                         value={partConfig.questionType}
                                         disabled={isLockedQuestionType}
                                         onChange={(event) =>
-                                          updateGeneratedPaper(system.id, (current) => ({
-                                            ...current,
-                                            parts: current.parts.map((item, itemIndex) =>
-                                              itemIndex === examPartIndex
-                                                ? { ...item, questionType: event.target.value }
-                                                : item,
-                                            ),
-                                          }))
+                                          subjectFilter === "english"
+                                            ? updateEnglishAssessmentParts(system.id, (currentRows) =>
+                                                currentRows.map((row, rowIndex) =>
+                                                  rowIndex === examPartIndex
+                                                    ? { ...row, questionType: event.target.value }
+                                                    : row,
+                                                ),
+                                              )
+                                            : updateGeneratedPaper(system.id, (current) => ({
+                                                ...current,
+                                                parts: current.parts.map((item, itemIndex) =>
+                                                  itemIndex === examPartIndex
+                                                    ? { ...item, questionType: event.target.value }
+                                                    : item,
+                                                ),
+                                              }))
                                         }
                                       >
                                         {questionTypeOptions.map((option) => (
@@ -849,14 +978,22 @@ export default function TagManager() {
                                         step={1}
                                         value={partConfig.totalQuestions}
                                         onChange={(event) =>
-                                          updateGeneratedPaper(system.id, (current) => ({
-                                            ...current,
-                                            parts: current.parts.map((item, itemIndex) =>
-                                              itemIndex === examPartIndex
-                                                ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
-                                                : item,
-                                            ),
-                                          }))
+                                          subjectFilter === "english"
+                                            ? updateEnglishAssessmentParts(system.id, (currentRows) =>
+                                                currentRows.map((row, rowIndex) =>
+                                                  rowIndex === examPartIndex
+                                                    ? { ...row, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                                    : row,
+                                                ),
+                                              )
+                                            : updateGeneratedPaper(system.id, (current) => ({
+                                                ...current,
+                                                parts: current.parts.map((item, itemIndex) =>
+                                                  itemIndex === examPartIndex
+                                                    ? { ...item, totalQuestions: Math.max(0, Number(event.target.value) || 0) }
+                                                    : item,
+                                                ),
+                                              }))
                                         }
                                         className="bg-white text-center"
                                       />
@@ -866,6 +1003,13 @@ export default function TagManager() {
                                         variant="outline"
                                         className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
                                         onClick={() => {
+                                          if (subjectFilter === "english") {
+                                            updateEnglishAssessmentParts(system.id, (currentRows) =>
+                                              currentRows.filter((_, rowIndex) => rowIndex !== examPartIndex),
+                                            );
+                                            return;
+                                          }
+
                                           const nextExamParts = system.examParts.filter((_, indexToKeep) => indexToKeep !== examPartIndex);
                                           setExamPartsForSystem(system.id, nextExamParts);
                                         }}
@@ -884,6 +1028,18 @@ export default function TagManager() {
                                   className="border-slate-200 bg-white"
                                   onClick={() => {
                                     const defaultPrefix = PART_PREFIX_OPTIONS[subjectFilter][0] || "Reading";
+                                    if (subjectFilter === "english") {
+                                      updateEnglishAssessmentParts(system.id, (currentRows) => [
+                                        ...currentRows,
+                                        {
+                                          prefix: defaultPrefix,
+                                          questionType: getGeneratedQuestionTypeOptions("english", formatExamPart(defaultPrefix, currentRows.length + 1))[0],
+                                          totalQuestions: 0,
+                                        },
+                                      ]);
+                                      return;
+                                    }
+
                                     setExamPartsForSystem(system.id, [...system.examParts, formatExamPart(defaultPrefix, system.examParts.length + 1)]);
                                   }}
                                 >
