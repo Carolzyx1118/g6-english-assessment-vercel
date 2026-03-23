@@ -336,52 +336,57 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               ) : (
                 <>
                   <div className="grid sm:grid-cols-2 gap-6">
-                    {filteredPapers.map((paper: Paper, i: number) => (
-                      <motion.button
-                        key={paper.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
-                        onClick={() => onSelectPaper(paper.id)}
-                        className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
-                      >
-                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
-                        </div>
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
-                            {paper.icon}
+                    {filteredPapers.map((paper: Paper, i: number) => {
+                      const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                      const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+
+                      return (
+                        <motion.button
+                          key={paper.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
+                          onClick={() => onSelectPaper(paper.id)}
+                          className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
+                        >
+                          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
                           </div>
-                          <div>
-                            <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                          <div className="flex items-center gap-4 mb-4">
+                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
+                              {paper.icon}
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                            </div>
                           </div>
-                        </div>
-                        <div className="mb-4 flex flex-wrap gap-2">
-                          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                            {PAPER_SUBJECT_LABELS[paper.subject]}
-                          </span>
-                          <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
-                            {PAPER_CATEGORY_LABELS[paper.category]}
-                          </span>
-                          {paper.tags?.slice(0, 2).map((tag) => (
-                            <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
-                              {tag}
+                          <div className="mb-4 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                              {PAPER_SUBJECT_LABELS[paper.subject]}
                             </span>
-                          ))}
-                        </div>
-                        <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
-                        <div className="flex flex-wrap gap-3">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
-                            <BookOpen className="w-3.5 h-3.5" />
-                            {paper.sections.length} Sections
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
-                            <GraduationCap className="w-3.5 h-3.5" />
-                            {paper.totalQuestions} Questions
-                          </span>
-                        </div>
-                      </motion.button>
-                    ))}
+                            <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
+                              {PAPER_CATEGORY_LABELS[paper.category]}
+                            </span>
+                            {paper.tags?.slice(0, 2).map((tag) => (
+                              <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
+                          <div className="flex flex-wrap gap-3">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
+                              <BookOpen className="w-3.5 h-3.5" />
+                              {displaySectionsCount} Sections
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
+                              <GraduationCap className="w-3.5 h-3.5" />
+                              {displayQuestionsCount} Questions
+                            </span>
+                          </div>
+                        </motion.button>
+                      );
+                    })}
                   </div>
                   {filteredPapers.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
@@ -519,52 +524,57 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
             </motion.div>
 
             <div className="grid sm:grid-cols-2 gap-6">
-              {filteredPapers.map((paper: Paper, i: number) => (
-                <motion.button
-                  key={paper.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
-                  onClick={() => onSelectPaper(paper.id)}
-                  className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
-                >
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
-                  </div>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
-                      {paper.icon}
+              {filteredPapers.map((paper: Paper, i: number) => {
+                const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+
+                return (
+                  <motion.button
+                    key={paper.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
+                    onClick={() => onSelectPaper(paper.id)}
+                    className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
+                        {paper.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                      {PAPER_SUBJECT_LABELS[paper.subject]}
-                    </span>
-                    <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
-                      {PAPER_CATEGORY_LABELS[paper.category]}
-                    </span>
-                    {paper.tags?.slice(0, 2).map((tag) => (
-                      <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
-                        {tag}
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {PAPER_SUBJECT_LABELS[paper.subject]}
                       </span>
-                    ))}
-                  </div>
-                  <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
-                  <div className="flex flex-wrap gap-3">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
-                      <BookOpen className="w-3.5 h-3.5" />
-                      {paper.sections.length} Sections
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
-                      <GraduationCap className="w-3.5 h-3.5" />
-                      {paper.totalQuestions} Questions
-                    </span>
-                  </div>
-                </motion.button>
-              ))}
+                      <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
+                        {PAPER_CATEGORY_LABELS[paper.category]}
+                      </span>
+                      {paper.tags?.slice(0, 2).map((tag) => (
+                        <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
+                    <div className="flex flex-wrap gap-3">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        {displaySectionsCount} Sections
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
+                        <GraduationCap className="w-3.5 h-3.5" />
+                        {displayQuestionsCount} Questions
+                      </span>
+                    </div>
+                  </motion.button>
+                );
+              })}
             </div>
           </div>
 
@@ -590,6 +600,8 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const hasDistinctSubtitle = Boolean(paper.subtitle?.trim())
     && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
   const isReadyToStart = paper.sections.length > 0 && paper.totalQuestions > 0;
+  const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+  const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -664,11 +676,11 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               </div>
               <div className="mt-8 flex items-center gap-6 text-sm text-white/50">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[#D4A84B] font-bold text-xs">{paper.sections.length}</div>
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[#D4A84B] font-bold text-xs">{displaySectionsCount}</div>
                   <span>Sections</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[#D4A84B] font-bold text-xs">{paper.totalQuestions}</div>
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[#D4A84B] font-bold text-xs">{displayQuestionsCount}</div>
                   <span>Questions</span>
                 </div>
               </div>

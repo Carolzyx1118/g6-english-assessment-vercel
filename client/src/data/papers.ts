@@ -294,6 +294,8 @@ export interface Paper {
   hiddenFromStudentSelection?: boolean;
   isGeneratedPaper?: boolean;
   generationWarnings?: string[];
+  configuredSectionsCount?: number;
+  configuredQuestionsCount?: number;
   sections: Section[];
   readingWordBank?: { word: string; imageUrl: string }[];
   totalQuestions: number;

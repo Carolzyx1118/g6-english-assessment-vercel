@@ -238,6 +238,40 @@ function buildTagSystemBlueprint(
   };
 }
 
+function getConfiguredCounts(system: TagSystemConfig) {
+  const generatedPaper = system.generatedPaper;
+  if (!generatedPaper) {
+    return {
+      configuredSectionsCount: 0,
+      configuredQuestionsCount: 0,
+    };
+  }
+
+  if (system.systemMode === "textbook-practice") {
+    const configuredSectionsCount = generatedPaper.practiceRules.filter((rule) => rule.filterValue.trim().length > 0).length;
+    const configuredQuestionsCount = generatedPaper.practiceRules.reduce(
+      (sum, rule) => sum + Math.max(0, Number(rule.totalQuestions || 0)),
+      0,
+    );
+
+    return {
+      configuredSectionsCount,
+      configuredQuestionsCount,
+    };
+  }
+
+  const configuredSectionsCount = generatedPaper.parts.length;
+  const configuredQuestionsCount = generatedPaper.parts.reduce(
+    (sum, part) => sum + Math.max(0, Number(part.totalQuestions || 0)),
+    0,
+  );
+
+  return {
+    configuredSectionsCount,
+    configuredQuestionsCount,
+  };
+}
+
 function toPaperCategory(systemMode: TagSystemMode | undefined): PaperCategory {
   return systemMode === "textbook-practice" ? "practice" : "assessment";
 }
@@ -256,6 +290,7 @@ function buildTagSystemPaper(
 
   const title = system.generatedPaper?.title?.trim() || system.label;
   const description = system.generatedPaper?.description?.trim() || converted.description;
+  const { configuredSectionsCount, configuredQuestionsCount } = getConfiguredCounts(system);
 
   return {
     ...converted,
@@ -273,6 +308,8 @@ function buildTagSystemPaper(
     ],
     isGeneratedPaper: true,
     generationWarnings: generated.warnings,
+    configuredSectionsCount,
+    configuredQuestionsCount,
   } as Paper;
 }
 
@@ -282,9 +319,7 @@ function buildFallbackTagSystemPaper(
   error?: unknown,
 ): Paper {
   const generatedPaper = system.generatedPaper;
-  const totalQuestions = system.systemMode === "textbook-practice"
-    ? (generatedPaper?.practiceRules ?? []).reduce((sum, rule) => sum + Math.max(0, Number(rule.totalQuestions || 0)), 0)
-    : (generatedPaper?.parts ?? []).reduce((sum, part) => sum + Math.max(0, Number(part.totalQuestions || 0)), 0);
+  const { configuredSectionsCount, configuredQuestionsCount } = getConfiguredCounts(system);
 
   return {
     id: `tag-system-${subject}-${system.id}`,
@@ -299,9 +334,11 @@ function buildFallbackTagSystemPaper(
     subject,
     category: toPaperCategory(system.systemMode),
     sections: [],
-    totalQuestions,
+    totalQuestions: configuredQuestionsCount,
     hasListening: false,
     hasWriting: false,
+    configuredSectionsCount,
+    configuredQuestionsCount,
     tags: [
       PAPER_SUBJECT_LABELS[subject],
       system.systemMode === "textbook-practice" ? "Practice" : "Assessment",
