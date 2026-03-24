@@ -1,10 +1,10 @@
 import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createPaperAssetClientToken = vi.fn();
+const processPaperAssetUploadRequest = vi.fn();
 
-vi.mock("./blobClientTokenRoute", () => ({
-  createPaperAssetClientToken,
+vi.mock("./blobClientUpload", () => ({
+  processPaperAssetUploadRequest,
 }));
 
 function createRequest(method: string, body?: unknown) {
@@ -45,13 +45,23 @@ describe("/api/blob/client-token", () => {
     vi.clearAllMocks();
   });
 
-  it("returns a client upload token for listening audio", async () => {
-    createPaperAssetClientToken.mockResolvedValue("client-token");
+  it("returns a client upload token payload for listening audio", async () => {
+    processPaperAssetUploadRequest.mockResolvedValue({
+      type: "blob.generate-client-token",
+      clientToken: "client-token",
+    });
     const { default: handler } = await import("../api/blob/client-token");
     const req = createRequest("POST", {
-      pathname: "paper-assets/audio-listening.mp3",
-      contentType: "audio/mpeg",
-      fileSize: 1024,
+      type: "blob.generate-client-token",
+      payload: {
+        pathname: "paper-assets/audio-listening.mp3",
+        callbackUrl: "https://example.com/api/blob/client-token",
+        clientPayload: JSON.stringify({
+          contentType: "audio/mpeg",
+          fileSize: 1024,
+        }),
+        multipart: false,
+      },
     });
     const res = createResponse();
 
@@ -59,12 +69,11 @@ describe("/api/blob/client-token", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.getHeader("content-type")).toContain("application/json");
-    expect(JSON.parse(res.getBody())).toEqual({ token: "client-token" });
-    expect(createPaperAssetClientToken).toHaveBeenCalledWith({
-      pathname: "paper-assets/audio-listening.mp3",
-      contentType: "audio/mpeg",
-      fileSize: 1024,
+    expect(JSON.parse(res.getBody())).toEqual({
+      type: "blob.generate-client-token",
+      clientToken: "client-token",
     });
+    expect(processPaperAssetUploadRequest).toHaveBeenCalledTimes(1);
   });
 
   it("rejects unsupported methods", async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { put as putBlob } from "@vercel/blob/client";
+import { upload as uploadBlob } from "@vercel/blob/client";
 import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mic, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
@@ -98,7 +98,7 @@ const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
 const DEFAULT_WORD_BANK_SIZE = 4;
 const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v2";
-const BLOB_CLIENT_TOKEN_ROUTE = "/api/blob/client-token";
+const BLOB_UPLOAD_ROUTE = "/api/blob/client-token";
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
 const ENGLISH_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "speaking", "grammar", "vocabulary"];
 const MATH_SECTION_TYPES: ManualSectionType[] = ["math-multiple-choice", "math-short-answer", "math-application"];
@@ -1218,45 +1218,19 @@ function getFriendlyAssetErrorMessage(error: unknown, fallback: string) {
   return rawMessage || fallback;
 }
 
-async function requestBlobClientToken(input: {
-  pathname: string;
-  contentType: string;
-  fileSize: number;
-}) {
-  const response = await fetch(BLOB_CLIENT_TOKEN_ROUTE, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(input),
-  });
-
-  const payload = await response
-    .json()
-    .catch(() => ({} as { message?: string; token?: string }));
-
-  if (!response.ok || !payload?.token) {
-    throw new Error(payload?.message || `Blob upload token request failed (${response.status}).`);
-  }
-
-  return payload.token;
-}
-
 async function uploadListeningAudioDirect(file: File, contentType: string) {
   const pathname = `paper-assets/${buildAssetUploadFileName(
     "audio",
     `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
     contentType,
   )}`;
-  const token = await requestBlobClientToken({
-    pathname,
-    contentType,
-    fileSize: file.size,
-  });
-
-  const uploaded = await putBlob(pathname, file, {
-    token,
+  const uploaded = await uploadBlob(pathname, file, {
     access: "public",
+    handleUploadUrl: BLOB_UPLOAD_ROUTE,
+    clientPayload: JSON.stringify({
+      contentType,
+      fileSize: file.size,
+    }),
     contentType,
     multipart: file.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
   });
@@ -4470,26 +4444,7 @@ export default function PaperIntake() {
 
     try {
       const contentType = guessAssetContentType("audio", file.name, file.type);
-      let persistedUrl: string | undefined;
-
-      try {
-        persistedUrl = await uploadListeningAudioDirect(file, contentType);
-      } catch (directUploadError) {
-        console.warn("[PaperIntake] Direct listening audio upload failed, retrying with legacy upload:", directUploadError);
-
-        try {
-          const fileBase64 = await fileToBase64(file);
-          const uploaded = await uploadFileMutation.mutateAsync({
-            fileName: buildAssetUploadFileName("audio", `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`, contentType),
-            contentType,
-            fileBase64,
-          });
-          persistedUrl = normalizeAssetUrl(uploaded.url);
-        } catch (legacyUploadError) {
-          console.error("[PaperIntake] Listening audio upload failed in both direct and legacy modes:", legacyUploadError);
-          throw legacyUploadError;
-        }
-      }
+      const persistedUrl = await uploadListeningAudioDirect(file, contentType);
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { ZodError } from "zod";
-import { createPaperAssetClientToken } from "../../server/blobClientTokenRoute";
+import { processPaperAssetUploadRequest } from "../../server/blobClientUpload";
 
 type JsonObject = Record<string, unknown>;
 
@@ -77,15 +77,12 @@ export default async function handler(
 
   try {
     const requestBody = await readJsonBody(req);
-    const token = await createPaperAssetClientToken({
-      pathname: typeof requestBody.pathname === "string" ? requestBody.pathname : "",
-      contentType:
-        typeof requestBody.contentType === "string" ? requestBody.contentType : "",
-      fileSize:
-        typeof requestBody.fileSize === "number" ? requestBody.fileSize : undefined,
+    const payload = await processPaperAssetUploadRequest({
+      request: req,
+      body: requestBody as never,
     });
 
-    respondJson(res, 200, { token });
+    respondJson(res, 200, payload as Record<string, unknown>);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to generate upload token.";
