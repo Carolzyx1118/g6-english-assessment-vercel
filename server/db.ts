@@ -429,6 +429,33 @@ async function ensureRuntimeDatabaseSchema(db: ReturnType<typeof drizzle>) {
   }
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shouldRetryAfterSchemaRepair(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("does not exist")
+    || message.includes("failed query")
+    || message.includes("undefined_column")
+  );
+}
+
+async function retryWithSchemaRepair<T>(
+  db: ReturnType<typeof drizzle>,
+  operation: () => Promise<T>,
+  error: unknown,
+): Promise<T> {
+  if (!shouldRetryAfterSchemaRepair(error)) {
+    throw error;
+  }
+
+  _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(db);
+  await _dbSchemaReadyPromise;
+  return operation();
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -441,13 +468,16 @@ export async function getDb() {
   }
 
   if (_db && !_dbSchemaReadyPromise) {
-    _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(_db).catch((error) => {
-      console.warn("[Database] Runtime schema repair failed:", error);
-    });
+    _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(_db);
   }
 
   if (_dbSchemaReadyPromise) {
-    await _dbSchemaReadyPromise;
+    try {
+      await _dbSchemaReadyPromise;
+    } catch (error) {
+      console.warn("[Database] Runtime schema repair failed:", error);
+      _dbSchemaReadyPromise = null;
+    }
   }
 
   return _db;
@@ -858,8 +888,17 @@ export async function getLocalUserByUsername(username: string): Promise<LocalUse
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.username === username);
   }
-  const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
+    return rows[0];
+  } catch (error) {
+    const rows = await retryWithSchemaRepair(
+      db,
+      () => db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1),
+      error,
+    );
+    return rows[0];
+  }
 }
 
 export async function getLocalUserById(id: number): Promise<LocalUser | undefined> {
@@ -869,8 +908,17 @@ export async function getLocalUserById(id: number): Promise<LocalUser | undefine
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.id === id);
   }
-  const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
+    return rows[0];
+  } catch (error) {
+    const rows = await retryWithSchemaRepair(
+      db,
+      () => db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1),
+      error,
+    );
+    return rows[0];
+  }
 }
 
 export async function listLocalUsers(): Promise<LocalUser[]> {
@@ -880,7 +928,15 @@ export async function listLocalUsers(): Promise<LocalUser[]> {
     const data = await readLocalAuthUsersFile();
     return [...data.users].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   }
-  return db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
+  try {
+    return await db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
+  } catch (error) {
+    return retryWithSchemaRepair(
+      db,
+      () => db.select().from(localUsers).orderBy(desc(localUsers.createdAt)),
+      error,
+    );
+  }
 }
 
 export async function createLocalUser(data: InsertLocalUser): Promise<number | null> {
@@ -904,10 +960,23 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
     await writeLocalAuthUsersFile(current);
     return nextId;
   }
-  const [result] = await db
-    .insert(localUsers)
-    .values(data)
-    .returning({ id: localUsers.id });
+  let resultRows;
+  try {
+    resultRows = await db
+      .insert(localUsers)
+      .values(data)
+      .returning({ id: localUsers.id });
+  } catch (error) {
+    resultRows = await retryWithSchemaRepair(
+      db,
+      () => db
+        .insert(localUsers)
+        .values(data)
+        .returning({ id: localUsers.id }),
+      error,
+    );
+  }
+  const [result] = resultRows;
   return result?.id ?? null;
 }
 
@@ -925,7 +994,15 @@ export async function updateLocalUser(
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.update(localUsers).set(data).where(eq(localUsers.id, id));
+  try {
+    await db.update(localUsers).set(data).where(eq(localUsers.id, id));
+  } catch (error) {
+    await retryWithSchemaRepair(
+      db,
+      () => db.update(localUsers).set(data).where(eq(localUsers.id, id)),
+      error,
+    );
+  }
 }
 
 export async function updateLocalUserLastLogin(id: number): Promise<void> {
@@ -939,7 +1016,15 @@ export async function updateLocalUserLastLogin(id: number): Promise<void> {
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+  try {
+    await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+  } catch (error) {
+    await retryWithSchemaRepair(
+      db,
+      () => db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id)),
+      error,
+    );
+  }
 }
 
 export async function deleteLocalUser(id: number): Promise<void> {
@@ -951,5 +1036,13 @@ export async function deleteLocalUser(id: number): Promise<void> {
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.delete(localUsers).where(eq(localUsers.id, id));
+  try {
+    await db.delete(localUsers).where(eq(localUsers.id, id));
+  } catch (error) {
+    await retryWithSchemaRepair(
+      db,
+      () => db.delete(localUsers).where(eq(localUsers.id, id)),
+      error,
+    );
+  }
 }
