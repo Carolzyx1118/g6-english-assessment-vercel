@@ -2487,6 +2487,7 @@ export default function PaperIntake() {
   const [hasHydratedEditState, setHasHydratedEditState] = useState(false);
   const [hasRestoredLocalDraft, setHasRestoredLocalDraft] = useState(false);
   const [activePreviewSubsectionId, setActivePreviewSubsectionId] = useState<string | null>(null);
+  const [uploadingSubsectionAudioId, setUploadingSubsectionAudioId] = useState<string | null>(null);
   const autosavePausedRef = useRef(false);
   const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const availableSectionTypes = useMemo(() => getAvailableSectionTypesForSubject(paperSubject), [paperSubject]);
@@ -4443,6 +4444,7 @@ export default function PaperIntake() {
     }
 
     try {
+      setUploadingSubsectionAudioId(subsectionId);
       const contentType = guessAssetContentType("audio", file.name, file.type);
       const persistedUrl = await uploadListeningAudioDirect(file, contentType);
 
@@ -4466,6 +4468,10 @@ export default function PaperIntake() {
           "Failed to upload the listening audio. Please retry the upload once.",
         ),
       );
+    } finally {
+      setUploadingSubsectionAudioId((currentId) => (
+        currentId === subsectionId ? null : currentId
+      ));
     }
   };
 
@@ -5074,27 +5080,49 @@ export default function PaperIntake() {
                             <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
                               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                                 <div className="space-y-2">
+                                  {(() => {
+                                    const isUploadingAudio = uploadingSubsectionAudioId === subsection.id;
+                                    return (
+                                      <>
                                   <div className="flex items-center gap-2">
                                     <Volume2 className="h-4 w-4 text-sky-700" />
                                     <Label className="text-sm font-semibold text-sky-800">Listening Audio</Label>
                                   </div>
                                   <p className="text-xs text-sky-700/80">
-                                    Upload an audio clip for this big question. Students will listen to it before answering.
+                                    {isUploadingAudio
+                                      ? "Uploading audio now. Keep this page open until the upload finishes."
+                                      : "Upload an audio clip for this big question. Students will listen to it before answering."}
                                   </p>
-                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-sky-400/50 bg-white px-3 py-2 text-sm font-medium text-sky-700 transition-colors hover:border-sky-500 hover:text-sky-800">
-                                    <Music className="h-4 w-4" />
-                                    {subsection.audio ? "Replace Audio" : "Upload Audio"}
+                                  <label className={`inline-flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-2 text-sm font-medium transition-colors ${
+                                    isUploadingAudio
+                                      ? "cursor-not-allowed border-slate-300 text-slate-400"
+                                      : "cursor-pointer border-sky-400/50 text-sky-700 hover:border-sky-500 hover:text-sky-800"
+                                  }`}>
+                                    {isUploadingAudio ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Music className="h-4 w-4" />
+                                    )}
+                                    {isUploadingAudio
+                                      ? "Uploading Audio..."
+                                      : subsection.audio
+                                        ? "Replace Audio"
+                                        : "Upload Audio"}
                                     <input
                                       type="file"
                                       accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
                                       className="hidden"
-                                      onChange={(event) =>
-                                        handleSubsectionAudioUpload(
+                                      disabled={isUploadingAudio}
+                                      onClick={(event) => {
+                                        event.currentTarget.value = "";
+                                      }}
+                                      onChange={(event) => {
+                                        void handleSubsectionAudioUpload(
                                           section.id,
                                           subsection.id,
                                           event.target.files?.[0],
-                                        )
-                                      }
+                                        );
+                                      }}
                                     />
                                   </label>
                                   {subsection.audio && (
@@ -5102,6 +5130,7 @@ export default function PaperIntake() {
                                       type="button"
                                       variant="ghost"
                                       className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                      disabled={isUploadingAudio}
                                       onClick={() =>
                                         updateSubsection(section.id, subsection.id, (currentSubsection) => ({
                                           ...currentSubsection,
@@ -5112,6 +5141,9 @@ export default function PaperIntake() {
                                       Remove Audio
                                     </Button>
                                   )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
 
                                 <div className="space-y-2">
