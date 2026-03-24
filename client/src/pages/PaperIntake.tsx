@@ -1179,43 +1179,6 @@ function normalizeAssetUrl(value?: string) {
   return undefined;
 }
 
-function encodeUtf8ToBase64(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function extractUploadableDataUrlPayload(value?: string) {
-  const normalized = normalizeAssetUrl(value);
-  if (!normalized?.startsWith("data:")) return null;
-
-  const match = normalized.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-  if (!match) return null;
-
-  const contentType = match[1]?.trim() || "application/octet-stream";
-  const body = match[3] ?? "";
-  if (!body) return null;
-
-  if (match[2]) {
-    return {
-      contentType,
-      fileBase64: body,
-    };
-  }
-
-  try {
-    return {
-      contentType,
-      fileBase64: encodeUtf8ToBase64(decodeURIComponent(body)),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function isBlobAssetUrl(value?: string) {
   if (!value) return false;
   return value.trim().toLowerCase().startsWith("blob:");
@@ -2566,7 +2529,6 @@ export default function PaperIntake() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const utils = trpc.useUtils();
-  const uploadFileMutation = trpc.papers.uploadFile.useMutation();
   const saveManualPaperMutation = trpc.papers.saveManualPaper.useMutation();
   const updateManualPaperMutation = trpc.papers.updateManualPaper.useMutation();
   const requestedSubject = useMemo(() => {
@@ -2622,87 +2584,6 @@ export default function PaperIntake() {
   const publishActionLabel = isQuestionBankMode
     ? (isEditing && currentPublished ? "Update Question" : "Submit Question")
     : (isEditing && currentPublished ? "Update Published Paper" : "Publish Paper");
-
-  const uploadAssetDataUrl = useCallback(async (
-    fileName: string,
-    assetDataUrl: string,
-    contentType: string,
-  ) => {
-    const payload = extractUploadableDataUrlPayload(assetDataUrl);
-    if (!payload) {
-      return null;
-    }
-
-    const uploaded = await uploadFileMutation.mutateAsync({
-      fileName,
-      fileBase64: payload.fileBase64,
-      contentType: payload.contentType || contentType,
-    });
-
-    return normalizeAssetUrl(uploaded.url) ?? uploaded.url;
-  }, [uploadFileMutation]);
-
-  const uploadAudioAssetToStableUrl = useCallback(async (
-    audio?: ManualAudioFile,
-  ): Promise<ManualAudioFile | undefined> => {
-    if (!audio) return undefined;
-
-    const contentType = guessAssetContentType("audio", audio.fileName, audio.mimeType);
-    const durableUrl = getDurableAssetUrl(audio.previewUrl) ?? getDurableAssetUrl(audio.dataUrl);
-    if (durableUrl) {
-      return {
-        ...audio,
-        dataUrl: durableUrl,
-        previewUrl: durableUrl,
-        mimeType: contentType,
-      };
-    }
-
-    const normalizedDataUrl = normalizeAssetUrl(audio.dataUrl);
-    if (!normalizedDataUrl?.startsWith("data:")) {
-      return {
-        ...audio,
-        dataUrl: normalizedDataUrl ?? "",
-        previewUrl: undefined,
-        mimeType: contentType,
-      };
-    }
-
-    const uploadedUrl = await uploadAssetDataUrl(
-      audio.fileName?.trim() || `listening-${Date.now()}.mp3`,
-      normalizedDataUrl,
-      contentType,
-    );
-
-    if (!uploadedUrl) {
-      return {
-        ...audio,
-        dataUrl: normalizedDataUrl,
-        previewUrl: undefined,
-        mimeType: contentType,
-      };
-    }
-
-    return {
-      ...audio,
-      dataUrl: uploadedUrl,
-      previewUrl: uploadedUrl,
-      mimeType: contentType,
-    };
-  }, [uploadAssetDataUrl]);
-
-  const ensureBlueprintListeningAssetsUploaded = useCallback(async (
-    bp: ManualPaperBlueprint,
-  ): Promise<ManualPaperBlueprint> => ({
-    ...bp,
-    sections: await Promise.all(bp.sections.map(async (section) => ({
-      ...section,
-      subsections: await Promise.all(section.subsections.map(async (subsection) => ({
-        ...subsection,
-        audio: await uploadAudioAssetToStableUrl(subsection.audio),
-      }))),
-    }))),
-  }), [uploadAudioAssetToStableUrl]);
 
   const getConfiguredEnglishQuestionTypeForTags = useCallback((tags: ManualQuestionTags | undefined) => {
     if (!isQuestionBankMode || paperSubject !== "english") return undefined;
@@ -4433,21 +4314,11 @@ export default function PaperIntake() {
       const fileBase64 = await fileToBase64(file);
       const contentType = guessAssetContentType("audio", file.name, file.type);
       const dataUrl = `data:${contentType};base64,${fileBase64}`;
-      const localAudioAsset = buildLocalAudioAsset(file, dataUrl, contentType);
 
-      try {
-        const uploadedAudioAsset = await uploadAudioAssetToStableUrl(localAudioAsset);
-        updateSubsection(sectionId, subsectionId, (subsection) => ({
-          ...subsection,
-          audio: uploadedAudioAsset,
-        }));
-      } catch (uploadError) {
-        console.warn("[PaperIntake] Immediate listening audio upload failed; keeping the embedded draft asset.", uploadError);
-        updateSubsection(sectionId, subsectionId, (subsection) => ({
-          ...subsection,
-          audio: localAudioAsset,
-        }));
-      }
+      updateSubsection(sectionId, subsectionId, (subsection) => ({
+        ...subsection,
+        audio: buildLocalAudioAsset(file, dataUrl, contentType),
+      }));
 
       toast.success("Audio file uploaded.");
     } catch (error) {
@@ -4456,7 +4327,7 @@ export default function PaperIntake() {
     }
   };
 
-  const isPersisting = uploadFileMutation.isPending || saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
+  const isPersisting = saveManualPaperMutation.isPending || updateManualPaperMutation.isPending;
   const hasGeneratedSections = generationConfig.sections.some((section) => Math.max(0, section.totalQuestions || 0) > 0);
   const saveDisabled = !effectiveTitle.trim()
     || (buildMode === "generated" ? !hasGeneratedSections : !hasAnyQuestions)
@@ -4470,18 +4341,17 @@ export default function PaperIntake() {
       return;
     }
 
-    try {
-      const blueprintWithListeningAssets = await ensureBlueprintListeningAssetsUploaded(blueprint);
-      const preparedBlueprint = await prepareBlueprintForSave(blueprintWithListeningAssets);
-      const trimmedTitle = effectiveTitle.trim();
-      const trimmedDescription = effectiveDescription.trim() || undefined;
-      const successFeedback = isQuestionBankMode
-        ? (published ? "Question bank updated." : "Question bank draft saved.")
-        : (published ? "Paper published successfully." : "Draft saved successfully.");
-      const successToast = isQuestionBankMode
-        ? (published ? "Question bank published successfully." : "Question bank draft saved successfully.")
-        : (published ? "Paper published successfully." : "Draft saved successfully.");
+    const preparedBlueprint = await prepareBlueprintForSave(blueprint);
+    const trimmedTitle = effectiveTitle.trim();
+    const trimmedDescription = effectiveDescription.trim() || undefined;
+    const successFeedback = isQuestionBankMode
+      ? (published ? "Question bank updated." : "Question bank draft saved.")
+      : (published ? "Paper published successfully." : "Draft saved successfully.");
+    const successToast = isQuestionBankMode
+      ? (published ? "Question bank published successfully." : "Question bank draft saved successfully.")
+      : (published ? "Paper published successfully." : "Draft saved successfully.");
 
+    try {
       if (isEditing) {
         if (!editingPaperMeta) {
           throw new Error("The paper is still loading. Please wait a moment and try again.");
