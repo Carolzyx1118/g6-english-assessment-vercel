@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import {
@@ -18,11 +18,17 @@ import {
 import { ENV } from './_core/env';
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+type DbClient = ReturnType<typeof drizzle>;
+
+let _db: DbClient | null = null;
+let _dbSchemaReadyPromise: Promise<void> | null = null;
 let hasLoggedLocalAuthFileFallback = false;
 let hasLoggedManualPaperFileFallback = false;
 let hasLoggedTestResultsFileFallback = false;
 let hasLoggedEphemeralPersistenceWarning = false;
+let hasForcedLocalAuthFileFallback = false;
+let hasForcedManualPaperFileFallback = false;
+let hasForcedTestResultsFileFallback = false;
 const RESERVED_MANUAL_PAPER_PREFIX = "__system:";
 const ENGLISH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}english-tag-schemas`;
 const ENGLISH_TAG_SCHEMA_STORE_TITLE = "__English Tag Schemas__";
@@ -30,6 +36,7 @@ const MATH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}math-tag-
 const MATH_TAG_SCHEMA_STORE_TITLE = "__Math Tag Schemas__";
 const VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}vocabulary-tag-schemas`;
 const VOCABULARY_TAG_SCHEMA_STORE_TITLE = "__Vocabulary Tag Schemas__";
+const LOCAL_AUTH_DEFAULT_INVITE_CODE = "TEACHER2026::english|math|vocabulary::active";
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
@@ -51,24 +58,45 @@ function logEphemeralPersistenceWarning() {
   );
 }
 
-function logLocalAuthFileFallback() {
+function logLocalAuthFileFallback(reason?: unknown) {
   if (hasLoggedLocalAuthFileFallback) return;
   hasLoggedLocalAuthFileFallback = true;
   logEphemeralPersistenceWarning();
+  if (reason) {
+    console.warn(
+      `[LocalAuth] Falling back to file storage at ${getLocalAuthUsersFilePath()} because database local user queries failed:`,
+      reason,
+    );
+    return;
+  }
   console.warn(`[LocalAuth] DATABASE_URL not configured. Falling back to file storage at ${getLocalAuthUsersFilePath()}`);
 }
 
-function logManualPaperFileFallback() {
+function logManualPaperFileFallback(reason?: unknown) {
   if (hasLoggedManualPaperFileFallback) return;
   hasLoggedManualPaperFileFallback = true;
   logEphemeralPersistenceWarning();
+  if (reason) {
+    console.warn(
+      `[ManualPapers] Falling back to file storage at ${getLocalManualPapersFilePath()} because database paper queries failed:`,
+      reason,
+    );
+    return;
+  }
   console.warn(`[ManualPapers] DATABASE_URL not configured. Falling back to file storage at ${getLocalManualPapersFilePath()}`);
 }
 
-function logTestResultsFileFallback() {
+function logTestResultsFileFallback(reason?: unknown) {
   if (hasLoggedTestResultsFileFallback) return;
   hasLoggedTestResultsFileFallback = true;
   logEphemeralPersistenceWarning();
+  if (reason) {
+    console.warn(
+      `[TestResults] Falling back to file storage at ${getLocalTestResultsFilePath()} because database test result queries failed:`,
+      reason,
+    );
+    return;
+  }
   console.warn(`[TestResults] DATABASE_URL not configured. Falling back to file storage at ${getLocalTestResultsFilePath()}`);
 }
 
@@ -331,6 +359,117 @@ async function writeTestResultsFile(data: {
   );
 }
 
+const RUNTIME_SCHEMA_REPAIR_STATEMENTS = [
+  `DO $$ BEGIN
+    CREATE TYPE "public"."local_role" AS ENUM('user', 'admin');
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$;`,
+  `DO $$ BEGIN
+    CREATE TYPE "public"."user_role" AS ENUM('user', 'admin');
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$;`,
+  `CREATE TABLE IF NOT EXISTS "localUsers" (
+    "id" serial PRIMARY KEY,
+    "username" varchar(128) NOT NULL UNIQUE,
+    "passwordHash" varchar(255) NOT NULL,
+    "inviteCode" varchar(128) NOT NULL,
+    "displayName" varchar(255),
+    "role" "local_role" NOT NULL DEFAULT 'user',
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "lastLoginAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "inviteCode" varchar(128) NOT NULL DEFAULT '${LOCAL_AUTH_DEFAULT_INVITE_CODE}';`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "displayName" varchar(255);`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "role" "local_role" NOT NULL DEFAULT 'user';`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "createdAt" timestamp NOT NULL DEFAULT now();`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "lastLoginAt" timestamp NOT NULL DEFAULT now();`,
+  `CREATE TABLE IF NOT EXISTS "manualPapers" (
+    "id" serial PRIMARY KEY,
+    "paperId" varchar(255) NOT NULL UNIQUE,
+    "title" varchar(255) NOT NULL,
+    "description" text,
+    "subject" varchar(64) NOT NULL DEFAULT 'english',
+    "category" varchar(64) NOT NULL DEFAULT 'assessment',
+    "blueprintJson" text NOT NULL,
+    "published" integer NOT NULL DEFAULT 1,
+    "totalQuestions" integer NOT NULL DEFAULT 0,
+    "hasListening" integer NOT NULL DEFAULT 0,
+    "hasWriting" integer NOT NULL DEFAULT 0,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "subject" varchar(64) NOT NULL DEFAULT 'english';`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "category" varchar(64) NOT NULL DEFAULT 'assessment';`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "published" integer NOT NULL DEFAULT 1;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "totalQuestions" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasListening" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasWriting" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
+  `CREATE TABLE IF NOT EXISTS "testResults" (
+    "id" serial PRIMARY KEY,
+    "studentName" varchar(255) NOT NULL,
+    "studentGrade" varchar(64),
+    "paperId" varchar(128) NOT NULL,
+    "paperTitle" varchar(255) NOT NULL,
+    "totalCorrect" integer NOT NULL,
+    "totalQuestions" integer NOT NULL,
+    "totalTimeSeconds" integer,
+    "answersJson" text NOT NULL,
+    "scoreBySectionJson" text,
+    "sectionTimingsJson" text,
+    "readingResultsJson" text,
+    "writingResultJson" text,
+    "explanationsJson" text,
+    "reportJson" text,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "studentGrade" varchar(64);`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "totalTimeSeconds" integer;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "scoreBySectionJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "sectionTimingsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "readingResultsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "writingResultJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "explanationsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "reportJson" text;`,
+  `CREATE TABLE IF NOT EXISTS "users" (
+    "id" serial PRIMARY KEY,
+    "openId" varchar(64) NOT NULL UNIQUE,
+    "name" text,
+    "email" varchar(320),
+    "loginMethod" varchar(64),
+    "role" "user_role" NOT NULL DEFAULT 'user',
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now(),
+    "lastSignedIn" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user';`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp NOT NULL DEFAULT now();`,
+] as const;
+
+async function ensureRuntimeDatabaseSchema(db: DbClient) {
+  for (const statement of RUNTIME_SCHEMA_REPAIR_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+}
+
+function activateLocalAuthFileFallback(reason: unknown) {
+  hasForcedLocalAuthFileFallback = true;
+  logLocalAuthFileFallback(reason);
+}
+
+function activateManualPaperFileFallback(reason: unknown) {
+  hasForcedManualPaperFileFallback = true;
+  logManualPaperFileFallback(reason);
+}
+
+function activateTestResultsFileFallback(reason: unknown) {
+  hasForcedTestResultsFileFallback = true;
+  logTestResultsFileFallback(reason);
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -341,6 +480,17 @@ export async function getDb() {
       _db = null;
     }
   }
+
+  if (_db && !_dbSchemaReadyPromise) {
+    _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(_db).catch((error) => {
+      console.warn("[Database] Runtime schema repair failed:", error);
+    });
+  }
+
+  if (_dbSchemaReadyPromise) {
+    await _dbSchemaReadyPromise;
+  }
+
   return _db;
 }
 
@@ -422,7 +572,7 @@ export async function getUserByOpenId(openId: string) {
 
 export async function saveTestResult(data: InsertTestResult): Promise<number | null> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedTestResultsFileFallback) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     const nextId = current.lastId + 1;
@@ -457,25 +607,35 @@ export async function saveTestResult(data: InsertTestResult): Promise<number | n
 
 export async function getAllTestResults(): Promise<TestResult[]> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedTestResultsFileFallback) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     return [...current.results].sort(
       (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
     );
   }
-  return db.select().from(testResults).orderBy(testResults.createdAt);
+  try {
+    return await db.select().from(testResults).orderBy(testResults.createdAt);
+  } catch (error) {
+    activateTestResultsFileFallback(error);
+    return getAllTestResults();
+  }
 }
 
 export async function getTestResultById(id: number): Promise<TestResult | undefined> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedTestResultsFileFallback) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     return current.results.find((result) => result.id === id);
   }
-  const rows = await db.select().from(testResults).where(eq(testResults.id, id)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(testResults).where(eq(testResults.id, id)).limit(1);
+    return rows[0];
+  } catch (error) {
+    activateTestResultsFileFallback(error);
+    return getTestResultById(id);
+  }
 }
 
 export async function updateTestResultAI(id: number, updates: {
@@ -485,7 +645,7 @@ export async function updateTestResultAI(id: number, updates: {
   reportJson?: string;
 }): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedTestResultsFileFallback) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     current.results = current.results.map((result) =>
@@ -499,26 +659,36 @@ export async function updateTestResultAI(id: number, updates: {
     await writeTestResultsFile(current);
     return;
   }
-  await db.update(testResults).set(updates).where(eq(testResults.id, id));
+  try {
+    await db.update(testResults).set(updates).where(eq(testResults.id, id));
+  } catch (error) {
+    activateTestResultsFileFallback(error);
+    await updateTestResultAI(id, updates);
+  }
 }
 
 export async function deleteTestResult(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedTestResultsFileFallback) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     current.results = current.results.filter((result) => result.id !== id);
     await writeTestResultsFile(current);
     return;
   }
-  await db.delete(testResults).where(eq(testResults.id, id));
+  try {
+    await db.delete(testResults).where(eq(testResults.id, id));
+  } catch (error) {
+    activateTestResultsFileFallback(error);
+    await deleteTestResult(id);
+  }
 }
 
 // ── Manual Papers ──
 
 export async function saveManualPaper(data: InsertManualPaper): Promise<number | null> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const current = await readManualPapersFile();
     const nextId = current.lastId + 1;
@@ -543,74 +713,104 @@ export async function saveManualPaper(data: InsertManualPaper): Promise<number |
     await writeManualPapersFile(current);
     return nextId;
   }
-  const [result] = await db
-    .insert(manualPapers)
-    .values(data)
-    .returning({ id: manualPapers.id });
-  return result?.id ?? null;
+  try {
+    const [result] = await db
+      .insert(manualPapers)
+      .values(data)
+      .returning({ id: manualPapers.id });
+    return result?.id ?? null;
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    return saveManualPaper(data);
+  }
 }
 
 export async function getAllManualPapers(): Promise<ManualPaper[]> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
     return filterVisibleManualPapers([...data.papers]).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  const papers = await db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
-  return filterVisibleManualPapers(papers);
+  try {
+    const papers = await db.select().from(manualPapers).orderBy(desc(manualPapers.createdAt));
+    return filterVisibleManualPapers(papers);
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    return getAllManualPapers();
+  }
 }
 
 export async function getPublishedManualPapers(): Promise<ManualPaper[]> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
     return filterVisibleManualPapers(data.papers)
       .filter((paper) => paper.published === 1)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  const papers = await db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
-  return filterVisibleManualPapers(papers);
+  try {
+    const papers = await db.select().from(manualPapers).where(eq(manualPapers.published, 1)).orderBy(desc(manualPapers.createdAt));
+    return filterVisibleManualPapers(papers);
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    return getPublishedManualPapers();
+  }
 }
 
 export async function getManualPaperByPaperId(paperId: string): Promise<ManualPaper | undefined> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
     return data.papers.find((paper) => paper.paperId === paperId);
   }
-  const rows = await db.select().from(manualPapers).where(eq(manualPapers.paperId, paperId)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(manualPapers).where(eq(manualPapers.paperId, paperId)).limit(1);
+    return rows[0];
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    return getManualPaperByPaperId(paperId);
+  }
 }
 
 export async function getManualPaperById(id: number): Promise<ManualPaper | undefined> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
     return data.papers.find((paper) => paper.id === id);
   }
-  const rows = await db.select().from(manualPapers).where(eq(manualPapers.id, id)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(manualPapers).where(eq(manualPapers.id, id)).limit(1);
+    return rows[0];
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    return getManualPaperById(id);
+  }
 }
 
 export async function deleteManualPaper(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const data = await readManualPapersFile();
     data.papers = data.papers.filter((paper) => paper.id !== id);
     await writeManualPapersFile(data);
     return;
   }
-  await db.delete(manualPapers).where(eq(manualPapers.id, id));
+  try {
+    await db.delete(manualPapers).where(eq(manualPapers.id, id));
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    await deleteManualPaper(id);
+  }
 }
 
 export async function updateManualPaper(id: number, data: Partial<InsertManualPaper>): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedManualPaperFileFallback) {
     logManualPaperFileFallback();
     const current = await readManualPapersFile();
     current.papers = current.papers.map((paper) =>
@@ -633,10 +833,15 @@ export async function updateManualPaper(id: number, data: Partial<InsertManualPa
     await writeManualPapersFile(current);
     return;
   }
-  await db
-    .update(manualPapers)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(manualPapers.id, id));
+  try {
+    await db
+      .update(manualPapers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(manualPapers.id, id));
+  } catch (error) {
+    activateManualPaperFileFallback(error);
+    await updateManualPaper(id, data);
+  }
 }
 
 export async function getEnglishTagSystems(): Promise<EnglishExamTagSystem[]> {
@@ -744,39 +949,54 @@ export async function saveVocabularyTagSystems(systems: SubjectTagSystem[]): Pro
 
 export async function getLocalUserByUsername(username: string): Promise<LocalUser | undefined> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.username === username);
   }
-  const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
+    return rows[0];
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    return getLocalUserByUsername(username);
+  }
 }
 
 export async function getLocalUserById(id: number): Promise<LocalUser | undefined> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.id === id);
   }
-  const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
-  return rows[0];
+  try {
+    const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
+    return rows[0];
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    return getLocalUserById(id);
+  }
 }
 
 export async function listLocalUsers(): Promise<LocalUser[]> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const data = await readLocalAuthUsersFile();
     return [...data.users].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   }
-  return db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
+  try {
+    return await db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    return listLocalUsers();
+  }
 }
 
 export async function createLocalUser(data: InsertLocalUser): Promise<number | null> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const current = await readLocalAuthUsersFile();
     const nextId = current.lastId + 1;
@@ -795,11 +1015,16 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
     await writeLocalAuthUsersFile(current);
     return nextId;
   }
-  const [result] = await db
-    .insert(localUsers)
-    .values(data)
-    .returning({ id: localUsers.id });
-  return result?.id ?? null;
+  try {
+    const [result] = await db
+      .insert(localUsers)
+      .values(data)
+      .returning({ id: localUsers.id });
+    return result?.id ?? null;
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    return createLocalUser(data);
+  }
 }
 
 export async function updateLocalUser(
@@ -807,7 +1032,7 @@ export async function updateLocalUser(
   data: Partial<Pick<LocalUser, "displayName" | "inviteCode" | "role" | "passwordHash">>,
 ): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const current = await readLocalAuthUsersFile();
     const user = current.users.find((item) => item.id === id);
@@ -816,12 +1041,17 @@ export async function updateLocalUser(
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.update(localUsers).set(data).where(eq(localUsers.id, id));
+  try {
+    await db.update(localUsers).set(data).where(eq(localUsers.id, id));
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    await updateLocalUser(id, data);
+  }
 }
 
 export async function updateLocalUserLastLogin(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const current = await readLocalAuthUsersFile();
     const user = current.users.find((item) => item.id === id);
@@ -830,17 +1060,27 @@ export async function updateLocalUserLastLogin(id: number): Promise<void> {
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+  try {
+    await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    await updateLocalUserLastLogin(id);
+  }
 }
 
 export async function deleteLocalUser(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db || hasForcedLocalAuthFileFallback) {
     logLocalAuthFileFallback();
     const current = await readLocalAuthUsersFile();
     current.users = current.users.filter((user) => user.id !== id);
     await writeLocalAuthUsersFile(current);
     return;
   }
-  await db.delete(localUsers).where(eq(localUsers.id, id));
+  try {
+    await db.delete(localUsers).where(eq(localUsers.id, id));
+  } catch (error) {
+    activateLocalAuthFileFallback(error);
+    await deleteLocalUser(id);
+  }
 }
