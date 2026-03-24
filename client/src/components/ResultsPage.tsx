@@ -1,4 +1,4 @@
-import { readPersistedQuizSession, useQuiz } from '@/contexts/QuizContext';
+import { useQuiz } from '@/contexts/QuizContext';
 import type { Question, Section } from '@/data/papers';
 import { trpc } from '@/lib/trpc';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -79,78 +79,6 @@ type SpeakingResponseInput = {
   prompt: string;
   audioUrl: string;
 };
-
-type ResultSavePayload = {
-  studentName: string;
-  studentGrade?: string;
-  paperId: string;
-  paperTitle: string;
-  totalCorrect: number;
-  totalQuestions: number;
-  totalTimeSeconds?: number;
-  answersJson: string;
-  scoreBySectionJson: string;
-  sectionTimingsJson: string;
-};
-
-const PENDING_RESULT_SAVE_STORAGE_KEY = 'pureon_pending_result_save_v1';
-
-function readPendingResultSave(): ResultSavePayload | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const raw = window.localStorage.getItem(PENDING_RESULT_SAVE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ResultSavePayload>;
-    if (
-      typeof parsed.studentName !== 'string'
-      || typeof parsed.paperId !== 'string'
-      || typeof parsed.paperTitle !== 'string'
-      || typeof parsed.totalCorrect !== 'number'
-      || typeof parsed.totalQuestions !== 'number'
-      || typeof parsed.answersJson !== 'string'
-      || typeof parsed.scoreBySectionJson !== 'string'
-      || typeof parsed.sectionTimingsJson !== 'string'
-    ) {
-      return null;
-    }
-
-    return {
-      studentName: parsed.studentName,
-      studentGrade: typeof parsed.studentGrade === 'string' ? parsed.studentGrade : undefined,
-      paperId: parsed.paperId,
-      paperTitle: parsed.paperTitle,
-      totalCorrect: parsed.totalCorrect,
-      totalQuestions: parsed.totalQuestions,
-      totalTimeSeconds: typeof parsed.totalTimeSeconds === 'number' ? parsed.totalTimeSeconds : undefined,
-      answersJson: parsed.answersJson,
-      scoreBySectionJson: parsed.scoreBySectionJson,
-      sectionTimingsJson: parsed.sectionTimingsJson,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writePendingResultSave(payload: ResultSavePayload) {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.setItem(PENDING_RESULT_SAVE_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // Ignore storage write failures.
-  }
-}
-
-function clearPendingResultSave() {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.removeItem(PENDING_RESULT_SAVE_STORAGE_KEY);
-  } catch {
-    // Ignore storage delete failures.
-  }
-}
 
 function extractSpeakingAudioUrls(value: unknown): string[] {
   if (typeof value === 'string') {
@@ -433,7 +361,7 @@ interface ReadingSubItem {
 }
 
 export default function ResultsPage() {
-  const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime, studentInfo, sections, selectedPaper, isRestoringSession } = useQuiz();
+  const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime, studentInfo, sections, selectedPaper } = useQuiz();
   const { user } = useLocalAuth();
   const { correct, total, bySection } = getScore();
 
@@ -486,8 +414,6 @@ export default function ResultsPage() {
   const updateAIMutation = trpc.results.updateAI.useMutation();
   const savedResultId = useRef<number | null>(null);
   const hasSavedInitial = useRef(false);
-  const saveRetryTimerRef = useRef<number | null>(null);
-  const [saveRetryCount, setSaveRetryCount] = useState(0);
 
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
@@ -891,20 +817,16 @@ export default function ResultsPage() {
     [studentInfo?.grade],
   );
 
-  const persistedPaperMeta = useMemo(() => {
-    return readPersistedQuizSession()?.selectedPaperMeta ?? null;
-  }, [selectedPaper?.id, selectedPaper?.title, state.submitted]);
-
-  const initialResultSavePayload = useMemo<ResultSavePayload | null>(() => {
-    const paperId = selectedPaper?.id?.trim() || persistedPaperMeta?.id?.trim();
-    const paperTitle = selectedPaper?.title?.trim() || persistedPaperMeta?.title?.trim();
-    if (!paperId || !paperTitle) return null;
-
-    return {
+  // Save initial result state, then request reading checks and review placeholders.
+  // Auto-save initial results to database
+  useEffect(() => {
+    if (hasSavedInitial.current) return;
+    hasSavedInitial.current = true;
+    saveResultMutation.mutate({
       studentName: recordedStudentName,
       studentGrade: recordedStudentGrade,
-      paperId,
-      paperTitle,
+      paperId: selectedPaper?.id || 'unknown',
+      paperTitle: selectedPaper?.title || 'Assessment',
       totalCorrect: correct,
       totalQuestions: total,
       totalTimeSeconds: totalTime || undefined,
@@ -914,62 +836,14 @@ export default function ResultsPage() {
       ),
       scoreBySectionJson: JSON.stringify(bySection),
       sectionTimingsJson: JSON.stringify(sectionTimings),
-    };
-  }, [
-    bySection,
-    correct,
-    recordedStudentGrade,
-    recordedStudentName,
-    sectionTimings,
-    persistedPaperMeta?.id,
-    persistedPaperMeta?.title,
-    selectedPaper,
-    state.answers,
-    state.submitted,
-    total,
-    totalTime,
-  ]);
-
-  useEffect(() => {
-    if (initialResultSavePayload) {
-      writePendingResultSave(initialResultSavePayload);
-    }
-  }, [initialResultSavePayload]);
-
-  useEffect(() => {
-    if (hasSavedInitial.current || saveResultMutation.isPending || isRestoringSession) return;
-
-    const payload = initialResultSavePayload ?? readPendingResultSave();
-    if (!payload) return;
-
-    saveResultMutation.mutate(payload, {
+    }, {
       onSuccess: (data) => {
-        hasSavedInitial.current = true;
         savedResultId.current = data.id ?? null;
-        clearPendingResultSave();
         console.log('[Results] Saved to database with id:', data.id);
       },
-      onError: (err) => {
-        console.error('[Results] Failed to save:', err);
-        if (typeof window !== 'undefined') {
-          if (saveRetryTimerRef.current !== null) {
-            window.clearTimeout(saveRetryTimerRef.current);
-          }
-          saveRetryTimerRef.current = window.setTimeout(() => {
-            setSaveRetryCount((current) => current + 1);
-          }, 1500);
-        }
-      },
+      onError: (err) => console.error('[Results] Failed to save:', err),
     });
-  }, [initialResultSavePayload, isRestoringSession, saveResultMutation, saveRetryCount]);
-
-  useEffect(() => {
-    return () => {
-      if (saveRetryTimerRef.current !== null && typeof window !== 'undefined') {
-        window.clearTimeout(saveRetryTimerRef.current);
-      }
-    };
-  }, []);
+  }, [bySection, correct, recordedStudentGrade, recordedStudentName, saveResultMutation, sectionTimings, selectedPaper?.id, selectedPaper?.title, state.answers, total, totalTime]);
 
   // Update AI results in database when they become available
   useEffect(() => {
