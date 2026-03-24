@@ -55,9 +55,9 @@ export function getPersistenceStatus() {
 
   return {
     databaseConfigured,
-    localAuthUsingFileFallback: false,
-    manualPapersUsingFileFallback: false,
-    testResultsUsingFileFallback: false,
+    localAuthUsingFileFallback: !databaseConfigured || hasForcedLocalAuthFileFallback,
+    manualPapersUsingFileFallback: !databaseConfigured || hasForcedManualPaperFileFallback,
+    testResultsUsingFileFallback: !databaseConfigured || hasForcedTestResultsFileFallback,
     localAuthFilePath: getLocalAuthUsersFilePath(),
     localManualPapersFilePath: getLocalManualPapersFilePath(),
     localTestResultsFilePath: getLocalTestResultsFilePath(),
@@ -470,36 +470,28 @@ async function ensureRuntimeDatabaseSchema(db: DbClient) {
 }
 
 function activateLocalAuthFileFallback(reason: unknown) {
-  throw new Error(
-    `[LocalAuth] Database query failed. File fallback is disabled. ${reason instanceof Error ? reason.message : String(reason)}`,
-  );
+  hasForcedLocalAuthFileFallback = true;
+  logLocalAuthFileFallback(reason);
 }
 
 function activateManualPaperFileFallback(reason: unknown) {
-  throw new Error(
-    `[ManualPapers] Database query failed. File fallback is disabled. ${reason instanceof Error ? reason.message : String(reason)}`,
-  );
+  hasForcedManualPaperFileFallback = true;
+  logManualPaperFileFallback(reason);
 }
 
 function activateTestResultsFileFallback(reason: unknown) {
-  throw new Error(
-    `[TestResults] Database query failed. File fallback is disabled. ${reason instanceof Error ? reason.message : String(reason)}`,
-  );
+  hasForcedTestResultsFileFallback = true;
+  logTestResultsFileFallback(reason);
 }
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required. Local file fallback is disabled.");
-  }
-
-  if (!_db) {
+  if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      throw new Error(
-        `[Database] Failed to connect. Local file fallback is disabled. ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
     }
   }
 
