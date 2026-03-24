@@ -203,6 +203,7 @@ export interface ManualQuestionBlock {
   audioUrl?: string;
   sceneImageUrl?: string;
   inlineCloze?: boolean;
+  inlineClozeQuestionIds?: number[];
   matchingDescriptions?: { label: string; name: string; text: string }[];
 }
 
@@ -256,6 +257,7 @@ export interface Section {
     | 'math-short-answer'
     | 'math-application';
   inlineCloze?: boolean;
+  inlineClozeQuestionIds?: number[];
   matchingDescriptions?: { label: string; name: string; text: string }[];
   manualBlocks?: ManualQuestionBlock[];
   wordBankImageUrl?: string;
