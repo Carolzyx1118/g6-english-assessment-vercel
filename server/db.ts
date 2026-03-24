@@ -24,7 +24,6 @@ let hasLoggedManualPaperFileFallback = false;
 let hasLoggedTestResultsFileFallback = false;
 let hasLoggedEphemeralPersistenceWarning = false;
 const RESERVED_MANUAL_PAPER_PREFIX = "__system:";
-const TEST_RESULT_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
 const ENGLISH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}english-tag-schemas`;
 const ENGLISH_TAG_SCHEMA_STORE_TITLE = "__English Tag Schemas__";
 const MATH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}math-tag-schemas`;
@@ -110,23 +109,6 @@ function isReservedManualPaperRecord(paper: Pick<ManualPaper, "paperId">) {
 
 function filterVisibleManualPapers(papers: ManualPaper[]) {
   return papers.filter((paper) => !isReservedManualPaperRecord(paper));
-}
-
-function isDuplicateTestResultCandidate(result: TestResult, data: InsertTestResult) {
-  const referenceTime = data.createdAt ?? new Date();
-  return (
-    Math.abs(result.createdAt.getTime() - referenceTime.getTime()) <= TEST_RESULT_DEDUPE_WINDOW_MS
-    && result.studentName === data.studentName
-    && (result.studentGrade ?? null) === (data.studentGrade ?? null)
-    && result.paperId === data.paperId
-    && result.paperTitle === data.paperTitle
-    && result.totalCorrect === data.totalCorrect
-    && result.totalQuestions === data.totalQuestions
-    && (result.totalTimeSeconds ?? null) === (data.totalTimeSeconds ?? null)
-    && result.answersJson === data.answersJson
-    && (result.scoreBySectionJson ?? null) === (data.scoreBySectionJson ?? null)
-    && (result.sectionTimingsJson ?? null) === (data.sectionTimingsJson ?? null)
-  );
 }
 
 function parseEnglishTagSchemaStore(raw: string | null | undefined): EnglishTagSchemaStore {
@@ -443,10 +425,6 @@ export async function saveTestResult(data: InsertTestResult): Promise<number | n
   if (!db) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
-    const existing = current.results.find((result) => isDuplicateTestResultCandidate(result, data));
-    if (existing) {
-      return existing.id;
-    }
     const nextId = current.lastId + 1;
     current.lastId = nextId;
     current.results.push({
@@ -470,18 +448,6 @@ export async function saveTestResult(data: InsertTestResult): Promise<number | n
     await writeTestResultsFile(current);
     return nextId;
   }
-
-  const existingRows = await db
-    .select()
-    .from(testResults)
-    .where(eq(testResults.paperId, data.paperId))
-    .orderBy(desc(testResults.createdAt))
-    .limit(20);
-  const existing = existingRows.find((result) => isDuplicateTestResultCandidate(result, data));
-  if (existing) {
-    return existing.id;
-  }
-
   const [result] = await db
     .insert(testResults)
     .values(data)

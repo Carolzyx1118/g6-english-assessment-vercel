@@ -13,12 +13,6 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
 import { isAudioAnswerValue } from '@/lib/audioStorage';
-import {
-  clearPendingResultSave,
-  readPendingResultSave,
-  type ResultSavePayload,
-  writePendingResultSave,
-} from '@/lib/pendingResultSave';
 import { packStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
@@ -85,6 +79,78 @@ type SpeakingResponseInput = {
   prompt: string;
   audioUrl: string;
 };
+
+type ResultSavePayload = {
+  studentName: string;
+  studentGrade?: string;
+  paperId: string;
+  paperTitle: string;
+  totalCorrect: number;
+  totalQuestions: number;
+  totalTimeSeconds?: number;
+  answersJson: string;
+  scoreBySectionJson: string;
+  sectionTimingsJson: string;
+};
+
+const PENDING_RESULT_SAVE_STORAGE_KEY = 'pureon_pending_result_save_v1';
+
+function readPendingResultSave(): ResultSavePayload | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(PENDING_RESULT_SAVE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ResultSavePayload>;
+    if (
+      typeof parsed.studentName !== 'string'
+      || typeof parsed.paperId !== 'string'
+      || typeof parsed.paperTitle !== 'string'
+      || typeof parsed.totalCorrect !== 'number'
+      || typeof parsed.totalQuestions !== 'number'
+      || typeof parsed.answersJson !== 'string'
+      || typeof parsed.scoreBySectionJson !== 'string'
+      || typeof parsed.sectionTimingsJson !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      studentName: parsed.studentName,
+      studentGrade: typeof parsed.studentGrade === 'string' ? parsed.studentGrade : undefined,
+      paperId: parsed.paperId,
+      paperTitle: parsed.paperTitle,
+      totalCorrect: parsed.totalCorrect,
+      totalQuestions: parsed.totalQuestions,
+      totalTimeSeconds: typeof parsed.totalTimeSeconds === 'number' ? parsed.totalTimeSeconds : undefined,
+      answersJson: parsed.answersJson,
+      scoreBySectionJson: parsed.scoreBySectionJson,
+      sectionTimingsJson: parsed.sectionTimingsJson,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePendingResultSave(payload: ResultSavePayload) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(PENDING_RESULT_SAVE_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function clearPendingResultSave() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.removeItem(PENDING_RESULT_SAVE_STORAGE_KEY);
+  } catch {
+    // Ignore storage delete failures.
+  }
+}
 
 function extractSpeakingAudioUrls(value: unknown): string[] {
   if (typeof value === 'string') {

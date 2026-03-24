@@ -2,10 +2,6 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
-import {
-  clearPendingResultSave,
-  readPendingResultSave,
-} from '@/lib/pendingResultSave';
 import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import { blueprintToPaper } from '@shared/blueprintToPaper';
@@ -218,7 +214,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
   const restoredSessionOwnerRef = useRef<string | null>(null);
-  const flushedPendingResultSignatureRef = useRef<string | null>(null);
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
       PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
@@ -242,8 +237,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const { data: vocabularyTagSystemsData } = trpc.papers.getVocabularyTagSystems.useQuery(undefined, {
     staleTime: 30_000,
   });
-  const flushPendingResultMutation = trpc.results.save.useMutation();
-  const utils = trpc.useUtils();
 
   const allPapers = useMemo(() => {
     const filteredStatic = staticPapers.filter((paper) => allowedSubjects.includes(paper.subject));
@@ -433,37 +426,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     writePersistedQuizSession(session);
   }, [authLoading, isRestoringSession, user?.username, selectedPaper?.id, state, isStarted, studentInfo]);
-
-  useEffect(() => {
-    if (authLoading || isRestoringSession || state.submitted || flushPendingResultMutation.isPending) return;
-
-    const pending = readPendingResultSave();
-    if (!pending) {
-      flushedPendingResultSignatureRef.current = null;
-      return;
-    }
-
-    const signature = JSON.stringify(pending);
-    if (flushedPendingResultSignatureRef.current === signature) return;
-    flushedPendingResultSignatureRef.current = signature;
-
-    flushPendingResultMutation.mutate(pending, {
-      onSuccess: async () => {
-        clearPendingResultSave();
-        flushedPendingResultSignatureRef.current = null;
-        await utils.results.list.invalidate();
-      },
-      onError: (error) => {
-        console.error('[QuizContext] Failed to flush pending result save:', error);
-      },
-    });
-  }, [
-    authLoading,
-    flushPendingResultMutation,
-    isRestoringSession,
-    state.submitted,
-    utils.results.list,
-  ]);
 
   useEffect(() => {
     if (!selectedPaper) return;
