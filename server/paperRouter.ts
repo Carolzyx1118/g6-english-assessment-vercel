@@ -12,7 +12,6 @@ import {
   getManualPaperByPaperId,
   deleteManualPaper,
   updateManualPaper as persistManualPaperUpdate,
-  getPersistenceStatus,
   getEnglishTagSystems,
   getMathTagSystems,
   getVocabularyTagSystems,
@@ -278,17 +277,6 @@ export const paperRouter = router({
         return [];
       }
     });
-  }),
-
-  getPersistenceStatus: publicProcedure.query(() => {
-    const status = getPersistenceStatus();
-    return {
-      databaseConfigured: status.databaseConfigured,
-      localAuthUsingFileFallback: status.localAuthUsingFileFallback,
-      manualPapersUsingFileFallback: status.manualPapersUsingFileFallback,
-      testResultsUsingFileFallback: status.testResultsUsingFileFallback,
-      localManualPapersFilePath: status.localManualPapersFilePath,
-    };
   }),
 
   getEnglishTagSystems: publicProcedure.query(async () => {
