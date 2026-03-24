@@ -90,6 +90,24 @@ function buildUnitRange(count: number) {
   return Array.from({ length: clampPositiveInt(count) }, (_, index) => formatUnitNumber(index + 1));
 }
 
+function getDisplayedPartCount(
+  subject: PaperSubject,
+  system: EnglishExamTagSystem | SubjectTagSystem,
+) {
+  if (system.systemMode !== "textbook-practice") {
+    return system.examParts.length;
+  }
+
+  return buildGeneratedPaperConfig(
+    subject,
+    system.label,
+    system.examParts,
+    system.generatedPaper,
+    "textbook-practice",
+    system.units,
+  ).practiceRules.length;
+}
+
 function parseExamPart(value: string, fallbackPrefix: string) {
   const partMatch = value.match(/^(.*?)\s*Part\s*(\d+)$/i);
   if (partMatch) {
@@ -589,7 +607,7 @@ export default function TagManager() {
                           </Badge>
                         ) : null}
                         <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                          {system.examParts.length} Parts
+                          {getDisplayedPartCount(subjectFilter, system)} Parts
                         </Badge>
                       </div>
                     </CardHeader>

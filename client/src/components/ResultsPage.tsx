@@ -13,6 +13,11 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
 import { isAudioAnswerValue } from '@/lib/audioStorage';
+import {
+  queuePendingTestResult,
+  removePendingTestResult,
+  type PendingTestResultPayload,
+} from '@/lib/pendingTestResults';
 import { packStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
@@ -361,7 +366,18 @@ interface ReadingSubItem {
 }
 
 export default function ResultsPage() {
-  const { getScore, resetQuiz, state, getAnswer, getSectionTimings, getTotalTime, studentInfo, sections, selectedPaper } = useQuiz();
+  const {
+    getScore,
+    resetQuiz,
+    state,
+    getAnswer,
+    getSectionTimings,
+    getTotalTime,
+    studentInfo,
+    sections,
+    selectedPaper,
+    isRestoringSession,
+  } = useQuiz();
   const { user } = useLocalAuth();
   const { correct, total, bySection } = getScore();
 
@@ -414,6 +430,8 @@ export default function ResultsPage() {
   const updateAIMutation = trpc.results.updateAI.useMutation();
   const savedResultId = useRef<number | null>(null);
   const hasSavedInitial = useRef(false);
+  const pendingResultId = useRef<string | null>(null);
+  const isSavingInitial = useRef(false);
 
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
@@ -817,33 +835,64 @@ export default function ResultsPage() {
     [studentInfo?.grade],
   );
 
-  // Save initial result state, then request reading checks and review placeholders.
-  // Auto-save initial results to database
-  useEffect(() => {
-    if (hasSavedInitial.current) return;
-    hasSavedInitial.current = true;
-    saveResultMutation.mutate({
+  const initialResultPayload = useMemo<PendingTestResultPayload | null>(() => {
+    if (isRestoringSession || !selectedPaper?.id || !selectedPaper?.title) return null;
+
+    return {
       studentName: recordedStudentName,
       studentGrade: recordedStudentGrade,
-      paperId: selectedPaper?.id || 'unknown',
-      paperTitle: selectedPaper?.title || 'Assessment',
+      paperId: selectedPaper.id,
+      paperTitle: selectedPaper.title,
       totalCorrect: correct,
       totalQuestions: total,
       totalTimeSeconds: totalTime || undefined,
       answersJson: packStoredAssessmentPayload(
         state.answers as Record<string, unknown>,
-        selectedPaper?.isGeneratedPaper ? selectedPaper : undefined,
+        selectedPaper.isGeneratedPaper ? selectedPaper : undefined,
       ),
       scoreBySectionJson: JSON.stringify(bySection),
       sectionTimingsJson: JSON.stringify(sectionTimings),
-    }, {
-      onSuccess: (data) => {
+    };
+  }, [
+    bySection,
+    correct,
+    isRestoringSession,
+    recordedStudentGrade,
+    recordedStudentName,
+    sectionTimings,
+    selectedPaper,
+    state.answers,
+    total,
+    totalTime,
+  ]);
+
+  // Save initial result state, then request reading checks and review placeholders.
+  // Auto-save initial results to database
+  useEffect(() => {
+    if (!initialResultPayload || hasSavedInitial.current || isSavingInitial.current) return;
+
+    isSavingInitial.current = true;
+    if (!pendingResultId.current) {
+      pendingResultId.current = queuePendingTestResult(initialResultPayload);
+    }
+
+    void saveResultMutation.mutateAsync(initialResultPayload)
+      .then((data) => {
+        hasSavedInitial.current = true;
         savedResultId.current = data.id ?? null;
+        if (pendingResultId.current) {
+          removePendingTestResult(pendingResultId.current);
+          pendingResultId.current = null;
+        }
         console.log('[Results] Saved to database with id:', data.id);
-      },
-      onError: (err) => console.error('[Results] Failed to save:', err),
-    });
-  }, [bySection, correct, recordedStudentGrade, recordedStudentName, saveResultMutation, sectionTimings, selectedPaper?.id, selectedPaper?.title, state.answers, total, totalTime]);
+      })
+      .catch((err) => {
+        console.error('[Results] Failed to save:', err);
+      })
+      .finally(() => {
+        isSavingInitial.current = false;
+      });
+  }, [initialResultPayload, saveResultMutation]);
 
   // Update AI results in database when they become available
   useEffect(() => {

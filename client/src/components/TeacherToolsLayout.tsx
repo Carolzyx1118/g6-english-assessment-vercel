@@ -29,7 +29,6 @@ type TeacherToolKey =
 interface TeacherToolsLayoutProps {
   activeTool: TeacherToolKey;
   currentSubject?: PaperSubject | null;
-  headerOffset?: boolean;
   children: ReactNode;
 }
 
@@ -121,7 +120,6 @@ function ExpandToggle({
 export default function TeacherToolsLayout({
   activeTool,
   currentSubject = null,
-  headerOffset = false,
   children,
 }: TeacherToolsLayoutProps) {
   const { user } = useLocalAuth();
@@ -165,23 +163,13 @@ export default function TeacherToolsLayout({
   const defaultSubject = allowedSubjects[0] ?? "english";
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB] md:flex">
+    <div className="min-h-screen bg-[#F6F8FB]">
       <aside
-        className={`hidden shrink-0 md:sticky md:flex md:flex-col ${
-          headerOffset ? "md:top-16 md:h-[calc(100vh-4rem)]" : "md:top-0 md:h-screen"
-        } ${
+        className={`hidden border-r border-slate-200 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur transition-[width] duration-200 md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:flex-col ${
           collapsed ? "md:w-20" : "md:w-72"
-        } ${
-          headerOffset ? "bg-transparent" : "border-r border-slate-200 bg-white/95 backdrop-blur"
         }`}
       >
-        <div
-          className={`flex h-full flex-col ${
-            headerOffset
-              ? "rounded-br-[28px] border-r border-b border-slate-200/80 bg-white/94 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur"
-              : "h-full"
-          }`}
-        >
+        <div className="flex h-full flex-col">
           <div className={`flex items-center border-b border-slate-200 px-4 py-4 ${collapsed ? "justify-center" : "justify-between"}`}>
             {!collapsed ? (
               <div>
@@ -400,7 +388,13 @@ export default function TeacherToolsLayout({
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">{children}</div>
+      <div
+        className={`min-w-0 flex-1 transition-[padding-left] duration-200 ${
+          collapsed ? "md:pl-20" : "md:pl-72"
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

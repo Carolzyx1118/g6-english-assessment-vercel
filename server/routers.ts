@@ -13,6 +13,69 @@ import type {
   SpeakingQuestionEvaluation,
 } from "../shared/assessmentReport";
 
+type ResultPaperSubject = "english" | "math" | "vocabulary";
+
+function isPaperSubjectValue(value: unknown): value is ResultPaperSubject {
+  return value === "english" || value === "math" || value === "vocabulary";
+}
+
+function getGeneratedPaperSubjectFromPaperId(paperId: string | null | undefined): ResultPaperSubject | null {
+  if (!paperId) return null;
+  const match = /^tag-system-(english|math|vocabulary)-/i.exec(paperId.trim());
+  if (!match) return null;
+
+  const subject = match[1]?.toLowerCase();
+  return isPaperSubjectValue(subject) ? subject : null;
+}
+
+function extractStoredPaperSnapshot(raw: string | null | undefined) {
+  if (!raw) {
+    return {
+      paperId: null as string | null,
+      paperTitle: null as string | null,
+      paperSubject: null as ResultPaperSubject | null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        paperId: null as string | null,
+        paperTitle: null as string | null,
+        paperSubject: null as ResultPaperSubject | null,
+      };
+    }
+
+    const payload = parsed as { __format?: string; paperSnapshot?: unknown };
+    if (payload.__format !== "assessment_payload_v2" || !payload.paperSnapshot || typeof payload.paperSnapshot !== "object") {
+      return {
+        paperId: null as string | null,
+        paperTitle: null as string | null,
+        paperSubject: null as ResultPaperSubject | null,
+      };
+    }
+
+    const snapshot = payload.paperSnapshot as {
+      id?: unknown;
+      title?: unknown;
+      subject?: unknown;
+    };
+
+    return {
+      paperId: typeof snapshot.id === "string" && snapshot.id.trim().length > 0 ? snapshot.id.trim() : null,
+      paperTitle: typeof snapshot.title === "string" && snapshot.title.trim().length > 0 ? snapshot.title.trim() : null,
+      paperSubject: isPaperSubjectValue(snapshot.subject) ? snapshot.subject : null,
+    };
+  } catch {
+    return {
+      paperId: null as string | null,
+      paperTitle: null as string | null,
+      paperSubject: null as ResultPaperSubject | null,
+    };
+  }
+}
+
 function normalizeReadingText(value: string) {
   return value
     .trim()
@@ -490,20 +553,32 @@ Respond in JSON format:
 
     list: publicProcedure.query(async () => {
       const results = await getAllTestResults();
-      return results.map(r => ({
-        id: r.id,
-        studentName: r.studentName,
-        studentGrade: r.studentGrade,
-        paperId: r.paperId,
-        paperTitle: r.paperTitle,
-        totalCorrect: r.totalCorrect,
-        totalQuestions: r.totalQuestions,
-        totalTimeSeconds: r.totalTimeSeconds,
-        createdAt: r.createdAt,
-        hasReport: !!r.reportJson,
-        hasReadingResults: !!r.readingResultsJson,
-        hasWritingResult: !!r.writingResultJson,
-      }));
+      return results.map((r) => {
+        const snapshot = extractStoredPaperSnapshot(r.answersJson);
+        const normalizedPaperId = r.paperId === "unknown" && snapshot.paperId
+          ? snapshot.paperId
+          : r.paperId;
+        const normalizedPaperTitle = (!r.paperTitle || r.paperTitle === "Assessment") && snapshot.paperTitle
+          ? snapshot.paperTitle
+          : r.paperTitle;
+        const paperSubject = snapshot.paperSubject ?? getGeneratedPaperSubjectFromPaperId(normalizedPaperId);
+
+        return {
+          id: r.id,
+          studentName: r.studentName,
+          studentGrade: r.studentGrade,
+          paperId: normalizedPaperId,
+          paperTitle: normalizedPaperTitle,
+          paperSubject,
+          totalCorrect: r.totalCorrect,
+          totalQuestions: r.totalQuestions,
+          totalTimeSeconds: r.totalTimeSeconds,
+          createdAt: r.createdAt,
+          hasReport: !!r.reportJson,
+          hasReadingResults: !!r.readingResultsJson,
+          hasWritingResult: !!r.writingResultJson,
+        };
+      });
     }),
 
     getById: publicProcedure

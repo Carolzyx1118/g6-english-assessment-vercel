@@ -548,11 +548,42 @@ export async function getUserByOpenId(openId: string) {
 
 // ── Test Results ──
 
+function doesTestResultMatchInsert(existing: Pick<TestResult,
+  | "studentName"
+  | "studentGrade"
+  | "paperId"
+  | "paperTitle"
+  | "totalCorrect"
+  | "totalQuestions"
+  | "totalTimeSeconds"
+  | "answersJson"
+  | "scoreBySectionJson"
+  | "sectionTimingsJson"
+>, incoming: InsertTestResult) {
+  return existing.studentName === incoming.studentName
+    && (existing.studentGrade ?? null) === (incoming.studentGrade ?? null)
+    && existing.paperId === incoming.paperId
+    && existing.paperTitle === incoming.paperTitle
+    && existing.totalCorrect === incoming.totalCorrect
+    && existing.totalQuestions === incoming.totalQuestions
+    && (existing.totalTimeSeconds ?? null) === (incoming.totalTimeSeconds ?? null)
+    && existing.answersJson === incoming.answersJson
+    && (existing.scoreBySectionJson ?? null) === (incoming.scoreBySectionJson ?? null)
+    && (existing.sectionTimingsJson ?? null) === (incoming.sectionTimingsJson ?? null);
+}
+
 export async function saveTestResult(data: InsertTestResult): Promise<number | null> {
   const db = await getDb();
   if (!db) {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
+    const existing = [...current.results]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10)
+      .find((result) => doesTestResultMatchInsert(result, data));
+    if (existing) {
+      return existing.id;
+    }
     const nextId = current.lastId + 1;
     current.lastId = nextId;
     current.results.push({
@@ -575,6 +606,16 @@ export async function saveTestResult(data: InsertTestResult): Promise<number | n
     });
     await writeTestResultsFile(current);
     return nextId;
+  }
+  const recentResults = await db
+    .select()
+    .from(testResults)
+    .where(eq(testResults.studentName, data.studentName))
+    .orderBy(desc(testResults.createdAt))
+    .limit(10);
+  const existing = recentResults.find((result) => doesTestResultMatchInsert(result, data));
+  if (existing) {
+    return existing.id;
   }
   const [result] = await db
     .insert(testResults)

@@ -102,6 +102,52 @@ function BrandHeader() {
   );
 }
 
+function TeacherWorkspaceTopBar({
+  activeSubject,
+}: {
+  activeSubject: PaperSubject | 'all' | null;
+}) {
+  const { user, isAuthenticated, logout } = useLocalAuth();
+  const workspaceLabel =
+    activeSubject && activeSubject !== 'all'
+      ? `${PAPER_SUBJECT_LABELS[activeSubject]} Workspace`
+      : 'Teacher Workspace';
+
+  return (
+    <div className="border-b border-slate-200/70 bg-white/92 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <img src={PUREON_LOGO} alt="璞源教育" className="h-10 w-10 object-contain" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-lg font-bold text-[#1E3A5F]">璞源教育</div>
+            <div className="text-[11px] uppercase tracking-[0.26em] text-slate-400">PUREON EDUCATION</div>
+            <div className="mt-1 text-sm text-slate-500">{workspaceLabel}</div>
+          </div>
+        </div>
+        {isAuthenticated && user ? (
+          <div className="flex items-center gap-4 self-start lg:self-auto">
+            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1E3A5F] text-white">
+                <User className="h-4 w-4 text-[#D4A84B]" />
+              </div>
+              <span className="font-medium text-[#1E3A5F]">{user.displayName || user.username}</span>
+            </div>
+            <button
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:border-slate-300 hover:text-[#1E3A5F]"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>退出</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ========== PAPER SELECTION PAGE ==========
 
 function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
@@ -199,9 +245,9 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
-      <BrandHeader />
       {isTeacher ? (
-        <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject} headerOffset>
+        <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject}>
+          <TeacherWorkspaceTopBar activeSubject={activeSubject} />
           <div className="bg-[#FAFBFD]">
             <div className="relative">
               <div className="relative overflow-hidden">
@@ -410,6 +456,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
         </TeacherToolsLayout>
       ) : (
         <>
+          <BrandHeader />
           <div className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
             <div className="absolute inset-0 opacity-5" style={{

@@ -39,6 +39,10 @@ import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 import { getAudioSourceType, isLikelyAudioUrl } from '@/lib/audioStorage';
 import { getGeneratedPaperSubjectFromPaperId } from '@/lib/historySubjects';
 import {
+  readPendingTestResults,
+  removePendingTestResult,
+} from '@/lib/pendingTestResults';
+import {
   getPaperById,
   type Paper,
   type PaperCategory,
@@ -449,6 +453,7 @@ export default function History() {
 function HistoryContent() {
   const search = useSearch();
   const { data: results, isLoading, refetch } = trpc.results.list.useQuery();
+  const saveResultMutation = trpc.results.save.useMutation();
   const manualPapersQuery = trpc.papers.listAllManualPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
@@ -492,7 +497,41 @@ function HistoryContent() {
     );
   }, [manualPapersQuery.data]);
 
-  const getResultSubject = (paperId: string): PaperSubject | null => {
+  useEffect(() => {
+    const pendingResults = readPendingTestResults();
+    if (pendingResults.length === 0 || saveResultMutation.isPending) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      let savedAny = false;
+
+      for (const entry of pendingResults) {
+        try {
+          await saveResultMutation.mutateAsync(entry.payload);
+          removePendingTestResult(entry.id);
+          savedAny = true;
+        } catch (error) {
+          console.error('[History] Failed to flush pending result:', error);
+        }
+      }
+
+      if (!cancelled && savedAny) {
+        await refetch();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refetch, saveResultMutation]);
+
+  const getResultSubject = (result: { paperId: string; paperSubject?: string | null }): PaperSubject | null => {
+    if (isPaperSubjectValue(result.paperSubject)) {
+      return result.paperSubject;
+    }
+
+    const paperId = result.paperId;
     const staticPaper = getPaperById(paperId);
     if (staticPaper && isPaperSubjectValue(staticPaper.subject)) {
       return staticPaper.subject;
@@ -508,7 +547,7 @@ function HistoryContent() {
   const filteredResults = useMemo(() => {
     if (!results) return [];
     if (!subjectFilter) return results;
-    return results.filter((result) => getResultSubject(result.paperId) === subjectFilter);
+    return results.filter((result) => getResultSubject(result) === subjectFilter);
   }, [results, subjectFilter, manualPaperSubjectMap]);
   const historySummary = useMemo(() => {
     const total = filteredResults.length;
@@ -904,7 +943,7 @@ function HistoryContent() {
                     const gradeInfo = getGradeInfo(r.totalCorrect, r.totalQuestions);
                     const isExpanded = selectedId === r.id;
                     const currentDetail = isExpanded && detail?.id === r.id ? detail : null;
-                    const resultSubject = getResultSubject(r.paperId);
+                    const resultSubject = getResultSubject(r);
 
                     return (
                       <motion.div

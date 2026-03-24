@@ -19,6 +19,8 @@ describe("results CRUD", () => {
   const ctx = createPublicContext();
   const caller = appRouter.createCaller(ctx);
   let savedId: number | null = null;
+  let generatedSavedId: number | null = null;
+  let dedupedSavedId: number | null = null;
 
   it("saves a test result and returns an id", async () => {
     const result = await caller.results.save({
@@ -76,6 +78,67 @@ describe("results CRUD", () => {
     expect(detail!.reportJson).toBe(reportData);
   });
 
+  it("recovers generated paper metadata from stored assessment payload", async () => {
+    const generatedAnswersJson = JSON.stringify({
+      __format: "assessment_payload_v2",
+      answers: { q1: "A" },
+      paperSnapshot: {
+        id: "tag-system-english-ket-unit-1",
+        title: "KET Unit 1 Practice",
+        subject: "english",
+      },
+    });
+
+    const saveResult = await caller.results.save({
+      studentName: "Generated Student",
+      paperId: "unknown",
+      paperTitle: "Assessment",
+      totalCorrect: 1,
+      totalQuestions: 1,
+      answersJson: generatedAnswersJson,
+    });
+
+    generatedSavedId = saveResult.id!;
+
+    const list = await caller.results.list();
+    const found = list.find((result) => result.id === generatedSavedId);
+    expect(found).toBeDefined();
+    expect(found!.paperId).toBe("tag-system-english-ket-unit-1");
+    expect(found!.paperTitle).toBe("KET Unit 1 Practice");
+    expect(found!.paperSubject).toBe("english");
+  });
+
+  it("deduplicates identical pending result retries", async () => {
+    const duplicatedAnswersJson = JSON.stringify({ q1: "retry" });
+
+    const firstSave = await caller.results.save({
+      studentName: "Retry Student",
+      paperId: "retry-paper",
+      paperTitle: "Retry Paper",
+      totalCorrect: 2,
+      totalQuestions: 3,
+      totalTimeSeconds: 90,
+      answersJson: duplicatedAnswersJson,
+      scoreBySectionJson: JSON.stringify({ reading: { correct: 2, total: 3 } }),
+      sectionTimingsJson: JSON.stringify({ reading: 90 }),
+    });
+
+    const secondSave = await caller.results.save({
+      studentName: "Retry Student",
+      paperId: "retry-paper",
+      paperTitle: "Retry Paper",
+      totalCorrect: 2,
+      totalQuestions: 3,
+      totalTimeSeconds: 90,
+      answersJson: duplicatedAnswersJson,
+      scoreBySectionJson: JSON.stringify({ reading: { correct: 2, total: 3 } }),
+      sectionTimingsJson: JSON.stringify({ reading: 90 }),
+    });
+
+    dedupedSavedId = firstSave.id!;
+    expect(secondSave.id).toBe(firstSave.id);
+  });
+
   it("deletes a result", async () => {
     const deleteResult = await caller.results.delete({ id: savedId! });
     expect(deleteResult).toEqual({ success: true });
@@ -83,5 +146,15 @@ describe("results CRUD", () => {
     // Verify deletion
     const detail = await caller.results.getById({ id: savedId! });
     expect(detail).toBeNull();
+  });
+
+  it("deletes the generated metadata fixture", async () => {
+    const deleteResult = await caller.results.delete({ id: generatedSavedId! });
+    expect(deleteResult).toEqual({ success: true });
+  });
+
+  it("deletes the deduped retry fixture", async () => {
+    const deleteResult = await caller.results.delete({ id: dedupedSavedId! });
+    expect(deleteResult).toEqual({ success: true });
   });
 });
