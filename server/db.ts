@@ -50,20 +50,6 @@ function getLocalTestResultsFilePath() {
   return process.env.LOCAL_TEST_RESULTS_FILE || getWritableDataPath("test-results.json");
 }
 
-export function getPersistenceStatus() {
-  const databaseConfigured = Boolean(ENV.databaseUrl);
-
-  return {
-    databaseConfigured,
-    localAuthUsingFileFallback: !databaseConfigured || hasForcedLocalAuthFileFallback,
-    manualPapersUsingFileFallback: !databaseConfigured || hasForcedManualPaperFileFallback,
-    testResultsUsingFileFallback: !databaseConfigured || hasForcedTestResultsFileFallback,
-    localAuthFilePath: getLocalAuthUsersFilePath(),
-    localManualPapersFilePath: getLocalManualPapersFilePath(),
-    localTestResultsFilePath: getLocalTestResultsFilePath(),
-  };
-}
-
 function logEphemeralPersistenceWarning() {
   if (hasLoggedEphemeralPersistenceWarning || !isVercelRuntime()) return;
   hasLoggedEphemeralPersistenceWarning = true;

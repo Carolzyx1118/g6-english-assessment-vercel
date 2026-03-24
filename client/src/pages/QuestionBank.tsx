@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -593,9 +593,6 @@ export default function QuestionBank() {
   const listQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
     staleTime: 5_000,
   });
-  const persistenceStatusQuery = trpc.papers.getPersistenceStatus.useQuery(undefined, {
-    staleTime: 5_000,
-  });
   const englishSystemsQuery = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
     staleTime: 30_000,
   });
@@ -810,30 +807,6 @@ export default function QuestionBank() {
               </CardHeader>
             </Card>
           </div>
-
-          {persistenceStatusQuery.data?.manualPapersUsingFileFallback ? (
-            <Card className="border-amber-200 bg-amber-50 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
-                  <div className="space-y-1">
-                    <CardTitle className="text-base text-amber-900">Question Bank Is Using Local Fallback Storage</CardTitle>
-                    <CardDescription className="text-amber-800">
-                      {persistenceStatusQuery.data.databaseConfigured
-                        ? "Database paper queries failed in this environment, so the Question Bank is currently reading the local fallback file instead."
-                        : "DATABASE_URL is not configured in this environment, so the Question Bank is currently reading the local fallback file instead of your database."}
-                    </CardDescription>
-                    <p className="text-sm text-amber-900">
-                      If your old question-bank items seem missing, they are likely still in the original database and are not being loaded right now.
-                    </p>
-                    <p className="text-xs text-amber-700">
-                      Local fallback file: <span className="font-mono">{persistenceStatusQuery.data.localManualPapersFilePath}</span>
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          ) : null}
 
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-4">
