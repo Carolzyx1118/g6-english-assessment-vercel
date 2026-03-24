@@ -1163,7 +1163,6 @@ function normalizeAssetUrl(value?: string) {
   const lowerValue = trimmed.toLowerCase();
   if (
     lowerValue.startsWith("data:")
-    || lowerValue.startsWith("blob:")
     || lowerValue.startsWith("http://")
     || lowerValue.startsWith("https://")
     || trimmed.startsWith("/")
@@ -1178,6 +1177,34 @@ function normalizeAssetUrl(value?: string) {
   }
 
   return undefined;
+}
+
+function isBlobAssetUrl(value?: string) {
+  if (!value) return false;
+  return value.trim().toLowerCase().startsWith("blob:");
+}
+
+async function recoverBlobAssetDataUrl(
+  assetUrl: string,
+  kind: "image" | "audio",
+  fallbackContentType: string,
+) {
+  const response = await fetch(assetUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to recover the local ${kind} asset before saving.`);
+  }
+
+  const blob = await response.blob();
+  const mimeType = blob.type || fallbackContentType || "application/octet-stream";
+  const extension = mimeType.split("/")[1]?.split(";")[0] || (kind === "audio" ? "mp3" : "bin");
+  const file = new File([blob], `recovered-${kind}.${extension}`, { type: mimeType });
+  const fileBase64 = await fileToBase64(file);
+
+  return {
+    dataUrl: `data:${mimeType};base64,${fileBase64}`,
+    mimeType,
+    size: blob.size,
+  };
 }
 
 function sanitizeAssetUrls(dataUrl?: string, previewUrl?: string) {
@@ -2908,8 +2935,25 @@ export default function PaperIntake() {
   ): Promise<T | undefined> => {
     if (!asset) return undefined;
 
-    const durableUrl = getDurableAssetUrl(asset.previewUrl) ?? getDurableAssetUrl(asset.dataUrl);
     const contentType = guessAssetContentType(kind, asset.fileName, asset.mimeType);
+    const transientBlobUrl = [asset.previewUrl, asset.dataUrl].find((value) => isBlobAssetUrl(value));
+
+    if (transientBlobUrl) {
+      try {
+        const recovered = await recoverBlobAssetDataUrl(transientBlobUrl, kind, contentType);
+        return {
+          ...asset,
+          dataUrl: recovered.dataUrl,
+          previewUrl: undefined,
+          mimeType: recovered.mimeType,
+          size: recovered.size || asset.size,
+        };
+      } catch (error) {
+        console.warn("[PaperIntake] Failed to recover transient asset URL before save:", error);
+      }
+    }
+
+    const durableUrl = getDurableAssetUrl(asset.previewUrl) ?? getDurableAssetUrl(asset.dataUrl);
 
     if (durableUrl) {
       return {
@@ -2920,10 +2964,10 @@ export default function PaperIntake() {
       };
     }
 
-    const normalizedDataUrl = normalizeAssetUrl(asset.dataUrl) ?? asset.dataUrl;
+    const normalizedDataUrl = normalizeAssetUrl(asset.dataUrl);
     return {
       ...asset,
-      dataUrl: normalizedDataUrl,
+      dataUrl: normalizedDataUrl ?? "",
       previewUrl: undefined,
       mimeType: contentType,
     };
