@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { upload as uploadBlob } from "@vercel/blob/client";
 import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mic, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
@@ -98,8 +97,6 @@ const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
 const DEFAULT_WORD_BANK_SIZE = 4;
 const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v2";
-const BLOB_UPLOAD_ROUTE = "/api/blob/client-token";
-const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
 const ENGLISH_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "speaking", "grammar", "vocabulary"];
 const MATH_SECTION_TYPES: ManualSectionType[] = ["math-multiple-choice", "math-short-answer", "math-application"];
 const ENGLISH_GENERATED_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "grammar", "vocabulary"];
@@ -1216,26 +1213,6 @@ function getFriendlyAssetErrorMessage(error: unknown, fallback: string) {
     return fallback;
   }
   return rawMessage || fallback;
-}
-
-async function uploadListeningAudioDirect(file: File, contentType: string) {
-  const pathname = `paper-assets/${buildAssetUploadFileName(
-    "audio",
-    `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
-    contentType,
-  )}`;
-  const uploaded = await uploadBlob(pathname, file, {
-    access: "public",
-    handleUploadUrl: BLOB_UPLOAD_ROUTE,
-    clientPayload: JSON.stringify({
-      contentType,
-      fileSize: file.size,
-    }),
-    contentType,
-    multipart: file.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
-  });
-
-  return normalizeAssetUrl(uploaded.url);
 }
 
 function normalizeQuestionAssetUrls(question: ManualQuestion): ManualQuestion {
@@ -4446,12 +4423,32 @@ export default function PaperIntake() {
     try {
       setUploadingSubsectionAudioId(subsectionId);
       const contentType = guessAssetContentType("audio", file.name, file.type);
-      const persistedUrl = await uploadListeningAudioDirect(file, contentType);
+      const fileBase64 = await fileToBase64(file);
+      const embeddedDataUrl = `data:${contentType};base64,${fileBase64}`;
+      let persistedUrl: string | undefined;
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: buildAssetUploadFileName(
+            "audio",
+            `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
+            contentType,
+          ),
+          contentType,
+          fileBase64,
+        });
+        persistedUrl = normalizeAssetUrl(uploaded.url) ?? undefined;
+      } catch (uploadError) {
+        console.warn(
+          "[PaperIntake] Listening audio upload failed, falling back to embedded audio:",
+          uploadError,
+        );
+      }
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,
         audio: {
-          dataUrl: persistedUrl ?? "",
+          dataUrl: persistedUrl ?? embeddedDataUrl,
           previewUrl: persistedUrl,
           fileName: file.name,
           mimeType: contentType,
@@ -4459,7 +4456,11 @@ export default function PaperIntake() {
         },
       }));
 
-      toast.success("Audio file uploaded.");
+      toast.success(
+        persistedUrl
+          ? "Audio file uploaded."
+          : "Audio attached. It will be finalized when you save the question.",
+      );
     } catch (error) {
       console.error("[PaperIntake] Failed to process subsection audio:", error);
       toast.error(
