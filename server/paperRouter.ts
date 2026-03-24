@@ -25,198 +25,7 @@ import {
   blueprintHasWriting,
 } from "../shared/blueprintToPaper";
 import { getBlueprintBuildMode, getBlueprintVisibilityMode } from "../shared/taggedPaperGenerator";
-import type {
-  ManualAudioFile,
-  ManualOptionImage,
-  ManualPaperBlueprint,
-  ManualQuestion,
-  ManualSection,
-  ManualSubsection,
-} from "../shared/manualPaperBlueprint";
 import { z } from "zod";
-
-function normalizePersistedAssetUrl(value?: string) {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-
-  const lowerValue = trimmed.toLowerCase();
-  if (
-    lowerValue.startsWith("http://")
-    || lowerValue.startsWith("https://")
-    || lowerValue.startsWith("data:")
-    || trimmed.startsWith("/")
-  ) {
-    return trimmed;
-  }
-
-  if (trimmed.startsWith("local-paper-assets/") || trimmed.startsWith("api/blob?")) {
-    return `/${trimmed.replace(/^\/+/, "")}`;
-  }
-
-  return undefined;
-}
-
-function decodeDataUrl(value?: string) {
-  const normalized = normalizePersistedAssetUrl(value);
-  if (!normalized?.startsWith("data:")) return null;
-
-  const match = normalized.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-  if (!match) return null;
-
-  const contentType = match[1]?.trim() || "application/octet-stream";
-  const body = match[3] ?? "";
-  if (!body) return null;
-
-  if (match[2]) {
-    return {
-      contentType,
-      buffer: Buffer.from(body, "base64"),
-    };
-  }
-
-  try {
-    return {
-      contentType,
-      buffer: Buffer.from(decodeURIComponent(body), "utf8"),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function guessAssetExtension(contentType: string, kind: "image" | "audio") {
-  const normalizedType = contentType.toLowerCase();
-
-  if (kind === "audio") {
-    if (normalizedType.includes("mpeg") || normalizedType.includes("mp3")) return "mp3";
-    if (normalizedType.includes("wav")) return "wav";
-    if (normalizedType.includes("ogg")) return "ogg";
-    if (normalizedType.includes("webm")) return "webm";
-    if (normalizedType.includes("mp4")) return "mp4";
-    if (normalizedType.includes("m4a")) return "m4a";
-    if (normalizedType.includes("aac")) return "aac";
-    return "bin";
-  }
-
-  if (normalizedType.includes("png")) return "png";
-  if (normalizedType.includes("webp")) return "webp";
-  if (normalizedType.includes("gif")) return "gif";
-  return "jpg";
-}
-
-function buildAssetStorageKey(kind: "image" | "audio", fileName: string | undefined, contentType: string) {
-  const safeBaseName = (fileName?.trim() || `${kind}-${Date.now()}`)
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/_{2,}/g, "_")
-    .replace(/^_+|_+$/g, "");
-  const baseName = safeBaseName || `${kind}-${Date.now()}`;
-  const fileWithExtension = baseName.includes(".")
-    ? baseName
-    : `${baseName}.${guessAssetExtension(contentType, kind)}`;
-  const suffix = Math.random().toString(36).slice(2, 10);
-  return `paper-assets/${kind}-${suffix}-${fileWithExtension}`;
-}
-
-async function persistAssetOnServer<T extends ManualOptionImage | ManualAudioFile>(
-  asset: T | undefined,
-  kind: "image" | "audio",
-): Promise<T | undefined> {
-  if (!asset) return undefined;
-
-  const durableUrl = normalizePersistedAssetUrl(asset.previewUrl) || normalizePersistedAssetUrl(asset.dataUrl);
-  if (durableUrl && !durableUrl.startsWith("data:")) {
-    return {
-      ...asset,
-      dataUrl: durableUrl,
-      previewUrl: durableUrl,
-    };
-  }
-
-  const payload = decodeDataUrl(asset.dataUrl);
-  if (!payload) {
-    return {
-      ...asset,
-      dataUrl: normalizePersistedAssetUrl(asset.dataUrl) ?? asset.dataUrl,
-      previewUrl: undefined,
-    };
-  }
-
-  try {
-    const { url } = await storagePut(
-      buildAssetStorageKey(kind, asset.fileName, payload.contentType || asset.mimeType || "application/octet-stream"),
-      payload.buffer,
-      payload.contentType || asset.mimeType || "application/octet-stream",
-    );
-    const normalizedUrl = normalizePersistedAssetUrl(url) ?? url;
-
-    return {
-      ...asset,
-      dataUrl: normalizedUrl,
-      previewUrl: normalizedUrl,
-      mimeType: payload.contentType || asset.mimeType,
-      size: payload.buffer.byteLength || asset.size,
-    };
-  } catch (error) {
-    console.error(`[papers] Failed to persist ${kind} asset on save:`, error);
-    return {
-      ...asset,
-      dataUrl: asset.dataUrl,
-      previewUrl: undefined,
-    };
-  }
-}
-
-async function persistQuestionAssetsOnServer(question: ManualQuestion): Promise<ManualQuestion> {
-  if (question.type === "mcq" || question.type === "checkbox" || question.type === "passage-mcq") {
-    return {
-      ...question,
-      options: await Promise.all(question.options.map(async (option) => (
-        "image" in option
-          ? {
-              ...option,
-              image: await persistAssetOnServer(option.image, "image"),
-            }
-          : option
-      ))),
-    };
-  }
-
-  if (
-    question.type === "picture-spelling"
-    || question.type === "word-completion"
-    || question.type === "writing"
-    || question.type === "speaking"
-  ) {
-    return {
-      ...question,
-      image: await persistAssetOnServer(question.image, "image"),
-    };
-  }
-
-  return question;
-}
-
-async function persistSubsectionAssetsOnServer(subsection: ManualSubsection): Promise<ManualSubsection> {
-  return {
-    ...subsection,
-    sceneImage: await persistAssetOnServer(subsection.sceneImage, "image"),
-    audio: await persistAssetOnServer(subsection.audio, "audio"),
-    questions: await Promise.all(subsection.questions.map((question) => persistQuestionAssetsOnServer(question))),
-  };
-}
-
-async function persistBlueprintAssetsOnServer(blueprint: ManualPaperBlueprint): Promise<ManualPaperBlueprint> {
-  return {
-    ...blueprint,
-    sections: await Promise.all(
-      blueprint.sections.map(async (section: ManualSection & { partLabel: string }) => ({
-        ...section,
-        subsections: await Promise.all(section.subsections.map((subsection) => persistSubsectionAssetsOnServer(subsection))),
-      })),
-    ),
-  };
-}
 
 const englishTagSystemInputSchema = z.object({
   id: z.string().min(1),
@@ -331,9 +140,7 @@ export const paperRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const parsedBlueprint = JSON.parse(input.blueprintJson) as ManualPaperBlueprint;
-        const blueprint = await persistBlueprintAssetsOnServer(parsedBlueprint);
-        const blueprintJson = JSON.stringify(blueprint);
+        const blueprint = JSON.parse(input.blueprintJson);
         const totalQuestions = countBlueprintQuestions(blueprint);
         const hasListening = blueprintHasListening(blueprint);
         const hasWriting = blueprintHasWriting(blueprint);
@@ -354,7 +161,7 @@ export const paperRouter = router({
           subject: input.subject,
           category: input.category,
           published: input.published ? 1 : 0,
-          blueprintJson,
+          blueprintJson: input.blueprintJson,
           totalQuestions,
           hasListening: hasListening ? 1 : 0,
           hasWriting: hasWriting ? 1 : 0,
@@ -570,9 +377,7 @@ export const paperRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const parsedBlueprint = JSON.parse(input.blueprintJson) as ManualPaperBlueprint;
-        const blueprint = await persistBlueprintAssetsOnServer(parsedBlueprint);
-        const blueprintJson = JSON.stringify(blueprint);
+        const blueprint = JSON.parse(input.blueprintJson);
         const totalQuestions = countBlueprintQuestions(blueprint);
         const hasListening = blueprintHasListening(blueprint);
         const hasWriting = blueprintHasWriting(blueprint);
@@ -583,7 +388,7 @@ export const paperRouter = router({
           subject: input.subject,
           category: input.category,
           published: input.published === undefined ? undefined : (input.published ? 1 : 0),
-          blueprintJson,
+          blueprintJson: input.blueprintJson,
           totalQuestions,
           hasListening: hasListening ? 1 : 0,
           hasWriting: hasWriting ? 1 : 0,
