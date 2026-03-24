@@ -3,6 +3,7 @@ import express from "express";
 import fs from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { registerBlobProxyRoute } from "../blobProxy";
+import { registerBlobClientTokenRoute } from "../blobClientTokenRoute";
 import { appRouter } from "../routers";
 import { LOCAL_STORAGE_DIR, LOCAL_STORAGE_ROUTE } from "../storage";
 import { createContext } from "./context";
@@ -42,6 +43,7 @@ async function createRpcApp(): Promise<RpcAppHandler> {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(LOCAL_STORAGE_ROUTE, express.static(LOCAL_STORAGE_DIR));
   registerBlobProxyRoute(app);
+  registerBlobClientTokenRoute(app);
 
   registerOAuthRoutes(app);
 

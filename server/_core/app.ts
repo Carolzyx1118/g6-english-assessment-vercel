@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { registerBlobProxyRoute } from "../blobProxy";
+import { registerBlobClientTokenRoute } from "../blobClientTokenRoute";
 import { LOCAL_STORAGE_DIR, LOCAL_STORAGE_ROUTE } from "../storage";
 import { createContext } from "./context";
 import { registerOAuthRoutes } from "./oauth";
@@ -25,6 +26,7 @@ export async function createApp({
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(LOCAL_STORAGE_ROUTE, express.static(LOCAL_STORAGE_DIR));
   registerBlobProxyRoute(app);
+  registerBlobClientTokenRoute(app);
 
   registerOAuthRoutes(app);
 
