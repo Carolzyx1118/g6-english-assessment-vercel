@@ -1064,22 +1064,21 @@ function normalizeAssetUrl(value?: string) {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-
-  const lowerValue = trimmed.toLowerCase();
   if (
-    lowerValue.startsWith("data:")
-    || lowerValue.startsWith("blob:")
-    || lowerValue.startsWith("http://")
-    || lowerValue.startsWith("https://")
-    || trimmed.startsWith("/")
-    || trimmed.startsWith("./")
-    || trimmed.startsWith("../")
+    trimmed.startsWith("data:")
+    || trimmed.startsWith("blob:")
+    || trimmed.startsWith("http://")
+    || trimmed.startsWith("https://")
   ) {
     return trimmed;
   }
 
-  if (trimmed.startsWith("local-paper-assets/") || trimmed.startsWith("api/blob?")) {
-    return `/${trimmed.replace(/^\/+/, "")}`;
+  if (typeof window !== "undefined") {
+    try {
+      return new URL(trimmed, window.location.origin).toString();
+    } catch {
+      return undefined;
+    }
   }
 
   return undefined;
@@ -1115,34 +1114,8 @@ function normalizeAudioAsset(audio?: ManualAudioFile): ManualAudioFile | undefin
   };
 }
 
-function buildLocalImageAsset(
-  file: File,
-  dataUrl: string,
-  previewUrl: string,
-  mimeType: string,
-  size: number,
-): ManualOptionImage {
-  return {
-    dataUrl,
-    previewUrl,
-    fileName: file.name,
-    mimeType,
-    size,
-  };
-}
-
-function buildLocalAudioAsset(
-  file: File,
-  dataUrl: string,
-  mimeType: string,
-): ManualAudioFile {
-  return {
-    dataUrl,
-    previewUrl: undefined,
-    fileName: file.name,
-    mimeType,
-    size: file.size,
-  };
+function getUploadedPreviewUrl(uploadedUrl: string | undefined, fallbackPreviewUrl: string) {
+  return normalizeAssetUrl(uploadedUrl) ?? fallbackPreviewUrl;
 }
 
 function guessAssetContentType(
@@ -3682,16 +3655,33 @@ export default function PaperIntake() {
       const compressedFile = await compressImage(file, "scene");
       const fileBase64 = await fileToBase64(compressedFile);
       const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
-      const previewUrl = URL.createObjectURL(compressedFile);
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `writing-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
 
       updateWritingQuestion(sectionId, subsectionId, questionId, (question) => ({
         ...question,
-        image: buildLocalImageAsset(compressedFile, dataUrl, previewUrl, compressedFile.type, compressedFile.size),
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
       }));
 
       toast.success("Writing prompt image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -3713,16 +3703,33 @@ export default function PaperIntake() {
       const compressedFile = await compressImage(file, "scene");
       const fileBase64 = await fileToBase64(compressedFile);
       const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
-      const previewUrl = URL.createObjectURL(compressedFile);
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `speaking-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
 
       updateSpeakingQuestion(sectionId, subsectionId, questionId, (question) => ({
         ...question,
-        image: buildLocalImageAsset(compressedFile, dataUrl, previewUrl, compressedFile.type, compressedFile.size),
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
       }));
 
       toast.success("Speaking prompt image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -3744,16 +3751,33 @@ export default function PaperIntake() {
       const compressedFile = await compressImage(file, "scene");
       const fileBase64 = await fileToBase64(compressedFile);
       const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
-      const previewUrl = URL.createObjectURL(compressedFile);
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `vocabulary-picture-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to local preview when upload is unavailable.
+      }
 
       updatePictureSpellingQuestion(sectionId, subsectionId, questionId, (question) => ({
         ...question,
-        image: buildLocalImageAsset(compressedFile, dataUrl, previewUrl, compressedFile.type, compressedFile.size),
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
       }));
 
       toast.success("Vocabulary image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -3775,16 +3799,33 @@ export default function PaperIntake() {
       const compressedFile = await compressImage(file, "scene");
       const fileBase64 = await fileToBase64(compressedFile);
       const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
-      const previewUrl = URL.createObjectURL(compressedFile);
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `vocabulary-completion-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to local preview when upload is unavailable.
+      }
 
       updateWordCompletionQuestion(sectionId, subsectionId, questionId, (question) => ({
         ...question,
-        image: buildLocalImageAsset(compressedFile, dataUrl, previewUrl, compressedFile.type, compressedFile.size),
+        image: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
       }));
 
       toast.success("Word completion image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -4289,20 +4330,32 @@ export default function PaperIntake() {
 
     try {
       const normalizedImage = await createSquareImageDataUrl(file, 320);
+      let previewUrl = normalizedImage.previewUrl;
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `option-${file.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: normalizedImage.mimeType,
+          fileBase64: normalizedImage.dataUrl.split(",")[1] ?? "",
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
 
       updateOption(sectionId, subsectionId, questionId, optionId, (option) => ({
         ...option,
-        image: buildLocalImageAsset(
-          file,
-          normalizedImage.dataUrl,
-          normalizedImage.previewUrl,
-          normalizedImage.mimeType,
-          normalizedImage.size,
-        ),
+        image: {
+          dataUrl: normalizedImage.dataUrl,
+          previewUrl,
+          fileName: file.name,
+          mimeType: normalizedImage.mimeType,
+          size: normalizedImage.size,
+        },
       }));
       toast.success("Square option image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -4323,16 +4376,33 @@ export default function PaperIntake() {
       const compressedFile = await compressImage(file, "scene");
       const fileBase64 = await fileToBase64(compressedFile);
       const dataUrl = `data:${compressedFile.type};base64,${fileBase64}`;
-      const previewUrl = URL.createObjectURL(compressedFile);
+      let previewUrl = URL.createObjectURL(compressedFile);
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: `scene-${compressedFile.name.replace(/\s+/g, "-").toLowerCase()}`,
+          contentType: compressedFile.type,
+          fileBase64,
+        });
+        previewUrl = getUploadedPreviewUrl(uploaded.url, previewUrl);
+      } catch {
+        // Fall back to the in-browser preview URL when upload is unavailable.
+      }
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,
-        sceneImage: buildLocalImageAsset(compressedFile, dataUrl, previewUrl, compressedFile.type, compressedFile.size),
+        sceneImage: {
+          dataUrl,
+          previewUrl,
+          fileName: compressedFile.name,
+          mimeType: compressedFile.type,
+          size: compressedFile.size,
+        },
       }));
 
       toast.success("Question block image updated.");
     } catch (error) {
-      toast.error(getFriendlyAssetErrorMessage(error, "Failed to process the image. Please try another file."));
+      toast.error(error instanceof Error ? error.message : "Failed to process image");
     }
   };
 
@@ -4353,10 +4423,28 @@ export default function PaperIntake() {
       const fileBase64 = await fileToBase64(file);
       const contentType = guessAssetContentType("audio", file.name, file.type);
       const dataUrl = `data:${contentType};base64,${fileBase64}`;
+      let persistedUrl: string | undefined;
+
+      try {
+        const uploaded = await uploadFileMutation.mutateAsync({
+          fileName: buildAssetUploadFileName("audio", `audio-${file.name.replace(/\s+/g, "-").toLowerCase()}`, contentType),
+          contentType,
+          fileBase64,
+        });
+        persistedUrl = normalizeAssetUrl(uploaded.url);
+      } catch (error) {
+        console.warn("[PaperIntake] Audio upload failed, keeping embedded audio until save:", error);
+      }
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,
-        audio: buildLocalAudioAsset(file, dataUrl, contentType),
+        audio: {
+          dataUrl: persistedUrl ?? dataUrl,
+          previewUrl: persistedUrl,
+          fileName: file.name,
+          mimeType: contentType,
+          size: file.size,
+        },
       }));
 
       toast.success("Audio file uploaded.");
