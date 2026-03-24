@@ -228,6 +228,13 @@ function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function getQuestionBankItemIdSummary(items: QuestionBankItemRecord[]) {
+  if (items.length === 0) return "No items yet";
+  if (items.length === 1) return `Item ID: ${items[0].itemId}`;
+  if (items.length === 2) return `Item IDs: ${items[0].itemId}, ${items[1].itemId}`;
+  return `Item IDs: ${items[0].itemId}, ${items[1].itemId} +${items.length - 2} more`;
+}
+
 function PreviewImage({ image, className = "h-36 w-full max-w-xs" }: { image?: ManualOptionImage; className?: string }) {
   if (!image?.previewUrl && !image?.dataUrl) return null;
   const source = image.previewUrl || image.dataUrl;
@@ -710,8 +717,7 @@ export default function QuestionBank() {
 
   const summary = useMemo(() => ({
     totalBanks: filteredPapers.length,
-    totalItems: filteredPapers.reduce((sum, paper) => sum + (hasActiveFilters ? paper.filteredItems.length : paper.items.length), 0),
-  }), [filteredPapers, hasActiveFilters]);
+  }), [filteredPapers]);
 
   const refreshQuestionBankQueries = async () => {
     await Promise.all([
@@ -793,17 +799,11 @@ export default function QuestionBank() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-1">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription>{hasActiveFilters ? "Matching Question Bank Papers" : "Question Bank Papers"}</CardDescription>
                 <CardTitle className="text-xl">{summary.totalBanks}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>{hasActiveFilters ? "Matching Question Bank Items" : "Question Bank Items"}</CardDescription>
-                <CardTitle className="text-xl text-sky-700">{summary.totalItems}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -884,6 +884,7 @@ export default function QuestionBank() {
                 const itemCountLabel = hasActiveFilters && items.length !== paperView.items.length
                   ? `${items.length} of ${paperView.items.length} items`
                   : `${paperView.items.length} items`;
+                const itemIdSummary = getQuestionBankItemIdSummary(items);
 
                 return (
                   <Card key={paper.id} className="border-slate-200 shadow-sm">
@@ -898,7 +899,7 @@ export default function QuestionBank() {
                             </Badge>
                           </div>
                           <CardDescription>
-                            Bank ID: {paper.paperId} · Updated {formatDate(paper.updatedAt)}
+                            {itemIdSummary} · Updated {formatDate(paper.updatedAt)}
                           </CardDescription>
                         </div>
 
@@ -967,9 +968,6 @@ export default function QuestionBank() {
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                   <div className="space-y-2">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <Badge className="rounded-full bg-[#1E3A5F] px-3 py-1 text-white hover:bg-[#1E3A5F]">
-                                        {item.itemId}
-                                      </Badge>
                                       {item.questionTypes.map((questionType) => (
                                         <Badge key={`${item.section.id}-${questionType}`} className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
                                           {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}

@@ -6,6 +6,7 @@ import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft,
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { getPaperReadinessMessage, isPaperReadyToStart } from '@/lib/paperReadiness';
 import TeacherToolsLayout from '@/components/TeacherToolsLayout';
 
 const PUREON_LOGO = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bJDnAegOAPWmMppj.png';
@@ -115,22 +116,22 @@ function TeacherWorkspaceTopBar({
 
   return (
     <div className="border-b border-slate-200/70 bg-white/92 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <img src={PUREON_LOGO} alt="璞源教育" className="h-10 w-10 object-contain" />
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <img src={PUREON_LOGO} alt="璞源教育" className="h-9 w-9 object-contain" />
           </div>
           <div className="min-w-0">
             <div className="text-lg font-bold text-[#1E3A5F]">璞源教育</div>
             <div className="text-[11px] uppercase tracking-[0.26em] text-slate-400">PUREON EDUCATION</div>
-            <div className="mt-1 text-sm text-slate-500">{workspaceLabel}</div>
+            <div className="mt-0.5 text-sm text-slate-500">{workspaceLabel}</div>
           </div>
         </div>
         {isAuthenticated && user ? (
           <div className="flex items-center gap-4 self-start lg:self-auto">
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1E3A5F] text-white">
-                <User className="h-4 w-4 text-[#D4A84B]" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
+              <div className="flex h-4 w-4 items-center justify-center text-[#D4A84B]">
+                <User className="h-4 w-4" />
               </div>
               <span className="font-medium text-[#1E3A5F]">{user.displayName || user.username}</span>
             </div>
@@ -646,9 +647,10 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const { startQuiz } = useQuiz();
   const hasDistinctSubtitle = Boolean(paper.subtitle?.trim())
     && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
-  const isReadyToStart = paper.sections.length > 0 && paper.totalQuestions > 0;
+  const isReadyToStart = isPaperReadyToStart(paper);
   const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
   const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+  const readinessMessage = getPaperReadinessMessage(paper);
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -706,8 +708,9 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
                 {paper.description}
               </p>
               {!isReadyToStart ? (
-                <div className="mt-6 inline-flex items-center rounded-full bg-amber-500/15 px-4 py-2 text-sm font-medium text-[#F4D48B]">
-                  This paper is not ready yet. Add question counts and tagged question-bank items first.
+                <div className="mt-6 max-w-xl rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3">
+                  <div className="text-sm font-semibold text-[#F4D48B]">This paper is not ready yet.</div>
+                  <div className="mt-1 text-sm text-white/70">{readinessMessage}</div>
                 </div>
               ) : null}
               <div className="mt-8 flex flex-wrap gap-4">

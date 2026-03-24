@@ -468,7 +468,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const paper = allPapers.find(p => p.id === paperId);
-    if (paper && paper.sections.length > 0 && paper.totalQuestions > 0) {
+    if (paper) {
       setSelectedPaper(paper);
       currentSectionIdRef.current = paper.sections[0]?.id || '';
     }
