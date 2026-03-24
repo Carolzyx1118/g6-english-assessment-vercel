@@ -12,6 +12,26 @@ function extractPassageGapNumbers(passage?: string) {
     .filter((value) => Number.isFinite(value));
 }
 
+function buildEntriesFromQuestionIds(passageGapNumbers: number[], questions: MCQQuestion[]) {
+  if (passageGapNumbers.length === 0 || questions.length === 0) {
+    return null;
+  }
+
+  const questionById = new Map(questions.map((question) => [question.id, question]));
+  const matchedQuestions = passageGapNumbers
+    .map((gapNumber) => questionById.get(gapNumber))
+    .filter((question): question is MCQQuestion => Boolean(question));
+
+  if (matchedQuestions.length !== passageGapNumbers.length) {
+    return null;
+  }
+
+  return passageGapNumbers.map((gapNumber, index) => ({
+    gapNumber,
+    question: matchedQuestions[index]!,
+  }));
+}
+
 function extractQuestionGapNumber(question: MCQQuestion, fallback: number) {
   const match = question.question.match(/(\d+)/);
   const parsed = match ? Number.parseInt(match[1], 10) : NaN;
@@ -75,6 +95,11 @@ export function buildInlineClozeGapEntries(
   if (questions.length === 0) return [];
 
   const passageGapNumbers = extractPassageGapNumbers(passage);
+  const questionIdEntries = buildEntriesFromQuestionIds(passageGapNumbers, questions);
+  if (questionIdEntries) {
+    return questionIdEntries;
+  }
+
   const orderedIdEntries = buildEntriesFromOrderedQuestionIds(passageGapNumbers, orderedQuestionIds, questions);
   if (orderedIdEntries) {
     return orderedIdEntries;

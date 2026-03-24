@@ -4,6 +4,10 @@
  */
 import { MANUAL_SECTION_TYPE_LABELS } from "./manualPaperBlueprint";
 import type { ManualPaperBlueprint, ManualQuestion, ManualSectionType, ManualSubsection } from "./manualPaperBlueprint";
+import {
+  normalizePassageChoiceCorrectAnswer,
+  normalizePassageChoiceTextOptions,
+} from "./passageChoiceOptions";
 import { getBlueprintBuildMode, getGenerationConfigQuestionCount } from "./taggedPaperGenerator";
 
 // Re-export the types we need from papers.ts (but keep this file dependency-free for the server)
@@ -178,7 +182,9 @@ function convertSingleQuestion(
     const prompt = "prompt" in q && typeof q.prompt === "string" && q.prompt.trim()
       ? q.prompt
       : subsection.instructions?.trim() || "Record your answer.";
-    const imageUrl = "image" in q && q.image ? getAssetUrl(q.image) : undefined;
+    const imageUrl = "image" in q && q.image
+      ? getAssetUrl(q.image)
+      : getAssetUrl(subsection.sceneImage);
 
     return {
       id,
@@ -270,15 +276,24 @@ function convertSingleQuestion(
     }
 
     case "passage-mcq": {
-      const optionTexts = q.options.map((o) => o.text);
-      const correctIdx = q.options.findIndex((o) => o.label === q.correctAnswer);
+      const normalizedOptions = normalizePassageChoiceTextOptions(q.options, (_index, label) => ({
+        id: `${id}-${label.toLowerCase()}`,
+        label,
+        text: "",
+      }));
+      const correctLabel = normalizePassageChoiceCorrectAnswer(
+        q.correctAnswer,
+        normalizedOptions.map((option) => option.label),
+      );
+      const optionTexts = normalizedOptions.map((option) => option.text);
+      const correctIdx = normalizedOptions.findIndex((option) => option.label === correctLabel);
       return {
         id,
         type: "mcq",
         question: q.prompt,
         options: optionTexts,
         correctAnswer: correctIdx >= 0 ? correctIdx : 0,
-        blankOptions: q.options.map((o) => ({ label: o.label, text: o.text })),
+        blankOptions: normalizedOptions.map((option) => ({ label: option.label, text: option.text })),
       };
     }
 
@@ -483,14 +498,26 @@ function convertSingleQuestion(
     }
 
     case "passage-inline-word-choice": {
-      const items = q.items.map((item) => ({
-        label: item.label,
-        options: item.options.map((option) => option.text),
-        correctAnswer: Math.max(
-          0,
-          item.options.findIndex((option) => option.label === item.correctAnswer),
-        ),
-      }));
+      const items = q.items.map((item) => {
+        const normalizedOptions = normalizePassageChoiceTextOptions(item.options, (_index, label) => ({
+          id: `${item.id}-${label.toLowerCase()}`,
+          label,
+          text: "",
+        }));
+        const correctLabel = normalizePassageChoiceCorrectAnswer(
+          item.correctAnswer,
+          normalizedOptions.map((option) => option.label),
+        );
+
+        return {
+          label: item.label,
+          options: normalizedOptions.map((option) => option.text),
+          correctAnswer: Math.max(
+            0,
+            normalizedOptions.findIndex((option) => option.label === correctLabel),
+          ),
+        };
+      });
       return {
         id,
         type: "passage-inline-word-choice",

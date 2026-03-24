@@ -46,7 +46,12 @@ type SelectedCandidate = {
   rule: ManualPaperGenerationRule | null;
 };
 
-const SHARED_BLOCK_TYPES = new Set<ManualQuestionType>(["passage-fill-blank", "passage-mcq", "passage-open-ended"]);
+const SHARED_BLOCK_TYPES = new Set<ManualQuestionType>([
+  "passage-fill-blank",
+  "passage-mcq",
+  "passage-inline-word-choice",
+  "passage-open-ended",
+]);
 
 function cloneDeep<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

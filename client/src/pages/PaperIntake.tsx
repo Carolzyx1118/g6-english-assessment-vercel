@@ -82,6 +82,10 @@ import {
   MANUAL_SECTION_TYPE_LABELS,
 } from "@shared/manualPaperBlueprint";
 import {
+  normalizePassageChoiceCorrectAnswer,
+  normalizePassageChoiceTextOptions,
+} from "@shared/passageChoiceOptions";
+import {
   generatePaperFromTaggedSources,
   getBlueprintBuildMode,
   getBlueprintVisibilityMode,
@@ -496,6 +500,97 @@ function relabelInlineWordChoiceOptions(options: ManualInlineWordChoiceOption[])
   }));
 }
 
+function normalizePassageMCQOptions(options: ManualPassageMCQOption[]) {
+  return normalizePassageChoiceTextOptions(options, (_index, label) => ({
+    id: createLocalId(),
+    label,
+    text: "",
+  }));
+}
+
+function normalizePassageInlineWordChoiceOptions(options: ManualInlineWordChoiceOption[]) {
+  return normalizePassageChoiceTextOptions(options, (_index, label) => ({
+    id: createLocalId(),
+    label,
+    text: "",
+  }));
+}
+
+function normalizePassageMCQQuestion(question: ManualPassageMCQQuestion, blankIndex: number) {
+  const options = normalizePassageMCQOptions(question.options);
+  return {
+    ...question,
+    prompt: `Blank ${blankIndex + 1}`,
+    options,
+    correctAnswer: normalizePassageChoiceCorrectAnswer(
+      question.correctAnswer,
+      options.map((option) => option.label),
+    ),
+  };
+}
+
+function normalizePassageInlineWordChoiceItem(
+  item: ManualPassageInlineWordChoiceQuestion["items"][number],
+  itemIndex: number,
+) {
+  const options = normalizePassageInlineWordChoiceOptions(item.options);
+  return {
+    ...item,
+    label: getNumberLabel(itemIndex),
+    options,
+    correctAnswer: normalizePassageChoiceCorrectAnswer(
+      item.correctAnswer,
+      options.map((option) => option.label),
+    ),
+  };
+}
+
+function normalizePassageMCQQuestions(
+  questions: readonly ManualPassageMCQQuestion[],
+  blankCount: number,
+  sharedTags?: ManualQuestionTags,
+) {
+  return Array.from({ length: blankCount }, (_unused, index) => {
+    const existingQuestion = questions[index];
+    if (existingQuestion) {
+      return normalizePassageMCQQuestion(existingQuestion, index);
+    }
+
+    return {
+      ...createPassageMCQQuestion(index + 1),
+      ...(sharedTags ? { tags: sharedTags } : {}),
+    };
+  });
+}
+
+function normalizePassageInlineWordChoiceQuestions(
+  questions: readonly ManualPassageInlineWordChoiceQuestion[],
+  blankCount: number,
+  sharedTags?: ManualQuestionTags,
+) {
+  const existingQuestion = questions[0];
+  const baseQuestion = existingQuestion
+    ? existingQuestion
+    : {
+        ...createPassageInlineWordChoiceQuestion(),
+        ...(sharedTags ? { tags: sharedTags } : {}),
+      };
+  const existingItems = baseQuestion.items ?? [];
+
+  return [
+    {
+      ...baseQuestion,
+      items: Array.from({ length: blankCount }, (_unused, index) => {
+        const existingItem = existingItems[index];
+        return normalizePassageInlineWordChoiceItem(
+          existingItem ?? createPassageInlineWordChoiceItem(index),
+          index,
+        );
+      }),
+    },
+  ];
+}
+
 function relabelWordBank(wordBank: ManualWordBankItem[]) {
   return wordBank.map((item, itemIndex) => ({
     ...item,
@@ -768,7 +863,11 @@ function createPassageInlineWordChoiceItem(index: number): ManualPassageInlineWo
   return {
     id: createLocalId(),
     label: getNumberLabel(index),
-    options: [createInlineWordChoiceOption(0), createInlineWordChoiceOption(1)],
+    options: [
+      createInlineWordChoiceOption(0),
+      createInlineWordChoiceOption(1),
+      createInlineWordChoiceOption(2),
+    ],
     correctAnswer: "A",
   };
 }
@@ -778,11 +877,7 @@ function createPassageInlineWordChoiceQuestion(): ManualPassageInlineWordChoiceQ
     id: createLocalId(),
     type: "passage-inline-word-choice",
     prompt: "",
-    items: [
-      createPassageInlineWordChoiceItem(0),
-      createPassageInlineWordChoiceItem(1),
-      createPassageInlineWordChoiceItem(2),
-    ],
+    items: [],
   };
 }
 
@@ -1220,6 +1315,10 @@ function normalizeLoadedSubsection(
           : DEFAULT_QUESTION_TYPE;
       })();
   const baseSubsection = createSubsection(questionType);
+  const normalizedPassageText = typeof rawSubsection?.passageText === "string"
+    ? rawSubsection.passageText
+    : baseSubsection.passageText;
+  const normalizedSharedQuestionTags = rawSubsection?.sharedQuestionTags ?? baseSubsection.sharedQuestionTags;
   const loadedQuestions = (() => {
     if (!Array.isArray(rawSubsection?.questions)) {
       return baseSubsection.questions;
@@ -1242,6 +1341,25 @@ function normalizeLoadedSubsection(
 
     return baseSubsection.questions;
   })();
+  const normalizedLoadedQuestions = (() => {
+    if (questionType === "passage-mcq") {
+      return normalizePassageMCQQuestions(
+        loadedQuestions.filter(isManualPassageMCQQuestion),
+        countPassageBlanks(normalizedPassageText || ""),
+        normalizedSharedQuestionTags,
+      );
+    }
+
+    if (questionType === "passage-inline-word-choice") {
+      return normalizePassageInlineWordChoiceQuestions(
+        loadedQuestions.filter(isManualPassageInlineWordChoiceQuestion),
+        countPassageBlanks(normalizedPassageText || ""),
+        normalizedSharedQuestionTags,
+      );
+    }
+
+    return loadedQuestions;
+  })();
 
   return {
     ...baseSubsection,
@@ -1254,15 +1372,13 @@ function normalizeLoadedSubsection(
         ? rawSubsection.taskDescription
         : undefined,
     questionType,
-    questions: loadedQuestions.length > 0 || baseSubsection.questions.length === 0
-      ? loadedQuestions
+    questions: normalizedLoadedQuestions.length > 0 || baseSubsection.questions.length === 0
+      ? normalizedLoadedQuestions
       : baseSubsection.questions,
     wordBank: Array.isArray(rawSubsection?.wordBank)
       ? rawSubsection.wordBank
       : baseSubsection.wordBank,
-    passageText: typeof rawSubsection?.passageText === "string"
-      ? rawSubsection.passageText
-      : baseSubsection.passageText,
+    passageText: normalizedPassageText,
     matchingDescriptions: Array.isArray(rawSubsection?.matchingDescriptions)
       ? rawSubsection.matchingDescriptions
       : baseSubsection.matchingDescriptions,
@@ -1481,10 +1597,11 @@ function buildBlueprint(
         if (subsection.questionType === "passage-mcq") {
           return {
             ...subsection,
-            questions: subsection.questions.filter(isManualPassageMCQQuestion).map((question) => ({
-              ...question,
-              options: relabelOptions(question.options as ManualMCQOption[]) as unknown as ManualPassageMCQOption[],
-            })),
+            questions: normalizePassageMCQQuestions(
+              subsection.questions.filter(isManualPassageMCQQuestion),
+              countPassageBlanks(subsection.passageText || ""),
+              subsection.sharedQuestionTags,
+            ),
           };
         }
 
@@ -1519,21 +1636,11 @@ function buildBlueprint(
         if (subsection.questionType === "passage-inline-word-choice") {
           return {
             ...subsection,
-            questions: subsection.questions.filter(isManualPassageInlineWordChoiceQuestion).map((question) => ({
-              ...question,
-              items: question.items.map((item, itemIndex) => {
-                const options = relabelInlineWordChoiceOptions(item.options);
-                const validCorrectAnswer = options.some((option) => option.label === item.correctAnswer)
-                  ? item.correctAnswer
-                  : options[0]?.label || "A";
-                return {
-                  ...item,
-                  label: getNumberLabel(itemIndex),
-                  options,
-                  correctAnswer: validCorrectAnswer,
-                };
-              }),
-            })),
+            questions: normalizePassageInlineWordChoiceQuestions(
+              subsection.questions.filter(isManualPassageInlineWordChoiceQuestion),
+              countPassageBlanks(subsection.passageText || ""),
+              subsection.sharedQuestionTags,
+            ),
           };
         }
 
@@ -3450,47 +3557,6 @@ export default function PaperIntake() {
     }));
   };
 
-  const addPassageInlineWordChoiceOption = (
-    sectionId: string,
-    subsectionId: string,
-    questionId: string,
-    itemId: string,
-  ) => {
-    updatePassageInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
-      ...question,
-      items: question.items.map((item) => (
-        item.id === itemId
-          ? {
-              ...item,
-              options: [...item.options, createInlineWordChoiceOption(item.options.length)],
-            }
-          : item
-      )),
-    }));
-  };
-
-  const removePassageInlineWordChoiceOption = (
-    sectionId: string,
-    subsectionId: string,
-    questionId: string,
-    itemId: string,
-    optionId: string,
-  ) => {
-    updatePassageInlineWordChoiceQuestion(sectionId, subsectionId, questionId, (question) => ({
-      ...question,
-      items: question.items.map((item) => {
-        if (item.id !== itemId || item.options.length <= 2) return item;
-        const nextOptions = relabelInlineWordChoiceOptions(item.options.filter((option) => option.id !== optionId));
-        const hasCorrect = nextOptions.some((option) => option.label === item.correctAnswer);
-        return {
-          ...item,
-          options: nextOptions,
-          correctAnswer: hasCorrect ? item.correctAnswer : nextOptions[0]?.label || "A",
-        };
-      }),
-    }));
-  };
-
   const updatePassageInlineWordChoiceOption = (
     sectionId: string,
     subsectionId: string,
@@ -4087,28 +4153,14 @@ export default function PaperIntake() {
 
   /**
    * For passage-mcq: auto-sync the questions array to match the number of ___ in the passage.
-   * Each blank gets its own set of MCQ options (A/B/C/D).
+   * Each blank gets its own fixed set of MCQ options (A/B/C).
    */
   const syncPassageMCQBlanksToQuestions = (sectionId: string, subsectionId: string, newPassageText: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const blankCount = countPassageBlanks(newPassageText);
       const existingQuestions = subsection.questions.filter(isManualPassageMCQQuestion);
       const sharedTags = existingQuestions[0]?.tags ?? subsection.sharedQuestionTags;
-
-      let nextQuestions: ManualPassageMCQQuestion[];
-      if (existingQuestions.length < blankCount) {
-        nextQuestions = [
-          ...existingQuestions,
-          ...Array.from({ length: blankCount - existingQuestions.length }, (_, i) =>
-            ({
-              ...createPassageMCQQuestion(existingQuestions.length + i + 1),
-              tags: sharedTags,
-            }),
-          ),
-        ];
-      } else {
-        nextQuestions = existingQuestions.slice(0, blankCount);
-      }
+      const nextQuestions = normalizePassageMCQQuestions(existingQuestions, blankCount, sharedTags);
 
       return {
         ...subsection,
@@ -4122,65 +4174,17 @@ export default function PaperIntake() {
   const syncPassageInlineWordChoiceBlanksToQuestions = (sectionId: string, subsectionId: string, newPassageText: string) => {
     updateSubsection(sectionId, subsectionId, (subsection) => {
       const blankCount = countPassageBlanks(newPassageText);
-      const existingQuestion = subsection.questions.find(isManualPassageInlineWordChoiceQuestion);
-      const baseQuestion = existingQuestion
-        ? existingQuestion
-        : {
-            ...createPassageInlineWordChoiceQuestion(),
-            tags: subsection.sharedQuestionTags,
-          };
-      const existingItems = baseQuestion.items ?? [];
-
-      let nextItems = existingItems;
-      if (existingItems.length < blankCount) {
-        nextItems = [
-          ...existingItems,
-          ...Array.from({ length: blankCount - existingItems.length }, (_, i) =>
-            createPassageInlineWordChoiceItem(existingItems.length + i),
-          ),
-        ];
-      } else {
-        nextItems = existingItems.slice(0, blankCount);
-      }
-
-      nextItems = nextItems.map((item, index) => ({
-        ...item,
-        label: getNumberLabel(index),
-      }));
+      const nextQuestions = normalizePassageInlineWordChoiceQuestions(
+        subsection.questions.filter(isManualPassageInlineWordChoiceQuestion),
+        blankCount,
+        subsection.sharedQuestionTags,
+      );
 
       return {
         ...subsection,
         passageText: newPassageText,
-        sharedQuestionTags: baseQuestion.tags,
-        questions: blankCount > 0
-          ? [{
-              ...baseQuestion,
-              items: nextItems,
-            }]
-          : [{
-              ...baseQuestion,
-              items: [],
-            }],
-      };
-    });
-  };
-
-  const addPassageMCQOption = (sectionId: string, subsectionId: string, questionId: string) => {
-    updatePassageMCQQuestion(sectionId, subsectionId, questionId, (question) => ({
-      ...question,
-      options: [...question.options, createPassageMCQOption(question.options.length)],
-    }));
-  };
-
-  const removePassageMCQOption = (sectionId: string, subsectionId: string, questionId: string, optionId: string) => {
-    updatePassageMCQQuestion(sectionId, subsectionId, questionId, (question) => {
-      if (question.options.length <= 2) return question;
-      const nextOptions = question.options.filter((o) => o.id !== optionId).map((o, i) => ({ ...o, label: getOptionLabel(i) }));
-      const hasCorrect = nextOptions.some((o) => o.label === question.correctAnswer);
-      return {
-        ...question,
-        options: nextOptions,
-        correctAnswer: hasCorrect ? question.correctAnswer : nextOptions[0]?.label || "A",
+        sharedQuestionTags: nextQuestions[0]?.tags ?? subsection.sharedQuestionTags,
+        questions: nextQuestions,
       };
     });
   };
@@ -6510,15 +6514,6 @@ export default function PaperIntake() {
                                                 <div key={option.id} className="rounded-lg border border-slate-200 bg-white p-3">
                                                   <div className="mb-2 flex items-center justify-between gap-2">
                                                     <Label>{`Option ${option.label}`}</Label>
-                                                    <Button
-                                                      type="button"
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      onClick={() => removePassageInlineWordChoiceOption(section.id, subsection.id, question.id, item.id, option.id)}
-                                                      className="h-8 w-8 text-slate-500 hover:text-red-500"
-                                                    >
-                                                      <Trash2 className="h-4 w-4" />
-                                                    </Button>
                                                   </div>
                                                   <Input
                                                     value={option.text}
@@ -6534,14 +6529,7 @@ export default function PaperIntake() {
                                               ))}
                                             </div>
 
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              onClick={() => addPassageInlineWordChoiceOption(section.id, subsection.id, question.id, item.id)}
-                                            >
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Add Option
-                                            </Button>
+                                            <p className="text-xs text-slate-500">Each blank uses one fixed set of A/B/C choices.</p>
 
                                             <div className="space-y-2">
                                               <Label>Correct Answer</Label>
@@ -6937,30 +6925,12 @@ export default function PaperIntake() {
                                             placeholder={`Option ${option.label} text`}
                                             className="h-8 text-sm"
                                           />
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => removePassageMCQOption(section.id, subsection.id, question.id, option.id)}
-                                            className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                          </Button>
                                         </div>
                                       ))}
                                     </div>
 
                                     <div className="flex flex-wrap items-center justify-between gap-3">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => addPassageMCQOption(section.id, subsection.id, question.id)}
-                                        className="text-xs"
-                                      >
-                                        <Plus className="mr-1 h-3 w-3" />
-                                        Add Option
-                                      </Button>
+                                      <p className="text-xs text-slate-500">Each blank uses one fixed set of A/B/C choices.</p>
 
                                       <div className="min-w-[140px] space-y-1">
                                         <Label className="text-xs">Correct Answer</Label>

@@ -10,6 +10,10 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ManualPassageMCQQuestion } from "@shared/manualPaperBlueprint";
+import {
+  normalizePassageChoiceCorrectAnswer,
+  normalizePassageChoiceTextOptions,
+} from "@shared/passageChoiceOptions";
 
 interface PassageMCQPreviewProps {
   passageText: string;
@@ -22,11 +26,27 @@ export default function PassageMCQPreview({
 }: PassageMCQPreviewProps) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [openBlank, setOpenBlank] = useState<number | null>(null);
+  const normalizedQuestions = questions.map((question) => {
+    const options = normalizePassageChoiceTextOptions(question.options, (_index, label) => ({
+      id: `${question.id}-${label.toLowerCase()}`,
+      label,
+      text: "",
+    }));
+
+    return {
+      ...question,
+      options,
+      correctAnswer: normalizePassageChoiceCorrectAnswer(
+        question.correctAnswer,
+        options.map((option) => option.label),
+      ),
+    };
+  });
 
   // Split the passage around ___ markers
   const parts = passageText.split(/___/);
 
-  const answerKey = questions.map((q, i) => ({
+  const answerKey = normalizedQuestions.map((q, i) => ({
     id: i + 1,
     answer: q.correctAnswer
       ? q.options.find((o) => o.label === q.correctAnswer)?.text || q.correctAnswer
@@ -53,7 +73,7 @@ export default function PassageMCQPreview({
                 {!isLastPart && (
                   <BlankSlot
                     blankNumber={blankIndex + 1}
-                    question={questions[blankIndex]}
+                    question={normalizedQuestions[blankIndex]}
                     selectedAnswer={answers[blankIndex + 1]}
                     isOpen={openBlank === blankIndex + 1}
                     onOpenChange={(open) => setOpenBlank(open ? blankIndex + 1 : null)}
