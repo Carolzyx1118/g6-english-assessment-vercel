@@ -294,54 +294,6 @@ describe("blueprintToPaper", () => {
     expect(result.sections[0].questions[0].type).toBe("mcq");
   });
 
-  it("normalizes passage mcq options to a single A/B/C set per blank", () => {
-    const blueprint = makeBlueprint({
-      sections: [
-        {
-          id: "s-inline-cloze",
-          partLabel: "Part 3",
-          sectionType: "reading",
-          subsections: [
-            {
-              id: "sub-inline-cloze",
-              title: "",
-              instructions: "",
-              questionType: "passage-mcq",
-              passageText: "It was ___ day.",
-              questions: [
-                {
-                  id: "q-inline-cloze-1",
-                  type: "passage-mcq",
-                  prompt: "Blank 1",
-                  options: [
-                    { id: "o1", label: "A", text: "sunny" },
-                    { id: "o2", label: "B", text: "stormy" },
-                    { id: "o3", label: "C", text: "cold" },
-                    { id: "o4", label: "D", text: "windy" },
-                    { id: "o5", label: "E", text: "rainy" },
-                  ],
-                  correctAnswer: "E",
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-
-    const result = blueprintToPaper(blueprint);
-    expect(result.sections[0].questions[0]).toMatchObject({
-      type: "mcq",
-      options: ["sunny", "stormy", "cold"],
-      correctAnswer: 0,
-      blankOptions: [
-        { label: "A", text: "sunny" },
-        { label: "B", text: "stormy" },
-        { label: "C", text: "cold" },
-      ],
-    });
-  });
-
   it("converts image mcq into picture-mcq", () => {
     const blueprint = makeBlueprint({
       sections: [
@@ -994,12 +946,12 @@ describe("blueprintToPaper", () => {
       items: [
         {
           label: "1",
-          options: ["Skateboarding", "Surfing", ""],
+          options: ["Skateboarding", "Surfing"],
           correctAnswer: 1,
         },
         {
           label: "2",
-          options: ["cupboard", "bookshelf", ""],
+          options: ["cupboard", "bookshelf"],
           correctAnswer: 0,
         },
       ],

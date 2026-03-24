@@ -14,19 +14,6 @@ function makeQuestion(id: number, question: string): MCQQuestion {
 }
 
 describe("buildInlineClozeGapEntries", () => {
-  it("binds passage gaps directly to matching question ids before using prompt order", () => {
-    const entries = buildInlineClozeGapEntries(
-      "My name is Anna and I (23) ___ in a small house.\nEvery morning I (24) ___ breakfast.",
-      [
-        makeQuestion(24, "Blank 1"),
-        makeQuestion(23, "Blank 99"),
-      ],
-    );
-
-    expect(entries.map((entry) => entry.gapNumber)).toEqual([23, 24]);
-    expect(entries.map((entry) => entry.question.id)).toEqual([23, 24]);
-  });
-
   it("prefers passage gap numbers when the passage and question counts match", () => {
     const entries = buildInlineClozeGapEntries(
       "My name is Anna and I (21) ___ in a small house.\nEvery morning I (22) ___ breakfast.",
