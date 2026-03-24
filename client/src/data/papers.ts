@@ -20,6 +20,7 @@ export interface MCQQuestion {
   question: string;
   highlightWord?: string;
   options: string[];
+  blankOptions?: Array<{ label: string; text: string }>;
   correctAnswer: number | string;
   imageUrl?: string;
   correctAnswers?: number[];
