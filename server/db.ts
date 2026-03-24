@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import {
@@ -19,6 +19,7 @@ import { ENV } from './_core/env';
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _dbSchemaReadyPromise: Promise<void> | null = null;
 let hasLoggedLocalAuthFileFallback = false;
 let hasLoggedManualPaperFileFallback = false;
 let hasLoggedTestResultsFileFallback = false;
@@ -30,6 +31,7 @@ const MATH_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}math-tag-
 const MATH_TAG_SCHEMA_STORE_TITLE = "__Math Tag Schemas__";
 const VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}vocabulary-tag-schemas`;
 const VOCABULARY_TAG_SCHEMA_STORE_TITLE = "__Vocabulary Tag Schemas__";
+const LOCAL_AUTH_DEFAULT_INVITE_CODE = "TEACHER2026::english|math|vocabulary::active";
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
@@ -331,6 +333,102 @@ async function writeTestResultsFile(data: {
   );
 }
 
+const RUNTIME_SCHEMA_REPAIR_STATEMENTS = [
+  `DO $$ BEGIN
+    CREATE TYPE "public"."local_role" AS ENUM('user', 'admin');
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$;`,
+  `DO $$ BEGIN
+    CREATE TYPE "public"."user_role" AS ENUM('user', 'admin');
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$;`,
+  `CREATE TABLE IF NOT EXISTS "localUsers" (
+    "id" serial PRIMARY KEY,
+    "username" varchar(128) NOT NULL UNIQUE,
+    "passwordHash" varchar(255) NOT NULL,
+    "inviteCode" varchar(128) NOT NULL,
+    "displayName" varchar(255),
+    "role" "local_role" NOT NULL DEFAULT 'user',
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "lastLoginAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "inviteCode" varchar(128) NOT NULL DEFAULT '${LOCAL_AUTH_DEFAULT_INVITE_CODE}';`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "displayName" varchar(255);`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "role" "local_role" NOT NULL DEFAULT 'user';`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "createdAt" timestamp NOT NULL DEFAULT now();`,
+  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "lastLoginAt" timestamp NOT NULL DEFAULT now();`,
+  `CREATE TABLE IF NOT EXISTS "manualPapers" (
+    "id" serial PRIMARY KEY,
+    "paperId" varchar(255) NOT NULL UNIQUE,
+    "title" varchar(255) NOT NULL,
+    "description" text,
+    "subject" varchar(64) NOT NULL DEFAULT 'english',
+    "category" varchar(64) NOT NULL DEFAULT 'assessment',
+    "blueprintJson" text NOT NULL,
+    "published" integer NOT NULL DEFAULT 1,
+    "totalQuestions" integer NOT NULL DEFAULT 0,
+    "hasListening" integer NOT NULL DEFAULT 0,
+    "hasWriting" integer NOT NULL DEFAULT 0,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "subject" varchar(64) NOT NULL DEFAULT 'english';`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "category" varchar(64) NOT NULL DEFAULT 'assessment';`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "published" integer NOT NULL DEFAULT 1;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "totalQuestions" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasListening" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasWriting" integer NOT NULL DEFAULT 0;`,
+  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
+  `CREATE TABLE IF NOT EXISTS "testResults" (
+    "id" serial PRIMARY KEY,
+    "studentName" varchar(255) NOT NULL,
+    "studentGrade" varchar(64),
+    "paperId" varchar(128) NOT NULL,
+    "paperTitle" varchar(255) NOT NULL,
+    "totalCorrect" integer NOT NULL,
+    "totalQuestions" integer NOT NULL,
+    "totalTimeSeconds" integer,
+    "answersJson" text NOT NULL,
+    "scoreBySectionJson" text,
+    "sectionTimingsJson" text,
+    "readingResultsJson" text,
+    "writingResultJson" text,
+    "explanationsJson" text,
+    "reportJson" text,
+    "createdAt" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "studentGrade" varchar(64);`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "totalTimeSeconds" integer;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "scoreBySectionJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "sectionTimingsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "readingResultsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "writingResultJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "explanationsJson" text;`,
+  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "reportJson" text;`,
+  `CREATE TABLE IF NOT EXISTS "users" (
+    "id" serial PRIMARY KEY,
+    "openId" varchar(64) NOT NULL UNIQUE,
+    "name" text,
+    "email" varchar(320),
+    "loginMethod" varchar(64),
+    "role" "user_role" NOT NULL DEFAULT 'user',
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now(),
+    "lastSignedIn" timestamp NOT NULL DEFAULT now()
+  );`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user';`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp NOT NULL DEFAULT now();`,
+] as const;
+
+async function ensureRuntimeDatabaseSchema(db: ReturnType<typeof drizzle>) {
+  for (const statement of RUNTIME_SCHEMA_REPAIR_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -341,6 +439,17 @@ export async function getDb() {
       _db = null;
     }
   }
+
+  if (_db && !_dbSchemaReadyPromise) {
+    _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(_db).catch((error) => {
+      console.warn("[Database] Runtime schema repair failed:", error);
+    });
+  }
+
+  if (_dbSchemaReadyPromise) {
+    await _dbSchemaReadyPromise;
+  }
+
   return _db;
 }
 
