@@ -1,9 +1,32 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
-import { ZodError } from "zod";
-import { processPaperAssetUploadRequest } from "../../server/blobClientUpload";
+import { handleUpload } from "@vercel/blob/client";
+import { ZodError, z } from "zod";
 
 type JsonObject = Record<string, unknown>;
+type UploadBody = Parameters<typeof handleUpload>[0]["body"];
+
+const PAPER_ASSET_PREFIX = "paper-assets/";
+const MAX_CLIENT_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+const pathnameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^paper-assets\/[a-zA-Z0-9._/-]+$/, "Invalid asset path.");
+
+const clientPayloadSchema = z.object({
+  contentType: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^audio\/[a-zA-Z0-9.+-]+$/, "Only audio uploads are supported."),
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_CLIENT_UPLOAD_BYTES, "Audio file is too large."),
+});
 
 async function readJsonBody(req: IncomingMessage): Promise<JsonObject> {
   const maybeBody = req as IncomingMessage & { body?: unknown };
@@ -57,6 +80,61 @@ function respondJson(
   res.end(JSON.stringify(payload));
 }
 
+function parseClientPayload(clientPayload: string | null | undefined) {
+  if (!clientPayload) {
+    throw new Error("Missing upload payload.");
+  }
+
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(clientPayload);
+  } catch {
+    throw new Error("Upload payload must be valid JSON.");
+  }
+
+  return clientPayloadSchema.parse(parsedPayload);
+}
+
+function createUploadConfig(
+  pathname: string,
+  clientPayload: string | null | undefined,
+) {
+  const validatedPathname = pathnameSchema.parse(pathname);
+  if (!validatedPathname.startsWith(PAPER_ASSET_PREFIX)) {
+    throw new Error("Asset uploads must stay inside paper-assets/.");
+  }
+
+  const { contentType, fileSize } = parseClientPayload(clientPayload);
+
+  return {
+    allowedContentTypes: [contentType],
+    maximumSizeInBytes: fileSize,
+    allowOverwrite: true,
+    addRandomSuffix: false,
+  };
+}
+
+async function processUploadRequest(
+  request: IncomingMessage,
+  body: UploadBody,
+) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) {
+    throw new Error("Direct blob uploads are not available in this environment.");
+  }
+
+  return handleUpload({
+    token,
+    request,
+    body,
+    onBeforeGenerateToken: async (pathname, clientPayload) =>
+      createUploadConfig(pathname, clientPayload),
+    onUploadCompleted: async () => {
+      // Paper intake persists the uploaded URL in the blueprint immediately.
+    },
+  });
+}
+
 export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
@@ -77,10 +155,10 @@ export default async function handler(
 
   try {
     const requestBody = await readJsonBody(req);
-    const payload = await processPaperAssetUploadRequest({
-      request: req,
-      body: requestBody as never,
-    });
+    const payload = await processUploadRequest(
+      req,
+      requestBody as unknown as UploadBody,
+    );
 
     respondJson(res, 200, payload as Record<string, unknown>);
   } catch (error) {

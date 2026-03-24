@@ -1,10 +1,10 @@
 import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const processPaperAssetUploadRequest = vi.fn();
+const handleUpload = vi.fn();
 
-vi.mock("./blobClientUpload", () => ({
-  processPaperAssetUploadRequest,
+vi.mock("@vercel/blob/client", () => ({
+  handleUpload,
 }));
 
 function createRequest(method: string, body?: unknown) {
@@ -43,10 +43,11 @@ describe("/api/blob/client-token", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
   });
 
   it("returns a client upload token payload for listening audio", async () => {
-    processPaperAssetUploadRequest.mockResolvedValue({
+    handleUpload.mockResolvedValue({
       type: "blob.generate-client-token",
       clientToken: "client-token",
     });
@@ -73,7 +74,9 @@ describe("/api/blob/client-token", () => {
       type: "blob.generate-client-token",
       clientToken: "client-token",
     });
-    expect(processPaperAssetUploadRequest).toHaveBeenCalledTimes(1);
+    expect(handleUpload).toHaveBeenCalledTimes(1);
+    const firstCall = handleUpload.mock.calls[0]?.[0];
+    expect(firstCall?.token).toBe("blob-token");
   });
 
   it("rejects unsupported methods", async () => {
