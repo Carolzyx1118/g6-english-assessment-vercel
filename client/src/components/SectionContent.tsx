@@ -15,7 +15,6 @@ import AudioRecorder from '@/components/AudioRecorder';
 import { isPersistedAudioUrl } from '@/lib/audioStorage';
 import { renderTextWithFractions } from '@/lib/renderTextWithFractions';
 import { buildInlineClozeGapEntries } from '@/lib/inlineCloze';
-import { normalizePassageChoiceStrings } from '@shared/passageChoiceOptions';
 import {
   buildWordCompletionAnswer,
   getPictureSpellingCharacters,
@@ -1249,7 +1248,7 @@ function PassageInlineWordChoiceCard({
                           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-200 px-2 text-[10px] font-bold text-emerald-900">
                             {item.label}
                           </span>
-                          {normalizePassageChoiceStrings(item.options).map((option, optionIndex) => {
+                          {item.options.map((option, optionIndex) => {
                             const isSelected = selectedIndex === optionIndex;
                             return (
                               <button
@@ -1442,9 +1441,6 @@ function InlineClozeMCQSection({
   const gapMap = new Map(gapEntries.map((entry) => [entry.gapNumber, entry.question]));
   const [selectedGap, setSelectedGap] = useState<number | null>(gapEntries[0]?.gapNumber ?? null);
   const activeQuestion = selectedGap ? gapMap.get(selectedGap) : undefined;
-  const activeOptions = activeQuestion
-    ? normalizePassageChoiceStrings(activeQuestion.options, activeQuestion.blankOptions)
-    : [];
 
   useEffect(() => {
     if (gapEntries.length === 0) {
@@ -1465,8 +1461,7 @@ function InlineClozeMCQSection({
 
     const rawAnswer = getAnswer(sectionId, question.id);
     const answerIndex = typeof rawAnswer === 'number' ? rawAnswer : Number.parseInt(String(rawAnswer ?? ''), 10);
-    const questionOptions = normalizePassageChoiceStrings(question.options, question.blankOptions);
-    const selectedOption = Number.isFinite(answerIndex) && answerIndex >= 0 ? questionOptions[answerIndex] : '';
+    const selectedOption = Number.isFinite(answerIndex) && answerIndex >= 0 ? question.options[answerIndex] : '';
     const isActive = selectedGap === gapNumber;
 
     return (
@@ -1527,11 +1522,11 @@ function InlineClozeMCQSection({
             Gap {selectedGap}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            {activeOptions.map((option, optionIndex) => {
+            {activeQuestion.options.map((option, optionIndex) => {
               const isSelected = getAnswer(sectionId, activeQuestion.id) === optionIndex;
               return (
                 <button
-                  key={`${selectedGap}-${optionIndex}`}
+                  key={option}
                   type="button"
                   onClick={() => setAnswer(sectionId, activeQuestion.id, optionIndex)}
                   className={`
@@ -1990,19 +1985,7 @@ function SectionQuestionBody({
   const isWIDAReading = questions.some(q => q.type === 'wordbank-fill' || q.type === 'story-fill');
   const hasPassageInlineWordChoice = questions.some(q => q.type === 'passage-inline-word-choice');
   const isHuaZhongReading = !!section.passage && !hasPassageInlineWordChoice;
-  const inlineClozeQuestions = (() => {
-    const mcqQuestions = questions.filter((q): q is MCQQuestion => q.type === 'mcq');
-    if (!section.inlineClozeQuestionIds || section.inlineClozeQuestionIds.length === 0) {
-      return mcqQuestions;
-    }
-
-    const questionById = new Map(mcqQuestions.map((question) => [question.id, question]));
-    return section.inlineClozeQuestionIds
-      .map((questionId) => questionById.get(questionId))
-      .filter((question): question is MCQQuestion => Boolean(question));
-  })();
-  const isPETInlineCloze = !hasPassageInlineWordChoice
-    && (section.inlineCloze === true || (section.id === 'vocabulary-and-grammar' && !!section.passage));
+  const isPETInlineCloze = section.id === 'vocabulary-and-grammar' || section.inlineCloze === true;
   const isListeningSection = !!section.audioUrl;
   const usesDragDropFillBlank = hasFillBlank && hasWordBank;
   const regularQuestions = usesDragDropFillBlank
@@ -2050,7 +2033,7 @@ function SectionQuestionBody({
         <InlineClozeMCQSection
           section={section}
           sectionId={answerSectionId}
-          questions={inlineClozeQuestions}
+          questions={questions.filter((q): q is MCQQuestion => q.type === 'mcq')}
           orderedQuestionIds={section.inlineClozeQuestionIds}
           getAnswer={getAnswer}
           setAnswer={(sectionId, id, value) => setAnswer(sectionId, id, value)}
