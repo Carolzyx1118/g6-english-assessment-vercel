@@ -157,35 +157,6 @@ async function storagePutBlob(
   };
 }
 
-async function storagePutForge(
-  relKey: string,
-  data: Buffer | Uint8Array | string,
-  contentType: string,
-): Promise<{ key: string; url: string }> {
-  const { baseUrl, apiKey } = getStorageConfig();
-  const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
-    );
-  }
-  const url = (await response.json()).url;
-  return { key, url };
-}
-
-function logStorageFallback(provider: "blob" | "forge", error: unknown) {
-  console.warn(`[storage] ${provider} upload failed, falling back to local storage.`, error);
-}
-
 async function storageGetBlob(
   relKey: string
 ): Promise<{ key: string; url: string }> {
@@ -217,43 +188,29 @@ export async function storagePut(
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
   if (hasBlobStorageConfig()) {
-    try {
-      return await storagePutBlob(relKey, data, contentType);
-    } catch (error) {
-      const forge = getForgeConfigStatus();
-      if (forge.isConfigured) {
-        try {
-          return await storagePutForge(relKey, data, contentType);
-        } catch (forgeError) {
-          if (!isVercelRuntime()) {
-            logStorageFallback("forge", forgeError);
-            return storagePutLocal(relKey, data);
-          }
-          throw forgeError;
-        }
-      }
-
-      if (!isVercelRuntime()) {
-        logStorageFallback("blob", error);
-        return storagePutLocal(relKey, data);
-      }
-
-      throw error;
-    }
+    return storagePutBlob(relKey, data, contentType);
   }
 
   const forge = getForgeConfigStatus();
   if (forge.isConfigured) {
-    try {
-      return await storagePutForge(relKey, data, contentType);
-    } catch (error) {
-      if (!isVercelRuntime()) {
-        logStorageFallback("forge", error);
-        return storagePutLocal(relKey, data);
-      }
+    const { baseUrl, apiKey } = getStorageConfig();
+    const key = normalizeKey(relKey);
+    const uploadUrl = buildUploadUrl(baseUrl, key);
+    const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: buildAuthHeaders(apiKey),
+      body: formData,
+    });
 
-      throw error;
+    if (!response.ok) {
+      const message = await response.text().catch(() => response.statusText);
+      throw new Error(
+        `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+      );
     }
+    const url = (await response.json()).url;
+    return { key, url };
   }
 
   if (isVercelRuntime()) {
