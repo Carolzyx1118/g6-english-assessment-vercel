@@ -1425,16 +1425,18 @@ function InlineClozeMCQSection({
   section,
   sectionId,
   questions,
+  orderedQuestionIds,
   getAnswer,
   setAnswer,
 }: {
   section: Section;
   sectionId: string;
   questions: MCQQuestion[];
+  orderedQuestionIds?: number[];
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, value: number) => void;
 }) {
-  const gapEntries = buildInlineClozeGapEntries(section.passage, questions);
+  const gapEntries = buildInlineClozeGapEntries(section.passage, questions, orderedQuestionIds);
 
   const gapMap = new Map(gapEntries.map((entry) => [entry.gapNumber, entry.question]));
   const [selectedGap, setSelectedGap] = useState<number | null>(gapEntries[0]?.gapNumber ?? null);
@@ -2032,6 +2034,7 @@ function SectionQuestionBody({
           section={section}
           sectionId={answerSectionId}
           questions={questions.filter((q): q is MCQQuestion => q.type === 'mcq')}
+          orderedQuestionIds={section.inlineClozeQuestionIds}
           getAnswer={getAnswer}
           setAnswer={(sectionId, id, value) => setAnswer(sectionId, id, value)}
         />
@@ -2160,6 +2163,7 @@ export default function SectionContent() {
                 audioUrl: block.audioUrl,
                 sceneImageUrl: block.sceneImageUrl,
                 inlineCloze: block.inlineCloze,
+                inlineClozeQuestionIds: block.inlineClozeQuestionIds,
                 matchingDescriptions: block.matchingDescriptions,
                 manualBlocks: undefined,
               };
