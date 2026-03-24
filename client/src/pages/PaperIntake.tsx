@@ -1170,70 +1170,6 @@ function guessAssetContentType(
   return "image/jpeg";
 }
 
-function guessAssetExtension(contentType: string, kind: "image" | "audio") {
-  const normalizedType = contentType.toLowerCase();
-
-  if (kind === "audio") {
-    if (normalizedType.includes("mpeg") || normalizedType.includes("mp3")) return "mp3";
-    if (normalizedType.includes("wav")) return "wav";
-    if (normalizedType.includes("ogg")) return "ogg";
-    if (normalizedType.includes("webm")) return "webm";
-    if (normalizedType.includes("mp4")) return "mp4";
-    if (normalizedType.includes("m4a")) return "m4a";
-    if (normalizedType.includes("aac")) return "aac";
-    return "bin";
-  }
-
-  if (normalizedType.includes("png")) return "png";
-  if (normalizedType.includes("webp")) return "webp";
-  if (normalizedType.includes("gif")) return "gif";
-  return "jpg";
-}
-
-function buildAssetUploadFileName(
-  kind: "image" | "audio",
-  fileName: string | undefined,
-  contentType: string,
-) {
-  const safeBaseName = (fileName?.trim() || `${kind}-${Date.now()}`)
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/_{2,}/g, "_")
-    .replace(/^_+|_+$/g, "");
-  const fallbackName = safeBaseName || `${kind}-${Date.now()}`;
-  if (fallbackName.includes(".")) return fallbackName;
-  return `${fallbackName}.${guessAssetExtension(contentType, kind)}`;
-}
-
-function getDataUrlUploadPayload(dataUrl?: string) {
-  const normalized = normalizeAssetUrl(dataUrl);
-  if (!normalized?.startsWith("data:")) return null;
-
-  const match = normalized.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-  if (!match) return null;
-
-  const contentType = match[1]?.trim() || "application/octet-stream";
-  const isBase64 = Boolean(match[2]);
-  const body = match[3] ?? "";
-
-  if (!body) return null;
-
-  if (isBase64) {
-    return {
-      contentType,
-      fileBase64: body,
-    };
-  }
-
-  try {
-    return {
-      contentType,
-      fileBase64: btoa(decodeURIComponent(body)),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function getFriendlyAssetErrorMessage(error: unknown, fallback: string) {
   const rawMessage = error instanceof Error ? error.message : "";
   if (rawMessage.includes("did not match the expected pattern")) {
@@ -2459,7 +2395,6 @@ export default function PaperIntake() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const utils = trpc.useUtils();
-  const uploadFileMutation = trpc.papers.uploadFile.useMutation();
   const saveManualPaperMutation = trpc.papers.saveManualPaper.useMutation();
   const updateManualPaperMutation = trpc.papers.updateManualPaper.useMutation();
   const requestedSubject = useMemo(() => {
@@ -2876,28 +2811,6 @@ export default function PaperIntake() {
         previewUrl: durableUrl,
         mimeType: contentType,
       };
-    }
-
-    const uploadPayload = getDataUrlUploadPayload(asset.dataUrl);
-    if (uploadPayload) {
-      try {
-        const uploaded = await uploadFileMutation.mutateAsync({
-          fileName: buildAssetUploadFileName(kind, asset.fileName, uploadPayload.contentType || contentType),
-          contentType: uploadPayload.contentType || contentType,
-          fileBase64: uploadPayload.fileBase64,
-        });
-        const uploadedUrl = normalizeAssetUrl(uploaded.url);
-        if (uploadedUrl) {
-          return {
-            ...asset,
-            dataUrl: uploadedUrl,
-            previewUrl: uploadedUrl,
-            mimeType: uploadPayload.contentType || contentType,
-          };
-        }
-      } catch (error) {
-        console.error(`[PaperIntake] Failed to upload ${kind} asset before save:`, error);
-      }
     }
 
     const normalizedDataUrl = normalizeAssetUrl(asset.dataUrl) ?? asset.dataUrl;
