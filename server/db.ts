@@ -334,16 +334,6 @@ async function writeTestResultsFile(data: {
 }
 
 const RUNTIME_SCHEMA_REPAIR_STATEMENTS = [
-  `DO $$ BEGIN
-    CREATE TYPE "public"."local_role" AS ENUM('user', 'admin');
-  EXCEPTION
-    WHEN duplicate_object THEN NULL;
-  END $$;`,
-  `DO $$ BEGIN
-    CREATE TYPE "public"."user_role" AS ENUM('user', 'admin');
-  EXCEPTION
-    WHEN duplicate_object THEN NULL;
-  END $$;`,
   `CREATE TABLE IF NOT EXISTS "localUsers" (
     "id" serial PRIMARY KEY,
     "username" varchar(128) NOT NULL UNIQUE,
@@ -423,7 +413,34 @@ const RUNTIME_SCHEMA_REPAIR_STATEMENTS = [
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp NOT NULL DEFAULT now();`,
 ] as const;
 
-async function ensureRuntimeDatabaseSchema(db: ReturnType<typeof drizzle>) {
+type RuntimeDb = ReturnType<typeof drizzle>;
+
+function readResultRows(result: unknown): any[] {
+  if (!result || typeof result !== "object") return [];
+  const maybeRows = (result as { rows?: unknown }).rows;
+  return Array.isArray(maybeRows) ? maybeRows : [];
+}
+
+async function ensureEnumType(db: RuntimeDb, typeName: "local_role" | "user_role") {
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_type
+      WHERE typname = ${typeName}
+    ) AS "exists"
+  `);
+  const rows = readResultRows(result);
+  const exists = rows[0] && typeof rows[0] === "object" ? Boolean((rows[0] as { exists?: unknown }).exists) : false;
+  if (exists) {
+    return;
+  }
+
+  await db.execute(sql.raw(`CREATE TYPE "public"."${typeName}" AS ENUM('user', 'admin');`));
+}
+
+async function ensureRuntimeDatabaseSchema(db: RuntimeDb) {
+  await ensureEnumType(db, "local_role");
+  await ensureEnumType(db, "user_role");
   for (const statement of RUNTIME_SCHEMA_REPAIR_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
@@ -443,7 +460,7 @@ function shouldRetryAfterSchemaRepair(error: unknown) {
 }
 
 async function retryWithSchemaRepair<T>(
-  db: ReturnType<typeof drizzle>,
+  db: RuntimeDb,
   operation: () => Promise<T>,
   error: unknown,
 ): Promise<T> {
