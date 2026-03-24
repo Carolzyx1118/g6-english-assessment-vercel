@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { InsertUser, users, testResults, localUsers, manualPapers, type InsertTestResult, type TestResult, type LocalUser, type InsertLocalUser, type ManualPaper, type InsertManualPaper } from "../drizzle/schema";
 import {
@@ -19,7 +19,6 @@ import { ENV } from './_core/env';
 import { getWritableDataPath, isVercelRuntime } from "./_core/runtime";
 
 let _db: ReturnType<typeof drizzle> | null = null;
-let _dbSchemaReadyPromise: Promise<void> | null = null;
 let hasLoggedLocalAuthFileFallback = false;
 let hasLoggedManualPaperFileFallback = false;
 let hasLoggedTestResultsFileFallback = false;
@@ -32,6 +31,7 @@ const MATH_TAG_SCHEMA_STORE_TITLE = "__Math Tag Schemas__";
 const VOCABULARY_TAG_SCHEMA_STORE_PAPER_ID = `${RESERVED_MANUAL_PAPER_PREFIX}vocabulary-tag-schemas`;
 const VOCABULARY_TAG_SCHEMA_STORE_TITLE = "__Vocabulary Tag Schemas__";
 const LOCAL_AUTH_DEFAULT_INVITE_CODE = "TEACHER2026::english|math|vocabulary::active";
+const LOCAL_AUTH_SELECT_COLUMNS = `"id", "username", "passwordHash", "inviteCode", "displayName", "createdAt", "lastLoginAt"`;
 
 function getLocalAuthUsersFilePath() {
   return process.env.LOCAL_AUTH_USERS_FILE || getWritableDataPath("local-users.json");
@@ -333,117 +333,12 @@ async function writeTestResultsFile(data: {
   );
 }
 
-const RUNTIME_SCHEMA_REPAIR_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS "localUsers" (
-    "id" serial PRIMARY KEY,
-    "username" varchar(128) NOT NULL UNIQUE,
-    "passwordHash" varchar(255) NOT NULL,
-    "inviteCode" varchar(128) NOT NULL,
-    "displayName" varchar(255),
-    "role" "local_role" NOT NULL DEFAULT 'user',
-    "createdAt" timestamp NOT NULL DEFAULT now(),
-    "lastLoginAt" timestamp NOT NULL DEFAULT now()
-  );`,
-  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "inviteCode" varchar(128) NOT NULL DEFAULT '${LOCAL_AUTH_DEFAULT_INVITE_CODE}';`,
-  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "displayName" varchar(255);`,
-  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "role" "local_role" NOT NULL DEFAULT 'user';`,
-  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "createdAt" timestamp NOT NULL DEFAULT now();`,
-  `ALTER TABLE "localUsers" ADD COLUMN IF NOT EXISTS "lastLoginAt" timestamp NOT NULL DEFAULT now();`,
-  `CREATE TABLE IF NOT EXISTS "manualPapers" (
-    "id" serial PRIMARY KEY,
-    "paperId" varchar(255) NOT NULL UNIQUE,
-    "title" varchar(255) NOT NULL,
-    "description" text,
-    "subject" varchar(64) NOT NULL DEFAULT 'english',
-    "category" varchar(64) NOT NULL DEFAULT 'assessment',
-    "blueprintJson" text NOT NULL,
-    "published" integer NOT NULL DEFAULT 1,
-    "totalQuestions" integer NOT NULL DEFAULT 0,
-    "hasListening" integer NOT NULL DEFAULT 0,
-    "hasWriting" integer NOT NULL DEFAULT 0,
-    "createdAt" timestamp NOT NULL DEFAULT now(),
-    "updatedAt" timestamp NOT NULL DEFAULT now()
-  );`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "subject" varchar(64) NOT NULL DEFAULT 'english';`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "category" varchar(64) NOT NULL DEFAULT 'assessment';`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "published" integer NOT NULL DEFAULT 1;`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "totalQuestions" integer NOT NULL DEFAULT 0;`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasListening" integer NOT NULL DEFAULT 0;`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "hasWriting" integer NOT NULL DEFAULT 0;`,
-  `ALTER TABLE "manualPapers" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
-  `CREATE TABLE IF NOT EXISTS "testResults" (
-    "id" serial PRIMARY KEY,
-    "studentName" varchar(255) NOT NULL,
-    "studentGrade" varchar(64),
-    "paperId" varchar(128) NOT NULL,
-    "paperTitle" varchar(255) NOT NULL,
-    "totalCorrect" integer NOT NULL,
-    "totalQuestions" integer NOT NULL,
-    "totalTimeSeconds" integer,
-    "answersJson" text NOT NULL,
-    "scoreBySectionJson" text,
-    "sectionTimingsJson" text,
-    "readingResultsJson" text,
-    "writingResultJson" text,
-    "explanationsJson" text,
-    "reportJson" text,
-    "createdAt" timestamp NOT NULL DEFAULT now()
-  );`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "studentGrade" varchar(64);`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "totalTimeSeconds" integer;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "scoreBySectionJson" text;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "sectionTimingsJson" text;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "readingResultsJson" text;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "writingResultJson" text;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "explanationsJson" text;`,
-  `ALTER TABLE "testResults" ADD COLUMN IF NOT EXISTS "reportJson" text;`,
-  `CREATE TABLE IF NOT EXISTS "users" (
-    "id" serial PRIMARY KEY,
-    "openId" varchar(64) NOT NULL UNIQUE,
-    "name" text,
-    "email" varchar(320),
-    "loginMethod" varchar(64),
-    "role" "user_role" NOT NULL DEFAULT 'user',
-    "createdAt" timestamp NOT NULL DEFAULT now(),
-    "updatedAt" timestamp NOT NULL DEFAULT now(),
-    "lastSignedIn" timestamp NOT NULL DEFAULT now()
-  );`,
-  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user';`,
-  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp NOT NULL DEFAULT now();`,
-  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp NOT NULL DEFAULT now();`,
-] as const;
-
 type RuntimeDb = ReturnType<typeof drizzle>;
 
 function readResultRows(result: unknown): any[] {
   if (!result || typeof result !== "object") return [];
   const maybeRows = (result as { rows?: unknown }).rows;
   return Array.isArray(maybeRows) ? maybeRows : [];
-}
-
-async function ensureEnumType(db: RuntimeDb, typeName: "local_role" | "user_role") {
-  const result = await db.execute(sql`
-    SELECT EXISTS (
-      SELECT 1
-      FROM pg_type
-      WHERE typname = ${typeName}
-    ) AS "exists"
-  `);
-  const rows = readResultRows(result);
-  const exists = rows[0] && typeof rows[0] === "object" ? Boolean((rows[0] as { exists?: unknown }).exists) : false;
-  if (exists) {
-    return;
-  }
-
-  await db.execute(sql.raw(`CREATE TYPE "public"."${typeName}" AS ENUM('user', 'admin');`));
-}
-
-async function ensureRuntimeDatabaseSchema(db: RuntimeDb) {
-  await ensureEnumType(db, "local_role");
-  await ensureEnumType(db, "user_role");
-  for (const statement of RUNTIME_SCHEMA_REPAIR_STATEMENTS) {
-    await db.execute(sql.raw(statement));
-  }
 }
 
 function getErrorMessage(error: unknown) {
@@ -459,18 +354,108 @@ function shouldRetryAfterSchemaRepair(error: unknown) {
   );
 }
 
-async function retryWithSchemaRepair<T>(
-  db: RuntimeDb,
-  operation: () => Promise<T>,
-  error: unknown,
-): Promise<T> {
-  if (!shouldRetryAfterSchemaRepair(error)) {
-    throw error;
+function normalizeDbLocalUserRecord(raw: any): LocalUser {
+  const username = String(raw.username);
+  const createdAt = raw.createdAt ? new Date(raw.createdAt) : new Date();
+  return {
+    id: Number(raw.id),
+    username,
+    passwordHash: String(raw.passwordHash),
+    inviteCode: typeof raw.inviteCode === "string" && raw.inviteCode ? raw.inviteCode : LOCAL_AUTH_DEFAULT_INVITE_CODE,
+    displayName: typeof raw.displayName === "string" && raw.displayName ? raw.displayName : username,
+    role: raw.role === "admin" ? "admin" : "user",
+    createdAt,
+    lastLoginAt: raw.lastLoginAt ? new Date(raw.lastLoginAt) : createdAt,
+  };
+}
+
+async function queryLocalUsersCompatible(db: RuntimeDb, whereClause: SQL = sql`TRUE`): Promise<LocalUser[]> {
+  const variants = [
+    sql`SELECT ${sql.raw(LOCAL_AUTH_SELECT_COLUMNS)} FROM "localUsers" WHERE ${whereClause}`,
+    sql`SELECT "id", "username", "passwordHash", "inviteCode", "displayName", "createdAt" FROM "localUsers" WHERE ${whereClause}`,
+    sql`SELECT "id", "username", "passwordHash", "inviteCode", "displayName" FROM "localUsers" WHERE ${whereClause}`,
+    sql`SELECT "id", "username", "passwordHash", "inviteCode" FROM "localUsers" WHERE ${whereClause}`,
+    sql`SELECT "id", "username", "passwordHash" FROM "localUsers" WHERE ${whereClause}`,
+  ] as const;
+
+  let lastError: unknown;
+  for (const query of variants) {
+    try {
+      const result = await db.execute(query);
+      return readResultRows(result).map(normalizeDbLocalUserRecord);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryAfterSchemaRepair(error)) {
+        throw error;
+      }
+    }
   }
 
-  _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(db);
-  await _dbSchemaReadyPromise;
-  return operation();
+  throw lastError;
+}
+
+async function insertLocalUserCompatible(db: RuntimeDb, data: InsertLocalUser): Promise<number | null> {
+  const now = new Date();
+  const variants = [
+    sql`
+      INSERT INTO "localUsers" ("username", "passwordHash", "inviteCode", "displayName", "createdAt", "lastLoginAt")
+      VALUES (${data.username}, ${data.passwordHash}, ${data.inviteCode}, ${data.displayName ?? data.username}, ${now}, ${now})
+      RETURNING "id"
+    `,
+    sql`
+      INSERT INTO "localUsers" ("username", "passwordHash", "inviteCode", "displayName")
+      VALUES (${data.username}, ${data.passwordHash}, ${data.inviteCode}, ${data.displayName ?? data.username})
+      RETURNING "id"
+    `,
+    sql`
+      INSERT INTO "localUsers" ("username", "passwordHash", "inviteCode")
+      VALUES (${data.username}, ${data.passwordHash}, ${data.inviteCode})
+      RETURNING "id"
+    `,
+    sql`
+      INSERT INTO "localUsers" ("username", "passwordHash")
+      VALUES (${data.username}, ${data.passwordHash})
+      RETURNING "id"
+    `,
+  ] as const;
+
+  let lastError: unknown;
+  for (const query of variants) {
+    try {
+      const result = await db.execute(query);
+      const rows = readResultRows(result);
+      const id = rows[0] && typeof rows[0] === "object" ? Number((rows[0] as { id?: unknown }).id) : null;
+      return Number.isFinite(id) ? id : null;
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryAfterSchemaRepair(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function updateLocalUserCompatible(
+  db: RuntimeDb,
+  id: number,
+  data: Partial<Pick<LocalUser, "displayName" | "inviteCode" | "role" | "passwordHash">>,
+): Promise<void> {
+  const fieldUpdates: Array<{ field: "passwordHash" | "inviteCode" | "displayName"; value: string }> = [];
+  if (typeof data.passwordHash === "string") fieldUpdates.push({ field: "passwordHash", value: data.passwordHash });
+  if (typeof data.inviteCode === "string") fieldUpdates.push({ field: "inviteCode", value: data.inviteCode });
+  if (typeof data.displayName === "string") fieldUpdates.push({ field: "displayName", value: data.displayName });
+
+  for (const update of fieldUpdates) {
+    try {
+      await db.execute(sql`UPDATE "localUsers" SET ${sql.raw(`"${update.field}"`)} = ${update.value} WHERE "id" = ${id}`);
+    } catch (error) {
+      if (!shouldRetryAfterSchemaRepair(error) || update.field === "passwordHash") {
+        throw error;
+      }
+    }
+  }
 }
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
@@ -481,19 +466,6 @@ export async function getDb() {
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
-    }
-  }
-
-  if (_db && !_dbSchemaReadyPromise) {
-    _dbSchemaReadyPromise = ensureRuntimeDatabaseSchema(_db);
-  }
-
-  if (_dbSchemaReadyPromise) {
-    try {
-      await _dbSchemaReadyPromise;
-    } catch (error) {
-      console.warn("[Database] Runtime schema repair failed:", error);
-      _dbSchemaReadyPromise = null;
     }
   }
 
@@ -905,17 +877,8 @@ export async function getLocalUserByUsername(username: string): Promise<LocalUse
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.username === username);
   }
-  try {
-    const rows = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
-    return rows[0];
-  } catch (error) {
-    const rows = await retryWithSchemaRepair(
-      db,
-      () => db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1),
-      error,
-    );
-    return rows[0];
-  }
+  const rows = await queryLocalUsersCompatible(db, sql`"username" = ${username}`);
+  return rows[0];
 }
 
 export async function getLocalUserById(id: number): Promise<LocalUser | undefined> {
@@ -925,17 +888,8 @@ export async function getLocalUserById(id: number): Promise<LocalUser | undefine
     const data = await readLocalAuthUsersFile();
     return data.users.find((user) => user.id === id);
   }
-  try {
-    const rows = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
-    return rows[0];
-  } catch (error) {
-    const rows = await retryWithSchemaRepair(
-      db,
-      () => db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1),
-      error,
-    );
-    return rows[0];
-  }
+  const rows = await queryLocalUsersCompatible(db, sql`"id" = ${id}`);
+  return rows[0];
 }
 
 export async function listLocalUsers(): Promise<LocalUser[]> {
@@ -945,15 +899,11 @@ export async function listLocalUsers(): Promise<LocalUser[]> {
     const data = await readLocalAuthUsersFile();
     return [...data.users].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   }
-  try {
-    return await db.select().from(localUsers).orderBy(desc(localUsers.createdAt));
-  } catch (error) {
-    return retryWithSchemaRepair(
-      db,
-      () => db.select().from(localUsers).orderBy(desc(localUsers.createdAt)),
-      error,
-    );
-  }
+  const users = await queryLocalUsersCompatible(db);
+  return users.sort((left, right) => {
+    const timeDiff = right.createdAt.getTime() - left.createdAt.getTime();
+    return timeDiff !== 0 ? timeDiff : right.id - left.id;
+  });
 }
 
 export async function createLocalUser(data: InsertLocalUser): Promise<number | null> {
@@ -977,24 +927,7 @@ export async function createLocalUser(data: InsertLocalUser): Promise<number | n
     await writeLocalAuthUsersFile(current);
     return nextId;
   }
-  let resultRows;
-  try {
-    resultRows = await db
-      .insert(localUsers)
-      .values(data)
-      .returning({ id: localUsers.id });
-  } catch (error) {
-    resultRows = await retryWithSchemaRepair(
-      db,
-      () => db
-        .insert(localUsers)
-        .values(data)
-        .returning({ id: localUsers.id }),
-      error,
-    );
-  }
-  const [result] = resultRows;
-  return result?.id ?? null;
+  return insertLocalUserCompatible(db, data);
 }
 
 export async function updateLocalUser(
@@ -1011,15 +944,7 @@ export async function updateLocalUser(
     await writeLocalAuthUsersFile(current);
     return;
   }
-  try {
-    await db.update(localUsers).set(data).where(eq(localUsers.id, id));
-  } catch (error) {
-    await retryWithSchemaRepair(
-      db,
-      () => db.update(localUsers).set(data).where(eq(localUsers.id, id)),
-      error,
-    );
-  }
+  await updateLocalUserCompatible(db, id, data);
 }
 
 export async function updateLocalUserLastLogin(id: number): Promise<void> {
@@ -1034,13 +959,11 @@ export async function updateLocalUserLastLogin(id: number): Promise<void> {
     return;
   }
   try {
-    await db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id));
+    await db.execute(sql`UPDATE "localUsers" SET "lastLoginAt" = ${new Date()} WHERE "id" = ${id}`);
   } catch (error) {
-    await retryWithSchemaRepair(
-      db,
-      () => db.update(localUsers).set({ lastLoginAt: new Date() }).where(eq(localUsers.id, id)),
-      error,
-    );
+    if (!shouldRetryAfterSchemaRepair(error)) {
+      throw error;
+    }
   }
 }
 
@@ -1053,13 +976,5 @@ export async function deleteLocalUser(id: number): Promise<void> {
     await writeLocalAuthUsersFile(current);
     return;
   }
-  try {
-    await db.delete(localUsers).where(eq(localUsers.id, id));
-  } catch (error) {
-    await retryWithSchemaRepair(
-      db,
-      () => db.delete(localUsers).where(eq(localUsers.id, id)),
-      error,
-    );
-  }
+  await db.execute(sql`DELETE FROM "localUsers" WHERE "id" = ${id}`);
 }
