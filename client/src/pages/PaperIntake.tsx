@@ -4471,18 +4471,8 @@ export default function PaperIntake() {
     }
 
     try {
-      let blueprintForSave = blueprint;
-
-      try {
-        blueprintForSave = await ensureBlueprintListeningAssetsUploaded(blueprint);
-      } catch (assetUploadError) {
-        console.warn(
-          "[PaperIntake] Listening asset pre-upload failed; continuing with the in-memory draft asset so the paper can still be saved.",
-          assetUploadError,
-        );
-      }
-
-      const preparedBlueprint = await prepareBlueprintForSave(blueprintForSave);
+      const blueprintWithListeningAssets = await ensureBlueprintListeningAssetsUploaded(blueprint);
+      const preparedBlueprint = await prepareBlueprintForSave(blueprintWithListeningAssets);
       const trimmedTitle = effectiveTitle.trim();
       const trimmedDescription = effectiveDescription.trim() || undefined;
       const successFeedback = isQuestionBankMode
