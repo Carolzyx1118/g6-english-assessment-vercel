@@ -26,7 +26,6 @@ export interface ConvertedSection {
   sceneImageUrl?: string;
   sectionType?: ManualSectionType;
   inlineCloze?: boolean;
-  inlineClozeQuestionIds?: number[];
   /** For passage-matching: the labeled descriptions */
   matchingDescriptions?: Array<{ label: string; name: string; text: string }>;
   manualBlocks?: ConvertedManualBlock[];
@@ -45,7 +44,6 @@ export interface ConvertedManualBlock {
   audioUrl?: string;
   sceneImageUrl?: string;
   inlineCloze?: boolean;
-  inlineClozeQuestionIds?: number[];
   matchingDescriptions?: Array<{ label: string; name: string; text: string }>;
 }
 
@@ -586,7 +584,6 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
             "inline-mcq",
           );
           convertedBlock.inlineCloze = true;
-          convertedBlock.inlineClozeQuestionIds = convertedQuestions.map((question) => question.id);
         } else if (
           subsection.questionType !== "passage-matching"
         ) {
@@ -635,7 +632,6 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
       convertedSection.audioUrl = onlyBlock.audioUrl;
       convertedSection.sceneImageUrl = onlyBlock.sceneImageUrl;
       convertedSection.inlineCloze = onlyBlock.inlineCloze;
-      convertedSection.inlineClozeQuestionIds = onlyBlock.inlineClozeQuestionIds;
       convertedSection.matchingDescriptions = onlyBlock.matchingDescriptions;
     }
 
