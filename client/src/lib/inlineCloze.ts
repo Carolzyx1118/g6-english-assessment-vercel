@@ -22,6 +22,18 @@ export function buildInlineClozeGapEntries(passage: string | undefined, question
   if (questions.length === 0) return [];
 
   const passageGapNumbers = extractPassageGapNumbers(passage);
+  if (passageGapNumbers.length > 0) {
+    const questionById = new Map(questions.map((question) => [question.id, question]));
+    const idMatchedEntries = passageGapNumbers.flatMap((gapNumber) => {
+      const question = questionById.get(gapNumber);
+      return question ? [{ gapNumber, question }] : [];
+    });
+
+    if (idMatchedEntries.length === passageGapNumbers.length) {
+      return idMatchedEntries;
+    }
+  }
+
   if (passageGapNumbers.length === questions.length) {
     return passageGapNumbers.map((gapNumber, index) => ({
       gapNumber,

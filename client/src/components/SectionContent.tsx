@@ -1515,7 +1515,7 @@ function InlineClozeMCQSection({
       )}
 
       {activeQuestion && (
-        <div className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
+        <div key={activeQuestion.id} className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
           <div className="mb-2 text-sm font-bold uppercase tracking-wider text-indigo-700">
             Gap {selectedGap}
           </div>
@@ -1524,7 +1524,7 @@ function InlineClozeMCQSection({
               const isSelected = getAnswer(sectionId, activeQuestion.id) === optionIndex;
               return (
                 <button
-                  key={option}
+                  key={`${activeQuestion.id}-${optionIndex}`}
                   type="button"
                   onClick={() => setAnswer(sectionId, activeQuestion.id, optionIndex)}
                   className={`

@@ -2852,6 +2852,21 @@ export default function PaperIntake() {
       };
     }
 
+    // Listening uploads can already be attached as embedded data when the
+    // immediate background upload did not complete. Saving should not retry a
+    // second upload and block submit; persist the embedded audio as-is.
+    if (kind === "audio") {
+      const normalizedAudioDataUrl = normalizeAssetUrl(asset.dataUrl);
+      if (normalizedAudioDataUrl?.startsWith("data:")) {
+        return {
+          ...asset,
+          dataUrl: normalizedAudioDataUrl,
+          previewUrl: undefined,
+          mimeType: contentType,
+        };
+      }
+    }
+
     const uploadPayload = getDataUrlUploadPayload(asset.dataUrl);
     if (uploadPayload) {
       try {
