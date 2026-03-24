@@ -18,73 +18,10 @@ function extractQuestionGapNumber(question: MCQQuestion, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function buildEntriesFromOrderedQuestionIds(
-  passageGapNumbers: number[],
-  orderedQuestionIds: number[] | undefined,
-  questions: MCQQuestion[],
-) {
-  if (!orderedQuestionIds || passageGapNumbers.length !== orderedQuestionIds.length) {
-    return null;
-  }
-
-  const questionById = new Map(questions.map((question) => [question.id, question]));
-  const orderedQuestions = orderedQuestionIds
-    .map((questionId) => questionById.get(questionId))
-    .filter((question): question is MCQQuestion => Boolean(question));
-
-  if (orderedQuestions.length !== passageGapNumbers.length) {
-    return null;
-  }
-
-  return passageGapNumbers.map((gapNumber, index) => ({
-    gapNumber,
-    question: orderedQuestions[index]!,
-  }));
-}
-
-function buildEntriesFromQuestionPromptNumbers(passageGapNumbers: number[], questions: MCQQuestion[]) {
-  if (passageGapNumbers.length !== questions.length) {
-    return null;
-  }
-
-  const withPromptNumbers = questions.map((question, index) => ({
-    question,
-    promptNumber: extractQuestionGapNumber(question, index + 1),
-  }));
-
-  const uniquePromptNumbers = new Set(withPromptNumbers.map((entry) => entry.promptNumber));
-  if (uniquePromptNumbers.size !== questions.length) {
-    return null;
-  }
-
-  const orderedQuestions = [...withPromptNumbers]
-    .sort((left, right) => left.promptNumber - right.promptNumber)
-    .map((entry) => entry.question);
-
-  return passageGapNumbers.map((gapNumber, index) => ({
-    gapNumber,
-    question: orderedQuestions[index]!,
-  }));
-}
-
-export function buildInlineClozeGapEntries(
-  passage: string | undefined,
-  questions: MCQQuestion[],
-  orderedQuestionIds?: number[],
-): InlineClozeGapEntry[] {
+export function buildInlineClozeGapEntries(passage: string | undefined, questions: MCQQuestion[]): InlineClozeGapEntry[] {
   if (questions.length === 0) return [];
 
   const passageGapNumbers = extractPassageGapNumbers(passage);
-  const orderedIdEntries = buildEntriesFromOrderedQuestionIds(passageGapNumbers, orderedQuestionIds, questions);
-  if (orderedIdEntries) {
-    return orderedIdEntries;
-  }
-
-  const promptNumberEntries = buildEntriesFromQuestionPromptNumbers(passageGapNumbers, questions);
-  if (promptNumberEntries) {
-    return promptNumberEntries;
-  }
-
   if (passageGapNumbers.length === questions.length) {
     return passageGapNumbers.map((gapNumber, index) => ({
       gapNumber,
