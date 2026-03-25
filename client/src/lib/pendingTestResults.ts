@@ -70,8 +70,33 @@ function writePendingTestResults(entries: PendingTestResultEntry[]) {
   }
 }
 
+function normalizeOptionalString(value: string | undefined) {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function arePendingPayloadsEqual(
+  left: PendingTestResultPayload,
+  right: PendingTestResultPayload,
+) {
+  return left.studentName === right.studentName
+    && normalizeOptionalString(left.studentGrade) === normalizeOptionalString(right.studentGrade)
+    && left.paperId === right.paperId
+    && left.paperTitle === right.paperTitle
+    && left.totalCorrect === right.totalCorrect
+    && left.totalQuestions === right.totalQuestions
+    && left.totalTimeSeconds === right.totalTimeSeconds
+    && left.answersJson === right.answersJson
+    && normalizeOptionalString(left.scoreBySectionJson) === normalizeOptionalString(right.scoreBySectionJson)
+    && normalizeOptionalString(left.sectionTimingsJson) === normalizeOptionalString(right.sectionTimingsJson);
+}
+
 export function queuePendingTestResult(payload: PendingTestResultPayload) {
   const entries = readPendingTestResults();
+  const existing = entries.find((entry) => arePendingPayloadsEqual(entry.payload, payload));
+  if (existing) {
+    return existing.id;
+  }
+
   const entry: PendingTestResultEntry = {
     id: buildPendingEntryId(),
     createdAt: Date.now(),
@@ -84,4 +109,9 @@ export function queuePendingTestResult(payload: PendingTestResultPayload) {
 export function removePendingTestResult(id: string) {
   const entries = readPendingTestResults();
   writePendingTestResults(entries.filter((entry) => entry.id !== id));
+}
+
+export function removeMatchingPendingTestResults(payload: PendingTestResultPayload) {
+  const entries = readPendingTestResults();
+  writePendingTestResults(entries.filter((entry) => !arePendingPayloadsEqual(entry.payload, payload)));
 }

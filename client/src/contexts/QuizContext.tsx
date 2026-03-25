@@ -436,6 +436,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, [authLoading, isRestoringSession, user?.username, selectedPaper?.id, state, isStarted, studentInfo]);
 
   useEffect(() => {
+    if (state.submitted) return;
     if (isFlushingPendingResultsRef.current) return;
 
     const pendingEntries = readPendingTestResults();
@@ -482,7 +483,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingResultsNonce]);
+  }, [pendingResultsNonce, state.submitted]);
 
   useEffect(() => {
     if (!selectedPaper) return;

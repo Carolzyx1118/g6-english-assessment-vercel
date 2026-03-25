@@ -28,6 +28,7 @@ import {
   readLatestSavedResultId,
   writeLatestSavedResultId,
 } from "@/lib/latestSavedResultId";
+import { removeMatchingPendingTestResults } from "@/lib/pendingTestResults";
 import { readSubmittedAssessmentSnapshot } from "@/lib/submittedAssessmentSnapshot";
 import { trpc } from "@/lib/trpc";
 
@@ -271,7 +272,7 @@ export default function ResultsPage() {
         setStatusText("Uploading your answers to test history...");
         setProgressValue(24);
 
-        const saveResult = await saveResultRef.current.mutateAsync({
+        const savePayload = {
           studentName: baseRecord.studentName,
           studentGrade: baseRecord.studentGrade || undefined,
           paperId: baseRecord.paperId,
@@ -282,7 +283,9 @@ export default function ResultsPage() {
           answersJson: baseRecord.answersJson,
           scoreBySectionJson: baseRecord.scoreBySectionJson || undefined,
           sectionTimingsJson: baseRecord.sectionTimingsJson || undefined,
-        });
+        };
+
+        const saveResult = await saveResultRef.current.mutateAsync(savePayload);
 
         if (cancelled) return;
 
@@ -291,6 +294,7 @@ export default function ResultsPage() {
           throw new Error("The assessment could not be assigned a history record id.");
         }
 
+        removeMatchingPendingTestResults(savePayload);
         setSavedResultId(persistedId);
         writeLatestSavedResultId(persistedId);
         setProgressValue(38);
