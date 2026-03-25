@@ -49,7 +49,7 @@ function logEphemeralPersistenceWarning() {
   if (hasLoggedEphemeralPersistenceWarning || !isVercelRuntime()) return;
   hasLoggedEphemeralPersistenceWarning = true;
   console.warn(
-    "[Database] DATABASE_URL is not configured on Vercel. File-backed data uses /tmp and is not durable across deployments or cold starts."
+    "[Database] DATABASE_URL or POSTGRES_PRISMA_URL is not configured on Vercel. File-backed data uses /tmp and is not durable across deployments or cold starts."
   );
 }
 
@@ -57,21 +57,21 @@ function logLocalAuthFileFallback() {
   if (hasLoggedLocalAuthFileFallback) return;
   hasLoggedLocalAuthFileFallback = true;
   logEphemeralPersistenceWarning();
-  console.warn(`[LocalAuth] DATABASE_URL not configured. Falling back to file storage at ${getLocalAuthUsersFilePath()}`);
+  console.warn(`[LocalAuth] DATABASE_URL or POSTGRES_PRISMA_URL not configured. Falling back to file storage at ${getLocalAuthUsersFilePath()}`);
 }
 
 function logManualPaperFileFallback() {
   if (hasLoggedManualPaperFileFallback) return;
   hasLoggedManualPaperFileFallback = true;
   logEphemeralPersistenceWarning();
-  console.warn(`[ManualPapers] DATABASE_URL not configured. Falling back to file storage at ${getLocalManualPapersFilePath()}`);
+  console.warn(`[ManualPapers] DATABASE_URL or POSTGRES_PRISMA_URL not configured. Falling back to file storage at ${getLocalManualPapersFilePath()}`);
 }
 
 function logTestResultsFileFallback() {
   if (hasLoggedTestResultsFileFallback) return;
   hasLoggedTestResultsFileFallback = true;
   logEphemeralPersistenceWarning();
-  console.warn(`[TestResults] DATABASE_URL not configured. Falling back to file storage at ${getLocalTestResultsFilePath()}`);
+  console.warn(`[TestResults] DATABASE_URL or POSTGRES_PRISMA_URL not configured. Falling back to file storage at ${getLocalTestResultsFilePath()}`);
 }
 
 function normalizeLocalUserRecord(raw: any): LocalUser {
@@ -460,9 +460,9 @@ async function updateLocalUserCompatible(
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db && ENV.databaseUrl) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle(ENV.databaseUrl);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

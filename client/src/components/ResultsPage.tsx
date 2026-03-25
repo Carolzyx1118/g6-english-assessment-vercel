@@ -376,8 +376,53 @@ function getReadingQuestionContext(section: Section, questionId: number) {
   return parts.length > 0 ? parts.join('\n\n') : undefined;
 }
 
+function isReadingLikeSection(section: Section) {
+  return (
+    section.id === 'reading' ||
+    section.id.startsWith('reading') ||
+    section.sectionType === 'reading'
+  );
+}
+
+function isWritingLikeSection(section: Section) {
+  return (
+    section.id === 'writing' ||
+    section.id.startsWith('writing') ||
+    section.sectionType === 'writing' ||
+    section.questions.some((q) => q.type === 'writing')
+  );
+}
+
+function isSpeakingLikeSection(section: Section) {
+  return (
+    section.id === 'speaking' ||
+    section.id.startsWith('speaking') ||
+    section.sectionType === 'speaking' ||
+    section.questions.some((q) => q.type === 'open-ended' && 'responseMode' in q && q.responseMode === 'audio')
+  );
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: number | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 interface ReadingSubItem {
-  id: string; parentId: number; label: string;
+  id: string; sectionId: string; parentId: number; label: string;
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
   context?: string;
   options?: ReviewOption[];
@@ -405,17 +450,6 @@ export default function ResultsPage() {
   const seconds = totalTime % 60;
 
   const lang: Lang = 'en';
-
-  const isWritingLikeSection = (section: Section) =>
-    section.id === 'writing' ||
-    section.sectionType === 'writing' ||
-    section.questions.some((q) => q.type === 'writing');
-
-  const isSpeakingLikeSection = (section: Section) =>
-    section.id === 'speaking' ||
-    section.id.startsWith('speaking') ||
-    section.sectionType === 'speaking' ||
-    section.questions.some((q) => q.type === 'open-ended' && 'responseMode' in q && q.responseMode === 'audio');
 
   // Review states
   const [readingResults, setReadingResults] = useState<ReadingGradingResult[] | null>(null);
@@ -460,142 +494,153 @@ export default function ResultsPage() {
 
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
-    const readingSection = sections.find(s => s.id === 'reading');
-    if (!readingSection) return [];
     const items: ReadingSubItem[] = [];
-    for (const q of readingSection.questions) {
-      const userAns = getAnswer('reading', q.id);
-      const sharedContext = getReadingQuestionContext(readingSection, q.id);
-      if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
-        items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
-          questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
-          correctAnswer: q.correctAnswer, questionType: q.type });
-      } else if (q.type === 'true-false') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        for (const stmt of q.statements) {
-          const raw = parsed[stmt.label];
-          const userChoice = normalizeTrueFalseChoice(raw && typeof raw === 'object' ? raw.tf : raw);
-          const correctChoice = getExpectedTrueFalseChoice(stmt);
-          const choiceOptions = ['True', 'False', 'Not Given'];
-          const selectedIndexes = userChoice ? [choiceOptions.indexOf(userChoice)].filter((value) => value >= 0) : [];
-          const correctIndexes = [choiceOptions.indexOf(correctChoice)].filter((value) => value >= 0);
-          items.push({ id: `${q.id}-${stmt.label}`, parentId: q.id, label: `Q${q.id}(${stmt.label})`,
-            questionText: `True or False: "${stmt.statement}"`,
-            userAnswer: userChoice || 'Not answered',
-            correctAnswer: correctChoice, questionType: 'true-false-sub',
-            options: buildReviewOptions(choiceOptions, selectedIndexes, correctIndexes) });
+    for (const readingSection of sections.filter(isReadingLikeSection)) {
+      for (const q of readingSection.questions) {
+        const baseId = `${readingSection.id}:${q.id}`;
+        const userAns = getAnswer(readingSection.id, q.id);
+        const sharedContext = getReadingQuestionContext(readingSection, q.id);
+        if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
+          items.push({ id: baseId, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}`,
+            questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
+            correctAnswer: q.correctAnswer, questionType: q.type, context: sharedContext });
+        } else if (q.type === 'true-false') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          for (const stmt of q.statements) {
+            const raw = parsed[stmt.label];
+            const userChoice = normalizeTrueFalseChoice(raw && typeof raw === 'object' ? raw.tf : raw);
+            const correctChoice = getExpectedTrueFalseChoice(stmt);
+            const choiceOptions = ['True', 'False', 'Not Given'];
+            const selectedIndexes = userChoice ? [choiceOptions.indexOf(userChoice)].filter((value) => value >= 0) : [];
+            const correctIndexes = [choiceOptions.indexOf(correctChoice)].filter((value) => value >= 0);
+            items.push({ id: `${baseId}-${stmt.label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${stmt.label})`,
+              questionText: `True or False: "${stmt.statement}"`,
+              userAnswer: userChoice || 'Not answered',
+              correctAnswer: correctChoice, questionType: 'true-false-sub',
+              context: sharedContext,
+              options: buildReviewOptions(choiceOptions, selectedIndexes, correctIndexes) });
+          }
+        } else if (q.type === 'open-ended' && q.subQuestions) {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          for (const sub of q.subQuestions) {
+            items.push({ id: `${baseId}-${sub.label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${sub.label})`,
+              questionText: `${q.question} — ${sub.question}`,
+              userAnswer: parsed[sub.label] || 'Not answered', correctAnswer: sub.answer, questionType: 'open-ended-sub',
+              context: sharedContext });
+          }
+        } else if (q.type === 'open-ended' && !q.subQuestions) {
+          items.push({ id: baseId, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}`,
+            questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
+            correctAnswer: q.correctAnswer || q.answer || '', questionType: 'open-ended', context: sharedContext });
+        } else if (q.type === 'table') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.rows.forEach((row: any, i: number) => {
+            const label = String.fromCharCode(97 + i);
+            items.push({ id: `${baseId}-${label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${label})`,
+              questionText: `Complete the table for: "${row.situation}" — fill in the ${row.blankField}`,
+              userAnswer: parsed[`row${i}`] || parsed[row.blankField + i] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+              correctAnswer: row.answer, questionType: 'table-sub', context: sharedContext });
+          });
+        } else if (q.type === 'reference') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.items.forEach((item: any, i: number) => {
+            const label = String.fromCharCode(97 + i);
+            items.push({ id: `${baseId}-${label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${label})`,
+              questionText: `What does "${item.word}" (${item.lineRef}) refer to?`,
+              userAnswer: parsed[item.word] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+              correctAnswer: item.answer, questionType: 'reference-sub', context: sharedContext });
+          });
+        } else if (q.type === 'order') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.events.forEach((event: string, i: number) => {
+            const label = String.fromCharCode(97 + i);
+            items.push({ id: `${baseId}-${label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${label})`,
+              questionText: `Order: "${event}"`,
+              userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+              correctAnswer: String(q.correctOrder[i]), questionType: 'order-sub', context: sharedContext });
+          });
+        } else if (q.type === 'phrase') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.items.forEach((item: any, i: number) => {
+            const label = String.fromCharCode(97 + i);
+            items.push({ id: `${baseId}-${label}`, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}(${label})`,
+              questionText: item.clue,
+              userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
+              correctAnswer: item.answer, questionType: 'phrase-sub', context: sharedContext });
+          });
+        } else if (q.type === 'checkbox') {
+          const userArr = userAns as number[] | undefined;
+          items.push({ id: baseId, sectionId: readingSection.id, parentId: q.id, label: `Q${q.id}`,
+            questionText: q.question,
+            userAnswer: userArr && userArr.length ? userArr.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', ') : 'Not answered',
+            correctAnswer: q.correctAnswers.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', '), questionType: 'checkbox',
+            context: sharedContext,
+            options: buildReviewOptions(q.options, userArr || [], q.correctAnswers) });
+        } else if (q.type === 'sentence-reorder') {
+          const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
+          q.items.forEach((item) => {
+            const userValue = sentenceReorderAnswerToString(parsed[item.label]);
+            items.push({
+              id: `${baseId}-${item.label}`,
+              sectionId: readingSection.id,
+              parentId: q.id,
+              label: `Q${q.id}(${item.label})`,
+              questionText: item.scrambledWords,
+              userAnswer: userValue || 'Not answered',
+              correctAnswer: item.correctAnswer,
+              questionType: 'sentence-reorder-sub',
+              context: sharedContext,
+            });
+          });
+        } else if (q.type === 'inline-word-choice') {
+          const parsed = parseSerializedChoiceMap(userAns);
+          q.items.forEach((item) => {
+            const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+            const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+            items.push({
+              id: `${baseId}-${item.label}`,
+              sectionId: readingSection.id,
+              parentId: q.id,
+              label: `Q${q.id}(${item.label})`,
+              questionText: formatInlineWordChoicePrompt(item),
+              userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
+              correctAnswer: item.options[item.correctAnswer] || '',
+              questionType: 'inline-word-choice-sub',
+              context: sharedContext,
+              options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
+            });
+          });
+        } else if (q.type === 'passage-inline-word-choice') {
+          const parsed = parseSerializedChoiceMap(userAns);
+          q.items.forEach((item) => {
+            const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
+            const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
+            items.push({
+              id: `${baseId}-${item.label}`,
+              sectionId: readingSection.id,
+              parentId: q.id,
+              label: `Q${q.id}(${item.label})`,
+              questionText: formatPassageInlineWordChoicePrompt(q.question, item),
+              userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
+              correctAnswer: item.options[item.correctAnswer] || '',
+              questionType: 'passage-inline-word-choice-sub',
+              context: sharedContext,
+              options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
+            });
+          });
+        } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
+          items.push({
+            id: baseId,
+            sectionId: readingSection.id,
+            parentId: q.id,
+            label: `Q${q.id}`,
+            questionText: q.question || `Vocabulary question ${q.id}`,
+            userAnswer: typeof userAns === 'string' && userAns.trim() ? userAns : 'Not answered',
+            correctAnswer: q.correctAnswer,
+            questionType: q.type,
+            context: sharedContext,
+          });
         }
-      } else if (q.type === 'open-ended' && q.subQuestions) {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        for (const sub of q.subQuestions) {
-          items.push({ id: `${q.id}-${sub.label}`, parentId: q.id, label: `Q${q.id}(${sub.label})`,
-            questionText: `${q.question} — ${sub.question}`,
-            userAnswer: parsed[sub.label] || 'Not answered', correctAnswer: sub.answer, questionType: 'open-ended-sub',
-            context: sharedContext });
-        }
-      } else if (q.type === 'open-ended' && !q.subQuestions) {
-        items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
-          questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
-          correctAnswer: q.correctAnswer || q.answer || '', questionType: 'open-ended', context: sharedContext });
-      } else if (q.type === 'table') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        q.rows.forEach((row: any, i: number) => {
-          const label = String.fromCharCode(97 + i);
-          items.push({ id: `${q.id}-${label}`, parentId: q.id, label: `Q${q.id}(${label})`,
-            questionText: `Complete the table for: "${row.situation}" — fill in the ${row.blankField}`,
-            userAnswer: parsed[`row${i}`] || parsed[row.blankField + i] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
-            correctAnswer: row.answer, questionType: 'table-sub' });
-        });
-      } else if (q.type === 'reference') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        q.items.forEach((item: any, i: number) => {
-          const label = String.fromCharCode(97 + i);
-          items.push({ id: `${q.id}-${label}`, parentId: q.id, label: `Q${q.id}(${label})`,
-            questionText: `What does "${item.word}" (${item.lineRef}) refer to?`,
-            userAnswer: parsed[item.word] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
-            correctAnswer: item.answer, questionType: 'reference-sub' });
-        });
-      } else if (q.type === 'order') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        q.events.forEach((event: string, i: number) => {
-          const label = String.fromCharCode(97 + i);
-          items.push({ id: `${q.id}-${label}`, parentId: q.id, label: `Q${q.id}(${label})`,
-            questionText: `Order: "${event}"`,
-            userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
-            correctAnswer: String(q.correctOrder[i]), questionType: 'order-sub' });
-        });
-      } else if (q.type === 'phrase') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        q.items.forEach((item: any, i: number) => {
-          const label = String.fromCharCode(97 + i);
-          items.push({ id: `${q.id}-${label}`, parentId: q.id, label: `Q${q.id}(${label})`,
-            questionText: item.clue,
-            userAnswer: parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string || 'Not answered') : 'Not answered'),
-            correctAnswer: item.answer, questionType: 'phrase-sub' });
-        });
-      } else if (q.type === 'checkbox') {
-        const userArr = userAns as number[] | undefined;
-        items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
-          questionText: q.question,
-          userAnswer: userArr && userArr.length ? userArr.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', ') : 'Not answered',
-          correctAnswer: q.correctAnswers.map((i: number) => getMCQOptionDisplay(q.options[i])).join(', '), questionType: 'checkbox',
-          options: buildReviewOptions(q.options, userArr || [], q.correctAnswers) });
-      } else if (q.type === 'sentence-reorder') {
-        const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
-        q.items.forEach((item) => {
-          const userValue = sentenceReorderAnswerToString(parsed[item.label]);
-          items.push({
-            id: `${q.id}-${item.label}`,
-            parentId: q.id,
-            label: `Q${q.id}(${item.label})`,
-            questionText: item.scrambledWords,
-            userAnswer: userValue || 'Not answered',
-            correctAnswer: item.correctAnswer,
-            questionType: 'sentence-reorder-sub',
-          });
-        });
-      } else if (q.type === 'inline-word-choice') {
-        const parsed = parseSerializedChoiceMap(userAns);
-        q.items.forEach((item) => {
-          const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
-          const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
-          items.push({
-            id: `${q.id}-${item.label}`,
-            parentId: q.id,
-            label: `Q${q.id}(${item.label})`,
-            questionText: formatInlineWordChoicePrompt(item),
-            userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
-            correctAnswer: item.options[item.correctAnswer] || '',
-            questionType: 'inline-word-choice-sub',
-            options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
-          });
-        });
-      } else if (q.type === 'passage-inline-word-choice') {
-        const parsed = parseSerializedChoiceMap(userAns);
-        q.items.forEach((item) => {
-          const selectedIndex = getSerializedChoiceIndex(parsed, item.label);
-          const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
-          items.push({
-            id: `${q.id}-${item.label}`,
-            parentId: q.id,
-            label: `Q${q.id}(${item.label})`,
-            questionText: formatPassageInlineWordChoicePrompt(q.question, item),
-            userAnswer: hasAnswer ? item.options[selectedIndex] || 'Not answered' : 'Not answered',
-            correctAnswer: item.options[item.correctAnswer] || '',
-            questionType: 'passage-inline-word-choice-sub',
-            options: buildReviewOptions(item.options, hasAnswer ? [selectedIndex] : [], [item.correctAnswer]),
-          });
-        });
-      } else if (q.type === 'picture-spelling' || q.type === 'word-completion') {
-        items.push({
-          id: `${q.id}`,
-          parentId: q.id,
-          label: `Q${q.id}`,
-          questionText: q.question || `Vocabulary question ${q.id}`,
-          userAnswer: typeof userAns === 'string' && userAns.trim() ? userAns : 'Not answered',
-          correctAnswer: q.correctAnswer,
-          questionType: q.type,
-        });
       }
     }
     return items;
@@ -608,7 +653,7 @@ export default function ResultsPage() {
     const writingQ = writingSection.questions.find((q): q is Extract<Question, { type: 'writing' }> => q.type === 'writing');
     if (!writingQ) return null;
 
-    const essay = getAnswer('writing', writingQ.id);
+    const essay = getAnswer(writingSection.id, writingQ.id);
     return {
       sectionId: writingSection.id,
       sectionTitle: writingSection.title,
@@ -651,11 +696,42 @@ export default function ResultsPage() {
     return responses;
   }, [getAnswer, sections]);
 
+  const hasAnySpeakingAnswerDraft = useMemo(() => {
+    return sections
+      .filter(isSpeakingLikeSection)
+      .some((section) =>
+        section.questions.some((question) => {
+          const answer = getAnswer(section.id, question.id);
+          if (typeof answer === 'string') return answer.trim().length > 0;
+          if (Array.isArray(answer)) return answer.length > 0;
+          return Boolean(answer);
+        }),
+      );
+  }, [getAnswer, sections]);
+
+  const writingSubmissionMessage = useMemo(() => {
+    if (writingError) return writingError;
+    if (!writingSubmission) return lang === 'en' ? 'No writing question found in this paper.' : '这张卷子里没有识别到写作题。';
+    if (writingSubmission.essay.trim().length === 0) return lang === 'en' ? 'No essay submitted' : '未提交作文';
+    return lang === 'en' ? 'Writing response detected but not scored yet.' : '已检测到作文作答，但暂未完成评分。';
+  }, [lang, writingError, writingSubmission]);
+
+  const speakingSubmissionMessage = useMemo(() => {
+    if (speakingError) return speakingError;
+    if (speakingResponses.length > 0) return lang === 'en' ? 'Speaking response detected but not scored yet.' : '已检测到口语作答，但暂未完成评分。';
+    if (hasAnySpeakingAnswerDraft) {
+      return lang === 'en'
+        ? 'A speaking draft exists, but no saved audio URL was found. Stop recording and wait for it to finish saving.'
+        : '检测到口语草稿，但没有找到已保存的音频地址。请结束录音并等待保存完成。';
+    }
+    return lang === 'en' ? 'No speaking response submitted' : '未提交口语作答';
+  }, [hasAnySpeakingAnswerDraft, lang, speakingError, speakingResponses.length]);
+
   // Detailed answer review for auto-gradable sections (vocabulary, grammar, listening)
   const detailedResults = useMemo(() => {
     const results: { sectionId: string; sectionTitle: string; questions: ReviewQuestion[] }[] = [];
     for (const section of sections) {
-      if (section.id === 'reading' || isWritingLikeSection(section) || isSpeakingLikeSection(section)) continue;
+      if (isReadingLikeSection(section) || isWritingLikeSection(section) || isSpeakingLikeSection(section)) continue;
       const sectionResults: ReviewQuestion[] = [];
       for (const q of section.questions) {
         if (q.type === 'picture-mcq' || q.type === 'listening-mcq') {
@@ -914,7 +990,11 @@ export default function ResultsPage() {
       pendingResultId.current = queuePendingTestResult(initialResultPayload);
     }
 
-    void saveResultMutation.mutateAsync(initialResultPayload)
+    void withTimeout(
+      saveResultMutation.mutateAsync(initialResultPayload),
+      15000,
+      'Saving test history',
+    )
       .then((data) => {
         hasSavedInitial.current = true;
         setSavedResultId(data.id ?? null);
@@ -998,7 +1078,7 @@ export default function ResultsPage() {
         onError: () => { setReadingError('Failed to check reading answers.'); setIsGradingReading(false); },
       });
     }
-    if (writingSubmission && writingSubmission.essay.trim().length > 10) {
+    if (writingSubmission && writingSubmission.essay.trim().length > 0) {
       setIsGradingWriting(true);
       evaluateWritingMutation.mutate(
         {
@@ -1008,7 +1088,10 @@ export default function ResultsPage() {
         },
         {
           onSuccess: (data) => { setWritingResult(data); setIsGradingWriting(false); },
-          onError: () => { setWritingError('Failed to evaluate writing.'); setIsGradingWriting(false); },
+          onError: (error) => {
+            setWritingError(error instanceof Error ? error.message : 'Failed to evaluate writing.');
+            setIsGradingWriting(false);
+          },
         }
       );
     }
@@ -1019,7 +1102,10 @@ export default function ResultsPage() {
         { responses: speakingResponses },
         {
           onSuccess: (data) => { setSpeakingResult(data); setIsGradingSpeaking(false); },
-          onError: () => { setSpeakingError('Failed to evaluate speaking.'); setIsGradingSpeaking(false); },
+          onError: (error) => {
+            setSpeakingError(error instanceof Error ? error.message : 'Failed to evaluate speaking.');
+            setIsGradingSpeaking(false);
+          },
         }
       );
     }
@@ -1078,7 +1164,7 @@ export default function ResultsPage() {
     if (hasRequestedReport.current) return;
 
     const shouldGradeReading = readingSubItems.length > 0;
-    const shouldGradeWriting = Boolean(writingSubmission && writingSubmission.essay.trim().length > 10);
+    const shouldGradeWriting = Boolean(writingSubmission && writingSubmission.essay.trim().length > 0);
     const shouldGradeSpeaking = speakingResponses.length > 0;
 
     const readingReady = !shouldGradeReading || readingResults !== null || readingError !== null;
@@ -1091,12 +1177,17 @@ export default function ResultsPage() {
     setIsGeneratingReport(true);
 
     const sectionResults = sections.map((section) => {
-      if (section.id === 'reading') {
+      if (isReadingLikeSection(section)) {
+        const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === section.id);
+        const sectionReadingResults = sectionReadingItems
+          .map((item) => getReadingResult(item.id))
+          .filter((item): item is ReadingGradingResult => Boolean(item));
+
         return {
           sectionId: section.id,
           sectionTitle: section.title,
-          correct: readingResults ? readingResults.reduce((sum, item) => sum + item.score, 0) : 0,
-          total: readingResults ? readingResults.length : readingSubItems.length,
+          correct: sectionReadingResults.reduce((sum, item) => sum + item.score, 0),
+          total: sectionReadingResults.length > 0 ? sectionReadingResults.length : sectionReadingItems.length,
           timeSeconds: sectionTimings[section.id] || 0,
         };
       }
@@ -1163,7 +1254,10 @@ export default function ResultsPage() {
       },
       {
         onSuccess: (data) => { setReportResult(data); setIsGeneratingReport(false); },
-        onError: () => { setReportError('Failed to generate report.'); setIsGeneratingReport(false); },
+        onError: (error) => {
+          setReportError(error instanceof Error ? error.message : 'Failed to generate report.');
+          setIsGeneratingReport(false);
+        },
       }
     );
   }, [
@@ -1339,7 +1433,11 @@ export default function ResultsPage() {
               const timeStr = sTime > 0 ? formatTime(sTime) : '';
 
               // Reading section (rule-based auto check)
-              if (section.id === 'reading') {
+              if (isReadingLikeSection(section)) {
+                const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === section.id);
+                const sectionReadingResults = sectionReadingItems
+                  .map((item) => getReadingResult(item.id))
+                  .filter((item): item is ReadingGradingResult => Boolean(item));
                 if (isGradingReading) {
                   return (
                     <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg}`}>
@@ -1352,8 +1450,9 @@ export default function ResultsPage() {
                   );
                 }
                 if (readingResults) {
-                  const rCorrect = readingResults.filter(r => r.isCorrect).length;
-                  const rTotal = readingResults.length;
+                  const scoredReadingResults = sectionReadingResults.length > 0 ? sectionReadingResults : readingResults;
+                  const rCorrect = scoredReadingResults.filter(r => r.isCorrect).length;
+                  const rTotal = scoredReadingResults.length;
                   const pct = rTotal > 0 ? Math.round((rCorrect / rTotal) * 100) : 0;
                   return (
                     <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg}`}>
@@ -1392,7 +1491,7 @@ export default function ResultsPage() {
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                       <div className="flex-1">
                         <div className="font-semibold text-base text-slate-700">{section.title}</div>
-                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Preparing teacher review...' : '正在准备人工批改...'}</div>
+                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Evaluating response...' : '正在评估作答...'}</div>
                       </div>
                     </div>
                   );
@@ -1448,7 +1547,7 @@ export default function ResultsPage() {
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                     <div className="flex-1">
                       <div className="font-semibold text-base text-slate-700">{section.title}</div>
-                      <div className="text-sm text-red-400">{writingError || (lang === 'en' ? 'No essay submitted' : '未提交作文')}</div>
+                      <div className="text-sm text-red-400">{writingSubmissionMessage}</div>
                     </div>
                   </div>
                 );
@@ -1460,8 +1559,8 @@ export default function ResultsPage() {
                     <div key={section.id} className={`flex items-center gap-4 p-3 rounded-xl ${sectionMeta[section.id]?.bg || 'bg-slate-50'}`}>
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${sectionMeta[section.id]?.gradient} text-white flex items-center justify-center`}>{sectionMeta[section.id]?.icon}</div>
                       <div className="flex-1">
-                        <div className="font-semibold text-base text-slate-700">{section.title}</div>
-                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Preparing teacher review...' : '正在准备人工批改...'}</div>
+                      <div className="font-semibold text-base text-slate-700">{section.title}</div>
+                        <div className="flex items-center gap-2 text-sm text-blue-500"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'en' ? 'Evaluating response...' : '正在评估作答...'}</div>
                       </div>
                     </div>
                   );
@@ -1523,7 +1622,7 @@ export default function ResultsPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-base text-slate-700">{section.title}</span>
-                        <span className="text-sm text-red-400 font-medium">{speakingError || (lang === 'en' ? 'No speaking response submitted' : '未提交口语作答')}</span>
+                        <span className="text-sm text-red-400 font-medium">{speakingSubmissionMessage}</span>
                       </div>
                     </div>
                   </div>

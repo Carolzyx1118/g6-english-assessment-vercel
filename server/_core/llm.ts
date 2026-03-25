@@ -307,7 +307,7 @@ const assertApiKey = () => {
   if (!ENV.aiGatewayApiKey && !ENV.openaiApiKey && !ENV.forgeApiKey) {
     throw new Error(
       getLLMConfigErrorMessage("AI requests") ||
-        "AI requests are unavailable because AI_GATEWAY_API_KEY, OPENAI_API_KEY, and BUILT_IN_FORGE_API_KEY are all missing."
+        "AI requests are unavailable because AI_GATEWAY_API_KEY (or VERCEL_AI_GATEWAY_KEY), OPENAI_API_KEY, and BUILT_IN_FORGE_API_KEY are all missing."
     );
   }
 };

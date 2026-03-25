@@ -1,6 +1,6 @@
 import { trpc } from '@/lib/trpc';
 import { parseStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearch } from 'wouter';
 import {
   ArrowLeft,
@@ -120,6 +120,25 @@ type TeacherSpeakingDraft = {
   overallFeedback: string;
   items: TeacherSpeakingItemDraft[];
 };
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: number | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
 
 function safeParseJSON<T>(json: string | null | undefined, fallback: T): T {
   if (!json) return fallback;
@@ -501,6 +520,7 @@ function HistoryContent() {
   const [teacherReviewError, setTeacherReviewError] = useState<string | null>(null);
   const [teacherReviewSuccess, setTeacherReviewSuccess] = useState<string | null>(null);
   const [pendingSaveNotice, setPendingSaveNotice] = useState<string | null>(null);
+  const isFlushingPendingRef = useRef(false);
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get('subject');
     return isPaperSubjectValue(value) ? value : null;
@@ -519,9 +539,10 @@ function HistoryContent() {
 
   useEffect(() => {
     const pendingResults = readPendingTestResults();
-    if (pendingResults.length === 0 || saveResultMutation.isPending) return;
+    if (pendingResults.length === 0 || isFlushingPendingRef.current) return;
 
     let cancelled = false;
+    isFlushingPendingRef.current = true;
 
     void (async () => {
       let savedAny = false;
@@ -529,10 +550,14 @@ function HistoryContent() {
 
       for (const entry of pendingResults) {
         try {
-          const saved = await saveResultMutation.mutateAsync({
-            ...entry.payload,
-            answersJson: sanitizeStoredAssessmentPayloadJsonForResultStorage(entry.payload.answersJson),
-          });
+          const saved = await withTimeout(
+            saveResultMutation.mutateAsync({
+              ...entry.payload,
+              answersJson: sanitizeStoredAssessmentPayloadJsonForResultStorage(entry.payload.answersJson),
+            }),
+            15000,
+            'Recovering pending test history',
+          );
           if (saved.id) {
             flushedIds.push(saved.id);
           }
@@ -556,7 +581,9 @@ function HistoryContent() {
         setPendingSaveNotice(notice);
         toast.success(notice);
       }
-    })();
+    })().finally(() => {
+      isFlushingPendingRef.current = false;
+    });
 
     return () => {
       cancelled = true;

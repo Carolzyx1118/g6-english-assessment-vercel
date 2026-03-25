@@ -1,8 +1,19 @@
+const resolvedDatabaseUrl =
+  process.env.DATABASE_URL
+  || process.env.POSTGRES_PRISMA_URL
+  || process.env.POSTGRES_URL
+  || "";
+
+const resolvedAiGatewayApiKey =
+  process.env.AI_GATEWAY_API_KEY
+  || process.env.VERCEL_AI_GATEWAY_KEY
+  || "";
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  aiGatewayApiKey: process.env.AI_GATEWAY_API_KEY ?? "",
+  databaseUrl: resolvedDatabaseUrl,
+  aiGatewayApiKey: resolvedAiGatewayApiKey,
   aiGatewayBaseUrl: process.env.AI_GATEWAY_BASE_URL ?? "",
   aiGatewayModel: process.env.AI_GATEWAY_MODEL ?? "",
   aiGatewaySpeakingModel: process.env.AI_GATEWAY_SPEAKING_MODEL ?? "",
@@ -55,7 +66,7 @@ export function getLLMConfigStatus() {
   return {
     isConfigured: false,
     provider: null,
-    missingVariables: ["AI_GATEWAY_API_KEY", "OPENAI_API_KEY", "BUILT_IN_FORGE_API_KEY"],
+    missingVariables: ["AI_GATEWAY_API_KEY (or VERCEL_AI_GATEWAY_KEY)", "OPENAI_API_KEY", "BUILT_IN_FORGE_API_KEY"],
   };
 }
 
@@ -153,7 +164,7 @@ export function getLLMConfigErrorMessage(feature: string): string {
     return "";
   }
 
-  return `${feature} is unavailable because AI_GATEWAY_API_KEY, OPENAI_API_KEY, and BUILT_IN_FORGE_API_KEY are all missing on the server.`;
+  return `${feature} is unavailable because AI_GATEWAY_API_KEY (or VERCEL_AI_GATEWAY_KEY), OPENAI_API_KEY, and BUILT_IN_FORGE_API_KEY are all missing on the server.`;
 }
 
 export function getSpeechConfigErrorMessage(feature: string): string {

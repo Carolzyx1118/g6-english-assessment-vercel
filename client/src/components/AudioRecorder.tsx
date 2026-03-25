@@ -73,6 +73,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const autoUploadAttemptedRef = useRef(false);
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
 
   const isRevokableAudioUrl = useCallback((value: string) => {
@@ -116,6 +117,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+      autoUploadAttemptedRef.current = false;
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -195,6 +197,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       URL.revokeObjectURL(audioUrlRef.current);
     }
     audioUrlRef.current = null;
+    autoUploadAttemptedRef.current = false;
     setStatus('idle');
     setRecordingTime(0);
     setIsPlaying(false);
@@ -306,6 +309,15 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       setStatus('recorded');
     }
   }, [blobToBase64, blobToDataUrl, getAudioExtension, normalizeAudioBlobForScoring, onRecorded, questionId, sectionId, uploadFileMutation]);
+
+  useEffect(() => {
+    if (status !== 'recorded' || autoUploadAttemptedRef.current || chunksRef.current.length === 0) {
+      return;
+    }
+
+    autoUploadAttemptedRef.current = true;
+    void uploadAudio();
+  }, [status, uploadAudio]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
