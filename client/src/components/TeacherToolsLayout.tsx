@@ -246,14 +246,6 @@ export default function TeacherToolsLayout({
               collapsed={collapsed}
             />
 
-            <PrimaryLink
-              href="/test-history"
-              icon={<History className="h-4 w-4" />}
-              label="Test History"
-              active={activeTool === "test-history"}
-              collapsed={collapsed}
-            />
-
             {!collapsed ? (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -335,6 +327,14 @@ export default function TeacherToolsLayout({
                 collapsed={collapsed}
               />
             )}
+
+            <PrimaryLink
+              href="/test-history"
+              icon={<History className="h-4 w-4" />}
+              label="Test History"
+              active={activeTool === "test-history"}
+              collapsed={collapsed}
+            />
           </div>
 
           <div className="space-y-1">

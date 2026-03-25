@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { History, Loader2, RotateCcw } from "lucide-react";
+import { CheckCircle2, FileSearch, History, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import AssessmentReportPanel from "@/components/AssessmentReportPanel";
 import { Button } from "@/components/ui/button";
 import { useQuiz } from "@/contexts/QuizContext";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
@@ -14,6 +13,8 @@ import {
 import { sanitizeReportForStorage } from "@/lib/resultStorage";
 import { packStoredAssessmentPayloadForResultStorage } from "@/lib/resultStorage";
 import { trpc } from "@/lib/trpc";
+
+const LATEST_RESULT_ID_STORAGE_KEY = "pureon_latest_assessment_result_id_v1";
 
 function getCacheKey(parts: {
   paperId: string;
@@ -49,6 +50,28 @@ function writeCachedReview(
   }
 }
 
+function readLatestSavedResultId() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(LATEST_RESULT_ID_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLatestSavedResultId(resultId: number) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(LATEST_RESULT_ID_STORAGE_KEY, String(resultId));
+  } catch {
+    // Ignore storage failures in restricted browsers.
+  }
+}
+
 function buildFallbackRecord(
   base: Omit<
     AssessmentReviewRecord,
@@ -78,7 +101,7 @@ export default function ResultsPage() {
   } = useQuiz();
   const [record, setRecord] = useState<AssessmentReviewRecord | null>(null);
   const [savedResultId, setSavedResultId] = useState<number | null>(null);
-  const [statusText, setStatusText] = useState("Preparing your report...");
+  const [statusText, setStatusText] = useState("Preparing your submission...");
   const [fatalError, setFatalError] = useState<string | null>(null);
 
   const saveResultMutation = trpc.results.save.useMutation();
@@ -106,6 +129,9 @@ export default function ResultsPage() {
     if (!cached) return;
 
     setSavedResultId(cached.savedResultId);
+    if (cached.savedResultId) {
+      writeLatestSavedResultId(cached.savedResultId);
+    }
     setRecord(cached.record);
   }, [cacheKey, selectedPaper, state.submitted, studentInfo]);
 
@@ -156,6 +182,7 @@ export default function ResultsPage() {
         }
 
         setSavedResultId(persistedId);
+        writeLatestSavedResultId(persistedId);
         await utils.results.list.invalidate();
 
         setStatusText("Running AI analysis...");
@@ -339,10 +366,27 @@ export default function ResultsPage() {
   ]);
 
   if (!selectedPaper || !studentInfo) {
+    const latestSavedResultId = readLatestSavedResultId();
+
     return (
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-12">
-        <div className="mx-auto max-w-4xl rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-900 shadow-sm">
-          Assessment data is missing. Return to the home page and start a new assessment.
+        <div className="mx-auto max-w-4xl rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-8 shadow-sm">
+          <p className="text-sm text-amber-900">
+            Assessment data is missing in this tab. The detailed results are stored in test history.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {isTeacher && latestSavedResultId ? (
+              <Link href={`/test-history?id=${latestSavedResultId}`}>
+                <Button type="button" className="gap-2 rounded-full bg-amber-900 text-white hover:bg-amber-950">
+                  <History className="h-4 w-4" />
+                  Open Latest Test History
+                </Button>
+              </Link>
+            ) : null}
+            <Button type="button" variant="outline" onClick={resetQuiz} className="rounded-full border-amber-300 bg-white">
+              Return Home
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -360,7 +404,7 @@ export default function ResultsPage() {
           </h1>
           <p className="mt-3 text-sm text-slate-500">{statusText}</p>
           <p className="mt-1 text-xs text-slate-400">
-            We are saving the answers, generating AI analysis, and building the final report.
+            We are saving the answers, scoring objective items, and running AI analysis for passage open-ended, writing, and speaking.
           </p>
           {fatalError ? (
             <div className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900">
@@ -373,37 +417,70 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB] px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <AssessmentReportPanel
-          record={record}
-          showDownload
-          extraHeaderActions={(
-            <div className="flex flex-wrap items-center gap-2">
+    <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl">
+        <div className="overflow-hidden rounded-[36px] border border-slate-200 bg-white shadow-sm">
+          <div className="bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_42%),linear-gradient(135deg,#0f172a_0%,#1d4ed8_100%)] px-6 py-8 text-white sm:px-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-50">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Assessment Complete
+                </div>
+                <h1 className="mt-4 text-3xl font-bold tracking-tight">
+                  {record.studentName}
+                </h1>
+                <p className="mt-2 text-sm text-blue-100">
+                  {record.paperTitle}
+                  {savedResultId ? ` · History #${savedResultId}` : ""}
+                </p>
+              </div>
+              <div className="rounded-[28px] border border-white/15 bg-white/10 px-5 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100">
+                  Report Status
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {record.reportJson ? "AI report ready" : "Saved without full AI report"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6 px-6 py-8 sm:px-8">
+            <div className="rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-5">
+              <div className="flex items-center gap-3 text-slate-900">
+                <FileSearch className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-semibold">Where to view the full report</h2>
+              </div>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                This assessment has been saved to <span className="font-semibold text-slate-900">Teacher Tools → Test History</span>.
+                There you can review every part score, each question result, passage open-ended AI grading, writing analysis,
+                speaking analysis, and download the PDF report.
+              </p>
+            </div>
+
+            {fatalError ? (
+              <div className="rounded-[28px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900">
+                {fatalError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
               {isTeacher ? (
                 <Link href={savedResultId ? `/test-history?id=${savedResultId}` : "/test-history"}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
-                  >
+                  <Button type="button" className="gap-2 rounded-full bg-[#1E3A5F] hover:bg-[#16314F]">
                     <History className="h-4 w-4" />
-                    Test History
+                    Open Test History
                   </Button>
                 </Link>
               ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={resetQuiz}
-                className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
-              >
+              <Button type="button" variant="outline" onClick={resetQuiz} className="gap-2 rounded-full">
                 <RotateCcw className="h-4 w-4" />
                 Start Another Assessment
               </Button>
             </div>
-          )}
-        />
+          </div>
+        </div>
       </div>
     </div>
   );
