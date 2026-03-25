@@ -8,7 +8,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { QuizProvider } from "./contexts/QuizContext";
 import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
-import History from "./pages/History";
 import Login from "./pages/Login";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
@@ -28,13 +27,6 @@ function Router() {
       <Route path={"/"}>
         <AuthGuard>
           <Home />
-        </AuthGuard>
-      </Route>
-      <Route path={"/history"}>
-        <AuthGuard>
-          <TeacherGuard>
-            <History />
-          </TeacherGuard>
         </AuthGuard>
       </Route>
       <Route path={"/paper-intake"}>

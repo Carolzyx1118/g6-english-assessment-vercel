@@ -11,23 +11,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
-import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from '@/lib/branding';
 import { isAudioAnswerValue } from '@/lib/audioStorage';
-import {
-  queuePendingTestResult,
-  removePendingTestResult,
-  type PendingTestResultPayload,
-} from '@/lib/pendingTestResults';
-import {
-  packStoredAssessmentPayloadForResultStorage,
-  sanitizeReportForStorage,
-} from '@/lib/resultStorage';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
-  AssessmentReportResult,
   SpeakingEvaluationResult,
 } from '@shared/assessmentReport';
-import { toast } from 'sonner';
 
 const sectionMetaMap: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
@@ -88,8 +76,6 @@ type SpeakingResponseInput = {
   prompt: string;
   audioUrl: string;
 };
-type HistorySaveState = 'idle' | 'saving' | 'saved' | 'retrying';
-type HistoryAiSyncState = 'idle' | 'syncing' | 'synced' | 'error';
 
 function extractSpeakingAudioUrls(value: unknown): string[] {
   if (typeof value === 'string') {
@@ -552,14 +538,12 @@ export default function ResultsPage() {
   const {
     getScore,
     resetQuiz,
-    state,
     getAnswer,
     getSectionTimings,
     getTotalTime,
     studentInfo,
     sections,
     selectedPaper,
-    isRestoringSession,
   } = useQuiz();
   const { user } = useLocalAuth();
   const { correct, total, bySection } = getScore();
@@ -575,19 +559,14 @@ export default function ResultsPage() {
   const [readingResults, setReadingResults] = useState<ReadingGradingResult[] | null>(null);
   const [writingResult, setWritingResult] = useState<WritingEvalResult | null>(null);
   const [speakingResult, setSpeakingResult] = useState<SpeakingEvaluationResult | null>(null);
-  const [reportResult, setReportResult] = useState<AssessmentReportResult | null>(null);
   const [explanations, setExplanations] = useState<ExplanationResult[] | null>(null);
   const [isGradingReading, setIsGradingReading] = useState(false);
   const [isGradingWriting, setIsGradingWriting] = useState(false);
   const [isGradingSpeaking, setIsGradingSpeaking] = useState(false);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isLoadingExplanations, setIsLoadingExplanations] = useState(false);
-  const [readingError, setReadingError] = useState<string | null>(null);
   const [writingError, setWritingError] = useState<string | null>(null);
   const [speakingError, setSpeakingError] = useState<string | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
   const hasStartedGrading = useRef(false);
-  const hasRequestedReport = useRef(false);
 
   const [writingTab, setWritingTab] = useState<'annotated' | 'corrected' | 'errors'>('annotated');
 
@@ -595,22 +574,6 @@ export default function ResultsPage() {
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
   const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const explainMutation = trpc.grading.explainWrongAnswers.useMutation();
-  const generateReportMutation = trpc.grading.generateReport.useMutation();
-
-  // Auto-save to database
-  const saveResultMutation = trpc.results.save.useMutation();
-  const updateAIMutation = trpc.results.updateAI.useMutation();
-  const [savedResultId, setSavedResultId] = useState<number | null>(null);
-  const hasSavedInitial = useRef(false);
-  const pendingResultId = useRef<string | null>(null);
-  const isSavingInitial = useRef(false);
-  const saveRetryTimer = useRef<number | null>(null);
-  const [saveRetryTick, setSaveRetryTick] = useState(0);
-  const [historySaveState, setHistorySaveState] = useState<HistorySaveState>('idle');
-  const [historySaveError, setHistorySaveError] = useState<string | null>(null);
-  const [historyAiSyncState, setHistoryAiSyncState] = useState<HistoryAiSyncState>('idle');
-  const lastAiSyncSignature = useRef<string | null>(null);
-  const latestAiSyncRunId = useRef(0);
 
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
@@ -1058,139 +1021,6 @@ export default function ResultsPage() {
     [studentInfo?.grade],
   );
 
-  const initialResultPayload = useMemo<PendingTestResultPayload | null>(() => {
-    if (isRestoringSession || !selectedPaper?.id || !selectedPaper?.title) return null;
-
-    return {
-      studentName: recordedStudentName,
-      studentGrade: recordedStudentGrade,
-      paperId: selectedPaper.id,
-      paperTitle: selectedPaper.title,
-      totalCorrect: correct,
-      totalQuestions: total,
-      totalTimeSeconds: totalTime || undefined,
-      answersJson: packStoredAssessmentPayloadForResultStorage(
-        state.answers as Record<string, unknown>,
-        selectedPaper.isGeneratedPaper ? selectedPaper : undefined,
-      ),
-      scoreBySectionJson: JSON.stringify(bySection),
-      sectionTimingsJson: JSON.stringify(sectionTimings),
-    };
-  }, [
-    bySection,
-    correct,
-    isRestoringSession,
-    recordedStudentGrade,
-    recordedStudentName,
-    sectionTimings,
-    selectedPaper,
-    state.answers,
-    total,
-    totalTime,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (saveRetryTimer.current) {
-        clearTimeout(saveRetryTimer.current);
-        saveRetryTimer.current = null;
-      }
-    };
-  }, []);
-
-  // Save initial result state, then request reading checks and review placeholders.
-  // Auto-save initial results to database
-  useEffect(() => {
-    if (!initialResultPayload || hasSavedInitial.current || isSavingInitial.current) return;
-
-    isSavingInitial.current = true;
-    setHistorySaveState('saving');
-    setHistorySaveError(null);
-    if (!pendingResultId.current) {
-      pendingResultId.current = queuePendingTestResult(initialResultPayload);
-    }
-
-    void withTimeout(
-      saveResultMutation.mutateAsync(initialResultPayload),
-      15000,
-      'Saving test history',
-    )
-      .then((data) => {
-        hasSavedInitial.current = true;
-        setSavedResultId(data.id ?? null);
-        setHistorySaveState('saved');
-        setHistorySaveError(null);
-        if (saveRetryTimer.current) {
-          clearTimeout(saveRetryTimer.current);
-          saveRetryTimer.current = null;
-        }
-        if (pendingResultId.current) {
-          removePendingTestResult(pendingResultId.current);
-          pendingResultId.current = null;
-        }
-        if (data.id) {
-          toast.success(lang === 'en' ? `Saved to Test History. Record ID #${data.id}.` : `已写入 Test History，记录 ID #${data.id}。`);
-        }
-        console.log('[Results] Saved to database with id:', data.id);
-      })
-      .catch((err) => {
-        console.error('[Results] Failed to save:', err);
-        setHistorySaveState('retrying');
-        setHistorySaveError(
-          getFriendlyMutationErrorMessage(
-            err,
-            lang === 'en'
-              ? 'Test History request failed. Check database configuration and redeploy.'
-              : 'Test History 请求失败，请检查数据库配置并重新部署。',
-          ),
-        );
-        if (!saveRetryTimer.current) {
-          saveRetryTimer.current = window.setTimeout(() => {
-            saveRetryTimer.current = null;
-            setSaveRetryTick((value) => value + 1);
-          }, 4000);
-        }
-      })
-      .finally(() => {
-        isSavingInitial.current = false;
-      });
-  }, [initialResultPayload, saveResultMutation, saveRetryTick]);
-
-  // Update AI results in database when they become available
-  useEffect(() => {
-    if (!savedResultId) return;
-    const updates: Record<string, string> = {};
-    if (readingResults) updates.readingResultsJson = JSON.stringify(readingResults);
-    if (writingResult) updates.writingResultJson = JSON.stringify(writingResult);
-    if (explanations) updates.explanationsJson = JSON.stringify(explanations);
-    if (reportResult) updates.reportJson = JSON.stringify(sanitizeReportForStorage(reportResult));
-    if (Object.keys(updates).length === 0) return;
-
-    const signature = JSON.stringify({ id: savedResultId, ...updates });
-    if (lastAiSyncSignature.current === signature) return;
-    lastAiSyncSignature.current = signature;
-
-    const syncRunId = latestAiSyncRunId.current + 1;
-    latestAiSyncRunId.current = syncRunId;
-    setHistoryAiSyncState('syncing');
-
-    void updateAIMutation.mutateAsync({ id: savedResultId, ...updates })
-      .then(() => {
-        if (latestAiSyncRunId.current === syncRunId) {
-          setHistoryAiSyncState('synced');
-        }
-      })
-      .catch((error) => {
-        console.error('[Results] Failed to sync AI details to history:', error);
-        if (lastAiSyncSignature.current === signature) {
-          lastAiSyncSignature.current = null;
-        }
-        if (latestAiSyncRunId.current === syncRunId) {
-          setHistoryAiSyncState('error');
-        }
-      });
-  }, [explanations, readingResults, reportResult, savedResultId, updateAIMutation, writingResult]);
-
   useEffect(() => {
     if (hasStartedGrading.current) return;
     hasStartedGrading.current = true;
@@ -1206,12 +1036,10 @@ export default function ResultsPage() {
       checkReadingMutation.mutate({ answers: readingAnswers }, {
         onSuccess: (data) => {
           setReadingResults(data);
-          setReadingError(null);
           setIsGradingReading(false);
         },
         onError: () => {
           setReadingResults(buildReadingFallbackResults(readingSubItems));
-          setReadingError(null);
           setIsGradingReading(false);
         },
       });
@@ -1319,138 +1147,7 @@ export default function ResultsPage() {
     return { grade: 'D', color: 'text-red-500', label: 'Needs Improvement', label_cn: '需要提高' };
   };
   const gradeInfo = getGrade();
-  const isStillGrading = isGradingReading || isGradingWriting || isGradingSpeaking || isGeneratingReport;
-
-  useEffect(() => {
-    if (hasRequestedReport.current) return;
-
-    const shouldGradeReading = readingSubItems.length > 0;
-    const shouldGradeWriting = Boolean(writingSubmission && writingSubmission.essay.trim().length > 0);
-    const shouldGradeSpeaking = speakingResponses.length > 0;
-
-    const readingReady = !shouldGradeReading || readingResults !== null || readingError !== null;
-    const writingReady = !shouldGradeWriting || writingResult !== null || writingError !== null;
-    const speakingReady = !shouldGradeSpeaking || speakingResult !== null || speakingError !== null;
-
-    if (!readingReady || !writingReady || !speakingReady) return;
-
-    hasRequestedReport.current = true;
-    setIsGeneratingReport(true);
-
-    const sectionResults = sections.map((section) => {
-      if (isReadingLikeSection(section)) {
-        const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === section.id);
-        const sectionReadingResults = sectionReadingItems
-          .map((item) => getReadingResult(item.id))
-          .filter((item): item is ReadingGradingResult => Boolean(item));
-
-        return {
-          sectionId: section.id,
-          sectionTitle: section.title,
-          correct: sectionReadingResults.reduce((sum, item) => sum + item.score, 0),
-          total: sectionReadingResults.length > 0 ? sectionReadingResults.length : sectionReadingItems.length,
-          timeSeconds: sectionTimings[section.id] || 0,
-        };
-      }
-
-      if (isWritingLikeSection(section)) {
-        return {
-          sectionId: section.id,
-          sectionTitle: section.title,
-          correct: writingResult && !writingIsManual ? writingResult.score : 0,
-          total: writingResult && !writingIsManual ? writingResult.maxScore : 0,
-          timeSeconds: sectionTimings[section.id] || 0,
-        };
-      }
-
-      if (isSpeakingLikeSection(section)) {
-        const evaluations = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
-        return {
-          sectionId: section.id,
-          sectionTitle: section.title,
-          correct: speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.score, 0),
-          total: speakingIsManual ? 0 : evaluations.reduce((sum, item) => sum + item.maxScore, 0),
-          timeSeconds: sectionTimings[section.id] || 0,
-        };
-      }
-
-      return {
-        sectionId: section.id,
-        sectionTitle: section.title,
-        correct: bySection[section.id]?.correct || 0,
-        total: bySection[section.id]?.total || 0,
-        timeSeconds: sectionTimings[section.id] || 0,
-      };
-    });
-
-    generateReportMutation.mutate(
-      {
-        paperTitle: selectedPaper?.title || 'Assessment',
-        studentName: recordedStudentName,
-        studentGrade: recordedStudentGrade,
-        totalScore,
-        totalPossible,
-        percentage,
-        grade: gradeInfo.grade,
-        totalTimeSeconds: totalTime,
-        sectionResults,
-        writingSummary: writingResult
-          ? {
-              score: writingResult.score,
-              maxScore: writingResult.maxScore,
-              grade: writingResult.grade,
-              overallFeedback_en: writingResult.overallFeedback_en,
-              overallFeedback_cn: writingResult.overallFeedback_cn,
-              suggestions_en: writingResult.suggestions_en,
-              suggestions_cn: writingResult.suggestions_cn,
-              manualReviewRequired: writingIsManual,
-            }
-          : undefined,
-        speakingSummary: speakingResult
-          ? {
-              ...speakingResult,
-              manualReviewRequired: speakingIsManual,
-            }
-          : undefined,
-      },
-      {
-        onSuccess: (data) => { setReportResult(data); setIsGeneratingReport(false); },
-        onError: (error) => {
-          setReportError(
-            getFriendlyMutationErrorMessage(
-              error,
-              'Report request failed. Check server configuration and redeploy.',
-            ),
-          );
-          setIsGeneratingReport(false);
-        },
-      }
-    );
-  }, [
-    bySection,
-    generateReportMutation,
-    gradeInfo.grade,
-    percentage,
-    readingError,
-    readingResults,
-    readingSubItems.length,
-    recordedStudentGrade,
-    recordedStudentName,
-    sections,
-    sectionTimings,
-    selectedPaper?.title,
-    speakingError,
-    speakingIsManual,
-    speakingResponses.length,
-    speakingResult,
-    totalScore,
-    totalPossible,
-    totalTime,
-    writingIsManual,
-    writingError,
-    writingResult,
-    writingSubmission,
-  ]);
+  const isStillGrading = isGradingReading || isGradingWriting || isGradingSpeaking;
 
   const getExplanation = (questionId: number): ExplanationResult | undefined => explanations?.find(e => e.questionId === questionId);
   const getReadingResult = (subItemId: string): ReadingGradingResult | undefined => readingResults?.find(r => r.questionId === subItemId);
@@ -1462,125 +1159,6 @@ export default function ResultsPage() {
 
   // Paper name for display
   const paperName = selectedPaper?.title || 'Assessment';
-  const hasPendingAiSync = Boolean(readingResults || writingResult || explanations || reportResult);
-  const effectiveHistorySaveState: HistorySaveState = historySaveState === 'idle' && initialResultPayload ? 'saving' : historySaveState;
-  const reportInsightMap = useMemo(
-    () => new Map((reportResult?.sectionInsights || []).map((item) => [item.sectionId, item])),
-    [reportResult],
-  );
-  const partByPartReportItems = useMemo(() => {
-    return sections.map((section) => {
-      const insight = reportInsightMap.get(section.id);
-      const hasQuestions = section.questions.length > 0;
-      const timeSeconds = sectionTimings[section.id] || 0;
-      const timeText = timeSeconds > 0 ? formatTime(timeSeconds) : null;
-      let correct = 0;
-      let total = 0;
-      let status_en = '';
-      let status_cn = '';
-
-      if (isReadingLikeSection(section)) {
-        const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === section.id);
-        const sectionReadingResults = sectionReadingItems
-          .map((item) => getReadingResult(item.id))
-          .filter((item): item is ReadingGradingResult => Boolean(item));
-
-        correct = sectionReadingResults.reduce((sum, item) => sum + item.score, 0);
-        total = sectionReadingResults.length > 0 ? sectionReadingResults.length : sectionReadingItems.length;
-        status_en = total > 0
-          ? `${correct}/${total}`
-          : hasQuestions
-            ? 'No scored questions'
-            : 'No questions in this part';
-        status_cn = total > 0
-          ? `${correct}/${total}`
-          : hasQuestions
-            ? '本部分没有可计分题目'
-            : '本部分没有题目';
-      } else if (isWritingLikeSection(section)) {
-        if (writingSubmission?.essay?.trim()) {
-          if (writingResult && !writingIsManual) {
-            correct = writingResult.score;
-            total = writingResult.maxScore;
-            status_en = total > 0 ? `${correct}/${total}` : 'AI review unavailable';
-            status_cn = total > 0 ? `${correct}/${total}` : 'AI 评分暂不可用';
-          } else if (writingIsManual) {
-            status_en = 'Teacher review';
-            status_cn = '老师批改';
-          } else {
-            status_en = 'Waiting for writing review';
-            status_cn = '等待写作评分';
-          }
-        } else {
-          status_en = 'No writing response';
-          status_cn = '未提交写作作答';
-        }
-      } else if (isSpeakingLikeSection(section)) {
-        const evaluations = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
-        if (evaluations.length > 0 && !speakingIsManual) {
-          correct = evaluations.reduce((sum, item) => sum + item.score, 0);
-          total = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
-          status_en = total > 0 ? `${correct}/${total}` : 'AI review unavailable';
-          status_cn = total > 0 ? `${correct}/${total}` : 'AI 评分暂不可用';
-        } else if (evaluations.length > 0 && speakingIsManual) {
-          status_en = 'Teacher review';
-          status_cn = '老师批改';
-        } else if (speakingResponses.some((item) => item.sectionId === section.id) || hasAnySpeakingAnswerDraft) {
-          status_en = 'Recording saved, waiting for review';
-          status_cn = '录音已保存，等待评分';
-        } else {
-          status_en = 'No speaking response';
-          status_cn = '未提交口语作答';
-        }
-      } else {
-        correct = bySection[section.id]?.correct || 0;
-        total = bySection[section.id]?.total || 0;
-        status_en = total > 0
-          ? `${correct}/${total}`
-          : hasQuestions
-            ? 'No scored questions'
-            : 'No questions in this part';
-        status_cn = total > 0
-          ? `${correct}/${total}`
-          : hasQuestions
-            ? '本部分没有可计分题目'
-            : '本部分没有题目';
-      }
-
-      const summary_en = insight?.summary_en
-        || (total > 0
-          ? `${section.title} scored ${correct} out of ${total}.`
-          : status_en);
-      const summary_cn = insight?.summary_cn || status_cn;
-
-      return {
-        sectionId: section.id,
-        sectionTitle: section.title,
-        status_en,
-        status_cn,
-        summary_en,
-        summary_cn,
-        timeText,
-      };
-    });
-  }, [
-    bySection,
-    getReadingResult,
-    hasAnySpeakingAnswerDraft,
-    readingSubItems,
-    reportInsightMap,
-    sectionTimings,
-    sections,
-    speakingIsManual,
-    speakingResponses,
-    speakingResult,
-    writingIsManual,
-    writingResult,
-    writingSubmission,
-  ]);
-
-  // PDF download removed from student view - only available in admin history page
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF]">
@@ -1610,62 +1188,6 @@ export default function ResultsPage() {
           )}
           <p className="text-sm text-slate-400 mt-2">{paperName}</p>
         </motion.div>
-
-        {initialResultPayload && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.12 }} className="mb-6">
-            <div
-              className={`rounded-2xl border px-4 py-4 shadow-sm ${
-                effectiveHistorySaveState === 'saved'
-                  ? 'border-emerald-200 bg-emerald-50'
-                  : effectiveHistorySaveState === 'retrying'
-                    ? 'border-amber-200 bg-amber-50'
-                    : 'border-blue-200 bg-blue-50'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                    effectiveHistorySaveState === 'saved'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : effectiveHistorySaveState === 'retrying'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-blue-100 text-blue-700'
-                  }`}
-                >
-                  {effectiveHistorySaveState === 'saved' ? <CheckCircle2 className="h-4 w-4" /> : effectiveHistorySaveState === 'retrying' ? <AlertCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800">
-                    {lang === 'en' ? 'Test History Status' : 'Test History 状态'}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {effectiveHistorySaveState === 'saved'
-                      ? (lang === 'en' ? `Saved to Test History. Record ID #${savedResultId}.` : `已写入 Test History，记录 ID #${savedResultId}。`)
-                      : effectiveHistorySaveState === 'retrying'
-                        ? (lang === 'en' ? 'Initial save failed. Retrying automatically. The attempt is still cached locally.' : '首次保存失败，系统会自动重试，这次作答仍保存在本地待补写。')
-                        : (lang === 'en' ? 'Saving this attempt to Test History...' : '正在把本次作答写入 Test History...')}
-                  </p>
-                  {historySaveError && effectiveHistorySaveState === 'retrying' && (
-                    <p className="mt-1 text-xs text-amber-700">
-                      {lang === 'en' ? `Last error: ${historySaveError}` : `最近一次错误：${historySaveError}`}
-                    </p>
-                  )}
-                  {effectiveHistorySaveState === 'saved' && hasPendingAiSync && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {historyAiSyncState === 'syncing'
-                        ? (lang === 'en' ? 'Syncing AI feedback and report to this record...' : '正在把 AI 评分和报告回写到这条记录...')
-                        : historyAiSyncState === 'synced'
-                          ? (lang === 'en' ? 'AI feedback has been attached to this record.' : 'AI 评分和报告已同步到这条记录。')
-                          : historyAiSyncState === 'error'
-                            ? (lang === 'en' ? 'AI feedback sync failed, but the base history record is already saved.' : 'AI 结果回写失败，但基础 history 记录已经保存。')
-                            : (lang === 'en' ? 'Waiting for AI feedback to finish before syncing.' : '等待 AI 批改完成后再回写到 history。')}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
 
         {/* Student Info */}
         {(recordedStudentName !== 'Unknown' || recordedStudentGrade) && (
@@ -2407,81 +1929,6 @@ export default function ResultsPage() {
               ) : (
                 <div className="p-5 text-center text-base text-red-400">{speakingError || (lang === 'en' ? 'Speaking review unavailable' : '口语批改信息不可用')}</div>
               )}
-            </div>
-          </motion.div>
-        )}
-
-        {(reportResult || isGeneratingReport || reportError) && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="mb-8">
-            <div className="relative bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
-              >
-                <div className="select-none whitespace-nowrap text-[52px] sm:text-[88px] font-black tracking-[0.2em] text-slate-100/80 rotate-[-24deg]">
-                  {APP_BRAND_SUBTITLE} · PUREON EDUCATION
-                </div>
-              </div>
-              <div className="relative z-10">
-                <div className="px-5 py-3 bg-blue-50/95 border-b border-slate-200">
-                  <div>
-                    <h3 className="font-bold text-base text-slate-700">{reportResult?.reportTitle_en || 'Assessment Feedback Report'}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{APP_BRAND_TITLE} · {APP_BRAND_SUBTITLE}</p>
-                  </div>
-                </div>
-
-                {isGeneratingReport ? (
-                  <div className="p-8 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-3" />
-                    <p className="text-base text-slate-500">{lang === 'en' ? 'Preparing the final report...' : '正在整理最终报告...'}</p>
-                  </div>
-                ) : reportResult ? (
-                  <div className="p-6 space-y-6">
-                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                      <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Overall Summary' : '整体情况总结'}</h4>
-                      <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.overallSummary_en : reportResult.overallSummary_cn}</p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-base text-slate-700 mb-3">{lang === 'en' ? 'Part-by-Part Review' : '按 Part 顺序解析'}</h4>
-                      <div className="space-y-3">
-                        {partByPartReportItems.map((item) => (
-                          <div key={item.sectionId} className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-                              <div>
-                                <p className="font-medium text-slate-700">{item.sectionTitle}</p>
-                                {item.timeText && (
-                                  <p className="text-xs text-slate-400 mt-1">
-                                    {lang === 'en' ? 'Time' : '用时'}: {item.timeText}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
-                                {lang === 'en' ? item.status_en : item.status_cn}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-600 leading-relaxed">
-                              {lang === 'en' ? item.summary_en : item.summary_cn}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                      <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Time Analysis' : '时间分析'}</h4>
-                      <p className="text-sm text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.timeAnalysis_en : reportResult.timeAnalysis_cn}</p>
-                    </div>
-
-                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
-                      <h4 className="font-semibold text-base text-slate-700 mb-2">{lang === 'en' ? 'Parent Feedback' : '给家长的反馈'}</h4>
-                      <p className="text-base text-slate-600 leading-relaxed">{lang === 'en' ? reportResult.parentFeedback_en : reportResult.parentFeedback_cn}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-5 text-center text-base text-red-400">{reportError || (lang === 'en' ? 'Report preparation failed' : '报告整理失败')}</div>
-                )}
-              </div>
             </div>
           </motion.div>
         )}

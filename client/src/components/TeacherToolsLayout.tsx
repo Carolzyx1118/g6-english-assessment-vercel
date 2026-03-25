@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  ClipboardList,
   Database,
   FilePlus2,
   Home,
@@ -18,7 +17,6 @@ import { useLocalAuth } from "@/hooks/useLocalAuth";
 
 type TeacherToolKey =
   | "home"
-  | "history"
   | "paper-intake"
   | "question-bank"
   | "tag-manager"
@@ -129,7 +127,6 @@ export default function TeacherToolsLayout({
   });
   const [tagManagerExpanded, setTagManagerExpanded] = useState(activeTool === "tag-manager");
   const [questionBankExpanded, setQuestionBankExpanded] = useState(activeTool === "question-bank");
-  const [historyExpanded, setHistoryExpanded] = useState(activeTool === "history");
   const [paperManagerExpanded, setPaperManagerExpanded] = useState(activeTool === "paper-manager");
 
   useEffect(() => {
@@ -143,9 +140,6 @@ export default function TeacherToolsLayout({
     }
     if (activeTool === "question-bank") {
       setQuestionBankExpanded(true);
-    }
-    if (activeTool === "history") {
-      setHistoryExpanded(true);
     }
     if (activeTool === "paper-manager") {
       setPaperManagerExpanded(true);
@@ -328,47 +322,6 @@ export default function TeacherToolsLayout({
                 icon={<BookCopy className="h-4 w-4" />}
                 label="Paper Manager"
                 active={activeTool === "paper-manager"}
-                collapsed={collapsed}
-              />
-            )}
-
-            {!collapsed ? (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <PrimaryLink
-                      href="/history"
-                      icon={<ClipboardList className="h-4 w-4" />}
-                      label="Test History"
-                      active={activeTool === "history"}
-                      collapsed={false}
-                    />
-                  </div>
-                  <ExpandToggle
-                    expanded={historyExpanded}
-                    onToggle={() => setHistoryExpanded((current) => !current)}
-                    label="Test History subjects"
-                  />
-                </div>
-                {historyExpanded ? (
-                  <div className="space-y-1 pl-10">
-                    {allowedSubjects.map((subject) => (
-                      <SubjectLink
-                        key={`history-${subject}`}
-                        href={`/history?subject=${subject}`}
-                        label={PAPER_SUBJECT_LABELS[subject]}
-                        active={activeTool === "history" && currentSubject === subject}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <PrimaryLink
-                href="/history"
-                icon={<ClipboardList className="h-4 w-4" />}
-                label="Test History"
-                active={activeTool === "history"}
                 collapsed={collapsed}
               />
             )}

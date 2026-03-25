@@ -281,7 +281,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                         <span className="block text-white/90">by Subject</span>
                       </h1>
                       <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
-                        Open a subject workspace to review papers, update content, manage what students see, and access your history, intake, and paper management tools.
+                        Open a subject workspace to review papers, update content, manage what students see, and access your intake, question bank, and paper management tools.
                       </p>
                       {hasSingleSubjectAccess && (
                         <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
