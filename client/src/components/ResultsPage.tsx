@@ -421,6 +421,115 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   }
 }
 
+function normalizeReadingText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripLeadingArticle(value: string) {
+  return value.replace(/^(a|an|the)\s+/i, '').trim();
+}
+
+function getReadingAcceptableAnswers(correctAnswer: string) {
+  return correctAnswer
+    .split(/\s*\/\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function compareReadingLists(userAnswer: string, correctAnswer: string) {
+  const normalizeList = (value: string) =>
+    value
+      .split(',')
+      .map((item) => normalizeReadingText(item))
+      .filter(Boolean)
+      .sort();
+
+  const user = normalizeList(userAnswer);
+  const correct = normalizeList(correctAnswer);
+  return user.length > 0 && JSON.stringify(user) === JSON.stringify(correct);
+}
+
+function isEquivalentReadingPhrase(userAnswer: string, expectedAnswer: string) {
+  const user = normalizeReadingText(userAnswer);
+  const expected = normalizeReadingText(expectedAnswer);
+  if (!user || !expected) return false;
+  if (user === expected) return true;
+
+  const userNoArticle = stripLeadingArticle(user);
+  const expectedNoArticle = stripLeadingArticle(expected);
+  if (userNoArticle === expectedNoArticle) return true;
+
+  const userTokens = userNoArticle.split(' ').filter(Boolean);
+  const expectedTokens = expectedNoArticle.split(' ').filter(Boolean);
+
+  if (userTokens.length === 1 && userTokens[0].length >= 4 && expectedTokens.includes(userTokens[0])) {
+    return true;
+  }
+  if (expectedTokens.length === 1 && expectedTokens[0].length >= 4 && userTokens.includes(expectedTokens[0])) {
+    return true;
+  }
+
+  return false;
+}
+
+function isReadingAnswerSubmitted(userAnswer: string) {
+  const normalized = userAnswer.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== 'not answered';
+}
+
+function gradeReadingFallbackItem(item: ReadingSubItem): ReadingGradingResult {
+  const userAnswer = item.userAnswer.trim();
+  const correctAnswer = item.correctAnswer.trim();
+  const isAnswered = isReadingAnswerSubmitted(userAnswer);
+  const acceptableAnswers = getReadingAcceptableAnswers(correctAnswer);
+
+  let isCorrect = false;
+  if (isAnswered) {
+    if (item.questionType === 'checkbox') {
+      isCorrect = compareReadingLists(userAnswer, correctAnswer);
+    } else {
+      isCorrect = acceptableAnswers.some((answer) => isEquivalentReadingPhrase(userAnswer, answer));
+    }
+  }
+
+  if (!isAnswered) {
+    return {
+      questionId: item.id,
+      isCorrect: false,
+      score: 0,
+      feedback_en: 'No answer submitted.',
+      feedback_cn: '未作答。',
+      explanation_en: correctAnswer ? `Expected answer: ${correctAnswer}.` : 'No answer key was provided.',
+      explanation_cn: correctAnswer ? `参考答案：${correctAnswer}。` : '未提供参考答案。',
+    };
+  }
+
+  return {
+    questionId: item.id,
+    isCorrect,
+    score: isCorrect ? 1 : 0,
+    feedback_en: isCorrect ? 'Answer accepted.' : 'Answer does not match the answer key.',
+    feedback_cn: isCorrect ? '答案可接受。' : '答案与参考答案不一致。',
+    explanation_en: isCorrect
+      ? `Accepted answer: ${correctAnswer}.`
+      : `Expected answer: ${correctAnswer}. If the wording is acceptable but different from the key, please review it manually.`,
+    explanation_cn: isCorrect
+      ? `参考答案：${correctAnswer}。`
+      : `参考答案：${correctAnswer}。如果学生表达意思正确但与答案写法不同，请人工复核。`,
+  };
+}
+
+function buildReadingFallbackResults(items: ReadingSubItem[]) {
+  return items.map(gradeReadingFallbackItem);
+}
+
 function getFriendlyMutationErrorMessage(
   error: unknown,
   fallback: string,
@@ -1086,15 +1195,27 @@ export default function ResultsPage() {
     if (hasStartedGrading.current) return;
     hasStartedGrading.current = true;
     if (readingSubItems.length > 0) {
+      if (!readingSubItems.some((item) => isReadingAnswerSubmitted(item.userAnswer))) {
+        setReadingResults(buildReadingFallbackResults(readingSubItems));
+      } else {
       const readingAnswers = readingSubItems.map(item => ({
         questionId: item.id, questionType: item.questionType,
         questionText: item.questionText, userAnswer: item.userAnswer, correctAnswer: item.correctAnswer, context: item.context,
       }));
       setIsGradingReading(true);
       checkReadingMutation.mutate({ answers: readingAnswers }, {
-        onSuccess: (data) => { setReadingResults(data); setIsGradingReading(false); },
-        onError: () => { setReadingError('Failed to check reading answers.'); setIsGradingReading(false); },
+        onSuccess: (data) => {
+          setReadingResults(data);
+          setReadingError(null);
+          setIsGradingReading(false);
+        },
+        onError: () => {
+          setReadingResults(buildReadingFallbackResults(readingSubItems));
+          setReadingError(null);
+          setIsGradingReading(false);
+        },
       });
+      }
     }
     if (writingSubmission && writingSubmission.essay.trim().length > 0) {
       setIsGradingWriting(true);
