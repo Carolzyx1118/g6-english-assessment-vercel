@@ -825,6 +825,7 @@ export const petPaper: Paper = {
   color: '#0f766e',
   subject: 'english',
   category: 'assessment',
+  hiddenFromStudentSelection: true,
   tags: ['PET', 'Cambridge', 'Speaking'],
   sections,
   totalQuestions: sections.reduce((sum, section) => sum + section.questions.length, 0),

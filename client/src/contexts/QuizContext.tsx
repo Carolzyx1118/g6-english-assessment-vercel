@@ -3,6 +3,10 @@ import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubj
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
 import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
+import {
+  clearSubmittedAssessmentSnapshot,
+  writeSubmittedAssessmentSnapshot,
+} from '@/lib/submittedAssessmentSnapshot';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import { blueprintToPaper } from '@shared/blueprintToPaper';
 import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
@@ -411,6 +415,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!selectedPaper) return;
+    if (state.submitted) return;
 
     const stillAllowed = allPapers.some((paper) => paper.id === selectedPaper.id);
     if (stillAllowed) return;
@@ -423,7 +428,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     currentSectionIdRef.current = '';
     clearPersistedQuizSession();
     setState(createInitialQuizState());
-  }, [allPapers, selectedPaper]);
+  }, [allPapers, selectedPaper, state.submitted]);
 
   useEffect(() => {
     if (!selectedPaper) return;
@@ -506,14 +511,37 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const submitQuiz = useCallback(() => {
     const now = Date.now();
+    const finalizedSectionTimings = { ...sectionTimingsRef.current };
     if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
       const elapsed = now - sectionEnteredAtRef.current;
-      sectionTimingsRef.current[currentSectionIdRef.current] =
-        (sectionTimingsRef.current[currentSectionIdRef.current] || 0) + elapsed;
+      finalizedSectionTimings[currentSectionIdRef.current] =
+        (finalizedSectionTimings[currentSectionIdRef.current] || 0) + elapsed;
+      sectionTimingsRef.current = finalizedSectionTimings;
       sectionEnteredAtRef.current = null;
     }
+
+    if (selectedPaper && studentInfo) {
+      writeSubmittedAssessmentSnapshot({
+        paper: selectedPaper,
+        studentInfo: {
+          name: studentInfo.name,
+          grade: studentInfo.grade,
+        },
+        answers: { ...state.answers },
+        sectionTimings: Object.fromEntries(
+          Object.entries(finalizedSectionTimings).map(([sectionId, milliseconds]) => [
+            sectionId,
+            Math.round(milliseconds / 1000),
+          ]),
+        ),
+        startTime: state.startTime,
+        endTime: now,
+        submittedAt: now,
+      });
+    }
+
     setState(prev => ({ ...prev, submitted: true, endTime: now }));
-  }, []);
+  }, [selectedPaper, state.answers, state.startTime, studentInfo]);
 
   const resetQuiz = useCallback(() => {
     setIsStarted(false);
@@ -523,11 +551,13 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     sectionEnteredAtRef.current = null;
     currentSectionIdRef.current = '';
     clearPersistedQuizSession();
+    clearSubmittedAssessmentSnapshot();
     setState(createInitialQuizState());
   }, []);
 
   const startQuiz = useCallback(() => {
     if (currentSections.length === 0) return;
+    clearSubmittedAssessmentSnapshot();
     setIsStarted(true);
     const now = Date.now();
     sectionEnteredAtRef.current = now;

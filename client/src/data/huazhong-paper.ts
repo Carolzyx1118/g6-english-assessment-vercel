@@ -207,6 +207,7 @@ export const huazhongPaper: Paper = {
   color: '#059669',
   subject: 'english',
   category: 'assessment',
+  hiddenFromStudentSelection: true,
   tags: ['Grade 6', 'Entrance', 'Writing'],
   sections,
   totalQuestions: sections.reduce((sum, s) => sum + s.questions.length, 0),

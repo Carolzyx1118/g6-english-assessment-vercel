@@ -365,6 +365,7 @@ export const widaPaper: Paper = {
   color: '#4F46E5',
   subject: 'english',
   category: 'assessment',
+  hiddenFromStudentSelection: true,
   tags: ['Grade 2-3', 'Proficiency', 'Listening'],
   sections,
   readingWordBank,
