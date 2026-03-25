@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -64,24 +64,48 @@ queryClient.getMutationCache().subscribe(event => {
 
 const trpcClient = trpc.createClient({
   links: [
-    httpBatchLink({
-      url: trpcUrl,
-      transformer: superjson,
-      headers() {
-        const token = getAuthToken();
-        if (token) {
-          return {
-            Authorization: `Bearer ${token}`,
-          };
-        }
-        return {};
+    splitLink({
+      condition(op) {
+        return op.type === "mutation";
       },
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
-      },
+      true: httpLink({
+        url: trpcUrl,
+        transformer: superjson,
+        headers() {
+          const token = getAuthToken();
+          if (token) {
+            return {
+              Authorization: `Bearer ${token}`,
+            };
+          }
+          return {};
+        },
+        fetch(input, init) {
+          return globalThis.fetch(input, {
+            ...(init ?? {}),
+            credentials: "include",
+          });
+        },
+      }),
+      false: httpBatchLink({
+        url: trpcUrl,
+        transformer: superjson,
+        headers() {
+          const token = getAuthToken();
+          if (token) {
+            return {
+              Authorization: `Bearer ${token}`,
+            };
+          }
+          return {};
+        },
+        fetch(input, init) {
+          return globalThis.fetch(input, {
+            ...(init ?? {}),
+            credentials: "include",
+          });
+        },
+      }),
     }),
   ],
 });

@@ -421,6 +421,17 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   }
 }
 
+function getFriendlyMutationErrorMessage(
+  error: unknown,
+  fallback: string,
+) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  if (rawMessage.includes('did not match the expected pattern')) {
+    return fallback;
+  }
+  return rawMessage || fallback;
+}
+
 interface ReadingSubItem {
   id: string; sectionId: string; parentId: number; label: string;
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
@@ -1016,7 +1027,14 @@ export default function ResultsPage() {
       .catch((err) => {
         console.error('[Results] Failed to save:', err);
         setHistorySaveState('retrying');
-        setHistorySaveError(err instanceof Error ? err.message : (lang === 'en' ? 'Save failed.' : '保存失败。'));
+        setHistorySaveError(
+          getFriendlyMutationErrorMessage(
+            err,
+            lang === 'en'
+              ? 'Test History request failed. Check database configuration and redeploy.'
+              : 'Test History 请求失败，请检查数据库配置并重新部署。',
+          ),
+        );
         if (!saveRetryTimer.current) {
           saveRetryTimer.current = window.setTimeout(() => {
             saveRetryTimer.current = null;
@@ -1089,7 +1107,12 @@ export default function ResultsPage() {
         {
           onSuccess: (data) => { setWritingResult(data); setIsGradingWriting(false); },
           onError: (error) => {
-            setWritingError(error instanceof Error ? error.message : 'Failed to evaluate writing.');
+            setWritingError(
+              getFriendlyMutationErrorMessage(
+                error,
+                'Writing evaluation request failed. Check AI service configuration and redeploy.',
+              ),
+            );
             setIsGradingWriting(false);
           },
         }
@@ -1103,7 +1126,12 @@ export default function ResultsPage() {
         {
           onSuccess: (data) => { setSpeakingResult(data); setIsGradingSpeaking(false); },
           onError: (error) => {
-            setSpeakingError(error instanceof Error ? error.message : 'Failed to evaluate speaking.');
+            setSpeakingError(
+              getFriendlyMutationErrorMessage(
+                error,
+                'Speaking evaluation request failed. Check AI service and upload configuration, then redeploy.',
+              ),
+            );
             setIsGradingSpeaking(false);
           },
         }
@@ -1255,7 +1283,12 @@ export default function ResultsPage() {
       {
         onSuccess: (data) => { setReportResult(data); setIsGeneratingReport(false); },
         onError: (error) => {
-          setReportError(error instanceof Error ? error.message : 'Failed to generate report.');
+          setReportError(
+            getFriendlyMutationErrorMessage(
+              error,
+              'Report request failed. Check server configuration and redeploy.',
+            ),
+          );
           setIsGeneratingReport(false);
         },
       }

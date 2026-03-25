@@ -251,6 +251,18 @@ const buildApiUrl = (baseUrl: string, path: string) => {
   return `${normalizedBase}/${normalizedPath}`;
 };
 
+const resolveSafeBaseUrl = (value: string, fallback: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    console.warn(`[LLM] Ignoring invalid API base URL: ${trimmed}`);
+    return fallback;
+  }
+};
+
 const normalizeGatewayModel = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -268,7 +280,10 @@ const resolveProviderConfig = (): LLMProviderConfig => {
       provider: "vercel-ai-gateway",
       apiKey: ENV.aiGatewayApiKey,
       apiUrl: buildApiUrl(
-        ENV.aiGatewayBaseUrl || "https://ai-gateway.vercel.sh/v1",
+        resolveSafeBaseUrl(
+          ENV.aiGatewayBaseUrl,
+          "https://ai-gateway.vercel.sh/v1"
+        ),
         "v1/chat/completions"
       ),
       defaultModel: normalizeGatewayModel(ENV.aiGatewayModel || ENV.openaiChatModel),
@@ -281,7 +296,10 @@ const resolveProviderConfig = (): LLMProviderConfig => {
       provider: "openai",
       apiKey: ENV.openaiApiKey,
       apiUrl: buildApiUrl(
-        ENV.openaiApiBaseUrl || "https://api.openai.com",
+        resolveSafeBaseUrl(
+          ENV.openaiApiBaseUrl,
+          "https://api.openai.com"
+        ),
         "v1/chat/completions"
       ),
       defaultModel: ENV.openaiChatModel || "gpt-4o-mini",
@@ -293,9 +311,12 @@ const resolveProviderConfig = (): LLMProviderConfig => {
     provider: "forge",
     apiKey: ENV.forgeApiKey,
     apiUrl: buildApiUrl(
-      ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-        ? ENV.forgeApiUrl
-        : "https://forge.manus.im",
+      resolveSafeBaseUrl(
+        ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+          ? ENV.forgeApiUrl
+          : "",
+        "https://forge.manus.im"
+      ),
       "v1/chat/completions"
     ),
     defaultModel: "gemini-2.5-flash",
