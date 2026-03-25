@@ -15,6 +15,9 @@ import { sanitizeReportForStorage } from "@/lib/resultStorage";
 import { packStoredAssessmentPayloadForResultStorage } from "@/lib/resultStorage";
 import { trpc } from "@/lib/trpc";
 
+const LATEST_REVIEW_CACHE_KEY = "assessment_latest_review_cache_v1";
+const LATEST_REVIEW_RESULT_ID_KEY = "assessment_latest_review_result_id_v1";
+
 function getCacheKey(parts: {
   paperId: string;
   studentName: string;
@@ -49,6 +52,46 @@ function writeCachedReview(
   }
 }
 
+function readLatestReview() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(LATEST_REVIEW_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as { savedResultId: number | null; record: AssessmentReviewRecord };
+  } catch {
+    return null;
+  }
+}
+
+function writeLatestReview(
+  value: { savedResultId: number | null; record: AssessmentReviewRecord },
+) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(LATEST_REVIEW_CACHE_KEY, JSON.stringify(value));
+    if (value.savedResultId !== null) {
+      window.localStorage.setItem(LATEST_REVIEW_RESULT_ID_KEY, String(value.savedResultId));
+    }
+  } catch {
+    // Ignore storage failures in restricted browsers.
+  }
+}
+
+function readLatestReviewResultId() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(LATEST_REVIEW_RESULT_ID_KEY);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function buildFallbackRecord(
   base: Omit<
     AssessmentReviewRecord,
@@ -80,6 +123,8 @@ export default function ResultsPage() {
   const [savedResultId, setSavedResultId] = useState<number | null>(null);
   const [statusText, setStatusText] = useState("Preparing your report...");
   const [fatalError, setFatalError] = useState<string | null>(null);
+  const [recoveredResultId, setRecoveredResultId] = useState<number | null>(() => readLatestReviewResultId());
+  const hasActiveAssessmentContext = Boolean(selectedPaper && studentInfo);
 
   const saveResultMutation = trpc.results.save.useMutation();
   const updateResultMutation = trpc.results.updateAI.useMutation();
@@ -88,6 +133,13 @@ export default function ResultsPage() {
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
   const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const generateReportMutation = trpc.grading.generateReport.useMutation();
+  const recoveredRecordQuery = trpc.results.getById.useQuery(
+    { id: recoveredResultId || 0 },
+    {
+      enabled: !hasActiveAssessmentContext && recoveredResultId !== null && record === null,
+      staleTime: 5_000,
+    },
+  );
 
   const cacheKey = useMemo(() => {
     if (!selectedPaper || !studentInfo) return null;
@@ -108,6 +160,29 @@ export default function ResultsPage() {
     setSavedResultId(cached.savedResultId);
     setRecord(cached.record);
   }, [cacheKey, selectedPaper, state.submitted, studentInfo]);
+
+  useEffect(() => {
+    if (record || hasActiveAssessmentContext) return;
+
+    const latest = readLatestReview();
+    if (!latest) return;
+
+    setSavedResultId(latest.savedResultId);
+    setRecoveredResultId(latest.savedResultId);
+    setRecord(latest.record);
+  }, [hasActiveAssessmentContext, record]);
+
+  useEffect(() => {
+    if (!recoveredRecordQuery.data || record) return;
+
+    const recoveredRecord = recoveredRecordQuery.data as AssessmentReviewRecord;
+    setRecord(recoveredRecord);
+    setSavedResultId(recoveredResultId);
+    writeLatestReview({
+      savedResultId: recoveredResultId,
+      record: recoveredRecord,
+    });
+  }, [record, recoveredRecordQuery.data, recoveredResultId]);
 
   useEffect(() => {
     if (!selectedPaper || !studentInfo || !state.submitted || !cacheKey || record) return;
@@ -290,6 +365,11 @@ export default function ResultsPage() {
           savedResultId: persistedId,
           record: nextRecord,
         });
+        writeLatestReview({
+          savedResultId: persistedId,
+          record: nextRecord,
+        });
+        setRecoveredResultId(persistedId);
 
         await updateResultMutation.mutateAsync({
           id: persistedId,
@@ -339,6 +419,24 @@ export default function ResultsPage() {
   ]);
 
   if (!selectedPaper || !studentInfo) {
+    if (recoveredRecordQuery.isLoading) {
+      return (
+        <div className="min-h-screen bg-[#F6F8FB] px-4 py-12">
+          <div className="mx-auto max-w-4xl rounded-[36px] border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+            <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
+              Restoring Assessment Report
+            </h1>
+            <p className="mt-3 text-sm text-slate-500">
+              Recovering the latest saved assessment record...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-12">
         <div className="mx-auto max-w-4xl rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-900 shadow-sm">
