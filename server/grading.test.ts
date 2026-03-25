@@ -34,6 +34,7 @@ vi.mock("./_core/env", async () => {
 
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
+import { ENV } from "./_core/env";
 const mockInvokeLLM = vi.mocked(invokeLLM);
 const mockTranscribeAudio = vi.mocked(transcribeAudio);
 
@@ -191,7 +192,12 @@ describe("grading.explainWrongAnswers", () => {
 });
 
 describe("grading.generateReport", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ENV.aiGatewayApiKey = "";
+    ENV.openaiApiKey = "";
+    ENV.forgeApiKey = "";
+  });
 
   it("builds a deterministic template report without calling the LLM", async () => {
     const caller = appRouter.createCaller(createPublicContext());
@@ -270,6 +276,109 @@ describe("grading.generateReport", () => {
     expect(result.studyPlan).toHaveLength(3);
     expect(result.speakingEvaluation?.reviewMode).toBe("manual");
   });
+
+  it("uses AI to rewrite the report when an LLM provider is configured", async () => {
+    ENV.aiGatewayApiKey = "test-gateway-key";
+    mockInvokeLLM.mockResolvedValueOnce({
+      id: "chatcmpl-report",
+      created: 123,
+      model: "openai/gpt-4o-mini",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              summary_en: "The student can manage core tasks but still needs steadier control in weaker sections.",
+              summary_cn: "学生已经能完成核心任务，但薄弱部分仍需要更稳定的控制能力。",
+              strengths_en: ["Reading accuracy is the clearest current strength.", "The student can already follow familiar task patterns."],
+              strengths_cn: ["阅读正确率是目前最明显的优势。", "学生已经能跟上熟悉的题型要求。"],
+              weaknesses_en: ["Grammar accuracy still breaks down under pressure.", "Output tasks need more structure and control."],
+              weaknesses_cn: ["在压力下语法准确性仍会下降。", "输出类任务还需要更好的结构和控制。"],
+              recommendations_en: ["Review sentence control daily.", "Practice short timed output tasks.", "Keep reading correction focused and consistent."],
+              recommendations_cn: ["每天复习句子控制。", "练习限时的短输出任务。", "保持阅读订正的针对性和连续性。"],
+              timeAnalysis_en: "The paper took 30 minutes in total. Reading used the most time, which suggests the student needs faster locating and checking.",
+              timeAnalysis_cn: "整套试卷共用时 30 分钟。阅读部分耗时最多，说明学生需要更快的定位和检查能力。",
+              reportTitle_en: "Assessment Feedback Report",
+              reportTitle_cn: "测评反馈报告",
+              overallSummary_en: "This result shows a workable foundation. The student is not starting from zero, but stronger and weaker parts are still clearly separated.",
+              overallSummary_cn: "这次结果说明学生已经有可用基础，但强项和弱项之间的差距仍然比较明显。",
+              abilitySnapshot_en: ["The foundation is usable.", "Reading is ahead of output.", "Consistency is the next target."],
+              abilitySnapshot_cn: ["基础可以使用。", "阅读强于输出。", "下一步目标是稳定性。"],
+              sectionInsights: [
+                {
+                  sectionId: "vocabulary",
+                  sectionTitle: "Part 1: Vocabulary",
+                  summary_en: "Vocabulary was handled with reasonable confidence, but precision should still be strengthened.",
+                  summary_cn: "词汇部分完成得比较有把握，但准确度还需要继续加强。",
+                },
+                {
+                  sectionId: "reading",
+                  sectionTitle: "Part 2: Reading",
+                  summary_en: "Reading is the strongest current section, although speed and checking can still improve.",
+                  summary_cn: "阅读是当前表现最好的部分，但速度和检查习惯还可以继续提升。",
+                },
+              ],
+              studyPlan: [
+                {
+                  stage_en: "Stage 1",
+                  stage_cn: "第一阶段",
+                  focus_en: "Stabilize accuracy",
+                  focus_cn: "先稳定准确率",
+                  actions_en: ["Correct 5 mistakes daily", "Review key grammar patterns"],
+                  actions_cn: ["每天订正 5 个错误", "复习核心语法模式"],
+                },
+                {
+                  stage_en: "Stage 2",
+                  stage_cn: "第二阶段",
+                  focus_en: "Improve output",
+                  focus_cn: "加强输出能力",
+                  actions_en: ["Practice short writing responses", "Answer speaking prompts in full sentences"],
+                  actions_cn: ["练习简短写作回应", "用完整句回答口语题"],
+                },
+                {
+                  stage_en: "Stage 3",
+                  stage_cn: "第三阶段",
+                  focus_en: "Build speed and consistency",
+                  focus_cn: "建立速度与稳定性",
+                  actions_en: ["Use timed mixed practice", "Track repeated error types"],
+                  actions_cn: ["做限时混合练习", "记录重复错误类型"],
+                },
+              ],
+              parentFeedback_en: "The student has a real base to build on. Progress now depends on targeted correction instead of broad repetitive practice.",
+              parentFeedback_cn: "孩子已经有真实基础，后续提升更依赖有针对性的纠正训练，而不是泛泛地重复刷题。",
+            }),
+          },
+        },
+      ],
+    });
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.generateReport({
+      paperTitle: "KET Unit 1 Practice",
+      studentName: "Amy",
+      studentGrade: "Grade 6",
+      totalScore: 22,
+      totalPossible: 32,
+      percentage: 69,
+      grade: "C",
+      totalTimeSeconds: 1800,
+      sectionResults: [
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 10, timeSeconds: 300 },
+        { sectionId: "reading", sectionTitle: "Part 2: Reading", correct: 14, total: 22, timeSeconds: 900 },
+      ],
+    });
+
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result.overallSummary_en).toContain("workable foundation");
+    expect(result.timeAnalysis_cn).toContain("30 分钟");
+    expect(result.sectionInsights).toHaveLength(2);
+    expect(result.sectionInsights[0].sectionId).toBe("vocabulary");
+    expect(result.sectionInsights[1].sectionId).toBe("reading");
+    expect(result.parentFeedback_en).toContain("targeted correction");
+    expect(result.speakingEvaluation).toBeNull();
+  });
 });
 
 describe("grading.evaluateWriting", () => {
@@ -322,7 +431,7 @@ describe("grading.evaluateWriting", () => {
     expect(result.suggestions_en).toContain("Add more supporting details.");
   });
 
-  it("falls back to manual review when writing evaluation fails", async () => {
+  it("falls back to an automatic unavailable state when writing evaluation fails", async () => {
     mockInvokeLLM.mockRejectedValueOnce(new Error("LLM unavailable"));
 
     const caller = appRouter.createCaller(createPublicContext());
@@ -333,10 +442,11 @@ describe("grading.evaluateWriting", () => {
     });
 
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
-    expect(result.grade).toBe("Manual Review");
+    expect(result.grade).toBe("AI Unavailable");
     expect(result.maxScore).toBe(0);
-    expect(result.reviewMode).toBe("manual");
-    expect(result.manualReviewRequired).toBe(true);
+    expect(result.reviewMode).toBe("ai");
+    expect(result.manualReviewRequired).toBe(false);
+    expect(result.overallFeedback_en).toContain("could not be completed");
   });
 });
 
@@ -415,7 +525,7 @@ describe("grading.evaluateSpeaking", () => {
     expect(result.evaluations[0].audioUrl).toBe("/api/blob?key=sample-speaking");
   });
 
-  it("falls back to manual review when transcription fails", async () => {
+  it("falls back to an automatic unavailable state when transcription fails", async () => {
     mockTranscribeAudio.mockResolvedValueOnce({
       error: "Voice transcription failed",
       code: "TRANSCRIPTION_FAILED",
@@ -439,8 +549,9 @@ describe("grading.evaluateSpeaking", () => {
     expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result.totalScore).toBe(0);
     expect(result.totalPossible).toBe(0);
-    expect(result.grade).toBe("Manual Review");
-    expect(result.reviewMode).toBe("manual");
-    expect(result.manualReviewRequired).toBe(true);
+    expect(result.grade).toBe("AI Unavailable");
+    expect(result.reviewMode).toBe("ai");
+    expect(result.manualReviewRequired).toBe(false);
+    expect(result.overallFeedback_en).toContain("could not be completed");
   });
 });

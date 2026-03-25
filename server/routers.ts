@@ -11,6 +11,7 @@ import { paperRouter } from "./paperRouter";
 import { localAuthRouter } from "./localAuthRouter";
 import { buildTemplateAssessmentReport } from "./reportTemplateBuilder";
 import type {
+  AssessmentReportResult,
   SpeakingEvaluationResult,
   SpeakingQuestionEvaluation,
 } from "../shared/assessmentReport";
@@ -370,7 +371,7 @@ Reference answer: ${answer.correctAnswer}
   }
 }
 
-function buildManualWritingEvaluation(input: {
+function buildAutomaticWritingFallbackEvaluation(input: {
   essay: string;
   topic: string;
   wordCountTarget: string;
@@ -383,15 +384,15 @@ function buildManualWritingEvaluation(input: {
       maxScore: 0,
       grade: "No Submission",
       overallFeedback_en:
-        "No writing response was submitted. This section is left for teacher review and is not included in the automatic score.",
+        "No writing response was submitted, so this section currently has no automatic score.",
       overallFeedback_cn:
-        "本次未提交作文作答。该部分将留给老师人工批改，且不会计入自动分数。",
+        "本次未提交作文作答，因此该部分目前没有自动评分结果。",
       grammarErrors: [],
       suggestions_en: [],
       suggestions_cn: [],
       correctedEssay: "",
       annotatedEssay: "",
-      reviewMode: "manual" as const,
+      reviewMode: "ai" as const,
       manualReviewRequired: false,
     };
   }
@@ -399,30 +400,30 @@ function buildManualWritingEvaluation(input: {
   return {
     score: 0,
     maxScore: 0,
-    grade: "Manual Review",
+    grade: "AI Unavailable",
     overallFeedback_en:
-      "Automatic writing scoring has been turned off for this site. A teacher should review this essay manually for content, language accuracy, organization, and vocabulary. This section is not included in the automatic score.",
+      "Automatic writing scoring could not be completed this time. The essay is still saved, but no AI score has been assigned yet.",
     overallFeedback_cn:
-      "本网站已关闭作文自动评分。该作文需要老师从内容完成度、语言准确性、结构组织和词汇使用等方面进行人工批改。本部分不会计入自动分数。",
+      "本次写作自动评分暂时未能完成。作文内容已经保存，但目前还没有生成 AI 分数。",
     grammarErrors: [],
     suggestions_en: [
-      `Review whether the response fully addresses the prompt: ${input.topic}.`,
-      `Check organization, sentence accuracy, and vocabulary against the target length (${input.wordCountTarget}).`,
-      "Add a teacher score and comments after manual review.",
+      `Retry AI scoring for the prompt: ${input.topic}.`,
+      `Use the target length (${input.wordCountTarget}) to check whether the response is complete enough before retrying.`,
+      "Keep the saved essay text unchanged so the system can analyze it again.",
     ],
     suggestions_cn: [
-      `先检查学生是否完整回应了题目要求：${input.topic}。`,
-      `再对照目标字数（${input.wordCountTarget}）检查结构、语法准确性和词汇使用。`,
-      "老师人工批改后补充分数和评语。",
+      `可针对题目“${input.topic}”重新触发一次 AI 评分。`,
+      `再次评分前，可先对照目标字数（${input.wordCountTarget}）确认作答是否完整。`,
+      "请保留当前作文原文，方便系统重新分析。",
     ],
-    correctedEssay: "",
-    annotatedEssay: "",
-    reviewMode: "manual" as const,
-    manualReviewRequired: true,
+    correctedEssay: input.essay.trim(),
+    annotatedEssay: input.essay.trim(),
+    reviewMode: "ai" as const,
+    manualReviewRequired: false,
   };
 }
 
-function buildManualSpeakingEvaluation(
+function buildAutomaticSpeakingFallbackEvaluation(
   responses: Array<{
     sectionId: string;
     sectionTitle: string;
@@ -437,51 +438,51 @@ function buildManualSpeakingEvaluation(
     questionId: response.questionId,
     prompt: response.prompt,
     audioUrl: response.audioUrl,
-    transcript: "",
+    transcript: "Automatic transcript unavailable for this recording.",
     score: 0,
     maxScore: 0,
-    grade: "Manual Review",
+    grade: "AI Unavailable",
     feedback_en:
-      "Automatic speaking scoring has been turned off for this site. The teacher should review the original recording manually for task completion, fluency, vocabulary, grammar, and pronunciation.",
+      "Automatic speaking scoring could not be completed for this recording this time.",
     feedback_cn:
-      "本网站已关闭口语自动评分。老师需要结合原始录音，从任务完成度、流利度、词汇、语法和发音等方面进行人工批改。",
-    taskCompletion_en: "Teacher review is required for this speaking response.",
-    taskCompletion_cn: "这道口语题需要老师人工批改。",
-    fluency_en: "Please judge fluency from the original recording.",
-    fluency_cn: "请结合原始录音判断流利度。",
-    vocabulary_en: "Please review vocabulary use manually.",
-    vocabulary_cn: "请人工判断词汇使用情况。",
-    grammar_en: "Please review grammar control manually.",
-    grammar_cn: "请人工判断语法使用情况。",
-    pronunciation_en: "Please review pronunciation from the original audio.",
-    pronunciation_cn: "请结合原始录音判断发音情况。",
+      "本次口语录音暂时未能完成自动评分。",
+    taskCompletion_en: "The system could not complete automatic task analysis for this response yet.",
+    taskCompletion_cn: "系统暂时还没能完成这道口语题的自动任务分析。",
+    fluency_en: "Automatic fluency analysis is temporarily unavailable.",
+    fluency_cn: "流利度自动分析暂时不可用。",
+    vocabulary_en: "Automatic vocabulary analysis is temporarily unavailable.",
+    vocabulary_cn: "词汇自动分析暂时不可用。",
+    grammar_en: "Automatic grammar analysis is temporarily unavailable.",
+    grammar_cn: "语法自动分析暂时不可用。",
+    pronunciation_en: "Automatic pronunciation analysis is temporarily unavailable.",
+    pronunciation_cn: "发音自动分析暂时不可用。",
     suggestions_en: [
-      "Listen to the original recording before scoring.",
-      "Add a teacher score and comments after manual review.",
+      "Retry AI speaking scoring after confirming the recording uploaded correctly.",
+      "Keep the original audio file available so the system can analyze it again.",
     ],
     suggestions_cn: [
-      "评分前请先听原始录音。",
-      "老师人工批改后补充分数和评语。",
+      "确认录音上传正常后，可重新触发一次 AI 口语评分。",
+      "请保留原始音频，方便系统再次分析。",
     ],
-    reviewMode: "manual",
-    manualReviewRequired: true,
+    reviewMode: "ai",
+    manualReviewRequired: false,
   }));
 
   return {
     totalScore: 0,
     totalPossible: 0,
-    grade: "Manual Review",
+    grade: "AI Unavailable",
     overallFeedback_en:
       evaluations.length > 0
-        ? "Automatic speaking scoring has been turned off for this site. Teacher review is required for all submitted speaking recordings, and speaking is excluded from the automatic score."
+        ? "Automatic speaking scoring could not be completed this time. The original recordings are still saved, but no AI score has been assigned yet."
         : "No speaking responses were submitted.",
     overallFeedback_cn:
       evaluations.length > 0
-        ? "本网站已关闭口语自动评分。所有已提交的口语录音都需要老师人工批改，且口语部分不会计入自动总分。"
+        ? "本次口语自动评分暂时未能完成。原始录音已经保存，但目前还没有生成 AI 分数。"
         : "未提交口语作答。",
     evaluations,
-    reviewMode: "manual",
-    manualReviewRequired: evaluations.length > 0,
+    reviewMode: "ai",
+    manualReviewRequired: false,
   };
 }
 
@@ -564,6 +565,268 @@ function normalizeGatewayModelId(value: string, fallback: string) {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
   return trimmed.includes("/") ? trimmed : `openai/${trimmed}`;
+}
+
+function normalizeOptionalString(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function normalizeStringArray(value: unknown, fallback: string[], maxItems = 5) {
+  if (!Array.isArray(value)) return fallback;
+  const items = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, maxItems);
+  return items.length > 0 ? items : fallback;
+}
+
+type AiReportDraft = Omit<AssessmentReportResult, "speakingEvaluation">;
+
+function mergeAIReportDraft(
+  fallback: AssessmentReportResult,
+  draft: Partial<AiReportDraft> | null | undefined,
+): AssessmentReportResult {
+  if (!draft) return fallback;
+
+  const fallbackInsightMap = new Map(
+    fallback.sectionInsights.map((item) => [item.sectionId, item]),
+  );
+  const nextSectionInsights = fallback.sectionInsights.map((item) => {
+    const matched = Array.isArray(draft.sectionInsights)
+      ? draft.sectionInsights.find((entry) => entry?.sectionId === item.sectionId)
+      : undefined;
+
+    return {
+      sectionId: item.sectionId,
+      sectionTitle: normalizeOptionalString(matched?.sectionTitle, item.sectionTitle),
+      summary_en: normalizeOptionalString(matched?.summary_en, item.summary_en),
+      summary_cn: normalizeOptionalString(matched?.summary_cn, item.summary_cn),
+    };
+  });
+
+  const extraInsights = Array.isArray(draft.sectionInsights)
+    ? draft.sectionInsights
+        .filter((item): item is NonNullable<AiReportDraft["sectionInsights"][number]> => Boolean(item && typeof item.sectionId === "string" && item.sectionId.trim()))
+        .filter((item) => !fallbackInsightMap.has(item.sectionId))
+        .map((item) => ({
+          sectionId: item.sectionId.trim(),
+          sectionTitle: normalizeOptionalString(item.sectionTitle, item.sectionId.trim()),
+          summary_en: normalizeOptionalString(item.summary_en, `${normalizeOptionalString(item.sectionTitle, item.sectionId.trim())} was completed.`),
+          summary_cn: normalizeOptionalString(item.summary_cn, "该部分已完成。"),
+        }))
+    : [];
+
+  const nextStudyPlan = Array.isArray(draft.studyPlan) && draft.studyPlan.length > 0
+    ? draft.studyPlan.slice(0, 3).map((item, index) => {
+        const fallbackStage = fallback.studyPlan[index] || fallback.studyPlan[fallback.studyPlan.length - 1];
+        return {
+          stage_en: normalizeOptionalString(item?.stage_en, fallbackStage?.stage_en || `Stage ${index + 1}`),
+          stage_cn: normalizeOptionalString(item?.stage_cn, fallbackStage?.stage_cn || `阶段 ${index + 1}`),
+          focus_en: normalizeOptionalString(item?.focus_en, fallbackStage?.focus_en || "Maintain progress"),
+          focus_cn: normalizeOptionalString(item?.focus_cn, fallbackStage?.focus_cn || "保持进步"),
+          actions_en: normalizeStringArray(item?.actions_en, fallbackStage?.actions_en || [], 4),
+          actions_cn: normalizeStringArray(item?.actions_cn, fallbackStage?.actions_cn || [], 4),
+        };
+      })
+    : fallback.studyPlan;
+
+  return {
+    ...fallback,
+    reportTitle_en: normalizeOptionalString(draft.reportTitle_en, fallback.reportTitle_en),
+    reportTitle_cn: normalizeOptionalString(draft.reportTitle_cn, fallback.reportTitle_cn),
+    summary_en: normalizeOptionalString(draft.summary_en, fallback.summary_en),
+    summary_cn: normalizeOptionalString(draft.summary_cn, fallback.summary_cn),
+    overallSummary_en: normalizeOptionalString(draft.overallSummary_en, fallback.overallSummary_en),
+    overallSummary_cn: normalizeOptionalString(draft.overallSummary_cn, fallback.overallSummary_cn),
+    strengths_en: normalizeStringArray(draft.strengths_en, fallback.strengths_en, 4),
+    strengths_cn: normalizeStringArray(draft.strengths_cn, fallback.strengths_cn, 4),
+    weaknesses_en: normalizeStringArray(draft.weaknesses_en, fallback.weaknesses_en, 4),
+    weaknesses_cn: normalizeStringArray(draft.weaknesses_cn, fallback.weaknesses_cn, 4),
+    recommendations_en: normalizeStringArray(draft.recommendations_en, fallback.recommendations_en, 4),
+    recommendations_cn: normalizeStringArray(draft.recommendations_cn, fallback.recommendations_cn, 4),
+    timeAnalysis_en: normalizeOptionalString(draft.timeAnalysis_en, fallback.timeAnalysis_en),
+    timeAnalysis_cn: normalizeOptionalString(draft.timeAnalysis_cn, fallback.timeAnalysis_cn),
+    abilitySnapshot_en: normalizeStringArray(draft.abilitySnapshot_en, fallback.abilitySnapshot_en, 4),
+    abilitySnapshot_cn: normalizeStringArray(draft.abilitySnapshot_cn, fallback.abilitySnapshot_cn, 4),
+    sectionInsights: [...nextSectionInsights, ...extraInsights],
+    studyPlan: nextStudyPlan,
+    parentFeedback_en: normalizeOptionalString(draft.parentFeedback_en, fallback.parentFeedback_en),
+    parentFeedback_cn: normalizeOptionalString(draft.parentFeedback_cn, fallback.parentFeedback_cn),
+  };
+}
+
+async function buildAssessmentReport(input: Parameters<typeof buildTemplateAssessmentReport>[0]) {
+  const fallbackReport = buildTemplateAssessmentReport(input);
+
+  if (!ENV.aiGatewayApiKey && !ENV.openaiApiKey && !ENV.forgeApiKey) {
+    return fallbackReport;
+  }
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write concise, high-signal bilingual assessment reports for K-12 English learners. Return valid JSON only. Do not invent scores, section names, or teacher-reviewed results.",
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Rewrite this assessment report using AI analysis while keeping the same overall structure.
+
+Requirements:
+- Keep the report practical, specific, and easy for parents and teachers to read.
+- Keep bilingual alignment: English and Chinese should say the same thing.
+- Preserve the exact section order from the input.
+- If a section has total=0, explicitly say whether there was no response or automatic scoring is currently unavailable. Do not invent a score.
+- Keep each list concise:
+  - strengths / weaknesses / recommendations / abilitySnapshot: 2-4 items
+  - studyPlan: exactly 3 stages
+- sectionInsights must cover the current sections in order and use the same sectionId / sectionTitle values when available.
+
+Student assessment data:
+${JSON.stringify({
+  paperTitle: input.paperTitle,
+  studentName: input.studentName || "",
+  studentGrade: input.studentGrade || "",
+  totalScore: input.totalScore,
+  totalPossible: input.totalPossible,
+  percentage: input.percentage,
+  grade: input.grade,
+  totalTimeSeconds: input.totalTimeSeconds,
+  sectionResults: input.sectionResults,
+  writingSummary: input.writingSummary || null,
+  speakingSummary: input.speakingSummary
+    ? {
+        totalScore: input.speakingSummary.totalScore,
+        totalPossible: input.speakingSummary.totalPossible,
+        grade: input.speakingSummary.grade,
+        overallFeedback_en: input.speakingSummary.overallFeedback_en,
+        overallFeedback_cn: input.speakingSummary.overallFeedback_cn,
+        reviewMode: input.speakingSummary.reviewMode || null,
+        manualReviewRequired: input.speakingSummary.manualReviewRequired || false,
+        evaluations: input.speakingSummary.evaluations.map((item) => ({
+          sectionId: item.sectionId,
+          sectionTitle: item.sectionTitle,
+          questionId: item.questionId,
+          score: item.score,
+          maxScore: item.maxScore,
+          feedback_en: item.feedback_en,
+          feedback_cn: item.feedback_cn,
+          suggestions_en: item.suggestions_en,
+          suggestions_cn: item.suggestions_cn,
+          reviewMode: item.reviewMode || null,
+          manualReviewRequired: item.manualReviewRequired || false,
+        })),
+      }
+    : null,
+  fallbackReport,
+}, null, 2)}
+
+Return JSON only.`,
+            },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "assessment_report",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary_en: { type: "string" },
+              summary_cn: { type: "string" },
+              strengths_en: { type: "array", items: { type: "string" } },
+              strengths_cn: { type: "array", items: { type: "string" } },
+              weaknesses_en: { type: "array", items: { type: "string" } },
+              weaknesses_cn: { type: "array", items: { type: "string" } },
+              recommendations_en: { type: "array", items: { type: "string" } },
+              recommendations_cn: { type: "array", items: { type: "string" } },
+              timeAnalysis_en: { type: "string" },
+              timeAnalysis_cn: { type: "string" },
+              reportTitle_en: { type: "string" },
+              reportTitle_cn: { type: "string" },
+              overallSummary_en: { type: "string" },
+              overallSummary_cn: { type: "string" },
+              abilitySnapshot_en: { type: "array", items: { type: "string" } },
+              abilitySnapshot_cn: { type: "array", items: { type: "string" } },
+              sectionInsights: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    sectionId: { type: "string" },
+                    sectionTitle: { type: "string" },
+                    summary_en: { type: "string" },
+                    summary_cn: { type: "string" },
+                  },
+                  required: ["sectionId", "sectionTitle", "summary_en", "summary_cn"],
+                  additionalProperties: false,
+                },
+              },
+              studyPlan: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    stage_en: { type: "string" },
+                    stage_cn: { type: "string" },
+                    focus_en: { type: "string" },
+                    focus_cn: { type: "string" },
+                    actions_en: { type: "array", items: { type: "string" } },
+                    actions_cn: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["stage_en", "stage_cn", "focus_en", "focus_cn", "actions_en", "actions_cn"],
+                  additionalProperties: false,
+                },
+              },
+              parentFeedback_en: { type: "string" },
+              parentFeedback_cn: { type: "string" },
+            },
+            required: [
+              "summary_en",
+              "summary_cn",
+              "strengths_en",
+              "strengths_cn",
+              "weaknesses_en",
+              "weaknesses_cn",
+              "recommendations_en",
+              "recommendations_cn",
+              "timeAnalysis_en",
+              "timeAnalysis_cn",
+              "reportTitle_en",
+              "reportTitle_cn",
+              "overallSummary_en",
+              "overallSummary_cn",
+              "abilitySnapshot_en",
+              "abilitySnapshot_cn",
+              "sectionInsights",
+              "studyPlan",
+              "parentFeedback_en",
+              "parentFeedback_cn",
+            ],
+            additionalProperties: false,
+          },
+        },
+      },
+      max_tokens: 2500,
+    });
+
+    const parsed = parseJsonMessage<AiReportDraft>(response.choices[0]?.message?.content);
+    if (!parsed) {
+      throw new Error("Assessment report response was not valid JSON.");
+    }
+
+    return mergeAIReportDraft(fallbackReport, parsed);
+  } catch (error) {
+    console.error("[grading.generateReport] Falling back to template report:", error);
+    return fallbackReport;
+  }
 }
 
 function normalizeAudioMimeType(value: string | null | undefined) {
@@ -781,8 +1044,8 @@ ${input.essay}`;
       manualReviewRequired: false,
     };
   } catch (error) {
-    console.error("[grading.evaluateWriting] Falling back to manual review:", error);
-    return buildManualWritingEvaluation(input);
+    console.error("[grading.evaluateWriting] Falling back to automatic unavailable state:", error);
+    return buildAutomaticWritingFallbackEvaluation(input);
   }
 }
 
@@ -1304,8 +1567,8 @@ async function evaluateSpeakingWithAI(
   try {
     return await evaluateSpeakingWithTranscriptAI(req, responses);
   } catch (error) {
-    console.error("[grading.evaluateSpeaking] Falling back to manual review:", error);
-    return buildManualSpeakingEvaluation(responses);
+    console.error("[grading.evaluateSpeaking] Falling back to automatic unavailable state:", error);
+    return buildAutomaticSpeakingFallbackEvaluation(responses);
   }
 }
 
@@ -1523,7 +1786,7 @@ Respond in JSON format:
           })),
         }).optional(),
       }))
-      .mutation(({ input }) => buildTemplateAssessmentReport(input)),
+      .mutation(async ({ input }) => buildAssessmentReport(input)),
    }),
 
   // Test results CRUD

@@ -283,6 +283,8 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const normalizedBlob = await normalizeAudioBlobForScoring(blob);
       const normalizedMimeType = normalizedBlob.type || mimeType;
+      const provisionalDataUrl = await blobToDataUrl(normalizedBlob);
+      onRecorded(provisionalDataUrl);
       let persistedUrl: string;
 
       try {
@@ -296,13 +298,15 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
         persistedUrl = uploaded.url;
       } catch (uploadError) {
         console.warn('Recording upload failed, falling back to embedded audio.', uploadError);
-        persistedUrl = await blobToDataUrl(normalizedBlob);
+        persistedUrl = provisionalDataUrl;
       }
 
       audioUrlRef.current = persistedUrl;
       setStatus('uploaded');
       setError(null);
-      onRecorded(persistedUrl);
+      if (persistedUrl !== provisionalDataUrl) {
+        onRecorded(persistedUrl);
+      }
     } catch (err: any) {
       console.error('Recording save error:', err);
       setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to save recording. Please try again.');

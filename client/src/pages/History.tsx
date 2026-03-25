@@ -102,6 +102,31 @@ type HistorySpeakingResponse = {
   audioUrl: string;
 };
 
+type SectionDescriptor = {
+  id: string;
+  title: string;
+  sectionType?: string;
+  questions: Array<{
+    type?: string;
+    responseMode?: string;
+  }>;
+};
+
+type HistoryReadingSubItem = {
+  id: string;
+  sectionId: string;
+};
+
+type HistoryPartByPartItem = {
+  sectionId: string;
+  sectionTitle: string;
+  status_en: string;
+  status_cn: string;
+  summary_en: string;
+  summary_cn: string;
+  timeText: string | null;
+};
+
 type TeacherWritingDraft = {
   score: string;
   maxScore: string;
@@ -207,7 +232,15 @@ function splitSuggestions(value: string) {
     .filter(Boolean);
 }
 
-function isWritingLikeSection(section: Section) {
+function isReadingLikeSection(section: SectionDescriptor) {
+  return (
+    section.id === 'reading' ||
+    section.id.startsWith('reading') ||
+    section.sectionType === 'reading'
+  );
+}
+
+function isWritingLikeSection(section: SectionDescriptor) {
   return (
     section.id === 'writing' ||
     section.id.startsWith('writing') ||
@@ -216,7 +249,7 @@ function isWritingLikeSection(section: Section) {
   );
 }
 
-function isSpeakingLikeSection(section: Section) {
+function isSpeakingLikeSection(section: SectionDescriptor) {
   return (
     section.id === 'speaking' ||
     section.id.startsWith('speaking') ||
@@ -226,6 +259,96 @@ function isSpeakingLikeSection(section: Section) {
       return question.responseMode === 'audio';
     })
   );
+}
+
+function isManualWritingReview(result: WritingEvalResult | null | undefined) {
+  return Boolean(
+    result &&
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.maxScore === 0 && result.grade === 'Manual Review'))
+  );
+}
+
+function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
+  return Boolean(
+    result &&
+    (result.manualReviewRequired || (result.reviewMode === 'manual' && result.totalPossible === 0 && result.grade === 'Manual Review'))
+  );
+}
+
+function buildHistoryReadingSubItems(paper: Paper | undefined): HistoryReadingSubItem[] {
+  if (!paper) return [];
+
+  const items: HistoryReadingSubItem[] = [];
+
+  for (const section of paper.sections.filter(isReadingLikeSection)) {
+    for (const question of section.questions) {
+      const baseId = `${section.id}:${question.id}`;
+
+      if (question.type === 'true-false') {
+        question.statements.forEach((statement) => {
+          items.push({ id: `${baseId}-${statement.label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'open-ended' && question.subQuestions) {
+        question.subQuestions.forEach((subQuestion) => {
+          items.push({ id: `${baseId}-${subQuestion.label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'table') {
+        question.rows.forEach((_row, index) => {
+          const label = String.fromCharCode(97 + index);
+          items.push({ id: `${baseId}-${label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'reference') {
+        question.items.forEach((_item, index) => {
+          const label = String.fromCharCode(97 + index);
+          items.push({ id: `${baseId}-${label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'order') {
+        question.events.forEach((_event, index) => {
+          const label = String.fromCharCode(97 + index);
+          items.push({ id: `${baseId}-${label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'phrase') {
+        question.items.forEach((_item, index) => {
+          const label = String.fromCharCode(97 + index);
+          items.push({ id: `${baseId}-${label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'sentence-reorder') {
+        question.items.forEach((item) => {
+          items.push({ id: `${baseId}-${item.label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      if (question.type === 'inline-word-choice' || question.type === 'passage-inline-word-choice') {
+        question.items.forEach((item) => {
+          items.push({ id: `${baseId}-${item.label}`, sectionId: section.id });
+        });
+        continue;
+      }
+
+      items.push({ id: baseId, sectionId: section.id });
+    }
+  }
+
+  return items;
 }
 
 function toHistoryPaper(raw: {
@@ -679,16 +802,20 @@ function HistoryContent() {
   );
   const speakingEvaluation = report?.speakingEvaluation ?? null;
   const writingUsesAIReview = Boolean(
-    writingResult && writingResult.reviewMode !== 'manual' && writingResult.maxScore > 0,
+    writingResult && writingResult.reviewMode !== 'manual',
   );
   const speakingUsesAIReview = Boolean(
-    speakingEvaluation && speakingEvaluation.reviewMode !== 'manual' && speakingEvaluation.totalPossible > 0,
+    speakingEvaluation && speakingEvaluation.reviewMode !== 'manual',
   );
   const hasAutoScoring = writingUsesAIReview || speakingUsesAIReview;
 
   const writingSubmission = useMemo(
     () => extractWritingSubmission(paper, answers),
     [answers, paper],
+  );
+  const readingSubItems = useMemo(
+    () => buildHistoryReadingSubItems(paper),
+    [paper],
   );
   const speakingResponses = useMemo(
     () => extractSpeakingResponses(paper, answers, speakingEvaluation),
@@ -698,6 +825,160 @@ function HistoryContent() {
     () => paper?.sections.some(isSpeakingLikeSection) ?? false,
     [paper],
   );
+  const writingIsManual = useMemo(
+    () => isManualWritingReview(writingResult),
+    [writingResult],
+  );
+  const speakingIsManual = useMemo(
+    () => isManualSpeakingReview(speakingEvaluation),
+    [speakingEvaluation],
+  );
+  const getReadingResult = (subItemId: string): ReadingGradingResult | undefined =>
+    readingResults?.find((item) => item.questionId === subItemId);
+  const reportInsightMap = useMemo(
+    () => new Map((report?.sectionInsights || []).map((item) => [item.sectionId, item])),
+    [report],
+  );
+  const sectionSources = useMemo<SectionDescriptor[]>(() => {
+    if (paper?.sections.length) return paper.sections;
+
+    const sources: SectionDescriptor[] = [];
+    const seen = new Set<string>();
+
+    const addSection = (sectionId: string, sectionTitle: string, sectionType?: string) => {
+      if (!sectionId || seen.has(sectionId)) return;
+      seen.add(sectionId);
+      sources.push({
+        id: sectionId,
+        title: sectionTitle || formatSectionLabel(sectionId),
+        sectionType,
+        questions: [],
+      });
+    };
+
+    report?.sectionInsights.forEach((item) => addSection(item.sectionId, item.sectionTitle));
+    Object.keys(bySection).forEach((sectionId) => addSection(sectionId, formatSectionLabel(sectionId)));
+    if (writingSubmission) {
+      addSection(writingSubmission.sectionId, writingSubmission.sectionTitle, 'writing');
+    }
+    speakingResponses.forEach((item) => addSection(item.sectionId, item.sectionTitle, 'speaking'));
+    speakingEvaluation?.evaluations.forEach((item) => addSection(item.sectionId, item.sectionTitle, 'speaking'));
+
+    return sources;
+  }, [bySection, paper, report, speakingEvaluation, speakingResponses, writingSubmission]);
+  const partByPartReportItems = useMemo<HistoryPartByPartItem[]>(() => {
+    return sectionSources.map((section) => {
+      const insight = reportInsightMap.get(section.id);
+      const hasQuestions = section.questions.length > 0;
+      const timeSeconds = sectionTimings[section.id] || 0;
+      const timeText = timeSeconds > 0 ? formatTime(timeSeconds) : null;
+      let correct = 0;
+      let total = 0;
+      let status_en = '';
+      let status_cn = '';
+
+      if (isReadingLikeSection(section)) {
+        const storedSectionScore = bySection[section.id];
+        const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === section.id);
+        const sectionReadingResults = sectionReadingItems
+          .map((item) => getReadingResult(item.id))
+          .filter((item): item is ReadingGradingResult => Boolean(item));
+
+        if (sectionReadingResults.length > 0) {
+          correct = sectionReadingResults.reduce((sum, item) => sum + item.score, 0);
+          total = sectionReadingItems.length > 0 ? sectionReadingItems.length : sectionReadingResults.length;
+        } else {
+          correct = storedSectionScore?.correct || 0;
+          total = storedSectionScore?.total || sectionReadingItems.length;
+        }
+
+        status_en = total > 0
+          ? `${correct}/${total}`
+          : hasQuestions
+            ? 'No scored questions'
+            : 'No questions in this part';
+        status_cn = total > 0
+          ? `${correct}/${total}`
+          : hasQuestions
+            ? '本部分没有可计分题目'
+            : '本部分没有题目';
+      } else if (isWritingLikeSection(section)) {
+        if (writingSubmission?.essay?.trim()) {
+          if (writingResult && !writingIsManual) {
+            correct = writingResult.score;
+            total = writingResult.maxScore;
+            status_en = total > 0 ? `${correct}/${total}` : 'AI review unavailable';
+            status_cn = total > 0 ? `${correct}/${total}` : 'AI 评分暂不可用';
+          } else if (writingIsManual) {
+            status_en = 'Teacher review';
+            status_cn = '老师批改';
+          } else {
+            status_en = 'Waiting for writing review';
+            status_cn = '等待写作评分';
+          }
+        } else {
+          status_en = 'No writing response';
+          status_cn = '未提交写作作答';
+        }
+      } else if (isSpeakingLikeSection(section)) {
+        const evaluations = speakingEvaluation?.evaluations.filter((item) => item.sectionId === section.id) || [];
+        if (evaluations.length > 0 && !speakingIsManual) {
+          correct = evaluations.reduce((sum, item) => sum + item.score, 0);
+          total = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
+          status_en = total > 0 ? `${correct}/${total}` : 'AI review unavailable';
+          status_cn = total > 0 ? `${correct}/${total}` : 'AI 评分暂不可用';
+        } else if (evaluations.length > 0 && speakingIsManual) {
+          status_en = 'Teacher review';
+          status_cn = '老师批改';
+        } else if (speakingResponses.some((item) => item.sectionId === section.id)) {
+          status_en = 'Recording saved, waiting for review';
+          status_cn = '录音已保存，等待评分';
+        } else {
+          status_en = 'No speaking response';
+          status_cn = '未提交口语作答';
+        }
+      } else {
+        correct = bySection[section.id]?.correct || 0;
+        total = bySection[section.id]?.total || 0;
+        status_en = total > 0
+          ? `${correct}/${total}`
+          : hasQuestions
+            ? 'No scored questions'
+            : 'No questions in this part';
+        status_cn = total > 0
+          ? `${correct}/${total}`
+          : hasQuestions
+            ? '本部分没有可计分题目'
+            : '本部分没有题目';
+      }
+
+      const summary_en = insight?.summary_en || (total > 0 ? `${section.title} scored ${correct} out of ${total}.` : status_en);
+      const summary_cn = insight?.summary_cn || status_cn;
+
+      return {
+        sectionId: section.id,
+        sectionTitle: section.title,
+        status_en,
+        status_cn,
+        summary_en,
+        summary_cn,
+        timeText,
+      };
+    });
+  }, [
+    bySection,
+    getReadingResult,
+    readingSubItems,
+    reportInsightMap,
+    sectionSources,
+    sectionTimings,
+    speakingEvaluation,
+    speakingIsManual,
+    speakingResponses,
+    writingIsManual,
+    writingResult,
+    writingSubmission,
+  ]);
 
   const writingResetKey = `${detail?.id ?? 'none'}:${detail?.writingResultJson ?? 'none'}:${writingSubmission?.essay ?? 'none'}`;
   const speakingResetKey = JSON.stringify({
@@ -806,26 +1087,31 @@ function HistoryContent() {
     const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
     const grade = getGradeLetter(totalScore, totalPossible);
 
-    const sectionSources = paper?.sections ?? Object.keys(bySection).map((sectionId) => ({
-      id: sectionId,
-      title: formatSectionLabel(sectionId),
-    }));
-
     const sectionResults = sectionSources.map((section) => {
       const sectionId = section.id;
       const sectionTitle = section.title;
 
-      if (sectionId === 'reading' || (typeof (section as Section).sectionType === 'string' && (section as Section).sectionType === 'reading')) {
+      if (isReadingLikeSection(section)) {
+        const storedSectionScore = bySection[sectionId];
+        const sectionReadingItems = readingSubItems.filter((item) => item.sectionId === sectionId);
+        const sectionReadingResults = sectionReadingItems
+          .map((item) => getReadingResult(item.id))
+          .filter((item): item is ReadingGradingResult => Boolean(item));
+
         return {
           sectionId,
           sectionTitle,
-          correct: readingScore,
-          total: readingTotal,
+          correct: sectionReadingResults.length > 0
+            ? sectionReadingResults.reduce((sum, item) => sum + item.score, 0)
+            : storedSectionScore?.correct || 0,
+          total: sectionReadingItems.length > 0
+            ? sectionReadingItems.length
+            : storedSectionScore?.total || 0,
           timeSeconds: sectionTimings[sectionId] || 0,
         };
       }
 
-      if (paper && isWritingLikeSection(section as Section)) {
+      if (isWritingLikeSection(section)) {
         return {
           sectionId,
           sectionTitle,
@@ -835,7 +1121,7 @@ function HistoryContent() {
         };
       }
 
-      if (paper && isSpeakingLikeSection(section as Section)) {
+      if (isSpeakingLikeSection(section)) {
         const evaluations = nextSpeakingEvaluation?.evaluations.filter((item) => item.sectionId === sectionId) || [];
         return {
           sectionId,
@@ -1138,10 +1424,10 @@ function HistoryContent() {
                                         <p className="text-sm text-slate-500 mt-1">
                                           {lang === 'en'
                                             ? (hasAutoScoring
-                                                ? 'AI scores are already saved. Edit below only if you want to override writing or speaking and regenerate the report.'
+                                                ? 'AI review data is attached. You can still override writing or speaking here and regenerate the report if needed.'
                                                 : 'Score writing and speaking here, then regenerate the report.')
                                             : (hasAutoScoring
-                                                ? 'AI 评分已经保存。如需老师覆盖写作或口语结果，可在这里修改并重新生成报告。'
+                                                ? '当前记录已附带 AI 评分或 AI 评分状态。如需覆盖写作或口语结果，可在这里修改并重新生成报告。'
                                                 : '在这里完成作文和口语人工评分，然后重新生成报告。')}
                                         </p>
                                       </div>
@@ -1388,61 +1674,85 @@ function HistoryContent() {
                                 )}
 
                                 {report && (
-                                  <div>
-                                    <h4 className="text-sm font-semibold text-slate-700 mb-3">
-                                      {lang === 'en' ? (report.reportTitle_en || 'Assessment Feedback Report') : (report.reportTitle_cn || '测评反馈报告')}
-                                    </h4>
-                                    <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-4 border border-violet-100">
-                                      <p className="text-sm text-slate-700 leading-relaxed">
-                                        {lang === 'en' ? (report.overallSummary_en || report.summary_en) : (report.overallSummary_cn || report.summary_cn)}
-                                      </p>
-                                      {((lang === 'en' ? report.abilitySnapshot_en : report.abilitySnapshot_cn) || []).length > 0 && (
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                          {((lang === 'en' ? report.abilitySnapshot_en : report.abilitySnapshot_cn) || []).map((item, index) => (
-                                            <span key={index} className="px-2 py-0.5 rounded-full text-xs bg-white/80 text-blue-700 border border-blue-100">
-                                              {item}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {((lang === 'en' ? report.strengths_en : report.strengths_cn) || []).length > 0 && (
-                                        <div className="mt-3">
-                                          <p className="text-xs font-semibold text-emerald-700 mb-1">
-                                            {lang === 'en' ? 'Strengths:' : '优势：'}
-                                          </p>
-                                          <ul className="text-sm text-slate-600 space-y-1">
-                                            {((lang === 'en' ? report.strengths_en : report.strengths_cn) || []).map((item, index) => (
-                                              <li key={index} className="flex items-start gap-1.5">
-                                                <span className="text-emerald-500 mt-0.5">✓</span> {item}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {((lang === 'en' ? report.weaknesses_en : report.weaknesses_cn) || []).length > 0 && (
-                                        <div className="mt-3">
-                                          <p className="text-xs font-semibold text-amber-700 mb-1">
-                                            {lang === 'en' ? 'Areas to Improve:' : '待提高：'}
-                                          </p>
-                                          <ul className="text-sm text-slate-600 space-y-1">
-                                            {((lang === 'en' ? report.weaknesses_en : report.weaknesses_cn) || []).map((item, index) => (
-                                              <li key={index} className="flex items-start gap-1.5">
-                                                <span className="text-amber-500 mt-0.5">△</span> {item}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {(lang === 'en' ? report.parentFeedback_en : report.parentFeedback_cn) && (
-                                        <div className="mt-3 pt-3 border-t border-violet-100">
-                                          <p className="text-xs font-semibold text-slate-700 mb-1">
-                                            {lang === 'en' ? 'Parent Note:' : '家长反馈：'}
-                                          </p>
-                                          <p className="text-sm text-slate-600 leading-relaxed">
-                                            {lang === 'en' ? report.parentFeedback_en : report.parentFeedback_cn}
+                                  <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                    <div
+                                      aria-hidden="true"
+                                      className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
+                                    >
+                                      <div className="select-none whitespace-nowrap text-[44px] font-black tracking-[0.2em] text-slate-100/80 rotate-[-24deg]">
+                                        PUREON ASSESSMENT SYSTEM
+                                      </div>
+                                    </div>
+                                    <div className="relative z-10">
+                                      <div className="border-b border-slate-200 bg-blue-50/95 px-5 py-3">
+                                        <h4 className="text-sm font-semibold text-slate-700">
+                                          {lang === 'en' ? (report.reportTitle_en || 'Assessment Feedback Report') : (report.reportTitle_cn || '测评反馈报告')}
+                                        </h4>
+                                        <p className="mt-1 text-xs text-slate-500">Pureon Assessment System</p>
+                                      </div>
+
+                                      <div className="space-y-5 p-5">
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                          <h5 className="mb-2 text-sm font-semibold text-slate-700">
+                                            {lang === 'en' ? 'Overall Summary' : '整体情况总结'}
+                                          </h5>
+                                          <p className="text-sm leading-relaxed text-slate-600">
+                                            {lang === 'en' ? (report.overallSummary_en || report.summary_en) : (report.overallSummary_cn || report.summary_cn)}
                                           </p>
                                         </div>
-                                      )}
+
+                                        {partByPartReportItems.length > 0 && (
+                                          <div>
+                                            <h5 className="mb-3 text-sm font-semibold text-slate-700">
+                                              {lang === 'en' ? 'Part-by-Part Review' : '按 Part 顺序解析'}
+                                            </h5>
+                                            <div className="space-y-3">
+                                              {partByPartReportItems.map((item) => (
+                                                <div key={item.sectionId} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                                  <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                                                    <div>
+                                                      <p className="font-medium text-slate-700">{item.sectionTitle}</p>
+                                                      {item.timeText && (
+                                                        <p className="mt-1 text-xs text-slate-400">
+                                                          {lang === 'en' ? 'Time' : '用时'}: {item.timeText}
+                                                        </p>
+                                                      )}
+                                                    </div>
+                                                    <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+                                                      {lang === 'en' ? item.status_en : item.status_cn}
+                                                    </span>
+                                                  </div>
+                                                  <p className="text-sm leading-relaxed text-slate-600">
+                                                    {lang === 'en' ? item.summary_en : item.summary_cn}
+                                                  </p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {(lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn) && (
+                                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                            <h5 className="mb-2 text-sm font-semibold text-slate-700">
+                                              {lang === 'en' ? 'Time Analysis' : '时间分析'}
+                                            </h5>
+                                            <p className="text-sm leading-relaxed text-slate-600">
+                                              {lang === 'en' ? report.timeAnalysis_en : report.timeAnalysis_cn}
+                                            </p>
+                                          </div>
+                                        )}
+
+                                        {(lang === 'en' ? report.parentFeedback_en : report.parentFeedback_cn) && (
+                                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                            <h5 className="mb-2 text-sm font-semibold text-slate-700">
+                                              {lang === 'en' ? 'Parent Feedback' : '给家长的反馈'}
+                                            </h5>
+                                            <p className="text-sm leading-relaxed text-slate-600">
+                                              {lang === 'en' ? report.parentFeedback_en : report.parentFeedback_cn}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 )}
