@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
+import { toast } from 'sonner';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
 import { buildSubmissionArtifacts } from '@/lib/assessmentReview';
@@ -575,6 +576,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const submitQuiz = useCallback(() => {
     if (state.submitted) return;
+    if (!selectedPaper || !studentInfo) {
+      toast.error("The assessment context was lost before submission. Please return home and restart this attempt.");
+      return;
+    }
 
     const now = Date.now();
     const finalizedSectionTimings = { ...sectionTimingsRef.current };
@@ -586,43 +591,41 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       sectionEnteredAtRef.current = null;
     }
 
-    if (selectedPaper && studentInfo) {
-      const normalizedSectionTimings = Object.fromEntries(
-        Object.entries(finalizedSectionTimings).map(([sectionId, milliseconds]) => [
-          sectionId,
-          Math.round(milliseconds / 1000),
-        ]),
-      );
-      const answersSnapshot = { ...state.answers };
+    const normalizedSectionTimings = Object.fromEntries(
+      Object.entries(finalizedSectionTimings).map(([sectionId, milliseconds]) => [
+        sectionId,
+        Math.round(milliseconds / 1000),
+      ]),
+    );
+    const answersSnapshot = { ...state.answers };
 
-      writeSubmittedAssessmentSnapshot({
-        paper: selectedPaper,
-        studentInfo: {
-          name: studentInfo.name,
-          grade: studentInfo.grade,
-        },
-        answers: answersSnapshot,
-        sectionTimings: normalizedSectionTimings,
-        startTime: state.startTime,
-        endTime: now,
-        submittedAt: now,
-      });
+    writeSubmittedAssessmentSnapshot({
+      paper: selectedPaper,
+      studentInfo: {
+        name: studentInfo.name,
+        grade: studentInfo.grade,
+      },
+      answers: answersSnapshot,
+      sectionTimings: normalizedSectionTimings,
+      startTime: state.startTime,
+      endTime: now,
+      submittedAt: now,
+    });
 
-      const artifacts = buildSubmissionArtifacts(selectedPaper, answersSnapshot);
-      queuePendingTestResult({
-        studentName: studentInfo.name,
-        studentGrade: studentInfo.grade || undefined,
-        paperId: selectedPaper.id,
-        paperTitle: selectedPaper.title,
-        totalCorrect: artifacts.objectiveTotals.correct,
-        totalQuestions: artifacts.objectiveTotals.total,
-        totalTimeSeconds: state.startTime ? Math.max(0, Math.round((now - state.startTime) / 1000)) : undefined,
-        answersJson: packStoredAssessmentPayloadForResultStorage(answersSnapshot, selectedPaper),
-        scoreBySectionJson: JSON.stringify(artifacts.objectiveBySection),
-        sectionTimingsJson: JSON.stringify(normalizedSectionTimings),
-      });
-      setPendingResultsNonce((value) => value + 1);
-    }
+    const artifacts = buildSubmissionArtifacts(selectedPaper, answersSnapshot);
+    queuePendingTestResult({
+      studentName: studentInfo.name,
+      studentGrade: studentInfo.grade || undefined,
+      paperId: selectedPaper.id,
+      paperTitle: selectedPaper.title,
+      totalCorrect: artifacts.objectiveTotals.correct,
+      totalQuestions: artifacts.objectiveTotals.total,
+      totalTimeSeconds: state.startTime ? Math.max(0, Math.round((now - state.startTime) / 1000)) : undefined,
+      answersJson: packStoredAssessmentPayloadForResultStorage(answersSnapshot, selectedPaper),
+      scoreBySectionJson: JSON.stringify(artifacts.objectiveBySection),
+      sectionTimingsJson: JSON.stringify(normalizedSectionTimings),
+    });
+    setPendingResultsNonce((value) => value + 1);
 
     setState(prev => ({ ...prev, submitted: true, endTime: now }));
   }, [selectedPaper, state.answers, state.startTime, state.submitted, studentInfo]);
