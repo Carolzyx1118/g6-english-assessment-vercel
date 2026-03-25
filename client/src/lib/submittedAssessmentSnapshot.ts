@@ -1,6 +1,7 @@
 import type { Paper } from "@/data/papers";
 
 const SUBMITTED_ASSESSMENT_SNAPSHOT_KEY = "pureon_submitted_assessment_snapshot_v1";
+let inMemorySubmittedAssessmentSnapshot: SubmittedAssessmentSnapshot | null = null;
 
 export interface SubmittedAssessmentSnapshot {
   version: 1;
@@ -17,13 +18,16 @@ export interface SubmittedAssessmentSnapshot {
 }
 
 export function writeSubmittedAssessmentSnapshot(snapshot: Omit<SubmittedAssessmentSnapshot, "version">) {
+  const payload: SubmittedAssessmentSnapshot = {
+    version: 1,
+    ...snapshot,
+  };
+
+  inMemorySubmittedAssessmentSnapshot = payload;
+
   if (typeof window === "undefined") return;
 
   try {
-    const payload: SubmittedAssessmentSnapshot = {
-      version: 1,
-      ...snapshot,
-    };
     window.sessionStorage.setItem(SUBMITTED_ASSESSMENT_SNAPSHOT_KEY, JSON.stringify(payload));
   } catch {
     // Ignore storage failures in restricted browsers.
@@ -31,6 +35,10 @@ export function writeSubmittedAssessmentSnapshot(snapshot: Omit<SubmittedAssessm
 }
 
 export function readSubmittedAssessmentSnapshot() {
+  if (inMemorySubmittedAssessmentSnapshot) {
+    return inMemorySubmittedAssessmentSnapshot;
+  }
+
   if (typeof window === "undefined") return null;
 
   try {
@@ -42,7 +50,7 @@ export function readSubmittedAssessmentSnapshot() {
     if (!parsed.paper || typeof parsed.paper !== "object") return null;
     if (!parsed.studentInfo || typeof parsed.studentInfo !== "object") return null;
 
-    return {
+    const snapshot = {
       version: 1,
       paper: parsed.paper as Paper,
       studentInfo: {
@@ -62,12 +70,17 @@ export function readSubmittedAssessmentSnapshot() {
       endTime: typeof parsed.endTime === "number" ? parsed.endTime : null,
       submittedAt: typeof parsed.submittedAt === "number" ? parsed.submittedAt : Date.now(),
     } satisfies SubmittedAssessmentSnapshot;
+
+    inMemorySubmittedAssessmentSnapshot = snapshot;
+    return snapshot;
   } catch {
     return null;
   }
 }
 
 export function clearSubmittedAssessmentSnapshot() {
+  inMemorySubmittedAssessmentSnapshot = null;
+
   if (typeof window === "undefined") return;
 
   try {
