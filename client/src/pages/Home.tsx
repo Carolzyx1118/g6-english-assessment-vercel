@@ -9,10 +9,11 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import LandingPage from '@/components/LandingPage';
 import QuizLayout from '@/components/QuizLayout';
+import StudentInfoForm from '@/components/StudentInfoForm';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const { isStarted, isRestoringSession } = useQuiz();
+  const { isStarted, isRestoringSession, studentInfo } = useQuiz();
 
   if (isRestoringSession) {
     return (
@@ -27,6 +28,10 @@ export default function Home() {
 
   if (!isStarted) {
     return <LandingPage />;
+  }
+
+  if (!studentInfo) {
+    return <StudentInfoForm />;
   }
 
   return <QuizLayout />;

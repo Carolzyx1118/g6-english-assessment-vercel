@@ -5,11 +5,15 @@ import { Input } from '@/components/ui/input';
 import { motion } from 'framer-motion';
 import { ArrowRight, ArrowLeft, User, GraduationCap } from 'lucide-react';
 
-export default function StudentInfoForm() {
-  const { setStudentInfo, startQuiz, resetQuiz } = useQuiz();
+interface StudentInfoFormProps {
+  onBack?: () => void;
+}
+
+export default function StudentInfoForm({ onBack }: StudentInfoFormProps) {
+  const { studentInfo, setStudentInfo, startQuiz, resetQuiz, isStarted } = useQuiz();
   const [form, setForm] = useState<StudentInfo>({
-    name: '',
-    grade: '',
+    name: studentInfo?.name ?? '',
+    grade: studentInfo?.grade ?? '',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof StudentInfo, string>>>({});
 
@@ -26,7 +30,9 @@ export default function StudentInfoForm() {
     e.preventDefault();
     if (!validate()) return;
     setStudentInfo(form);
-    startQuiz();
+    if (!isStarted) {
+      startQuiz(form);
+    }
   };
 
   return (
@@ -98,7 +104,7 @@ export default function StudentInfoForm() {
               size="lg"
               className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-6 text-lg rounded-xl shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all duration-300"
             >
-              Start Assessment
+              {isStarted ? 'Continue Assessment' : 'Start Assessment'}
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
           </div>
@@ -110,11 +116,11 @@ export default function StudentInfoForm() {
           <Button
             type="button"
             variant="ghost"
-            onClick={resetQuiz}
+            onClick={onBack ?? resetQuiz}
             className="w-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 py-3 rounded-xl transition-all duration-200"
           >
             <ArrowLeft className="mr-2 w-4 h-4" />
-            Back to Home
+            {onBack ? 'Back to Paper' : 'Back to Home'}
           </Button>
         </motion.form>
       </div>

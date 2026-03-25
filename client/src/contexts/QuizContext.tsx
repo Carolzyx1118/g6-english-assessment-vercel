@@ -56,7 +56,7 @@ interface QuizContextType {
   getAnswer: (sectionId: string, questionId: number) => QuizAnswerValue | undefined;
   submitQuiz: () => void;
   resetQuiz: () => void;
-  startQuiz: () => void;
+  startQuiz: (info?: StudentInfo) => void;
   isStarted: boolean;
   isRestoringSession: boolean;
   getScore: () => { correct: number; total: number; bySection: Record<string, { correct: number; total: number }> };
@@ -642,9 +642,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setState(createInitialQuizState());
   }, []);
 
-  const startQuiz = useCallback(() => {
+  const startQuiz = useCallback((info?: StudentInfo) => {
     if (currentSections.length === 0) return;
     clearSubmittedAssessmentSnapshot();
+    if (info) {
+      setStudentInfoState(info);
+    }
     setIsStarted(true);
     const now = Date.now();
     sectionEnteredAtRef.current = now;

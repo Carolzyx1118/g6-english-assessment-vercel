@@ -1,5 +1,6 @@
 import { useQuiz } from '@/contexts/QuizContext';
 import { Button } from '@/components/ui/button';
+import StudentInfoForm from '@/components/StudentInfoForm';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
 import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator } from 'lucide-react';
@@ -644,13 +645,17 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
 // ========== PAPER LANDING PAGE (after selecting a paper) ==========
 
 function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void }) {
-  const { startQuiz } = useQuiz();
+  const [showStudentInfoForm, setShowStudentInfoForm] = useState(false);
   const hasDistinctSubtitle = Boolean(paper.subtitle?.trim())
     && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
   const isReadyToStart = isPaperReadyToStart(paper);
   const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
   const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
   const readinessMessage = getPaperReadinessMessage(paper);
+
+  if (showStudentInfoForm) {
+    return <StudentInfoForm onBack={() => setShowStudentInfoForm(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -716,7 +721,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <div className="mt-8 flex flex-wrap gap-4">
                 <Button
                   size="lg"
-                  onClick={startQuiz}
+                  onClick={() => setShowStudentInfoForm(true)}
                   disabled={!isReadyToStart}
                   className="bg-gradient-to-r from-[#D4A84B] to-[#C49A3F] hover:from-[#C49A3F] hover:to-[#B48A35] text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-[#D4A84B]/20 hover:shadow-xl hover:shadow-[#D4A84B]/30 transition-all duration-300"
                 >
