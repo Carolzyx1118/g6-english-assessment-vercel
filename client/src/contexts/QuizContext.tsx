@@ -219,6 +219,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const restoredSessionOwnerRef = useRef<string | null>(null);
   const isFlushingPendingResultsRef = useRef(false);
   const saveResultMutation = trpc.results.save.useMutation();
+  const saveResultMutationRef = useRef(saveResultMutation);
+  saveResultMutationRef.current = saveResultMutation;
+  const utilsRef = useRef(utils);
+  utilsRef.current = utils;
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
       PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
@@ -443,7 +447,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         for (const entry of pendingEntries) {
           if (cancelled) return;
 
-          const result = await saveResultMutation.mutateAsync(entry.payload);
+          const result = await saveResultMutationRef.current.mutateAsync(entry.payload);
           if (cancelled) return;
 
           if (result.id) {
@@ -459,7 +463,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         isFlushingPendingResultsRef.current = false;
 
         if (flushedAny && !cancelled) {
-          await utils.results.list.invalidate();
+          await utilsRef.current.results.list.invalidate();
           setPendingResultsNonce((value) => value + 1);
         }
       }
@@ -470,7 +474,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pendingResultsNonce, saveResultMutation, utils.results.list]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingResultsNonce]);
 
   useEffect(() => {
     if (!selectedPaper) return;

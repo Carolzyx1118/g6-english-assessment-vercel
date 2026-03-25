@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import {
@@ -157,6 +157,23 @@ export default function ResultsPage() {
   const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const generateReportMutation = trpc.grading.generateReport.useMutation();
 
+  const saveResultRef = useRef(saveResultMutation);
+  saveResultRef.current = saveResultMutation;
+  const updateResultRef = useRef(updateResultMutation);
+  updateResultRef.current = updateResultMutation;
+  const checkReadingRef = useRef(checkReadingMutation);
+  checkReadingRef.current = checkReadingMutation;
+  const explainWrongRef = useRef(explainWrongAnswersMutation);
+  explainWrongRef.current = explainWrongAnswersMutation;
+  const evaluateWritingRef = useRef(evaluateWritingMutation);
+  evaluateWritingRef.current = evaluateWritingMutation;
+  const evaluateSpeakingRef = useRef(evaluateSpeakingMutation);
+  evaluateSpeakingRef.current = evaluateSpeakingMutation;
+  const generateReportRef = useRef(generateReportMutation);
+  generateReportRef.current = generateReportMutation;
+  const utilsRef = useRef(utils);
+  utilsRef.current = utils;
+
   const submittedSnapshot = useMemo(
     () => readSubmittedAssessmentSnapshot(),
     [selectedPaper?.id, state.endTime, state.submitted, studentInfo?.name],
@@ -254,7 +271,7 @@ export default function ResultsPage() {
         setStatusText("Uploading your answers to test history...");
         setProgressValue(24);
 
-        const saveResult = await saveResultMutation.mutateAsync({
+        const saveResult = await saveResultRef.current.mutateAsync({
           studentName: baseRecord.studentName,
           studentGrade: baseRecord.studentGrade || undefined,
           paperId: baseRecord.paperId,
@@ -277,14 +294,14 @@ export default function ResultsPage() {
         setSavedResultId(persistedId);
         writeLatestSavedResultId(persistedId);
         setProgressValue(38);
-        await utils.results.list.invalidate();
+        await utilsRef.current.results.list.invalidate();
 
         setStatusText("Running AI scoring for open-ended responses, writing, and speaking...");
         setProgressValue(58);
 
         const [readingResultSet, explanationResultSet, writingResultSet, speakingResultSet] = await Promise.allSettled([
           artifacts.readingInputs.length > 0
-            ? checkReadingMutation.mutateAsync({
+            ? checkReadingRef.current.mutateAsync({
                 answers: artifacts.readingInputs.map((item) => ({
                   questionId: item.questionId,
                   questionType: item.questionType,
@@ -296,19 +313,19 @@ export default function ResultsPage() {
               })
             : Promise.resolve([]),
           artifacts.wrongObjectiveAnswers.length > 0
-            ? explainWrongAnswersMutation.mutateAsync({
+            ? explainWrongRef.current.mutateAsync({
                 wrongAnswers: artifacts.wrongObjectiveAnswers,
               })
             : Promise.resolve([]),
           artifacts.writingTask
-            ? evaluateWritingMutation.mutateAsync({
+            ? evaluateWritingRef.current.mutateAsync({
                 essay: artifacts.writingTask.essay,
                 topic: artifacts.writingTask.question.topic || artifacts.writingTask.question.instructions,
                 wordCountTarget: artifacts.writingTask.question.wordCount || "No target specified",
               })
             : Promise.resolve(null),
           artifacts.speakingResponses.length > 0
-            ? evaluateSpeakingMutation.mutateAsync({
+            ? evaluateSpeakingRef.current.mutateAsync({
                 responses: artifacts.speakingResponses,
               })
             : Promise.resolve(null),
@@ -378,7 +395,7 @@ export default function ResultsPage() {
         const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
         const grade = getLetterGrade(totalScore, totalPossible);
 
-        const reportResult = await generateReportMutation.mutateAsync({
+        const reportResult = await generateReportRef.current.mutateAsync({
           paperTitle: submission.paper.title,
           studentName: submission.studentInfo.name,
           studentGrade: submission.studentInfo.grade,
@@ -423,7 +440,7 @@ export default function ResultsPage() {
           record: nextRecord,
         });
 
-        await updateResultMutation.mutateAsync({
+        await updateResultRef.current.mutateAsync({
           id: persistedId,
           readingResultsJson: nextRecord.readingResultsJson || undefined,
           writingResultJson: nextRecord.writingResultJson || undefined,
@@ -432,8 +449,8 @@ export default function ResultsPage() {
         });
 
         await Promise.all([
-          utils.results.list.invalidate(),
-          utils.results.getById.invalidate({ id: persistedId }),
+          utilsRef.current.results.list.invalidate(),
+          utilsRef.current.results.getById.invalidate({ id: persistedId }),
         ]);
       } catch (error) {
         if (cancelled) return;
@@ -452,19 +469,11 @@ export default function ResultsPage() {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     cacheKey,
-    checkReadingMutation,
-    evaluateSpeakingMutation,
-    evaluateWritingMutation,
-    explainWrongAnswersMutation,
-    generateReportMutation,
     record,
-    saveResultMutation,
     submission,
-    updateResultMutation,
-    utils.results.getById,
-    utils.results.list,
   ]);
 
   const displayStudentName = record?.studentName || submission?.studentInfo.name || "Student";
