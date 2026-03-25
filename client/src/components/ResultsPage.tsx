@@ -418,6 +418,44 @@ export default function ResultsPage() {
     utils.results.list,
   ]);
 
+  if (record) {
+    return (
+      <div className="min-h-screen bg-[#F6F8FB] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <AssessmentReportPanel
+            record={record}
+            showDownload
+            extraHeaderActions={(
+              <div className="flex flex-wrap items-center gap-2">
+                {isTeacher ? (
+                  <Link href={savedResultId ? `/test-history?id=${savedResultId}` : "/test-history"}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
+                    >
+                      <History className="h-4 w-4" />
+                      Test History
+                    </Button>
+                  </Link>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={resetQuiz}
+                  className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Start Another Assessment
+                </Button>
+              </div>
+            )}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (!selectedPaper || !studentInfo) {
     if (recoveredRecordQuery.isLoading) {
       return (
@@ -467,42 +505,6 @@ export default function ResultsPage() {
           ) : null}
         </div>
       </div>
-    );
+      );
   }
-
-  return (
-    <div className="min-h-screen bg-[#F6F8FB] px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <AssessmentReportPanel
-          record={record}
-          showDownload
-          extraHeaderActions={(
-            <div className="flex flex-wrap items-center gap-2">
-              {isTeacher ? (
-                <Link href={savedResultId ? `/test-history?id=${savedResultId}` : "/test-history"}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
-                  >
-                    <History className="h-4 w-4" />
-                    Test History
-                  </Button>
-                </Link>
-              ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={resetQuiz}
-                className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Start Another Assessment
-              </Button>
-            </div>
-          )}
-        />
-      </div>
-    </div>
-  );
 }
