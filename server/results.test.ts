@@ -31,7 +31,11 @@ describe("results CRUD", () => {
       totalCorrect: 15,
       totalQuestions: 20,
       totalTimeSeconds: 600,
-      answersJson: JSON.stringify({ q1: "a", q2: "b" }),
+      answersJson: JSON.stringify({
+        q1: "a",
+        q2: "b",
+        speaking: "data:audio/webm;base64,AAAA",
+      }),
       scoreBySectionJson: JSON.stringify({ vocab: { correct: 8, total: 10 }, grammar: { correct: 7, total: 10 } }),
       sectionTimingsJson: JSON.stringify({ vocab: 300, grammar: 300 }),
     });
@@ -58,12 +62,25 @@ describe("results CRUD", () => {
     expect(detail!.studentName).toBe("Test Student");
     expect(detail!.studentGrade).toBe("Grade 6");
     expect(detail!.paperId).toBe("test-paper-1");
-    expect(detail!.answersJson).toBe(JSON.stringify({ q1: "a", q2: "b" }));
+    expect(detail!.answersJson).toBe(JSON.stringify({
+      q1: "a",
+      q2: "b",
+      speaking: "",
+    }));
   });
 
   it("updates AI results for a saved record", async () => {
     const readingResults = JSON.stringify([{ questionId: "1", isCorrect: true, score: 1 }]);
-    const reportData = JSON.stringify({ languageLevel: "B1", summary_en: "Good progress" });
+    const reportData = JSON.stringify({
+      summary_en: "Good progress",
+      speakingEvaluation: {
+        evaluations: [
+          {
+            audioUrl: "data:audio/wav;base64,BBBB",
+          },
+        ],
+      },
+    });
 
     const updateResult = await caller.results.updateAI({
       id: savedId!,
@@ -75,7 +92,16 @@ describe("results CRUD", () => {
     // Verify the update
     const detail = await caller.results.getById({ id: savedId! });
     expect(detail!.readingResultsJson).toBe(readingResults);
-    expect(detail!.reportJson).toBe(reportData);
+    expect(detail!.reportJson).toBe(JSON.stringify({
+      summary_en: "Good progress",
+      speakingEvaluation: {
+        evaluations: [
+          {
+            audioUrl: "",
+          },
+        ],
+      },
+    }));
   });
 
   it("recovers generated paper metadata from stored assessment payload", async () => {

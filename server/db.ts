@@ -630,10 +630,10 @@ export async function getAllTestResults(): Promise<TestResult[]> {
     logTestResultsFileFallback();
     const current = await readTestResultsFile();
     return [...current.results].sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     );
   }
-  return db.select().from(testResults).orderBy(testResults.createdAt);
+  return db.select().from(testResults).orderBy(desc(testResults.createdAt));
 }
 
 export async function getTestResultById(id: number): Promise<TestResult | undefined> {

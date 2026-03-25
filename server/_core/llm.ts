@@ -23,7 +23,20 @@ export type FileContent = {
   };
 };
 
-export type MessageContent = string | TextContent | ImageContent | FileContent;
+export type AudioInputContent = {
+  type: "input_audio";
+  input_audio: {
+    data: string;
+    format: "wav" | "mp3";
+  };
+};
+
+export type MessageContent =
+  | string
+  | TextContent
+  | ImageContent
+  | FileContent
+  | AudioInputContent;
 
 export type Message = {
   role: Role;
@@ -61,6 +74,11 @@ export type InvokeParams = {
   tools?: Tool[];
   toolChoice?: ToolChoice;
   tool_choice?: ToolChoice;
+  modalities?: Array<"text" | "audio">;
+  audio?: {
+    voice: string;
+    format: "wav" | "mp3";
+  };
   maxTokens?: number;
   max_tokens?: number;
   outputSchema?: OutputSchema;
@@ -86,7 +104,7 @@ export type InvokeResult = {
     index: number;
     message: {
       role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent>;
+      content: string | Array<TextContent | ImageContent | FileContent | AudioInputContent>;
       tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
@@ -117,7 +135,7 @@ const ensureArray = (
 
 const normalizeContentPart = (
   part: MessageContent
-): TextContent | ImageContent | FileContent => {
+): TextContent | ImageContent | FileContent | AudioInputContent => {
   if (typeof part === "string") {
     return { type: "text", text: part };
   }
@@ -131,6 +149,10 @@ const normalizeContentPart = (
   }
 
   if (part.type === "file_url") {
+    return part;
+  }
+
+  if (part.type === "input_audio") {
     return part;
   }
 
@@ -215,7 +237,7 @@ type LLMProviderConfig = {
   apiUrl: string;
   defaultModel: string;
   defaultMaxTokens: number;
-  provider: "forge" | "openai";
+  provider: "forge" | "openai" | "vercel-ai-gateway";
 };
 
 const buildApiUrl = (baseUrl: string, path: string) => {
@@ -229,7 +251,31 @@ const buildApiUrl = (baseUrl: string, path: string) => {
   return `${normalizedBase}/${normalizedPath}`;
 };
 
+const normalizeGatewayModel = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "openai/gpt-4o-mini";
+  }
+  if (trimmed.includes("/")) {
+    return trimmed;
+  }
+  return `openai/${trimmed}`;
+};
+
 const resolveProviderConfig = (): LLMProviderConfig => {
+  if (ENV.aiGatewayApiKey) {
+    return {
+      provider: "vercel-ai-gateway",
+      apiKey: ENV.aiGatewayApiKey,
+      apiUrl: buildApiUrl(
+        ENV.aiGatewayBaseUrl || "https://ai-gateway.vercel.sh/v1",
+        "v1/chat/completions"
+      ),
+      defaultModel: normalizeGatewayModel(ENV.aiGatewayModel || ENV.openaiChatModel),
+      defaultMaxTokens: 4096,
+    };
+  }
+
   if (ENV.openaiApiKey) {
     return {
       provider: "openai",
@@ -258,10 +304,10 @@ const resolveProviderConfig = (): LLMProviderConfig => {
 };
 
 const assertApiKey = () => {
-  if (!ENV.openaiApiKey && !ENV.forgeApiKey) {
+  if (!ENV.aiGatewayApiKey && !ENV.openaiApiKey && !ENV.forgeApiKey) {
     throw new Error(
       getLLMConfigErrorMessage("AI requests") ||
-        "AI requests are unavailable because neither OPENAI_API_KEY nor BUILT_IN_FORGE_API_KEY is configured."
+        "AI requests are unavailable because AI_GATEWAY_API_KEY, OPENAI_API_KEY, and BUILT_IN_FORGE_API_KEY are all missing."
     );
   }
 };
@@ -324,6 +370,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     responseFormat,
     response_format,
+    modalities,
+    audio,
   } = params;
 
   const payload: Record<string, unknown> = {
@@ -345,6 +393,14 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   payload.max_tokens =
     params.maxTokens ?? params.max_tokens ?? provider.defaultMaxTokens;
+
+  if (modalities && modalities.length > 0) {
+    payload.modalities = modalities;
+  }
+
+  if (audio) {
+    payload.audio = audio;
+  }
 
   if (provider.provider === "forge") {
     payload.thinking = {

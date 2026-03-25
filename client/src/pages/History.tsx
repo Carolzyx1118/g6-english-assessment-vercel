@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateReportPDF, type PDFData } from '@/lib/generatePDF';
 import { getAudioSourceType, isLikelyAudioUrl } from '@/lib/audioStorage';
 import { getGeneratedPaperSubjectFromPaperId } from '@/lib/historySubjects';
+import { sanitizeStoredAssessmentPayloadJsonForResultStorage } from '@/lib/resultStorage';
 import {
   readPendingTestResults,
   removePendingTestResult,
@@ -257,7 +258,11 @@ function extractWritingSubmission(paper: Paper | undefined, answers: Record<stri
   };
 }
 
-function extractSpeakingResponses(paper: Paper | undefined, answers: Record<string, unknown>): HistorySpeakingResponse[] {
+function extractSpeakingResponses(
+  paper: Paper | undefined,
+  answers: Record<string, unknown>,
+  evaluation: SpeakingEvaluationResult | null,
+): HistorySpeakingResponse[] {
   const responses: HistorySpeakingResponse[] = [];
   const seen = new Set<string>();
 
@@ -292,6 +297,20 @@ function extractSpeakingResponses(paper: Paper | undefined, answers: Record<stri
         });
       }
     }
+  }
+
+  if (responses.length === 0 && evaluation?.evaluations.length) {
+    evaluation.evaluations.forEach((item) => {
+      if (!item.audioUrl || !isLikelyAudioUrl(item.audioUrl)) return;
+      addResponse({
+        label: `Q${item.questionId}`,
+        sectionId: item.sectionId,
+        sectionTitle: item.sectionTitle,
+        questionId: item.questionId,
+        prompt: item.prompt,
+        audioUrl: item.audioUrl,
+      });
+    });
   }
 
   if (responses.length > 0) return responses;
@@ -481,6 +500,7 @@ function HistoryContent() {
   const [speakingDraft, setSpeakingDraft] = useState<TeacherSpeakingDraft | null>(null);
   const [teacherReviewError, setTeacherReviewError] = useState<string | null>(null);
   const [teacherReviewSuccess, setTeacherReviewSuccess] = useState<string | null>(null);
+  const [pendingSaveNotice, setPendingSaveNotice] = useState<string | null>(null);
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get('subject');
     return isPaperSubjectValue(value) ? value : null;
@@ -505,10 +525,17 @@ function HistoryContent() {
 
     void (async () => {
       let savedAny = false;
+      const flushedIds: number[] = [];
 
       for (const entry of pendingResults) {
         try {
-          await saveResultMutation.mutateAsync(entry.payload);
+          const saved = await saveResultMutation.mutateAsync({
+            ...entry.payload,
+            answersJson: sanitizeStoredAssessmentPayloadJsonForResultStorage(entry.payload.answersJson),
+          });
+          if (saved.id) {
+            flushedIds.push(saved.id);
+          }
           removePendingTestResult(entry.id);
           savedAny = true;
         } catch (error) {
@@ -518,6 +545,16 @@ function HistoryContent() {
 
       if (!cancelled && savedAny) {
         await refetch();
+        const latestId = flushedIds[flushedIds.length - 1];
+        const notice = latestId
+          ? (
+            flushedIds.length === 1
+              ? (lang === 'en' ? `Recovered 1 pending history record. Record ID #${latestId}.` : `已补写 1 条待保存记录，记录 ID #${latestId}。`)
+              : (lang === 'en' ? `Recovered ${flushedIds.length} pending history records. Latest ID #${latestId}.` : `已补写 ${flushedIds.length} 条待保存记录，最新记录 ID #${latestId}。`)
+          )
+          : (lang === 'en' ? `Recovered ${flushedIds.length} pending history record(s).` : `已补写 ${flushedIds.length} 条待保存记录。`);
+        setPendingSaveNotice(notice);
+        toast.success(notice);
       }
     })();
 
@@ -614,14 +651,21 @@ function HistoryContent() {
     [detail?.reportJson],
   );
   const speakingEvaluation = report?.speakingEvaluation ?? null;
+  const writingUsesAIReview = Boolean(
+    writingResult && writingResult.reviewMode !== 'manual' && writingResult.maxScore > 0,
+  );
+  const speakingUsesAIReview = Boolean(
+    speakingEvaluation && speakingEvaluation.reviewMode !== 'manual' && speakingEvaluation.totalPossible > 0,
+  );
+  const hasAutoScoring = writingUsesAIReview || speakingUsesAIReview;
 
   const writingSubmission = useMemo(
     () => extractWritingSubmission(paper, answers),
     [answers, paper],
   );
   const speakingResponses = useMemo(
-    () => extractSpeakingResponses(paper, answers),
-    [answers, paper],
+    () => extractSpeakingResponses(paper, answers, speakingEvaluation),
+    [answers, paper, speakingEvaluation],
   );
   const hasSpeakingSection = useMemo(
     () => paper?.sections.some(isSpeakingLikeSection) ?? false,
@@ -922,8 +966,14 @@ function HistoryContent() {
                 </Card>
               </div>
 
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader>
+              {pendingSaveNotice && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  {pendingSaveNotice}
+                </div>
+              )}
+
+	            <Card className="border-slate-200 shadow-sm">
+	                <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1.5">
                       <CardTitle className="leading-tight">{lang === 'en' ? 'Assessment Records' : '测试记录'}</CardTitle>
@@ -939,7 +989,7 @@ function HistoryContent() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {[...filteredResults].reverse().map((r) => {
+                  {filteredResults.map((r) => {
                     const gradeInfo = getGradeInfo(r.totalCorrect, r.totalQuestions);
                     const isExpanded = selectedId === r.id;
                     const currentDetail = isExpanded && detail?.id === r.id ? detail : null;
@@ -1054,12 +1104,18 @@ function HistoryContent() {
                                     <div className="flex items-center justify-between gap-4 flex-wrap">
                                       <div>
                                         <h4 className="text-sm font-semibold text-slate-800">
-                                          {lang === 'en' ? 'Teacher Scoring Workspace' : '老师评分区'}
+                                          {lang === 'en'
+                                            ? (hasAutoScoring ? 'AI Review Workspace' : 'Teacher Scoring Workspace')
+                                            : (hasAutoScoring ? 'AI 评分工作区' : '老师评分区')}
                                         </h4>
                                         <p className="text-sm text-slate-500 mt-1">
                                           {lang === 'en'
-                                            ? 'Score writing and speaking here, then regenerate the report.'
-                                            : '在这里完成作文和口语人工评分，然后重新生成报告。'}
+                                            ? (hasAutoScoring
+                                                ? 'AI scores are already saved. Edit below only if you want to override writing or speaking and regenerate the report.'
+                                                : 'Score writing and speaking here, then regenerate the report.')
+                                            : (hasAutoScoring
+                                                ? 'AI 评分已经保存。如需老师覆盖写作或口语结果，可在这里修改并重新生成报告。'
+                                                : '在这里完成作文和口语人工评分，然后重新生成报告。')}
                                         </p>
                                       </div>
                                       <Button
@@ -1074,7 +1130,9 @@ function HistoryContent() {
                                           <FileText className="w-3.5 h-3.5" />
                                         )}
                                         {currentDetail.reportJson
-                                          ? (lang === 'en' ? 'Update Report' : '更新报告')
+                                          ? (lang === 'en'
+                                              ? (hasAutoScoring ? 'Override & Update Report' : 'Update Report')
+                                              : (hasAutoScoring ? '覆盖并更新报告' : '更新报告'))
                                           : (lang === 'en' ? 'Save Scores & Generate Report' : '保存评分并生成报告')}
                                       </Button>
                                     </div>

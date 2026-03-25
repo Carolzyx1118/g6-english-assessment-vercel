@@ -58,7 +58,6 @@ type SectionDescriptor = ReportSectionInput & {
 };
 
 type GradeTemplate = {
-  languageLevel: string;
   summary_en: string;
   summary_cn: string;
   overview_en: string;
@@ -81,7 +80,6 @@ const SECTION_LABELS: Record<SectionKind, { en: string; cn: string }> = {
 
 const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
   A: {
-    languageLevel: "B1",
     summary_en: "The student is already performing at a comparatively strong and balanced level for the assessed paper.",
     summary_cn: "学生在本次测评中的整体表现较强，能力发展也相对均衡。",
     overview_en:
@@ -102,7 +100,6 @@ const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
     ],
   },
   B: {
-    languageLevel: "A2+",
     summary_en: "The student has a workable foundation and is moving toward a more stable assessment level, but there are still visible gaps between stronger and weaker sections.",
     summary_cn: "学生已经有较明确的英语基础，正在向更稳定的测评水平过渡，但不同板块之间仍然存在明显差距。",
     overview_en:
@@ -123,7 +120,6 @@ const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
     ],
   },
   C: {
-    languageLevel: "A2",
     summary_en: "The student has some English foundation, but the current performance is still uneven and needs more structured reinforcement before it can become stable.",
     summary_cn: "学生目前有一定英语基础，但整体表现仍然不够均衡，需要更系统的强化训练后才能逐步稳定。",
     overview_en:
@@ -144,7 +140,6 @@ const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
     ],
   },
   D: {
-    languageLevel: "A1",
     summary_en: "The student has not yet reached a stable preparation level for this paper, and the current profile shows a clear need to rebuild the basics before pushing exam-style difficulty further.",
     summary_cn: "学生目前还没有达到这套测评所要求的稳定备考水平，现阶段需要先重建基础，再逐步推进到更完整的考试难度。",
     overview_en:
@@ -1063,7 +1058,6 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     .join("");
 
   return {
-    languageLevel: template.languageLevel,
     summary_en: template.summary_en,
     summary_cn: template.summary_cn,
     ...strengthsWeaknesses,

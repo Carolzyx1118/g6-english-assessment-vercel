@@ -18,12 +18,16 @@ import {
   removePendingTestResult,
   type PendingTestResultPayload,
 } from '@/lib/pendingTestResults';
-import { packStoredAssessmentPayload } from '@/lib/storedAssessmentPayload';
+import {
+  packStoredAssessmentPayloadForResultStorage,
+  sanitizeReportForStorage,
+} from '@/lib/resultStorage';
 import { normalizeVocabularyAnswer } from '@/lib/vocabularyWordHelpers';
 import type {
   AssessmentReportResult,
   SpeakingEvaluationResult,
 } from '@shared/assessmentReport';
+import { toast } from 'sonner';
 
 const sectionMetaMap: Record<string, { icon: React.ReactNode; gradient: string; bg: string }> = {
   vocabulary: { icon: <BookOpen className="w-5 h-5" />, gradient: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50' },
@@ -84,6 +88,8 @@ type SpeakingResponseInput = {
   prompt: string;
   audioUrl: string;
 };
+type HistorySaveState = 'idle' | 'saving' | 'saved' | 'retrying';
+type HistoryAiSyncState = 'idle' | 'syncing' | 'synced' | 'error';
 
 function extractSpeakingAudioUrls(value: unknown): string[] {
   if (typeof value === 'string') {
@@ -358,6 +364,18 @@ function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefi
   );
 }
 
+function getReadingQuestionContext(section: Section, questionId: number) {
+  const block = section.manualBlocks?.find((entry) => entry.questionIds.includes(questionId));
+  const parts = [
+    block?.passage || section.passage,
+    block?.instructions,
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts.join('\n\n') : undefined;
+}
+
 interface ReadingSubItem {
   id: string; parentId: number; label: string;
   questionText: string; userAnswer: string; correctAnswer: string; questionType: string;
@@ -428,10 +446,17 @@ export default function ResultsPage() {
   // Auto-save to database
   const saveResultMutation = trpc.results.save.useMutation();
   const updateAIMutation = trpc.results.updateAI.useMutation();
-  const savedResultId = useRef<number | null>(null);
+  const [savedResultId, setSavedResultId] = useState<number | null>(null);
   const hasSavedInitial = useRef(false);
   const pendingResultId = useRef<string | null>(null);
   const isSavingInitial = useRef(false);
+  const saveRetryTimer = useRef<number | null>(null);
+  const [saveRetryTick, setSaveRetryTick] = useState(0);
+  const [historySaveState, setHistorySaveState] = useState<HistorySaveState>('idle');
+  const [historySaveError, setHistorySaveError] = useState<string | null>(null);
+  const [historyAiSyncState, setHistoryAiSyncState] = useState<HistoryAiSyncState>('idle');
+  const lastAiSyncSignature = useRef<string | null>(null);
+  const latestAiSyncRunId = useRef(0);
 
   // Build reading sub-items - handles BOTH WIDA (wordbank-fill, story-fill) and HuaZhong (true-false, open-ended, table, reference, order, phrase, checkbox)
   const readingSubItems = useMemo((): ReadingSubItem[] => {
@@ -440,6 +465,7 @@ export default function ResultsPage() {
     const items: ReadingSubItem[] = [];
     for (const q of readingSection.questions) {
       const userAns = getAnswer('reading', q.id);
+      const sharedContext = getReadingQuestionContext(readingSection, q.id);
       if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
         items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
           questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
@@ -464,12 +490,13 @@ export default function ResultsPage() {
         for (const sub of q.subQuestions) {
           items.push({ id: `${q.id}-${sub.label}`, parentId: q.id, label: `Q${q.id}(${sub.label})`,
             questionText: `${q.question} — ${sub.question}`,
-            userAnswer: parsed[sub.label] || 'Not answered', correctAnswer: sub.answer, questionType: 'open-ended-sub' });
+            userAnswer: parsed[sub.label] || 'Not answered', correctAnswer: sub.answer, questionType: 'open-ended-sub',
+            context: sharedContext });
         }
       } else if (q.type === 'open-ended' && !q.subQuestions) {
         items.push({ id: `${q.id}`, parentId: q.id, label: `Q${q.id}`,
           questionText: q.question, userAnswer: typeof userAns === 'string' ? userAns : 'Not answered',
-          correctAnswer: q.answer || '', questionType: 'open-ended' });
+          correctAnswer: q.correctAnswer || q.answer || '', questionType: 'open-ended', context: sharedContext });
       } else if (q.type === 'table') {
         const parsed = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
         q.rows.forEach((row: any, i: number) => {
@@ -846,7 +873,7 @@ export default function ResultsPage() {
       totalCorrect: correct,
       totalQuestions: total,
       totalTimeSeconds: totalTime || undefined,
-      answersJson: packStoredAssessmentPayload(
+      answersJson: packStoredAssessmentPayloadForResultStorage(
         state.answers as Record<string, unknown>,
         selectedPaper.isGeneratedPaper ? selectedPaper : undefined,
       ),
@@ -866,12 +893,23 @@ export default function ResultsPage() {
     totalTime,
   ]);
 
+  useEffect(() => {
+    return () => {
+      if (saveRetryTimer.current) {
+        clearTimeout(saveRetryTimer.current);
+        saveRetryTimer.current = null;
+      }
+    };
+  }, []);
+
   // Save initial result state, then request reading checks and review placeholders.
   // Auto-save initial results to database
   useEffect(() => {
     if (!initialResultPayload || hasSavedInitial.current || isSavingInitial.current) return;
 
     isSavingInitial.current = true;
+    setHistorySaveState('saving');
+    setHistorySaveError(null);
     if (!pendingResultId.current) {
       pendingResultId.current = queuePendingTestResult(initialResultPayload);
     }
@@ -879,33 +917,72 @@ export default function ResultsPage() {
     void saveResultMutation.mutateAsync(initialResultPayload)
       .then((data) => {
         hasSavedInitial.current = true;
-        savedResultId.current = data.id ?? null;
+        setSavedResultId(data.id ?? null);
+        setHistorySaveState('saved');
+        setHistorySaveError(null);
+        if (saveRetryTimer.current) {
+          clearTimeout(saveRetryTimer.current);
+          saveRetryTimer.current = null;
+        }
         if (pendingResultId.current) {
           removePendingTestResult(pendingResultId.current);
           pendingResultId.current = null;
+        }
+        if (data.id) {
+          toast.success(lang === 'en' ? `Saved to Test History. Record ID #${data.id}.` : `已写入 Test History，记录 ID #${data.id}。`);
         }
         console.log('[Results] Saved to database with id:', data.id);
       })
       .catch((err) => {
         console.error('[Results] Failed to save:', err);
+        setHistorySaveState('retrying');
+        setHistorySaveError(err instanceof Error ? err.message : (lang === 'en' ? 'Save failed.' : '保存失败。'));
+        if (!saveRetryTimer.current) {
+          saveRetryTimer.current = window.setTimeout(() => {
+            saveRetryTimer.current = null;
+            setSaveRetryTick((value) => value + 1);
+          }, 4000);
+        }
       })
       .finally(() => {
         isSavingInitial.current = false;
       });
-  }, [initialResultPayload, saveResultMutation]);
+  }, [initialResultPayload, saveResultMutation, saveRetryTick]);
 
   // Update AI results in database when they become available
   useEffect(() => {
-    if (!savedResultId.current) return;
+    if (!savedResultId) return;
     const updates: Record<string, string> = {};
     if (readingResults) updates.readingResultsJson = JSON.stringify(readingResults);
     if (writingResult) updates.writingResultJson = JSON.stringify(writingResult);
     if (explanations) updates.explanationsJson = JSON.stringify(explanations);
-    if (reportResult) updates.reportJson = JSON.stringify(reportResult);
-    if (Object.keys(updates).length > 0) {
-      updateAIMutation.mutate({ id: savedResultId.current, ...updates });
-    }
-  }, [readingResults, writingResult, explanations, reportResult, updateAIMutation]);
+    if (reportResult) updates.reportJson = JSON.stringify(sanitizeReportForStorage(reportResult));
+    if (Object.keys(updates).length === 0) return;
+
+    const signature = JSON.stringify({ id: savedResultId, ...updates });
+    if (lastAiSyncSignature.current === signature) return;
+    lastAiSyncSignature.current = signature;
+
+    const syncRunId = latestAiSyncRunId.current + 1;
+    latestAiSyncRunId.current = syncRunId;
+    setHistoryAiSyncState('syncing');
+
+    void updateAIMutation.mutateAsync({ id: savedResultId, ...updates })
+      .then(() => {
+        if (latestAiSyncRunId.current === syncRunId) {
+          setHistoryAiSyncState('synced');
+        }
+      })
+      .catch((error) => {
+        console.error('[Results] Failed to sync AI details to history:', error);
+        if (lastAiSyncSignature.current === signature) {
+          lastAiSyncSignature.current = null;
+        }
+        if (latestAiSyncRunId.current === syncRunId) {
+          setHistoryAiSyncState('error');
+        }
+      });
+  }, [explanations, readingResults, reportResult, savedResultId, updateAIMutation, writingResult]);
 
   useEffect(() => {
     if (hasStartedGrading.current) return;
@@ -913,7 +990,7 @@ export default function ResultsPage() {
     if (readingSubItems.length > 0) {
       const readingAnswers = readingSubItems.map(item => ({
         questionId: item.id, questionType: item.questionType,
-        questionText: item.questionText, userAnswer: item.userAnswer, correctAnswer: item.correctAnswer,
+        questionText: item.questionText, userAnswer: item.userAnswer, correctAnswer: item.correctAnswer, context: item.context,
       }));
       setIsGradingReading(true);
       checkReadingMutation.mutate({ answers: readingAnswers }, {
@@ -1125,6 +1202,8 @@ export default function ResultsPage() {
 
   // Paper name for display
   const paperName = selectedPaper?.title || 'Assessment';
+  const hasPendingAiSync = Boolean(readingResults || writingResult || explanations || reportResult);
+  const effectiveHistorySaveState: HistorySaveState = historySaveState === 'idle' && initialResultPayload ? 'saving' : historySaveState;
 
   // PDF download removed from student view - only available in admin history page
 
@@ -1157,6 +1236,62 @@ export default function ResultsPage() {
           )}
           <p className="text-sm text-slate-400 mt-2">{paperName}</p>
         </motion.div>
+
+        {initialResultPayload && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.12 }} className="mb-6">
+            <div
+              className={`rounded-2xl border px-4 py-4 shadow-sm ${
+                effectiveHistorySaveState === 'saved'
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : effectiveHistorySaveState === 'retrying'
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-blue-200 bg-blue-50'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    effectiveHistorySaveState === 'saved'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : effectiveHistorySaveState === 'retrying'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-blue-100 text-blue-700'
+                  }`}
+                >
+                  {effectiveHistorySaveState === 'saved' ? <CheckCircle2 className="h-4 w-4" /> : effectiveHistorySaveState === 'retrying' ? <AlertCircle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {lang === 'en' ? 'Test History Status' : 'Test History 状态'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {effectiveHistorySaveState === 'saved'
+                      ? (lang === 'en' ? `Saved to Test History. Record ID #${savedResultId}.` : `已写入 Test History，记录 ID #${savedResultId}。`)
+                      : effectiveHistorySaveState === 'retrying'
+                        ? (lang === 'en' ? 'Initial save failed. Retrying automatically. The attempt is still cached locally.' : '首次保存失败，系统会自动重试，这次作答仍保存在本地待补写。')
+                        : (lang === 'en' ? 'Saving this attempt to Test History...' : '正在把本次作答写入 Test History...')}
+                  </p>
+                  {historySaveError && effectiveHistorySaveState === 'retrying' && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      {lang === 'en' ? `Last error: ${historySaveError}` : `最近一次错误：${historySaveError}`}
+                    </p>
+                  )}
+                  {effectiveHistorySaveState === 'saved' && hasPendingAiSync && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {historyAiSyncState === 'syncing'
+                        ? (lang === 'en' ? 'Syncing AI feedback and report to this record...' : '正在把 AI 评分和报告回写到这条记录...')
+                        : historyAiSyncState === 'synced'
+                          ? (lang === 'en' ? 'AI feedback has been attached to this record.' : 'AI 评分和报告已同步到这条记录。')
+                          : historyAiSyncState === 'error'
+                            ? (lang === 'en' ? 'AI feedback sync failed, but the base history record is already saved.' : 'AI 结果回写失败，但基础 history 记录已经保存。')
+                            : (lang === 'en' ? 'Waiting for AI feedback to finish before syncing.' : '等待 AI 批改完成后再回写到 history。')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Student Info */}
         {(recordedStudentName !== 'Unknown' || recordedStudentGrade) && (
@@ -1705,7 +1840,7 @@ export default function ResultsPage() {
               {isGradingSpeaking ? (
                 <div className="p-8 text-center">
                   <Loader2 className="w-6 h-6 animate-spin text-sky-500 mx-auto mb-3" />
-                  <p className="text-base text-slate-500">{lang === 'en' ? 'Preparing speaking for teacher review...' : '正在整理口语作答，准备人工批改...'}</p>
+                  <p className="text-base text-slate-500">{lang === 'en' ? 'Analyzing speaking responses...' : '正在分析口语作答...'}</p>
                 </div>
               ) : speakingResult ? (
                 <div className="p-6 space-y-6">

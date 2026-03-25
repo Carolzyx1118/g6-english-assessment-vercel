@@ -13,6 +13,54 @@ interface AudioRecorderProps {
   onRecorded: (url: string) => void;
 }
 
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+function encodeAudioBufferToWav(audioBuffer: AudioBuffer) {
+  const channelCount = 1;
+  const sampleRate = audioBuffer.sampleRate;
+  const sampleCount = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = channelCount * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = sampleCount * blockAlign;
+  const output = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(output);
+
+  writeAscii(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, 'WAVE');
+  writeAscii(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    let mixedSample = 0;
+    for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
+      mixedSample += audioBuffer.getChannelData(channelIndex)[sampleIndex] || 0;
+    }
+    mixedSample /= Math.max(audioBuffer.numberOfChannels, 1);
+
+    const clamped = Math.max(-1, Math.min(1, mixedSample));
+    const pcm = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+    view.setInt16(offset, Math.round(pcm), true);
+    offset += bytesPerSample;
+  }
+
+  return output;
+}
+
 export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecorded }: AudioRecorderProps) {
   const [status, setStatus] = useState<'idle' | 'recording' | 'recorded' | 'uploading' | 'uploaded'>('idle');
   const [recordingTime, setRecordingTime] = useState(0);
@@ -186,6 +234,41 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     return 'webm';
   }, []);
 
+  const convertBlobToWav = useCallback(async (blob: Blob) => {
+    const AudioContextCtor = window.AudioContext || (window as typeof window & {
+      webkitAudioContext?: typeof AudioContext;
+    }).webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      throw new Error('Audio conversion is not supported in this browser.');
+    }
+
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioContext = new AudioContextCtor();
+
+    try {
+      const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      const wavBuffer = encodeAudioBufferToWav(decoded);
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    } finally {
+      await audioContext.close().catch(() => undefined);
+    }
+  }, []);
+
+  const normalizeAudioBlobForScoring = useCallback(async (blob: Blob) => {
+    const mimeType = blob.type.toLowerCase();
+    if (mimeType.includes('wav') || mimeType.includes('mpeg') || mimeType.includes('mp3')) {
+      return blob;
+    }
+
+    try {
+      return await convertBlobToWav(blob);
+    } catch (error) {
+      console.warn('Failed to convert recording to WAV before upload.', error);
+      return blob;
+    }
+  }, [convertBlobToWav]);
+
   const uploadAudio = useCallback(async () => {
     if (!chunksRef.current.length) return;
 
@@ -195,20 +278,22 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     try {
       const mimeType = chunksRef.current[0].type || 'audio/webm';
       const blob = new Blob(chunksRef.current, { type: mimeType });
+      const normalizedBlob = await normalizeAudioBlobForScoring(blob);
+      const normalizedMimeType = normalizedBlob.type || mimeType;
       let persistedUrl: string;
 
       try {
-        const fileBase64 = await blobToBase64(blob);
-        const extension = getAudioExtension(mimeType);
+        const fileBase64 = await blobToBase64(normalizedBlob);
+        const extension = getAudioExtension(normalizedMimeType);
         const uploaded = await uploadFileMutation.mutateAsync({
           fileName: `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`,
           fileBase64,
-          contentType: mimeType,
+          contentType: normalizedMimeType,
         });
         persistedUrl = uploaded.url;
       } catch (uploadError) {
         console.warn('Recording upload failed, falling back to embedded audio.', uploadError);
-        persistedUrl = await blobToDataUrl(blob);
+        persistedUrl = await blobToDataUrl(normalizedBlob);
       }
 
       audioUrlRef.current = persistedUrl;
@@ -220,7 +305,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to save recording. Please try again.');
       setStatus('recorded');
     }
-  }, [blobToBase64, blobToDataUrl, getAudioExtension, onRecorded, questionId, sectionId, uploadFileMutation]);
+  }, [blobToBase64, blobToDataUrl, getAudioExtension, normalizeAudioBlobForScoring, onRecorded, questionId, sectionId, uploadFileMutation]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

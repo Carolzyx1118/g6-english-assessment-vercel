@@ -54,7 +54,6 @@ export interface AssessmentStudyPlanStage {
 }
 
 export interface AssessmentReportResult {
-  languageLevel: string;
   summary_en: string;
   summary_cn: string;
   strengths_en: string[];

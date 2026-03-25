@@ -11,6 +11,27 @@ vi.mock("./_core/voiceTranscription", () => ({
   transcribeAudio: vi.fn(),
 }));
 
+vi.mock("./_core/env", async () => {
+  const actual = await vi.importActual<typeof import("./_core/env")>("./_core/env");
+  return {
+    ...actual,
+    ENV: {
+      ...actual.ENV,
+      aiGatewayApiKey: "",
+      aiGatewayBaseUrl: "",
+      aiGatewayModel: "",
+      aiGatewaySpeakingModel: "",
+      openaiApiBaseUrl: "",
+      openaiApiKey: "",
+      openaiChatModel: "",
+      openaiTranscriptionModel: "",
+      forgeApiUrl: "",
+      forgeApiKey: "",
+      blobReadWriteToken: "",
+    },
+  };
+});
+
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 const mockInvokeLLM = vi.mocked(invokeLLM);
@@ -19,7 +40,7 @@ const mockTranscribeAudio = vi.mocked(transcribeAudio);
 function createPublicContext(): TrpcContext {
   return {
     user: null,
-    req: { protocol: "https", headers: {} } as TrpcContext["req"],
+    req: { protocol: "https", headers: { host: "example.com" } } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
 }
@@ -72,6 +93,49 @@ describe("grading.checkReadingAnswers", () => {
     expect(result).toHaveLength(1);
     expect(result[0].isCorrect).toBe(true);
     expect(result[0].score).toBe(1);
+  });
+
+  it("uses AI grading for open-ended reading answers such as passage open-ended items", async () => {
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              results: [
+                {
+                  questionId: "52",
+                  isCorrect: true,
+                  feedback_en: "The answer matches the main idea.",
+                  feedback_cn: "答案抓住了主要意思。",
+                  explanation_en: "The student's wording is different, but it conveys the same meaning as the reference answer.",
+                  explanation_cn: "学生的表述虽然不同，但意思和参考答案一致。",
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.checkReadingAnswers({
+      answers: [
+        {
+          questionId: "52",
+          questionType: "open-ended",
+          questionText: "What is the passage mainly about?",
+          userAnswer: "It talks about why daily exercise is important.",
+          correctAnswer: "The passage is about the importance of exercise.",
+          context: "Passage: Exercise helps children stay healthy and energetic.",
+        },
+      ],
+    });
+
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+    expect(result[0].isCorrect).toBe(true);
+    expect(result[0].score).toBe(1);
+    expect(result[0].feedback_en).toContain("main idea");
   });
 });
 
@@ -145,7 +209,6 @@ describe("grading.generateReport", () => {
     });
 
     expect(mockInvokeLLM).not.toHaveBeenCalled();
-    expect(result.languageLevel).toBe("A2");
     expect(result.summary_en).toContain("some English foundation");
     expect(result.summary_cn).toContain("有一定英语基础");
     expect(result.strengths_en.length).toBeGreaterThan(0);
@@ -199,7 +262,6 @@ describe("grading.generateReport", () => {
     });
 
     expect(mockInvokeLLM).not.toHaveBeenCalled();
-    expect(result.languageLevel).toBe("A2");
     expect(result.reportTitle_en).toBe("Assessment Feedback Report");
     expect(result.abilitySnapshot_en).toContain("Writing and speaking should be finalized together with teacher review.");
     expect(result.overallSummary_en).toContain("teacher scoring notes");
@@ -215,7 +277,33 @@ describe("grading.evaluateWriting", () => {
     vi.clearAllMocks();
   });
 
-  it("returns a manual-review placeholder without calling the LLM", async () => {
+  it("returns an AI writing evaluation when the gateway responds", async () => {
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              score: 16,
+              overallFeedback_en: "The essay answers the prompt clearly with a logical structure.",
+              overallFeedback_cn: "这篇作文能够回应题目，结构也比较清楚。",
+              correctedEssay: "I went to the park with my sister, and we played on the swings after lunch.",
+              annotatedEssay: "I [ERR:goed|COR:went|EXP:Use the past tense form of go] to the park.",
+              grammarErrors: [
+                {
+                  original: "goed",
+                  correction: "went",
+                  explanation_en: "Use the irregular past tense form.",
+                  explanation_cn: "这里要用 go 的不规则过去式。",
+                },
+              ],
+              suggestions_en: ["Add more supporting details.", "Check verb tense carefully."],
+              suggestions_cn: ["补充更多细节。", "注意检查动词时态。"],
+            }),
+          },
+        },
+      ],
+    } as any);
+
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.evaluateWriting({
       essay: "I went to the park with my sister and we played on the swings after lunch.",
@@ -223,19 +311,117 @@ describe("grading.evaluateWriting", () => {
       wordCountTarget: "80-100 words",
     });
 
-    expect(mockInvokeLLM).not.toHaveBeenCalled();
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result.score).toBe(16);
+    expect(result.maxScore).toBe(20);
+    expect(result.grade).toBe("B");
+    expect(result.reviewMode).toBe("ai");
+    expect(result.manualReviewRequired).toBe(false);
+    expect(result.correctedEssay).toContain("went to the park");
+    expect(result.grammarErrors).toHaveLength(1);
+    expect(result.suggestions_en).toContain("Add more supporting details.");
+  });
+
+  it("falls back to manual review when writing evaluation fails", async () => {
+    mockInvokeLLM.mockRejectedValueOnce(new Error("LLM unavailable"));
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateWriting({
+      essay: "I went to the park with my sister and we played on the swings after lunch.",
+      topic: "A day at the park",
+      wordCountTarget: "80-100 words",
+    });
+
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(result.grade).toBe("Manual Review");
     expect(result.maxScore).toBe(0);
     expect(result.reviewMode).toBe("manual");
     expect(result.manualReviewRequired).toBe(true);
-    expect(result.overallFeedback_en).toContain("Automatic writing scoring has been turned off");
   });
 });
 
 describe("grading.evaluateSpeaking", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("returns a manual-review placeholder without calling transcription or the LLM", async () => {
+  it("transcribes and evaluates speaking with AI", async () => {
+    mockTranscribeAudio.mockResolvedValueOnce({
+      text: "I like this meal because it is healthy and my family cooks it every weekend.",
+    } as any);
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              overallFeedback_en: "The student gave a relevant and mostly clear response.",
+              overallFeedback_cn: "学生的回答切题，整体比较清楚。",
+              evaluations: [
+                {
+                  sectionId: "speaking-part-4",
+                  questionId: 104,
+                  transcript: "I like this meal because it is healthy and my family cooks it every weekend.",
+                  score: 4,
+                  feedback_en: "The answer is relevant and easy to follow.",
+                  feedback_cn: "回答切题，也比较容易理解。",
+                  taskCompletion_en: "The prompt was answered directly.",
+                  taskCompletion_cn: "能够直接回应题目。",
+                  fluency_en: "The response flows fairly smoothly.",
+                  fluency_cn: "整体表达比较流畅。",
+                  vocabulary_en: "Vocabulary is simple but appropriate.",
+                  vocabulary_cn: "词汇较基础，但使用恰当。",
+                  grammar_en: "Most sentence patterns are controlled well.",
+                  grammar_cn: "大部分句子结构控制得不错。",
+                  pronunciation_en: "Clarity appears generally good from the transcript evidence.",
+                  pronunciation_cn: "从转写结果看，表达清晰度整体较好。",
+                  suggestions_en: ["Add one more supporting detail."],
+                  suggestions_cn: ["可以再补充一个支持细节。"],
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-4",
+          sectionTitle: "Speaking Part 4",
+          questionId: 104,
+          prompt: "Talk about the special meal in more detail.",
+          audioUrl: "/api/blob?key=sample-speaking",
+        },
+      ],
+    });
+
+    expect(mockTranscribeAudio).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAudio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioUrl: "https://example.com/api/blob?key=sample-speaking",
+        language: "en",
+      }),
+    );
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result.totalScore).toBe(4);
+    expect(result.totalPossible).toBe(5);
+    expect(result.grade).toBe("B");
+    expect(result.reviewMode).toBe("ai");
+    expect(result.manualReviewRequired).toBe(false);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0].reviewMode).toBe("ai");
+    expect(result.evaluations[0].manualReviewRequired).toBe(false);
+    expect(result.evaluations[0].feedback_en).toContain("easy to follow");
+    expect(result.evaluations[0].audioUrl).toBe("/api/blob?key=sample-speaking");
+  });
+
+  it("falls back to manual review when transcription fails", async () => {
+    mockTranscribeAudio.mockResolvedValueOnce({
+      error: "Voice transcription failed",
+      code: "TRANSCRIPTION_FAILED",
+      details: "temporary outage",
+    } as any);
+
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.evaluateSpeaking({
       responses: [
@@ -249,16 +435,12 @@ describe("grading.evaluateSpeaking", () => {
       ],
     });
 
-    expect(mockTranscribeAudio).not.toHaveBeenCalled();
+    expect(mockTranscribeAudio).toHaveBeenCalledTimes(1);
     expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result.totalScore).toBe(0);
     expect(result.totalPossible).toBe(0);
     expect(result.grade).toBe("Manual Review");
     expect(result.reviewMode).toBe("manual");
     expect(result.manualReviewRequired).toBe(true);
-    expect(result.evaluations).toHaveLength(1);
-    expect(result.evaluations[0].reviewMode).toBe("manual");
-    expect(result.evaluations[0].manualReviewRequired).toBe(true);
-    expect(result.evaluations[0].feedback_en).toContain("Automatic speaking scoring has been turned off");
   });
 });
