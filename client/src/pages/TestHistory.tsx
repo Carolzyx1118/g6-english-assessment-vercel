@@ -107,6 +107,13 @@ export default function TestHistory() {
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
                     <p className="mt-3">Loading test history...</p>
                   </div>
+                ) : listQuery.error ? (
+                  <div className="rounded-[28px] border border-rose-200 bg-rose-50 px-5 py-8 text-center text-sm text-rose-900 shadow-sm">
+                    <p className="font-semibold">Unable to load test history.</p>
+                    <p className="mt-2 break-words text-rose-800">
+                      {listQuery.error.message || "Unknown list query error."}
+                    </p>
+                  </div>
                 ) : filteredHistory.length === 0 ? (
                   <div className="rounded-[28px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm text-slate-500 shadow-sm">
                     No saved assessments found.
@@ -156,6 +163,13 @@ export default function TestHistory() {
                 <div className="rounded-[32px] border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" />
                   <p className="mt-3">Loading assessment record...</p>
+                </div>
+              ) : detailQuery.error ? (
+                <div className="rounded-[32px] border border-rose-200 bg-rose-50 px-6 py-8 text-sm text-rose-900 shadow-sm">
+                  <p className="font-semibold">Unable to load this assessment record.</p>
+                  <p className="mt-2 break-words text-rose-800">
+                    {detailQuery.error.message || "Unknown detail query error."}
+                  </p>
                 </div>
               ) : detailQuery.data ? (
                 <AssessmentReportPanel
