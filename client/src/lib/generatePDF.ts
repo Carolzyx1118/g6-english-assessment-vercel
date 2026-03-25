@@ -215,30 +215,6 @@ function safeParseJSON<T>(json: string | null, fallback: T): T {
   try { return JSON.parse(json) as T; } catch { return fallback; }
 }
 
-function getPDFReadingResult(
-  readingMap: Map<string, ReadingGradingResult>,
-  sectionId: string,
-  localKey: string,
-) {
-  return readingMap.get(`${sectionId}::${localKey}`) || readingMap.get(localKey);
-}
-
-function buildPDFScopedQuestionId(sectionId: string, questionId: number) {
-  const hash = Array.from(sectionId.toLowerCase()).reduce(
-    (accumulator, character) => ((accumulator * 31) + character.charCodeAt(0)) % 1_000_000,
-    7,
-  );
-  return (hash * 1_000) + questionId;
-}
-
-function getPDFExplanation(
-  explanationsMap: Map<number, ExplanationResult>,
-  sectionId: string,
-  questionId: number,
-) {
-  return explanationsMap.get(buildPDFScopedQuestionId(sectionId, questionId)) || explanationsMap.get(questionId);
-}
-
 function extractPDFAudioAnswers(value: unknown): string[] {
   if (typeof value === 'string') {
     if (isAudioAnswerValue(value)) {
@@ -306,7 +282,7 @@ function buildAutoGradableDetails(
         ? correctIndexes.map((index) => q.options[index]?.text || q.options[index]?.label || `Option ${index + 1}`).join(', ')
         : (q.options[q.correctAnswer]?.text || q.options[q.correctAnswer]?.label || `Option ${q.correctAnswer + 1}`);
       const isCorrect = JSON.stringify([...selectedIndexes].sort((a, b) => a - b)) === JSON.stringify([...correctIndexes].sort((a, b) => a - b));
-      const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+      const expl = explanationsMap.get(q.id);
         details.push({
           questionNum: `Q${q.id}`,
           questionText: q.question,
@@ -321,7 +297,7 @@ function buildAutoGradableDetails(
           tipCn: expl?.tip_cn,
         });
     } else if (q.type === 'mcq') {
-      const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+      const expl = explanationsMap.get(q.id);
       const correctIndexes = getPDFMCQCorrectIndexes(q);
       if (correctIndexes.length > 1) {
         const selectedIndexes = getPDFSelectedIndexes(userAns);
@@ -388,7 +364,7 @@ function buildAutoGradableDetails(
       const correctWord = wordBank?.find((w: any) => w.letter === q.correctAnswer);
       const userWord = isAnswered ? wordBank?.find((w: any) => w.letter === String(userAns)) : null;
       const isCorrect = isAnswered && String(userAns).toUpperCase() === q.correctAnswer.toUpperCase();
-      const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+      const expl = explanationsMap.get(q.id);
       details.push({
         questionNum: `Q${q.id}`,
         questionText: `Fill in blank ${q.id}`,
@@ -409,7 +385,7 @@ function buildAutoGradableDetails(
       const sorted1 = Array.isArray(userArr) ? [...userArr].sort() : [];
       const sorted2 = [...q.correctAnswers].sort();
       const isCorrect = JSON.stringify(sorted1) === JSON.stringify(sorted2);
-      const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+      const expl = explanationsMap.get(q.id);
       details.push({
         questionNum: `Q${q.id}`,
         questionText: q.question,
@@ -439,7 +415,7 @@ function buildAutoGradableDetails(
       q.items.forEach((item) => {
         const selectedIndex = getPDFChoiceIndex(parsed, item.label);
         const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
-        const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+        const expl = explanationsMap.get(q.id);
         details.push({
           questionNum: `Q${q.id}(${item.label})`,
           questionText: formatPDFPassageInlinePrompt(q.question, item),
@@ -482,8 +458,8 @@ function buildReadingDetails(
 
     if (q.type === 'wordbank-fill' || q.type === 'story-fill') {
       // These are AI-graded via readingResults
-      const rr = getPDFReadingResult(readingMap, section.id, String(q.id));
-      const expl = getPDFExplanation(explanationsMap, section.id, q.id);
+      const rr = readingMap.get(String(q.id));
+      const expl = explanationsMap.get(q.id);
       details.push({
         questionNum: `Q${q.id}`,
         questionText: q.question,
@@ -500,7 +476,7 @@ function buildReadingDetails(
       const parsed: Record<string, boolean> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
       for (const stmt of q.statements) {
         const subKey = `${q.id}-${stmt.label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const subAnswered = parsed[stmt.label] !== undefined;
         const choiceOptions = ['True', 'False', 'Not Given'];
         const userChoice = subAnswered ? (parsed[stmt.label] ? 'True' : 'False') : undefined;
@@ -525,7 +501,7 @@ function buildReadingDetails(
       const parsed: Record<string, string> = (() => { try { return typeof userAns === 'string' ? JSON.parse(userAns) : {}; } catch { return {}; } })();
       for (const sub of q.subQuestions) {
         const subKey = `${q.id}-${sub.label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const subAnswered = !!parsed[sub.label];
         details.push({
           questionNum: `Q${q.id}(${sub.label})`,
@@ -539,7 +515,7 @@ function buildReadingDetails(
         });
       }
     } else if (q.type === 'open-ended' && !q.subQuestions) {
-      const rr = getPDFReadingResult(readingMap, section.id, String(q.id));
+      const rr = readingMap.get(String(q.id));
       details.push({
         questionNum: `Q${q.id}`,
         questionText: q.question,
@@ -555,7 +531,7 @@ function buildReadingDetails(
       q.rows.forEach((row: any, i: number) => {
         const label = String.fromCharCode(97 + i);
         const subKey = `${q.id}-${label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const val = parsed[`row${i}`] || parsed[row.blankField + i] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
         const subAnswered = !!val;
         details.push({
@@ -574,7 +550,7 @@ function buildReadingDetails(
       q.items.forEach((item: any, i: number) => {
         const label = String.fromCharCode(97 + i);
         const subKey = `${q.id}-${label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const val = parsed[item.word] || parsed[label] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
         const subAnswered = !!val;
         details.push({
@@ -593,7 +569,7 @@ function buildReadingDetails(
       q.events.forEach((event: string, i: number) => {
         const label = String.fromCharCode(97 + i);
         const subKey = `${q.id}-${label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const val = parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
         const subAnswered = !!val;
         details.push({
@@ -612,7 +588,7 @@ function buildReadingDetails(
       q.items.forEach((item: any, i: number) => {
         const label = String.fromCharCode(97 + i);
         const subKey = `${q.id}-${label}`;
-        const rr = getPDFReadingResult(readingMap, section.id, subKey);
+        const rr = readingMap.get(subKey);
         const val = parsed[label] || parsed[i] || (typeof parsed === 'object' ? (Object.values(parsed)[i] as string) : undefined);
         const subAnswered = !!val;
         details.push({
@@ -630,7 +606,7 @@ function buildReadingDetails(
       const userArr = isAnswered ? (userAns as unknown as number[]) : [];
       const userLabels = Array.isArray(userArr) && userArr.length > 0 ? userArr.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ') : 'Not Answered';
       const correctLabels = q.correctAnswers.map((i: number) => getPDFOptionDisplay(q.options[i])).join(', ');
-      const rr = getPDFReadingResult(readingMap, section.id, String(q.id));
+      const rr = readingMap.get(String(q.id));
       details.push({
         questionNum: `Q${q.id}`,
         questionText: q.question,
@@ -646,7 +622,7 @@ function buildReadingDetails(
       const parsed = parsePDFChoiceMap(userAns);
       q.items.forEach((item) => {
         const selectedIndex = getPDFChoiceIndex(parsed, item.label);
-        const rr = getPDFReadingResult(readingMap, section.id, `${q.id}-${item.label}`);
+        const rr = readingMap.get(`${q.id}-${item.label}`);
         const hasAnswer = selectedIndex !== undefined && selectedIndex >= 0;
         details.push({
           questionNum: `Q${q.id}(${item.label})`,
@@ -982,24 +958,7 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
   // Build section list from bySection + reading + writing
   const sectionKeys = Object.keys(bySection);
   const allSectionIds = [...sectionKeys];
-  const prefixedReadingSectionIds = readingResults
-    ? Array.from(
-        new Set(
-          readingResults
-            .map((item) => String(item.questionId))
-            .filter((questionId) => questionId.includes('::'))
-            .map((questionId) => questionId.split('::')[0])
-            .filter(Boolean),
-        ),
-      )
-    : [];
-  if (prefixedReadingSectionIds.length > 0) {
-    prefixedReadingSectionIds.forEach((sectionId) => {
-      if (!allSectionIds.includes(sectionId)) allSectionIds.push(sectionId);
-    });
-  } else if (readingResults && !allSectionIds.includes('reading')) {
-    allSectionIds.push('reading');
-  }
+  if (readingResults && !allSectionIds.includes('reading')) allSectionIds.push('reading');
   if (writingResult && !allSectionIds.includes('writing')) allSectionIds.push('writing');
   if (speakingEvaluation) {
     for (const item of speakingEvaluation.evaluations) {
@@ -1014,18 +973,9 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = 'cn')
   orderedSections.forEach((sectionId, idx) => {
     let sCorrect = 0;
     let sTotal = 0;
-    const sectionReadingResults = readingResults
-      ? readingResults.filter((result) => {
-          const questionId = String(result.questionId);
-          if (questionId.includes('::')) {
-            return questionId.split('::')[0] === sectionId;
-          }
-          return sectionId === 'reading';
-        })
-      : [];
-    if (sectionReadingResults.length > 0) {
-      sCorrect = sectionReadingResults.filter(r => r.isCorrect).length;
-      sTotal = sectionReadingResults.length;
+    if (sectionId === 'reading' && readingResults) {
+      sCorrect = readingResults.filter(r => r.isCorrect).length;
+      sTotal = readingResults.length;
     } else if (sectionId === 'writing' && writingResult) {
       sCorrect = writingIsManual ? 0 : writingResult.score;
       sTotal = writingIsManual ? 0 : writingResult.maxScore;

@@ -8,7 +8,6 @@ import {
   ChevronUp,
   Database,
   FilePlus2,
-  History,
   Home,
   Tags,
   Users,
@@ -23,7 +22,6 @@ type TeacherToolKey =
   | "tag-manager"
   | "paper-manager"
   | "paper-composer"
-  | "test-history"
   | "user-manager";
 
 interface TeacherToolsLayoutProps {
@@ -243,14 +241,6 @@ export default function TeacherToolsLayout({
               icon={<FilePlus2 className="h-4 w-4" />}
               label="Question Intake"
               active={activeTool === "paper-intake"}
-              collapsed={collapsed}
-            />
-
-            <PrimaryLink
-              href="/test-history"
-              icon={<History className="h-4 w-4" />}
-              label="Test History"
-              active={activeTool === "test-history"}
               collapsed={collapsed}
             />
 

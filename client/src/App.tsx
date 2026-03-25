@@ -14,7 +14,6 @@ import PaperManager from "./pages/PaperManager";
 import QuestionBank from "./pages/QuestionBank";
 import Register from "./pages/Register";
 import TagManager from "./pages/TagManager";
-import TestHistory from "./pages/TestHistory";
 import UserManager from "./pages/UserManager";
 
 function Router() {
@@ -62,13 +61,6 @@ function Router() {
         <AuthGuard>
           <TeacherGuard>
             <UserManager />
-          </TeacherGuard>
-        </AuthGuard>
-      </Route>
-      <Route path={"/test-history"}>
-        <AuthGuard>
-          <TeacherGuard>
-            <TestHistory />
           </TeacherGuard>
         </AuthGuard>
       </Route>
