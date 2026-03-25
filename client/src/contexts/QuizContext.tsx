@@ -11,7 +11,10 @@ import {
   removePendingTestResult,
 } from '@/lib/pendingTestResults';
 import type { PersistedQuizSession } from '@/lib/persistedQuizSession';
-import { packStoredAssessmentPayloadForResultStorage } from '@/lib/resultStorage';
+import {
+  packStoredAssessmentPayloadForResultStorage,
+  sanitizeStoredAssessmentPayloadJsonForResultStorage,
+} from '@/lib/resultStorage';
 import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
 import {
   clearSubmittedAssessmentSnapshot,
@@ -448,7 +451,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         for (const entry of pendingEntries) {
           if (cancelled) return;
 
-          const result = await saveResultMutationRef.current.mutateAsync(entry.payload);
+          const result = await saveResultMutationRef.current.mutateAsync({
+            ...entry.payload,
+            answersJson: sanitizeStoredAssessmentPayloadJsonForResultStorage(entry.payload.answersJson),
+          });
           if (cancelled) return;
 
           if (result.id) {

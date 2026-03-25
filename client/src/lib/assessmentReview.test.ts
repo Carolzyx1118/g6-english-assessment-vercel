@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/data/papers";
 import { buildAssessmentReviewModel, type AssessmentReviewRecord } from "./assessmentReview";
-import { packStoredAssessmentPayload } from "./storedAssessmentPayload";
+import { packStoredAssessmentPayloadForResultStorage } from "./resultStorage";
 
 describe("assessmentReview", () => {
   it("builds history review from the stored generated paper snapshot instead of built-in papers", () => {
@@ -50,7 +50,7 @@ describe("assessmentReview", () => {
       totalCorrect: 1,
       totalQuestions: 1,
       totalTimeSeconds: 95,
-      answersJson: packStoredAssessmentPayload(
+      answersJson: packStoredAssessmentPayloadForResultStorage(
         { "generated-reading:1": 1 },
         generatedPaper,
       ),

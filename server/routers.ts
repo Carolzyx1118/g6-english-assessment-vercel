@@ -41,7 +41,7 @@ type WritingEvaluationResult = {
 const AI_WRITING_MAX_SCORE = 20;
 const AI_SPEAKING_MAX_SCORE = 5;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
-const EMBEDDED_AUDIO_DATA_URL_PREFIX = "data:audio/";
+const EMBEDDED_DATA_URL_PREFIX = "data:";
 
 function isPaperSubjectValue(value: unknown): value is ResultPaperSubject {
   return value === "english" || value === "math" || value === "vocabulary";
@@ -106,7 +106,7 @@ function extractStoredPaperSnapshot(raw: string | null | undefined) {
 
 function sanitizeValueForResultStorage(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.trim().toLowerCase().startsWith(EMBEDDED_AUDIO_DATA_URL_PREFIX) ? "" : value;
+    return value.trim().toLowerCase().startsWith(EMBEDDED_DATA_URL_PREFIX) ? "" : value;
   }
 
   if (Array.isArray(value)) {

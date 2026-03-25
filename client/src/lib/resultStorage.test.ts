@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { huazhongPaper } from '@/data/huazhong-paper';
+import type { Paper } from '@/data/papers';
 import { parseStoredAssessmentPayload } from './storedAssessmentPayload';
 import {
   packStoredAssessmentPayloadForResultStorage,
@@ -24,6 +26,17 @@ describe('resultStorage', () => {
         clip: '',
       },
     });
+  });
+
+  it('omits built-in paper snapshots so static papers do not bloat history uploads', () => {
+    const packed = packStoredAssessmentPayloadForResultStorage(
+      { 'vocabulary:1': 1 },
+      huazhongPaper,
+    );
+
+    const parsed = parseStoredAssessmentPayload(packed);
+    expect(parsed.answers).toEqual({ 'vocabulary:1': 1 });
+    expect(parsed.paperSnapshot).toBeUndefined();
   });
 
   it('removes embedded speaking audio URLs from report storage payloads', () => {
@@ -87,6 +100,81 @@ describe('resultStorage', () => {
     expect(sanitized.speakingEvaluation?.evaluations[0]?.audioUrl).toBe('');
   });
 
+  it('compacts generated paper snapshots and strips embedded media during packing', () => {
+    const generatedPaper: Paper = {
+      id: 'tag-system-english-ket-unit-1',
+      title: 'KET Unit1 Practice',
+      subtitle: 'Generated practice',
+      description: 'A generated paper with embedded media.',
+      icon: '🧪',
+      color: '#1d4ed8',
+      subject: 'english',
+      category: 'practice',
+      isGeneratedPaper: true,
+      totalQuestions: 1,
+      hasListening: false,
+      hasWriting: false,
+      sections: [
+        {
+          id: 'reading',
+          title: 'Reading',
+          subtitle: 'Generated reading',
+          icon: '📘',
+          color: 'text-sky-700',
+          bgColor: 'bg-sky-50',
+          description: 'Generated reading section',
+          sectionType: 'reading',
+          passage: 'A short generated passage.',
+          questions: [
+            {
+              id: 1,
+              type: 'picture-mcq',
+              question: 'Which animal is shown?',
+              options: [
+                { label: 'A', imageUrl: 'data:image/png;base64,AAAA', text: 'Cat' },
+                { label: 'B', imageUrl: 'https://example.com/dog.png', text: 'Dog' },
+              ],
+              correctAnswer: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const packed = packStoredAssessmentPayloadForResultStorage(
+      { 'reading:1': 1 },
+      generatedPaper,
+    );
+
+    const parsed = parseStoredAssessmentPayload(packed);
+    expect(parsed.answers).toEqual({ 'reading:1': 1 });
+    expect(parsed.paperSnapshot).toEqual({
+      id: 'tag-system-english-ket-unit-1',
+      title: 'KET Unit1 Practice',
+      subject: 'english',
+      sections: [
+        {
+          id: 'reading',
+          title: 'Reading',
+          sectionType: 'reading',
+          passage: 'A short generated passage.',
+          questions: [
+            {
+              id: 1,
+              type: 'picture-mcq',
+              question: 'Which animal is shown?',
+              options: [
+                { label: 'A', imageUrl: '', text: 'Cat' },
+                { label: 'B', imageUrl: 'https://example.com/dog.png', text: 'Dog' },
+              ],
+              correctAnswer: 1,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('sanitizes already-serialized assessment payload JSON for pending history saves', () => {
     const sanitized = sanitizeStoredAssessmentPayloadJsonForResultStorage(
       JSON.stringify({
@@ -95,7 +183,36 @@ describe('resultStorage', () => {
           'speaking:1': 'data:audio/webm;base64,AAAA',
           'reading:1': 'answer',
         },
-        paperSnapshot: { id: 'paper-1' },
+        paperSnapshot: {
+          id: 'tag-system-english-generated',
+          title: 'Generated Practice',
+          subject: 'english',
+          description: 'legacy full snapshot',
+          sections: [
+            {
+              id: 'reading',
+              title: 'Reading',
+              subtitle: 'legacy',
+              icon: '📘',
+              color: 'text-sky-700',
+              bgColor: 'bg-sky-50',
+              description: 'legacy section',
+              sectionType: 'reading',
+              passage: 'Legacy passage',
+              questions: [
+                {
+                  id: 1,
+                  type: 'picture-mcq',
+                  question: 'Choose one',
+                  options: [
+                    { label: 'A', imageUrl: 'data:image/png;base64,BBBB', text: 'Cat' },
+                  ],
+                  correctAnswer: 0,
+                },
+              ],
+            },
+          ],
+        },
       }),
     );
 
@@ -104,6 +221,29 @@ describe('resultStorage', () => {
       'speaking:1': '',
       'reading:1': 'answer',
     });
-    expect(parsed.paperSnapshot).toEqual({ id: 'paper-1' });
+    expect(parsed.paperSnapshot).toEqual({
+      id: 'tag-system-english-generated',
+      title: 'Generated Practice',
+      subject: 'english',
+      sections: [
+        {
+          id: 'reading',
+          title: 'Reading',
+          sectionType: 'reading',
+          passage: 'Legacy passage',
+          questions: [
+            {
+              id: 1,
+              type: 'picture-mcq',
+              question: 'Choose one',
+              options: [
+                { label: 'A', imageUrl: '', text: 'Cat' },
+              ],
+              correctAnswer: 0,
+            },
+          ],
+        },
+      ],
+    });
   });
 });
