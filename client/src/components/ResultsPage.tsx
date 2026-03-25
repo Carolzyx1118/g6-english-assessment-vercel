@@ -24,10 +24,12 @@ import {
   packStoredAssessmentPayloadForResultStorage,
   sanitizeReportForStorage,
 } from "@/lib/resultStorage";
+import {
+  readLatestSavedResultId,
+  writeLatestSavedResultId,
+} from "@/lib/latestSavedResultId";
 import { readSubmittedAssessmentSnapshot } from "@/lib/submittedAssessmentSnapshot";
 import { trpc } from "@/lib/trpc";
-
-const LATEST_RESULT_ID_STORAGE_KEY = "pureon_latest_assessment_result_id_v1";
 
 type SubmissionContext = {
   paper: Paper;
@@ -74,28 +76,6 @@ function writeCachedReview(
 
   try {
     window.sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage failures in restricted browsers.
-  }
-}
-
-function readLatestSavedResultId() {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.sessionStorage.getItem(LATEST_RESULT_ID_STORAGE_KEY);
-    const parsed = raw ? Number(raw) : NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLatestSavedResultId(resultId: number) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.setItem(LATEST_RESULT_ID_STORAGE_KEY, String(resultId));
   } catch {
     // Ignore storage failures in restricted browsers.
   }

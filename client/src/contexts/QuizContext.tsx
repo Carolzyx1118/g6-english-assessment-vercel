@@ -2,6 +2,15 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { PAPER_SUBJECT_ORDER, papers as staticPapers, type Paper, type PaperSubject, type Section, type Question } from '@/data/papers';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
 import { trpc } from '@/lib/trpc';
+import { buildSubmissionArtifacts } from '@/lib/assessmentReview';
+import { writeLatestSavedResultId } from '@/lib/latestSavedResultId';
+import {
+  queuePendingTestResult,
+  readPendingTestResults,
+  removePendingTestResult,
+} from '@/lib/pendingTestResults';
+import type { PersistedQuizSession } from '@/lib/persistedQuizSession';
+import { packStoredAssessmentPayloadForResultStorage } from '@/lib/resultStorage';
 import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
 import {
   clearSubmittedAssessmentSnapshot,
@@ -28,15 +37,6 @@ interface QuizState {
   submitted: boolean;
   startTime: number | null;
   endTime: number | null;
-}
-
-interface PersistedQuizSession {
-  version: 1;
-  username: string;
-  selectedPaperId: string | null;
-  state: QuizState;
-  isStarted: boolean;
-  studentInfo: StudentInfo | null;
 }
 
 interface QuizContextType {
@@ -143,13 +143,22 @@ function readPersistedQuizSession(): PersistedQuizSession | null {
     const raw = window.localStorage.getItem(QUIZ_SESSION_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as Partial<PersistedQuizSession>;
-    if (parsed.version !== 1 || typeof parsed.username !== 'string') return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedQuizSession> & {
+      version?: number;
+      selectedPaperSnapshot?: unknown;
+    };
+    const version = typeof (parsed as { version?: unknown }).version === 'number'
+      ? Number((parsed as { version?: unknown }).version)
+      : 0;
+    if ((version !== 1 && version !== 2) || typeof parsed.username !== 'string') return null;
 
     return {
-      version: 1,
+      version: 2,
       username: parsed.username,
       selectedPaperId: typeof parsed.selectedPaperId === 'string' ? parsed.selectedPaperId : null,
+      selectedPaperSnapshot: parsed.selectedPaperSnapshot && typeof parsed.selectedPaperSnapshot === 'object'
+        ? parsed.selectedPaperSnapshot as Paper
+        : null,
       state: {
         currentSectionIndex: typeof parsed.state?.currentSectionIndex === 'number' ? parsed.state.currentSectionIndex : 0,
         answers: parsed.state?.answers && typeof parsed.state.answers === 'object' ? parsed.state.answers : {},
@@ -196,16 +205,20 @@ function answerKey(sectionId: string, questionId: number): string {
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useLocalAuth();
+  const utils = trpc.useUtils();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [state, setState] = useState<QuizState>(createInitialQuizState);
   const [isStarted, setIsStarted] = useState(false);
   const [studentInfo, setStudentInfoState] = useState<StudentInfo | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const [pendingResultsNonce, setPendingResultsNonce] = useState(0);
 
   const sectionTimingsRef = useRef<Record<string, number>>({});
   const sectionEnteredAtRef = useRef<number | null>(null);
   const currentSectionIdRef = useRef<string>('');
   const restoredSessionOwnerRef = useRef<string | null>(null);
+  const isFlushingPendingResultsRef = useRef(false);
+  const saveResultMutation = trpc.results.save.useMutation();
   const allowedSubjects = useMemo(() => {
     const subjects = (user?.allowedSubjects ?? []).filter((subject): subject is PaperSubject =>
       PAPER_SUBJECT_ORDER.includes(subject as PaperSubject),
@@ -366,8 +379,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     const restoredPaper = persisted.selectedPaperId
-      ? allPapers.find((paper) => paper.id === persisted.selectedPaperId)
-      : null;
+      ? allPapers.find((paper) => paper.id === persisted.selectedPaperId) ?? persisted.selectedPaperSnapshot
+      : persisted.selectedPaperSnapshot;
     const maxSectionIndex = restoredPaper ? Math.max(restoredPaper.sections.length - 1, 0) : 0;
     const restoredState: QuizState = {
       currentSectionIndex: Math.min(Math.max(persisted.state.currentSectionIndex, 0), maxSectionIndex),
@@ -397,9 +410,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     const session: PersistedQuizSession = {
-      version: 1,
+      version: 2,
       username: user.username,
       selectedPaperId: selectedPaper?.id ?? null,
+      selectedPaperSnapshot: selectedPaper ?? null,
       state,
       isStarted,
       studentInfo,
@@ -412,6 +426,51 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     writePersistedQuizSession(session);
   }, [authLoading, isRestoringSession, user?.username, selectedPaper?.id, state, isStarted, studentInfo]);
+
+  useEffect(() => {
+    if (isFlushingPendingResultsRef.current) return;
+
+    const pendingEntries = readPendingTestResults();
+    if (pendingEntries.length === 0) return;
+
+    let cancelled = false;
+    isFlushingPendingResultsRef.current = true;
+
+    const flushPendingResults = async () => {
+      let flushedAny = false;
+
+      try {
+        for (const entry of pendingEntries) {
+          if (cancelled) return;
+
+          const result = await saveResultMutation.mutateAsync(entry.payload);
+          if (cancelled) return;
+
+          if (result.id) {
+            writeLatestSavedResultId(result.id);
+          }
+
+          removePendingTestResult(entry.id);
+          flushedAny = true;
+        }
+      } catch {
+        // Leave failed entries in localStorage so the next render can retry.
+      } finally {
+        isFlushingPendingResultsRef.current = false;
+
+        if (flushedAny && !cancelled) {
+          await utils.results.list.invalidate();
+          setPendingResultsNonce((value) => value + 1);
+        }
+      }
+    };
+
+    void flushPendingResults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingResultsNonce, saveResultMutation, utils.results.list]);
 
   useEffect(() => {
     if (!selectedPaper) return;
@@ -510,6 +569,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   }, [state.answers]);
 
   const submitQuiz = useCallback(() => {
+    if (state.submitted) return;
+
     const now = Date.now();
     const finalizedSectionTimings = { ...sectionTimingsRef.current };
     if (sectionEnteredAtRef.current !== null && currentSectionIdRef.current) {
@@ -521,27 +582,45 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (selectedPaper && studentInfo) {
+      const normalizedSectionTimings = Object.fromEntries(
+        Object.entries(finalizedSectionTimings).map(([sectionId, milliseconds]) => [
+          sectionId,
+          Math.round(milliseconds / 1000),
+        ]),
+      );
+      const answersSnapshot = { ...state.answers };
+
       writeSubmittedAssessmentSnapshot({
         paper: selectedPaper,
         studentInfo: {
           name: studentInfo.name,
           grade: studentInfo.grade,
         },
-        answers: { ...state.answers },
-        sectionTimings: Object.fromEntries(
-          Object.entries(finalizedSectionTimings).map(([sectionId, milliseconds]) => [
-            sectionId,
-            Math.round(milliseconds / 1000),
-          ]),
-        ),
+        answers: answersSnapshot,
+        sectionTimings: normalizedSectionTimings,
         startTime: state.startTime,
         endTime: now,
         submittedAt: now,
       });
+
+      const artifacts = buildSubmissionArtifacts(selectedPaper, answersSnapshot);
+      queuePendingTestResult({
+        studentName: studentInfo.name,
+        studentGrade: studentInfo.grade || undefined,
+        paperId: selectedPaper.id,
+        paperTitle: selectedPaper.title,
+        totalCorrect: artifacts.objectiveTotals.correct,
+        totalQuestions: artifacts.objectiveTotals.total,
+        totalTimeSeconds: state.startTime ? Math.max(0, Math.round((now - state.startTime) / 1000)) : undefined,
+        answersJson: packStoredAssessmentPayloadForResultStorage(answersSnapshot, selectedPaper),
+        scoreBySectionJson: JSON.stringify(artifacts.objectiveBySection),
+        sectionTimingsJson: JSON.stringify(normalizedSectionTimings),
+      });
+      setPendingResultsNonce((value) => value + 1);
     }
 
     setState(prev => ({ ...prev, submitted: true, endTime: now }));
-  }, [selectedPaper, state.answers, state.startTime, studentInfo]);
+  }, [selectedPaper, state.answers, state.startTime, state.submitted, studentInfo]);
 
   const resetQuiz = useCallback(() => {
     setIsStarted(false);
