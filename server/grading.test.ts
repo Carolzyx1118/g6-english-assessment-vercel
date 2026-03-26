@@ -281,7 +281,7 @@ describe("grading.generateReport", () => {
     expect(result.speakingEvaluation).toBeNull();
   });
 
-  it("marks writing and speaking as manual review in the template report", async () => {
+  it("marks writing and speaking as awaiting refreshed AI evaluation in the template report", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
       paperTitle: "G6 English Assessment",
@@ -307,8 +307,8 @@ describe("grading.generateReport", () => {
         totalScore: 0,
         totalPossible: 0,
         grade: "Manual Review",
-        overallFeedback_en: "Teacher review required.",
-        overallFeedback_cn: "需要老师人工批改。",
+        overallFeedback_en: "Awaiting AI evaluation.",
+        overallFeedback_cn: "等待 AI 评估结果。",
         reviewMode: "manual",
         manualReviewRequired: true,
         evaluations: [],
@@ -317,10 +317,10 @@ describe("grading.generateReport", () => {
 
     expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result.reportTitle_en).toBe("Assessment Feedback Report");
-    expect(result.abilitySnapshot_en).toContain("Writing and speaking should be finalized together with teacher review.");
-    expect(result.overallSummary_en).toContain("teacher scoring notes");
-    expect(result.sectionInsights.find((item) => item.sectionId === "writing")?.summary_en).toContain("teacher review");
-    expect(result.sectionInsights.find((item) => item.sectionId === "speaking-part-1")?.summary_en).toContain("teacher review");
+    expect(result.abilitySnapshot_en.some((item) => item.includes("refreshed AI evaluation"))).toBe(true);
+    expect(result.overallSummary_en).toContain("waiting for refreshed AI evaluation");
+    expect(result.sectionInsights.find((item) => item.sectionId === "writing")?.summary_en).toContain("waiting for refreshed AI evaluation");
+    expect(result.sectionInsights.find((item) => item.sectionId === "speaking-part-1")?.summary_en).toContain("waiting for refreshed AI evaluation");
     expect(result.studyPlan).toHaveLength(3);
     expect(result.speakingEvaluation?.reviewMode).toBe("manual");
   });
@@ -500,7 +500,12 @@ describe("grading.evaluateWriting", () => {
 });
 
 describe("grading.evaluateSpeaking", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ENV.aiGatewayApiKey = "";
+    ENV.aiGatewayModel = "";
+    ENV.aiGatewaySpeakingModel = "";
+  });
 
   it("transcribes and evaluates speaking with AI", async () => {
     mockTranscribeAudio.mockResolvedValueOnce({
@@ -572,6 +577,73 @@ describe("grading.evaluateSpeaking", () => {
     expect(result.evaluations[0].manualReviewRequired).toBe(false);
     expect(result.evaluations[0].feedback_en).toContain("easy to follow");
     expect(result.evaluations[0].audioUrl).toBe("/api/blob?key=sample-speaking");
+  });
+
+  it("scores the recordings that succeed and isolates individual failures", async () => {
+    mockTranscribeAudio
+      .mockResolvedValueOnce({
+        text: "I like this meal because my family makes it for birthdays.",
+      } as any)
+      .mockResolvedValueOnce({
+        error: "Voice transcription failed",
+        code: "TRANSCRIPTION_FAILED",
+        details: "temporary outage",
+      } as any);
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              transcript: "I like this meal because my family makes it for birthdays.",
+              score: 4,
+              feedback_en: "The response is relevant and easy to follow.",
+              feedback_cn: "回答切题，也比较容易理解。",
+              taskCompletion_en: "The prompt was answered directly.",
+              taskCompletion_cn: "能够直接回应题目。",
+              fluency_en: "The response flows fairly smoothly.",
+              fluency_cn: "整体表达比较流畅。",
+              vocabulary_en: "Vocabulary is simple but appropriate.",
+              vocabulary_cn: "词汇较基础，但使用恰当。",
+              grammar_en: "Most sentence patterns are controlled well.",
+              grammar_cn: "大部分句子结构控制得不错。",
+              pronunciation_en: "Clarity appears generally good from the transcript evidence.",
+              pronunciation_cn: "从转写结果看，表达清晰度整体较好。",
+              suggestions_en: ["Add one more supporting detail."],
+              suggestions_cn: ["可以再补充一个支持细节。"],
+            }),
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-4",
+          sectionTitle: "Speaking Part 4",
+          questionId: 104,
+          prompt: "Talk about the special meal in more detail.",
+          audioUrl: "/api/blob?key=sample-speaking-1",
+        },
+        {
+          sectionId: "speaking-part-4",
+          sectionTitle: "Speaking Part 4",
+          questionId: 105,
+          prompt: "Explain why it is special to you.",
+          audioUrl: "/api/blob?key=sample-speaking-2",
+        },
+      ],
+    });
+
+    expect(mockTranscribeAudio).toHaveBeenCalledTimes(2);
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result.totalScore).toBe(4);
+    expect(result.totalPossible).toBe(5);
+    expect(result.evaluations).toHaveLength(2);
+    expect(result.evaluations[0].score).toBe(4);
+    expect(result.evaluations[1].grade).toBe("AI Unavailable");
+    expect(result.overallFeedback_en).toContain("could not be processed automatically");
   });
 
   it("falls back to an automatic unavailable state when transcription fails", async () => {

@@ -68,6 +68,8 @@ type SpeechProviderConfig = {
   provider: "forge" | "openai";
 };
 
+const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
+
 function buildApiUrl(baseUrl: string, path: string): string {
   const normalizedBase = baseUrl.replace(/\/+$/, "");
   const normalizedPath = path.replace(/^\/+/, "");
@@ -150,13 +152,13 @@ export async function transcribeAudio(
       audioBuffer = Buffer.from(await response.arrayBuffer());
       mimeType = response.headers.get('content-type') || 'audio/mpeg';
       
-      // Check file size (16MB limit)
+      // Keep this aligned with the upstream transcription endpoint limit.
       const sizeMB = audioBuffer.length / (1024 * 1024);
-      if (sizeMB > 16) {
+      if (audioBuffer.length > MAX_TRANSCRIPTION_AUDIO_BYTES) {
         return {
           error: "Audio file exceeds maximum size limit",
           code: "FILE_TOO_LARGE",
-          details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`
+          details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 25MB`
         };
       }
     } catch (error) {

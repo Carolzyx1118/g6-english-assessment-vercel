@@ -53,6 +53,13 @@ const AI_WRITING_MAX_SCORE = 20;
 const AI_SPEAKING_MAX_SCORE = 5;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
 const EMBEDDED_DATA_URL_PREFIX = "data:";
+type SpeakingResponseInput = {
+  sectionId: string;
+  sectionTitle: string;
+  questionId: number;
+  prompt: string;
+  audioUrl: string;
+};
 
 function isPaperSubjectValue(value: unknown): value is ResultPaperSubject {
   return value === "english" || value === "math" || value === "vocabulary";
@@ -256,10 +263,10 @@ function gradeReadingAnswer(answer: {
     feedback_cn: isCorrect ? "答案可接受。" : "答案与参考答案不一致。",
     explanation_en: isCorrect
       ? `Accepted answer: ${correctAnswer}.`
-      : `Expected answer: ${correctAnswer}. If the wording is acceptable but different from the key, please review it manually.`,
+      : `Expected answer: ${correctAnswer}. The current response was not recognized as semantically equivalent to the reference answer.`,
     explanation_cn: isCorrect
       ? `参考答案：${correctAnswer}。`
-      : `参考答案：${correctAnswer}。如果学生表达意思正确但与答案写法不同，请人工复核。`,
+      : `参考答案：${correctAnswer}。系统当前未识别该作答与参考答案语义等价。`,
     referenceAnswer: correctAnswer,
   } satisfies ReadingCheckResult;
 }
@@ -464,16 +471,13 @@ function buildAutomaticWritingFallbackEvaluation(input: {
   };
 }
 
-function buildAutomaticSpeakingFallbackEvaluation(
-  responses: Array<{
-    sectionId: string;
-    sectionTitle: string;
-    questionId: number;
-    prompt: string;
-    audioUrl: string;
-  }>
-): SpeakingEvaluationResult {
-  const evaluations: SpeakingQuestionEvaluation[] = responses.map((response) => ({
+function buildAutomaticSpeakingFallbackQuestionEvaluation(
+  response: SpeakingResponseInput,
+  reason?: string,
+): SpeakingQuestionEvaluation {
+  const detail = reason?.trim();
+
+  return {
     sectionId: response.sectionId,
     sectionTitle: response.sectionTitle,
     questionId: response.questionId,
@@ -484,7 +488,9 @@ function buildAutomaticSpeakingFallbackEvaluation(
     maxScore: 0,
     grade: "AI Unavailable",
     feedback_en:
-      "Automatic speaking scoring could not be completed for this recording this time.",
+      detail
+        ? `Automatic speaking scoring could not be completed for this recording. ${detail}`
+        : "Automatic speaking scoring could not be completed for this recording this time.",
     feedback_cn:
       "本次口语录音暂时未能完成自动评分。",
     taskCompletion_en: "The system could not complete automatic task analysis for this response yet.",
@@ -499,28 +505,55 @@ function buildAutomaticSpeakingFallbackEvaluation(
     pronunciation_cn: "发音自动分析暂时不可用。",
     suggestions_en: [
       "Retry AI speaking scoring after confirming the recording uploaded correctly.",
-      "Keep the original audio file available so the system can analyze it again.",
+      "If the response is very long, keep the saved audio in a compressed browser format so transcription can still run.",
     ],
     suggestions_cn: [
       "确认录音上传正常后，可重新触发一次 AI 口语评分。",
-      "请保留原始音频，方便系统再次分析。",
+      "如果录音较长，尽量保留压缩后的浏览器音频格式，方便系统先完成转写。",
     ],
     reviewMode: "ai",
     manualReviewRequired: false,
-  }));
+  };
+}
+
+function summarizeSpeakingEvaluations(
+  evaluations: SpeakingQuestionEvaluation[],
+): SpeakingEvaluationResult {
+  const scorableEvaluations = evaluations.filter((item) => item.maxScore > 0);
+  const hasFailures = scorableEvaluations.length < evaluations.length;
+
+  if (scorableEvaluations.length === 0) {
+    return {
+      totalScore: 0,
+      totalPossible: 0,
+      grade: "AI Unavailable",
+      overallFeedback_en:
+        evaluations.length > 0
+          ? "Automatic speaking scoring could not be completed this time. The original recordings are still saved, but no AI score has been assigned yet."
+          : "No speaking responses were submitted.",
+      overallFeedback_cn:
+        evaluations.length > 0
+          ? "本次口语自动评分暂时未能完成。原始录音已经保存，但目前还没有生成 AI 分数。"
+          : "未提交口语作答。",
+      evaluations,
+      reviewMode: "ai",
+      manualReviewRequired: false,
+    };
+  }
+
+  const totalScore = scorableEvaluations.reduce((sum, item) => sum + item.score, 0);
+  const totalPossible = scorableEvaluations.reduce((sum, item) => sum + item.maxScore, 0);
 
   return {
-    totalScore: 0,
-    totalPossible: 0,
-    grade: "AI Unavailable",
-    overallFeedback_en:
-      evaluations.length > 0
-        ? "Automatic speaking scoring could not be completed this time. The original recordings are still saved, but no AI score has been assigned yet."
-        : "No speaking responses were submitted.",
-    overallFeedback_cn:
-      evaluations.length > 0
-        ? "本次口语自动评分暂时未能完成。原始录音已经保存，但目前还没有生成 AI 分数。"
-        : "未提交口语作答。",
+    totalScore,
+    totalPossible,
+    grade: getLetterGrade(totalScore, totalPossible),
+    overallFeedback_en: hasFailures
+      ? "Automatic speaking scoring completed for the available recordings. A few recordings could not be processed automatically, so please re-record those prompts if needed."
+      : "Automatic speaking scoring completed. Review the per-question feedback to strengthen task focus, fluency, and sentence accuracy.",
+    overallFeedback_cn: hasFailures
+      ? "系统已完成可用录音的口语自动评分。仍有少数录音暂时无法处理，如有需要可重新录制这些题目。"
+      : "口语已完成自动评分。请结合每题反馈，继续加强回应切题度、表达流利度和句子准确性。",
     evaluations,
     reviewMode: "ai",
     manualReviewRequired: false,
@@ -1343,85 +1376,39 @@ Pronunciation EN: ${item.pronunciation_en}
   };
 }
 
-async function evaluateSpeakingWithGatewayAudio(
+async function evaluateSpeakingResponseWithTranscriptAI(
   req: Pick<TrpcContext["req"], "headers" | "protocol">,
-  responses: Array<{
-    sectionId: string;
-    sectionTitle: string;
-    questionId: number;
-    prompt: string;
-    audioUrl: string;
-  }>,
-): Promise<SpeakingEvaluationResult> {
-  const evaluations = await Promise.all(
-    responses.map((response) => evaluateSpeakingResponseWithGatewayAudio(req, response)),
-  );
-  const totalScore = evaluations.reduce((sum, item) => sum + item.score, 0);
-  const totalPossible = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
-  const overallFeedback = await buildSpeakingOverallFeedback(evaluations);
+  responseInput: SpeakingResponseInput,
+): Promise<SpeakingQuestionEvaluation> {
+  const resolvedAudioUrl = resolveAssetUrl(req, responseInput.audioUrl);
+  const transcript = await transcribeAudio({
+    audioUrl: resolvedAudioUrl,
+    language: "en",
+    prompt:
+      "Transcribe a student's English speaking assessment response. Preserve hesitations, repeated words, and incomplete phrases when they affect fluency.",
+  });
 
-  return {
-    totalScore,
-    totalPossible,
-    grade: getLetterGrade(totalScore, totalPossible),
-    overallFeedback_en: overallFeedback.overallFeedback_en,
-    overallFeedback_cn: overallFeedback.overallFeedback_cn,
-    evaluations,
-    reviewMode: "ai",
-    manualReviewRequired: false,
-  };
-}
+  if ("error" in transcript || !transcript.text.trim()) {
+    throw new Error(
+      "error" in transcript
+        ? `${transcript.error}${transcript.details ? `: ${transcript.details}` : ""}`
+        : "Empty transcript returned from speech service."
+    );
+  }
 
-async function evaluateSpeakingWithTranscriptAI(
-  req: Pick<TrpcContext["req"], "headers" | "protocol">,
-  responses: Array<{
-    sectionId: string;
-    sectionTitle: string;
-    questionId: number;
-    prompt: string;
-    audioUrl: string;
-  }>,
-): Promise<SpeakingEvaluationResult> {
-  const transcriptResults = await Promise.all(
-    responses.map(async (response) => {
-      const resolvedAudioUrl = resolveAssetUrl(req, response.audioUrl);
-      const transcript = await transcribeAudio({
-        audioUrl: resolvedAudioUrl,
-        language: "en",
-        prompt:
-          "Transcribe a student's English speaking assessment response. Preserve hesitations, repeated words, and incomplete phrases when they affect fluency.",
-      });
-
-      if ("error" in transcript || !transcript.text.trim()) {
-        throw new Error(
-          "error" in transcript
-            ? `${transcript.error}${transcript.details ? `: ${transcript.details}` : ""}`
-            : "Empty transcript returned from speech service."
-        );
-      }
-
-      return {
-        ...response,
-        transcript: transcript.text.trim(),
-      };
-    })
-  );
-
-  const prompt = `Evaluate these English speaking assessment responses using the prompt and transcript.
+  const prompt = `Evaluate this English speaking assessment response using the prompt and transcript.
 
 Scoring rules:
-- Score each response from 0-${AI_SPEAKING_MAX_SCORE}.
+- Score the response from 0-${AI_SPEAKING_MAX_SCORE}.
 - Judge task completion, fluency, vocabulary, grammar, and pronunciation/clarity.
 - Be cautious and fair. Use only evidence available from the transcript and the fact that it came from a spoken response.
 - Keep feedback concise, specific, and useful for a learner.
 - Suggestions must be actionable.
 
-Responses:
-${transcriptResults.map((item, index) => `
-${index + 1}. sectionId=${item.sectionId}; questionId=${item.questionId}; sectionTitle=${item.sectionTitle}
-Prompt: ${item.prompt}
-Transcript: ${item.transcript}
-`).join("\n")}`;
+Response:
+sectionId=${responseInput.sectionId}; questionId=${responseInput.questionId}; sectionTitle=${responseInput.sectionTitle}
+Prompt: ${responseInput.prompt}
+Transcript: ${transcript.text.trim()}`;
 
   const response = await invokeLLM({
     messages: [
@@ -1435,97 +1422,95 @@ Transcript: ${item.transcript}
     response_format: {
       type: "json_schema",
       json_schema: {
-        name: "speaking_evaluation",
+        name: "speaking_transcript_evaluation",
         strict: true,
         schema: {
           type: "object",
           properties: {
-            overallFeedback_en: { type: "string" },
-            overallFeedback_cn: { type: "string" },
-            evaluations: {
+            transcript: { type: "string" },
+            score: { type: "integer", minimum: 0, maximum: AI_SPEAKING_MAX_SCORE },
+            feedback_en: { type: "string" },
+            feedback_cn: { type: "string" },
+            taskCompletion_en: { type: "string" },
+            taskCompletion_cn: { type: "string" },
+            fluency_en: { type: "string" },
+            fluency_cn: { type: "string" },
+            vocabulary_en: { type: "string" },
+            vocabulary_cn: { type: "string" },
+            grammar_en: { type: "string" },
+            grammar_cn: { type: "string" },
+            pronunciation_en: { type: "string" },
+            pronunciation_cn: { type: "string" },
+            suggestions_en: {
               type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  sectionId: { type: "string" },
-                  questionId: { type: "integer" },
-                  transcript: { type: "string" },
-                  score: { type: "integer", minimum: 0, maximum: AI_SPEAKING_MAX_SCORE },
-                  feedback_en: { type: "string" },
-                  feedback_cn: { type: "string" },
-                  taskCompletion_en: { type: "string" },
-                  taskCompletion_cn: { type: "string" },
-                  fluency_en: { type: "string" },
-                  fluency_cn: { type: "string" },
-                  vocabulary_en: { type: "string" },
-                  vocabulary_cn: { type: "string" },
-                  grammar_en: { type: "string" },
-                  grammar_cn: { type: "string" },
-                  pronunciation_en: { type: "string" },
-                  pronunciation_cn: { type: "string" },
-                  suggestions_en: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                  suggestions_cn: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                },
-                required: [
-                  "sectionId",
-                  "questionId",
-                  "transcript",
-                  "score",
-                  "feedback_en",
-                  "feedback_cn",
-                  "taskCompletion_en",
-                  "taskCompletion_cn",
-                  "fluency_en",
-                  "fluency_cn",
-                  "vocabulary_en",
-                  "vocabulary_cn",
-                  "grammar_en",
-                  "grammar_cn",
-                  "pronunciation_en",
-                  "pronunciation_cn",
-                  "suggestions_en",
-                  "suggestions_cn",
-                ],
-                additionalProperties: false,
-              },
+              items: { type: "string" },
+            },
+            suggestions_cn: {
+              type: "array",
+              items: { type: "string" },
             },
           },
-          required: ["overallFeedback_en", "overallFeedback_cn", "evaluations"],
+          required: [
+            "transcript",
+            "score",
+            "feedback_en",
+            "feedback_cn",
+            "taskCompletion_en",
+            "taskCompletion_cn",
+            "fluency_en",
+            "fluency_cn",
+            "vocabulary_en",
+            "vocabulary_cn",
+            "grammar_en",
+            "grammar_cn",
+            "pronunciation_en",
+            "pronunciation_cn",
+            "suggestions_en",
+            "suggestions_cn",
+          ],
           additionalProperties: false,
         },
       },
     },
-    max_tokens: 3500,
+    max_tokens: 1800,
   });
 
   const parsed = parseJsonMessage<{
-    overallFeedback_en: string;
-    overallFeedback_cn: string;
-    evaluations: Array<{
-      sectionId: string;
-      questionId: number;
-      transcript: string;
-      score: number;
-      feedback_en: string;
-      feedback_cn: string;
-      taskCompletion_en: string;
-      taskCompletion_cn: string;
-      fluency_en: string;
-      fluency_cn: string;
-      vocabulary_en: string;
-      vocabulary_cn: string;
-      grammar_en: string;
-      grammar_cn: string;
-      pronunciation_en: string;
-      pronunciation_cn: string;
-      suggestions_en: string[];
-      suggestions_cn: string[];
+    transcript: string;
+    score: number;
+    feedback_en: string;
+    feedback_cn: string;
+    taskCompletion_en: string;
+    taskCompletion_cn: string;
+    fluency_en: string;
+    fluency_cn: string;
+    vocabulary_en: string;
+    vocabulary_cn: string;
+    grammar_en: string;
+    grammar_cn: string;
+    pronunciation_en: string;
+    pronunciation_cn: string;
+    suggestions_en: string[];
+    suggestions_cn: string[];
+    evaluations?: Array<{
+      sectionId?: string;
+      questionId?: number;
+      transcript?: string;
+      score?: number;
+      feedback_en?: string;
+      feedback_cn?: string;
+      taskCompletion_en?: string;
+      taskCompletion_cn?: string;
+      fluency_en?: string;
+      fluency_cn?: string;
+      vocabulary_en?: string;
+      vocabulary_cn?: string;
+      grammar_en?: string;
+      grammar_cn?: string;
+      pronunciation_en?: string;
+      pronunciation_cn?: string;
+      suggestions_en?: string[];
+      suggestions_cn?: string[];
     }>;
   }>(response.choices[0]?.message?.content);
 
@@ -1533,59 +1518,46 @@ Transcript: ${item.transcript}
     throw new Error("Speaking evaluation response was not valid JSON.");
   }
 
-  const normalizedEvaluations: SpeakingQuestionEvaluation[] = transcriptResults.map((source) => {
-    const evaluation = parsed.evaluations.find(
-      (item) => item.sectionId === source.sectionId && item.questionId === source.questionId,
-    );
-    const score = clampScore(evaluation?.score ?? 0, AI_SPEAKING_MAX_SCORE);
-
-    return {
-      sectionId: source.sectionId,
-      sectionTitle: source.sectionTitle,
-      questionId: source.questionId,
-      prompt: source.prompt,
-      audioUrl: source.audioUrl,
-      transcript: typeof evaluation?.transcript === "string" && evaluation.transcript.trim().length > 0
-        ? evaluation.transcript.trim()
-        : source.transcript,
-      score,
-      maxScore: AI_SPEAKING_MAX_SCORE,
-      grade: getLetterGrade(score, AI_SPEAKING_MAX_SCORE),
-      feedback_en: evaluation?.feedback_en?.trim() || "The response was evaluated automatically.",
-      feedback_cn: evaluation?.feedback_cn?.trim() || "该口语作答已完成自动评分。",
-      taskCompletion_en: evaluation?.taskCompletion_en?.trim() || "Task completion was reviewed automatically.",
-      taskCompletion_cn: evaluation?.taskCompletion_cn?.trim() || "任务完成度已完成自动评估。",
-      fluency_en: evaluation?.fluency_en?.trim() || "Fluency was reviewed automatically.",
-      fluency_cn: evaluation?.fluency_cn?.trim() || "流利度已完成自动评估。",
-      vocabulary_en: evaluation?.vocabulary_en?.trim() || "Vocabulary use was reviewed automatically.",
-      vocabulary_cn: evaluation?.vocabulary_cn?.trim() || "词汇使用已完成自动评估。",
-      grammar_en: evaluation?.grammar_en?.trim() || "Grammar control was reviewed automatically.",
-      grammar_cn: evaluation?.grammar_cn?.trim() || "语法使用已完成自动评估。",
-      pronunciation_en: evaluation?.pronunciation_en?.trim() || "Pronunciation and clarity were reviewed automatically.",
-      pronunciation_cn: evaluation?.pronunciation_cn?.trim() || "发音与清晰度已完成自动评估。",
-      suggestions_en: toNonEmptyStringArray(evaluation?.suggestions_en, [
-        "Answer the prompt more directly before adding extra details.",
-        "Slow down slightly and aim for clearer sentence control.",
-      ]),
-      suggestions_cn: toNonEmptyStringArray(evaluation?.suggestions_cn, [
-        "先更直接地回应题目，再补充细节。",
-        "适当放慢速度，尽量让句子表达更清楚。",
-      ]),
-      reviewMode: "ai",
-      manualReviewRequired: false,
-    };
-  });
-
-  const totalScore = normalizedEvaluations.reduce((sum, item) => sum + item.score, 0);
-  const totalPossible = normalizedEvaluations.reduce((sum, item) => sum + item.maxScore, 0);
+  const parsedEvaluation = Array.isArray(parsed.evaluations)
+    ? parsed.evaluations.find(
+        (item) => item.sectionId === responseInput.sectionId && item.questionId === responseInput.questionId,
+      ) || parsed.evaluations[0]
+    : parsed;
+  const score = clampScore(parsedEvaluation?.score ?? parsed.score, AI_SPEAKING_MAX_SCORE);
 
   return {
-    totalScore,
-    totalPossible,
-    grade: getLetterGrade(totalScore, totalPossible),
-    overallFeedback_en: parsed.overallFeedback_en.trim(),
-    overallFeedback_cn: parsed.overallFeedback_cn.trim(),
-    evaluations: normalizedEvaluations,
+    sectionId: responseInput.sectionId,
+    sectionTitle: responseInput.sectionTitle,
+    questionId: responseInput.questionId,
+    prompt: responseInput.prompt,
+    audioUrl: responseInput.audioUrl,
+    transcript:
+      (typeof parsedEvaluation?.transcript === "string" && parsedEvaluation.transcript.trim().length > 0
+        ? parsedEvaluation.transcript.trim()
+        : parsed.transcript?.trim()) || transcript.text.trim(),
+    score,
+    maxScore: AI_SPEAKING_MAX_SCORE,
+    grade: getLetterGrade(score, AI_SPEAKING_MAX_SCORE),
+    feedback_en: normalizeOptionalString(parsedEvaluation?.feedback_en, "The response was evaluated automatically."),
+    feedback_cn: normalizeOptionalString(parsedEvaluation?.feedback_cn, "该口语作答已完成自动评分。"),
+    taskCompletion_en: normalizeOptionalString(parsedEvaluation?.taskCompletion_en, "Task completion was reviewed automatically."),
+    taskCompletion_cn: normalizeOptionalString(parsedEvaluation?.taskCompletion_cn, "任务完成度已完成自动评估。"),
+    fluency_en: normalizeOptionalString(parsedEvaluation?.fluency_en, "Fluency was reviewed automatically."),
+    fluency_cn: normalizeOptionalString(parsedEvaluation?.fluency_cn, "流利度已完成自动评估。"),
+    vocabulary_en: normalizeOptionalString(parsedEvaluation?.vocabulary_en, "Vocabulary use was reviewed automatically."),
+    vocabulary_cn: normalizeOptionalString(parsedEvaluation?.vocabulary_cn, "词汇使用已完成自动评估。"),
+    grammar_en: normalizeOptionalString(parsedEvaluation?.grammar_en, "Grammar control was reviewed automatically."),
+    grammar_cn: normalizeOptionalString(parsedEvaluation?.grammar_cn, "语法使用已完成自动评估。"),
+    pronunciation_en: normalizeOptionalString(parsedEvaluation?.pronunciation_en, "Pronunciation and clarity were reviewed automatically."),
+    pronunciation_cn: normalizeOptionalString(parsedEvaluation?.pronunciation_cn, "发音与清晰度已完成自动评估。"),
+    suggestions_en: normalizeStringArray(parsedEvaluation?.suggestions_en, [
+      "Answer the prompt more directly before adding extra details.",
+      "Slow down slightly and aim for clearer sentence control.",
+    ]),
+    suggestions_cn: normalizeStringArray(parsedEvaluation?.suggestions_cn, [
+      "先更直接地回应题目，再补充细节。",
+      "适当放慢速度，尽量让句子表达更清楚。",
+    ]),
     reviewMode: "ai",
     manualReviewRequired: false,
   };
@@ -1593,27 +1565,74 @@ Transcript: ${item.transcript}
 
 async function evaluateSpeakingWithAI(
   req: Pick<TrpcContext["req"], "headers" | "protocol">,
-  responses: Array<{
-    sectionId: string;
-    sectionTitle: string;
-    questionId: number;
-    prompt: string;
-    audioUrl: string;
-  }>,
+  responses: SpeakingResponseInput[],
 ): Promise<SpeakingEvaluationResult> {
-  if (ENV.aiGatewayApiKey) {
-    try {
-      return await evaluateSpeakingWithGatewayAudio(req, responses);
-    } catch (error) {
-      console.error("[grading.evaluateSpeaking] Gateway audio scoring failed, trying transcription fallback:", error);
-    }
+  const evaluations = await Promise.all(
+    responses.map(async (response) => {
+      if (ENV.aiGatewayApiKey) {
+        try {
+          return await evaluateSpeakingResponseWithGatewayAudio(req, response);
+        } catch (error) {
+          console.error(
+            `[grading.evaluateSpeaking] Gateway audio scoring failed for ${response.sectionId}#${response.questionId}, trying transcription fallback:`,
+            error,
+          );
+        }
+      }
+
+      try {
+        return await evaluateSpeakingResponseWithTranscriptAI(req, response);
+      } catch (error) {
+        console.error(
+          `[grading.evaluateSpeaking] Automatic speaking scoring failed for ${response.sectionId}#${response.questionId}:`,
+          error,
+        );
+        return buildAutomaticSpeakingFallbackQuestionEvaluation(
+          response,
+          error instanceof Error ? error.message : "Unknown automatic scoring error.",
+        );
+      }
+    }),
+  );
+
+  const result = summarizeSpeakingEvaluations(evaluations);
+  const scorableEvaluations = evaluations.filter((item) => item.maxScore > 0);
+
+  if (scorableEvaluations.length === 0) {
+    return result;
+  }
+
+  if (scorableEvaluations.length === 1) {
+    const [singleEvaluation] = scorableEvaluations;
+    return {
+      ...result,
+      overallFeedback_en:
+        result.overallFeedback_en.includes("could not be processed automatically")
+          ? `${singleEvaluation.feedback_en} ${result.overallFeedback_en}`.trim()
+          : singleEvaluation.feedback_en,
+      overallFeedback_cn:
+        result.overallFeedback_cn.includes("暂时无法处理")
+          ? `${singleEvaluation.feedback_cn} ${result.overallFeedback_cn}`.trim()
+          : singleEvaluation.feedback_cn,
+    };
   }
 
   try {
-    return await evaluateSpeakingWithTranscriptAI(req, responses);
+    const overallFeedback = await buildSpeakingOverallFeedback(scorableEvaluations);
+    return {
+      ...result,
+      overallFeedback_en:
+        result.overallFeedback_en.trim().length > 0
+          ? `${overallFeedback.overallFeedback_en} ${result.overallFeedback_en}`.trim()
+          : overallFeedback.overallFeedback_en,
+      overallFeedback_cn:
+        result.overallFeedback_cn.trim().length > 0
+          ? `${overallFeedback.overallFeedback_cn} ${result.overallFeedback_cn}`.trim()
+          : overallFeedback.overallFeedback_cn,
+    };
   } catch (error) {
-    console.error("[grading.evaluateSpeaking] Falling back to automatic unavailable state:", error);
-    return buildAutomaticSpeakingFallbackEvaluation(responses);
+    console.error("[grading.evaluateSpeaking] Failed to summarize speaking feedback:", error);
+    return result;
   }
 }
 

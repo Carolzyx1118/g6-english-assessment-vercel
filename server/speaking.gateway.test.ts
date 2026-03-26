@@ -108,20 +108,6 @@ describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
             },
           },
         ],
-      } as any)
-      .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                overallFeedback_en:
-                  "The student answers the prompt clearly and should keep developing fuller supporting details.",
-                overallFeedback_cn:
-                  "学生能够较清楚地回应题目，接下来可以继续加强补充细节的能力。",
-              }),
-            },
-          },
-        ],
       } as any);
 
     const caller = appRouter.createCaller(createPublicContext());
@@ -142,7 +128,7 @@ describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
       "https://example.com/api/blob?key=sample-speaking.wav",
     );
     expect(mockTranscribeAudio).not.toHaveBeenCalled();
-    expect(mockInvokeLLM).toHaveBeenCalledTimes(2);
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(mockInvokeLLM.mock.calls[0]?.[0]).toMatchObject({
       model: "openai/gpt-audio",
       modalities: ["text"],

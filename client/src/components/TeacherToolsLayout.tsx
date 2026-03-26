@@ -56,13 +56,13 @@ function PrimaryLink({
       <button
         type="button"
         title={collapsed ? label : undefined}
-        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+        className={`flex min-h-[56px] w-full items-center gap-3.5 rounded-[24px] px-4 py-3 text-left text-[15px] font-semibold leading-none tracking-[-0.01em] transition-colors ${
           active
             ? "bg-[#1E3A5F] text-white shadow-sm"
             : "text-slate-600 hover:bg-slate-100 hover:text-[#1E3A5F]"
         } ${collapsed ? "justify-center px-2" : ""}`}
       >
-        <span className="flex h-5 w-5 items-center justify-center">{icon}</span>
+        <span className="flex h-6 w-6 items-center justify-center">{icon}</span>
         {!collapsed ? <span>{label}</span> : null}
       </button>
     </Link>
@@ -82,7 +82,7 @@ function SubjectLink({
     <Link href={href}>
       <button
         type="button"
-        className={`w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+        className={`min-h-[44px] w-full rounded-2xl px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.01em] transition-colors ${
           active
             ? "bg-sky-50 text-sky-700"
             : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
@@ -107,13 +107,44 @@ function ExpandToggle({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+      className="inline-flex h-12 w-12 items-center justify-center rounded-[20px] text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
       title={expanded ? `Collapse ${label}` : `Expand ${label}`}
       aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`}
       aria-expanded={expanded}
     >
       {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
     </button>
+  );
+}
+
+function NavItemRow({
+  link,
+  collapsed,
+  expandable = false,
+  expanded = false,
+  onToggle,
+  toggleLabel,
+}: {
+  link: ReactNode;
+  collapsed: boolean;
+  expandable?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  toggleLabel?: string;
+}) {
+  if (collapsed) {
+    return <>{link}</>;
+  }
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_48px] items-center gap-2">
+      <div className="min-w-0">{link}</div>
+      {expandable && onToggle && toggleLabel ? (
+        <ExpandToggle expanded={expanded} onToggle={onToggle} label={toggleLabel} />
+      ) : (
+        <span aria-hidden="true" className="block h-12 w-12" />
+      )}
+    </div>
   );
 }
 
@@ -199,8 +230,13 @@ export default function TeacherToolsLayout({
             {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Teacher Tools</p> : null}
             {!collapsed ? (
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
+                <NavItemRow
+                  collapsed={false}
+                  expandable
+                  expanded={tagManagerExpanded}
+                  onToggle={() => setTagManagerExpanded((current) => !current)}
+                  toggleLabel="Paper Generator subjects"
+                  link={
                     <PrimaryLink
                       href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
                       icon={<Tags className="h-4 w-4" />}
@@ -208,13 +244,8 @@ export default function TeacherToolsLayout({
                       active={activeTool === "tag-manager"}
                       collapsed={false}
                     />
-                  </div>
-                  <ExpandToggle
-                    expanded={tagManagerExpanded}
-                    onToggle={() => setTagManagerExpanded((current) => !current)}
-                    label="Paper Generator subjects"
-                  />
-                </div>
+                  }
+                />
                 {tagManagerExpanded ? (
                   <div className="space-y-1 pl-10">
                     {allowedSubjects.map((subject) => (
@@ -238,18 +269,38 @@ export default function TeacherToolsLayout({
               />
             )}
 
-            <PrimaryLink
-              href={`/paper-intake?subject=${defaultSubject}`}
-              icon={<FilePlus2 className="h-4 w-4" />}
-              label="Question Intake"
-              active={activeTool === "paper-intake"}
-              collapsed={collapsed}
-            />
+            {collapsed ? (
+              <PrimaryLink
+                href={`/paper-intake?subject=${defaultSubject}`}
+                icon={<FilePlus2 className="h-4 w-4" />}
+                label="Question Intake"
+                active={activeTool === "paper-intake"}
+                collapsed={collapsed}
+              />
+            ) : (
+              <NavItemRow
+                collapsed={false}
+                link={
+                  <PrimaryLink
+                    href={`/paper-intake?subject=${defaultSubject}`}
+                    icon={<FilePlus2 className="h-4 w-4" />}
+                    label="Question Intake"
+                    active={activeTool === "paper-intake"}
+                    collapsed={false}
+                  />
+                }
+              />
+            )}
 
             {!collapsed ? (
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
+                <NavItemRow
+                  collapsed={false}
+                  expandable
+                  expanded={questionBankExpanded}
+                  onToggle={() => setQuestionBankExpanded((current) => !current)}
+                  toggleLabel="Question Bank subjects"
+                  link={
                     <PrimaryLink
                       href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
                       icon={<Database className="h-4 w-4" />}
@@ -257,13 +308,8 @@ export default function TeacherToolsLayout({
                       active={activeTool === "question-bank"}
                       collapsed={false}
                     />
-                  </div>
-                  <ExpandToggle
-                    expanded={questionBankExpanded}
-                    onToggle={() => setQuestionBankExpanded((current) => !current)}
-                    label="Question Bank subjects"
-                  />
-                </div>
+                  }
+                />
                 {questionBankExpanded ? (
                   <div className="space-y-1 pl-10">
                     {allowedSubjects.map((subject) => (
@@ -289,8 +335,13 @@ export default function TeacherToolsLayout({
 
             {!collapsed ? (
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
+                <NavItemRow
+                  collapsed={false}
+                  expandable
+                  expanded={paperManagerExpanded}
+                  onToggle={() => setPaperManagerExpanded((current) => !current)}
+                  toggleLabel="Paper Manager subjects"
+                  link={
                     <PrimaryLink
                       href="/paper-manager"
                       icon={<BookCopy className="h-4 w-4" />}
@@ -298,13 +349,8 @@ export default function TeacherToolsLayout({
                       active={activeTool === "paper-manager"}
                       collapsed={false}
                     />
-                  </div>
-                  <ExpandToggle
-                    expanded={paperManagerExpanded}
-                    onToggle={() => setPaperManagerExpanded((current) => !current)}
-                    label="Paper Manager subjects"
-                  />
-                </div>
+                  }
+                />
                 {paperManagerExpanded ? (
                   <div className="space-y-1 pl-10">
                     {allowedSubjects.map((subject) => (
@@ -328,13 +374,28 @@ export default function TeacherToolsLayout({
               />
             )}
 
-            <PrimaryLink
-              href="/test-history"
-              icon={<History className="h-4 w-4" />}
-              label="Test History"
-              active={activeTool === "test-history"}
-              collapsed={collapsed}
-            />
+            {collapsed ? (
+              <PrimaryLink
+                href="/test-history"
+                icon={<History className="h-4 w-4" />}
+                label="Test History"
+                active={activeTool === "test-history"}
+                collapsed={collapsed}
+              />
+            ) : (
+              <NavItemRow
+                collapsed={false}
+                link={
+                  <PrimaryLink
+                    href="/test-history"
+                    icon={<History className="h-4 w-4" />}
+                    label="Test History"
+                    active={activeTool === "test-history"}
+                    collapsed={false}
+                  />
+                }
+              />
+            )}
           </div>
 
           <div className="space-y-1">

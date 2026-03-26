@@ -28,6 +28,7 @@ interface DragDropFillBlankProps {
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
+  getDisplayQuestionNumber?: (questionId: number) => number;
 }
 
 export default function DragDropFillBlank({
@@ -37,7 +38,9 @@ export default function DragDropFillBlank({
   sectionId,
   getAnswer,
   setAnswer,
+  getDisplayQuestionNumber,
 }: DragDropFillBlankProps) {
+  const resolveDisplayQuestionNumber = getDisplayQuestionNumber || ((questionId: number) => questionId);
   const isPassageMode = !!grammarPassage;
 
   if (isPassageMode) {
@@ -49,6 +52,7 @@ export default function DragDropFillBlank({
         sectionId={sectionId}
         getAnswer={getAnswer}
         setAnswer={setAnswer}
+        getDisplayQuestionNumber={resolveDisplayQuestionNumber}
       />
     );
   }
@@ -60,6 +64,7 @@ export default function DragDropFillBlank({
       sectionId={sectionId}
       getAnswer={getAnswer}
       setAnswer={setAnswer}
+      getDisplayQuestionNumber={resolveDisplayQuestionNumber}
     />
   );
 }
@@ -75,6 +80,7 @@ function PassageModeFillBlank({
   sectionId,
   getAnswer,
   setAnswer,
+  getDisplayQuestionNumber,
 }: {
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
@@ -82,6 +88,7 @@ function PassageModeFillBlank({
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
+  getDisplayQuestionNumber: (questionId: number) => number;
 }) {
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
   const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
@@ -133,6 +140,7 @@ function PassageModeFillBlank({
   const renderBlank = (questionId: number, key: string) => {
     const answer = getAnswer(sectionId, questionId);
     const answerWord = answer && typeof answer === 'string' ? wordBank.find((w) => w.letter === answer) : null;
+    const displayNumber = getDisplayQuestionNumber(questionId);
 
     return (
       <span
@@ -157,7 +165,7 @@ function PassageModeFillBlank({
           }
         }}
       >
-        <span className="text-xs font-bold text-slate-400 mr-1">({questionId})</span>
+        <span className="text-xs font-bold text-slate-400 mr-1">({displayNumber})</span>
         {answerWord ? (
           <span className="flex items-center gap-1">
             {answerWord.word}
@@ -282,12 +290,14 @@ function SentenceModeFillBlank({
   sectionId,
   getAnswer,
   setAnswer,
+  getDisplayQuestionNumber,
 }: {
   questions: FillBlankQuestion[];
   wordBank: { letter: string; word: string }[];
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
+  getDisplayQuestionNumber: (questionId: number) => number;
 }) {
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
   const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
@@ -433,9 +443,10 @@ function SentenceModeFillBlank({
           if (!blank.id) return null;
           const answer = getAnswer(sectionId, blank.id);
           const answerWord = answer && typeof answer === 'string' ? answer : null;
+          const displayNumber = getDisplayQuestionNumber(blank.id);
           return (
             <div key={blank.id} className="text-base leading-[2.2] text-slate-700">
-              <span className="mr-2 inline-block font-bold text-slate-500 align-baseline">{`Q${blank.id}.`}</span>
+              <span className="mr-2 inline-block font-bold text-slate-500 align-baseline">{`Q${displayNumber}.`}</span>
               {renderSentenceParts(blank.text, blank.id, answerWord)}
             </div>
           );

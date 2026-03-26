@@ -21,7 +21,7 @@ import {
   getWordCompletionFilledLetters,
   parseWordPattern,
 } from '@/lib/vocabularyWordHelpers';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 type SelectableAnswer = number | number[] | undefined;
 const PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-base text-slate-700 leading-relaxed';
@@ -130,9 +130,80 @@ function stripDuplicatedOptionPrefix(value: string, label: string) {
   return value.replace(new RegExp(`^${escapedLabel}[\\.)]\\s*`, 'i'), '').trim();
 }
 
+function buildGlobalDisplayNumberMaps(sections: Section[]) {
+  const questionNumbers = new Map<string, number>();
+  const itemNumbers = new Map<string, number>();
+  let current = 1;
+
+  sections.forEach((section) => {
+    (section.questions || []).forEach((question) => {
+      const questionKey = `${section.id}:${question.id}`;
+
+      if (question.type === 'true-false') {
+        questionNumbers.set(questionKey, current);
+        question.statements.forEach((statement) => {
+          itemNumbers.set(`${questionKey}:${statement.label}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      if (question.type === 'table') {
+        questionNumbers.set(questionKey, current);
+        question.rows.forEach((_, index) => {
+          itemNumbers.set(`${questionKey}:${index}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      if (question.type === 'reference' || question.type === 'phrase') {
+        questionNumbers.set(questionKey, current);
+        question.items.forEach((_, index) => {
+          itemNumbers.set(`${questionKey}:${index}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      if (question.type === 'order') {
+        questionNumbers.set(questionKey, current);
+        question.events.forEach((_, index) => {
+          itemNumbers.set(`${questionKey}:${index}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      if (question.type === 'sentence-reorder' || question.type === 'inline-word-choice' || question.type === 'passage-inline-word-choice') {
+        questionNumbers.set(questionKey, current);
+        question.items.forEach((item) => {
+          itemNumbers.set(`${questionKey}:${item.label}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      if (question.type === 'open-ended' && question.subQuestions && question.subQuestions.length > 0) {
+        questionNumbers.set(questionKey, current);
+        question.subQuestions.forEach((subQuestion) => {
+          itemNumbers.set(`${questionKey}:${subQuestion.label}`, current);
+          current += 1;
+        });
+        return;
+      }
+
+      questionNumbers.set(questionKey, current);
+      current += 1;
+    });
+  });
+
+  return { questionNumbers, itemNumbers };
+}
+
 // ========== PICTURE MCQ (WIDA Vocabulary & Grammar) ==========
 
-function PictureMCQCard({ q, answer, onAnswer }: { q: PictureMCQ; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void }) {
+function PictureMCQCard({ q, answer, onAnswer, displayNumber }: { q: PictureMCQ; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void; displayNumber: number }) {
   const multiSelect = isMultiSelectQuestion(q);
   const selectionLimit = getSelectionLimit(q);
   const selected = normalizeSelectableAnswer(answer);
@@ -140,7 +211,7 @@ function PictureMCQCard({ q, answer, onAnswer }: { q: PictureMCQ; answer?: Selec
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         <span className="font-semibold text-slate-800">"{q.question}"</span>
         {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
       </p>
@@ -190,7 +261,7 @@ function PictureMCQCard({ q, answer, onAnswer }: { q: PictureMCQ; answer?: Selec
 
 // ========== TEXT MCQ (Both papers) ==========
 
-function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void }) {
+function MCQQuestionCard({ q, answer, onAnswer, displayNumber }: { q: MCQQuestion; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void; displayNumber: number }) {
   // Render question with highlightWord bolded if present
   const renderQuestion = () => {
     if (q.highlightWord) {
@@ -213,7 +284,7 @@ function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: Sel
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {renderQuestion()}
         {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
       </p>
@@ -264,7 +335,7 @@ function MCQQuestionCard({ q, answer, onAnswer }: { q: MCQQuestion; answer?: Sel
 
 // ========== LISTENING MCQ (WIDA) ==========
 
-function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void }) {
+function ListeningMCQCard({ q, answer, onAnswer, displayNumber }: { q: ListeningMCQ; answer?: SelectableAnswer; onAnswer: (v: number | number[]) => void; displayNumber: number }) {
   const multiSelect = isMultiSelectQuestion(q);
   const selectionLimit = getSelectionLimit(q);
   const selected = normalizeSelectableAnswer(answer);
@@ -272,7 +343,7 @@ function ListeningMCQCard({ q, answer, onAnswer }: { q: ListeningMCQ; answer?: S
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         <span className="font-semibold text-slate-800">{q.question}</span>
         {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
       </p>
@@ -383,16 +454,17 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
 
 // ========== WORD BANK FILL-IN (WIDA Reading Part 1) ==========
 
-function WordBankFillInCard({ q, answer, onAnswer, wordBankItems }: {
+function WordBankFillInCard({ q, answer, onAnswer, wordBankItems, displayNumber }: {
   q: WordBankFillIn;
   answer?: string;
   onAnswer: (v: string) => void;
   wordBankItems: { word: string; imageUrl: string }[];
+  displayNumber: number;
 }) {
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -429,11 +501,11 @@ function WordBankFillInCard({ q, answer, onAnswer, wordBankItems }: {
 
 // ========== STORY FILL-IN (WIDA Reading Part 2) ==========
 
-function StoryFillInCard({ q, answer, onAnswer }: { q: StoryFillIn; answer?: string; onAnswer: (v: string) => void }) {
+function StoryFillInCard({ q, answer, onAnswer, displayNumber }: { q: StoryFillIn; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   return (
     <div className="space-y-3">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question.split('___').map((part, i, arr) => (
           <span key={i}>
             {part}
@@ -458,11 +530,13 @@ function StandaloneFillBlankCard({
   section,
   answer,
   onAnswer,
+  displayNumber,
 }: {
   q: FillBlankQuestion;
   section: Section;
   answer?: string;
   onAnswer: (v: string) => void;
+  displayNumber: number;
 }) {
   const prompt = q.question || `Question ${q.id}: ___`;
   const parts = prompt.split('___');
@@ -476,7 +550,7 @@ function StandaloneFillBlankCard({
       <div className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
         <div className="min-h-[180px]">
           <p className={PROMPT_TEXT_CLASS}>
-            <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+            <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
             {renderTextWithFractions(mathPrompt, `math-short-answer-${q.id}`)}
           </p>
         </div>
@@ -496,7 +570,7 @@ function StandaloneFillBlankCard({
   return (
     <div className="space-y-3">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {hasInlineBlank ? (
           parts.map((part, index) => (
             <span key={index}>
@@ -533,10 +607,12 @@ function PictureSpellingCard({
   q,
   answer,
   onAnswer,
+  displayNumber,
 }: {
   q: PictureSpellingQuestion;
   answer?: string;
   onAnswer: (v: string) => void;
+  displayNumber: number;
 }) {
   const slotCount = Math.max(1, getPictureSpellingCharacters(q.correctAnswer).length || getPictureSpellingCharacters(answer || '').length);
   const currentChars = Array.from((answer || '').replace(/\s+/g, ''));
@@ -554,7 +630,7 @@ function PictureSpellingCard({
           </div>
           <div className="flex-1 space-y-4">
             <p className={PROMPT_TEXT_CLASS}>
-              <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+              <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
               {q.question?.trim() || 'Spell the word that matches the picture.'}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -586,10 +662,12 @@ function WordCompletionCard({
   q,
   answer,
   onAnswer,
+  displayNumber,
 }: {
   q: WordCompletionQuestion;
   answer?: string;
   onAnswer: (v: string) => void;
+  displayNumber: number;
 }) {
   const tokens = parseWordPattern(q.wordPattern || '');
   const currentLetters = getWordCompletionFilledLetters(q.wordPattern || '', answer || '');
@@ -604,7 +682,7 @@ function WordCompletionCard({
           </div>
         ) : null}
         <p className={PROMPT_TEXT_CLASS}>
-          <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+          <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
           {q.question?.trim() || 'Complete the word.'}
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -651,7 +729,7 @@ function WordCompletionCard({
 
 // ========== OPEN-ENDED (HuaZhong) ==========
 
-function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function OpenEndedCard({ q, answer, onAnswer, displayNumber }: { q: OpenEndedQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   if (q.subQuestions && q.subQuestions.length > 0) {
     const parsed = (() => {
       try { return typeof answer === 'string' ? JSON.parse(answer) : (answer || {}); } catch { return {}; }
@@ -667,7 +745,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
 
     const subItems = [
       <div key={`q${q.id}-prompt`} className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </div>,
       ...normalizedSubs.map((sub, idx) => (
@@ -692,7 +770,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
   return (
     <div className="space-y-3">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </p>
       <textarea
@@ -708,7 +786,7 @@ function OpenEndedCard({ q, answer, onAnswer }: { q: OpenEndedQuestion; answer?:
 
 // ========== SPEAKING (Audio Recording) ==========
 
-function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion; sectionId: string; answer?: string; onAnswer: (v: string) => void }) {
+function SpeakingCard({ q, sectionId, answer, onAnswer, displayNumber }: { q: OpenEndedQuestion; sectionId: string; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const isStoredAudio = (value: unknown): value is string =>
     typeof value === 'string' && isPersistedAudioUrl(value);
 
@@ -729,6 +807,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
           <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-slate-600`}>Question Prompt</p>
           <p className={SPEAKING_PROMPT_TEXT_CLASS}>
+            <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
             {q.question}
           </p>
         </div>
@@ -755,6 +834,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
       <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
         <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-slate-600`}>Question Prompt</p>
         <p className={SPEAKING_PROMPT_TEXT_CLASS}>
+          <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
           {q.question}
         </p>
       </div>
@@ -780,7 +860,7 @@ function SpeakingCard({ q, sectionId, answer, onAnswer }: { q: OpenEndedQuestion
 
 // ========== TRUE/FALSE (HuaZhong) ==========
 
-function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function TrueFalseCard({ q, answer, onAnswer, displayNumber }: { q: TrueFalseQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
@@ -794,7 +874,7 @@ function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?:
 
   const items = [
     <div key={`q${q.id}-prompt`} className={PROMPT_HEADING_CLASS}>
-      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
       {q.question || 'State whether each statement is True, False, or Not Given.'}
     </div>,
     ...q.statements.map((s, idx) => (
@@ -839,7 +919,7 @@ function TrueFalseCard({ q, answer, onAnswer }: { q: TrueFalseQuestion; answer?:
 
 // ========== TABLE QUESTION (HuaZhong) ==========
 
-function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function TableQuestionCard({ q, answer, onAnswer, displayNumber }: { q: TableQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
@@ -849,7 +929,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
     return (
       <div className="space-y-4">
         <div className={PROMPT_HEADING_CLASS}>
-          <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+          <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
           {q.question}
         </div>
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
@@ -862,7 +942,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
   return (
     <div className="space-y-4">
       <div className={PROMPT_HEADING_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </div>
       <div className="overflow-x-auto">
@@ -921,7 +1001,7 @@ function TableQuestionCard({ q, answer, onAnswer }: { q: TableQuestion; answer?:
 
 // ========== REFERENCE (HuaZhong) ==========
 
-function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function ReferenceCard({ q, answer, onAnswer, displayNumber }: { q: ReferenceQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
@@ -931,7 +1011,7 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
   return (
     <div className="space-y-4">
       <div className={PROMPT_HEADING_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </div>
       {safeItems.length === 0 ? (
@@ -963,14 +1043,14 @@ function ReferenceCard({ q, answer, onAnswer }: { q: ReferenceQuestion; answer?:
 
 // ========== ORDER (HuaZhong) ==========
 
-function OrderCard({ q, answer, onAnswer }: { q: OrderQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function OrderCard({ q, answer, onAnswer, displayNumber }: { q: OrderQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
 
   const items = [
     <div key={`q${q.id}-prompt`} className={PROMPT_HEADING_CLASS}>
-      <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+      <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
       {q.question}
     </div>,
     ...q.events.map((event, i) => (
@@ -999,7 +1079,7 @@ function OrderCard({ q, answer, onAnswer }: { q: OrderQuestion; answer?: string;
 
 // ========== PHRASE (HuaZhong) ==========
 
-function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function PhraseCard({ q, answer, onAnswer, displayNumber }: { q: PhraseQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
@@ -1009,7 +1089,7 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
   return (
     <div className="space-y-4">
       <div className={PROMPT_HEADING_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </div>
       {safeItems.length === 0 ? (
@@ -1037,7 +1117,7 @@ function PhraseCard({ q, answer, onAnswer }: { q: PhraseQuestion; answer?: strin
   );
 }
 
-function SentenceReorderCard({ q, answer, onAnswer }: { q: SentenceReorderQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function SentenceReorderCard({ q, answer, onAnswer, displayNumber, getDisplayItemNumber }: { q: SentenceReorderQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number; getDisplayItemNumber: (itemKey: string) => number }) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })() as Record<string, unknown>;
@@ -1080,7 +1160,7 @@ function SentenceReorderCard({ q, answer, onAnswer }: { q: SentenceReorderQuesti
   return (
     <div className="space-y-4">
       <div className={PROMPT_HEADING_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question}
       </div>
       <div className="rounded-xl border border-lime-200 bg-lime-50/60 p-4">
@@ -1094,8 +1174,8 @@ function SentenceReorderCard({ q, answer, onAnswer }: { q: SentenceReorderQuesti
           return (
           <div key={item.label} className="rounded-xl border border-lime-100 bg-lime-50/30 p-4">
             <div className="flex items-start gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-200 text-xs font-bold text-lime-900">
-                {item.label}
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-200 text-xs font-bold text-lime-900">
+                {getDisplayItemNumber(item.label)}
               </span>
               <div className="flex-1 space-y-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -1150,7 +1230,7 @@ function SentenceReorderCard({ q, answer, onAnswer }: { q: SentenceReorderQuesti
   );
 }
 
-function InlineWordChoiceCard({ q, answer, onAnswer }: { q: InlineWordChoiceQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function InlineWordChoiceCard({ q, answer, onAnswer, displayNumber, getDisplayItemNumber }: { q: InlineWordChoiceQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number; getDisplayItemNumber: (itemKey: string) => number }) {
   const parsed = parseSerializedAnswerRecord(answer);
 
   const setChoice = (label: string, choiceIndex: number) => {
@@ -1170,7 +1250,7 @@ function InlineWordChoiceCard({ q, answer, onAnswer }: { q: InlineWordChoiceQues
             <div key={item.label} className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
               <div className="text-base leading-relaxed text-slate-700">
                 <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-200 text-xs font-bold text-emerald-900">
-                  {item.label}
+                  {getDisplayItemNumber(item.label)}
                 </span>
                 {renderInlineWordChoiceParts(item, () => (
                   <>
@@ -1206,10 +1286,14 @@ function PassageInlineWordChoiceCard({
   q,
   answer,
   onAnswer,
+  displayNumber,
+  getDisplayItemNumber,
 }: {
   q: PassageInlineWordChoiceQuestion;
   answer?: string;
   onAnswer: (v: string) => void;
+  displayNumber: number;
+  getDisplayItemNumber: (itemKey: string) => number;
 }) {
   const parsed = parseSerializedAnswerRecord(answer);
 
@@ -1246,7 +1330,7 @@ function PassageInlineWordChoiceCard({
                       {item ? (
                         <span className="mx-1 inline-flex flex-wrap items-center gap-1 align-middle">
                           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-200 px-2 text-[10px] font-bold text-emerald-900">
-                            {item.label}
+                            {getDisplayItemNumber(item.label)}
                           </span>
                           {item.options.map((option, optionIndex) => {
                             const isSelected = selectedIndex === optionIndex;
@@ -1285,7 +1369,7 @@ function PassageInlineWordChoiceCard({
 
 // ========== CHECKBOX (HuaZhong) ==========
 
-function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: number[]; onAnswer: (v: number[]) => void }) {
+function CheckboxCard({ q, answer, onAnswer, displayNumber }: { q: CheckboxQuestion; answer?: number[]; onAnswer: (v: number[]) => void; displayNumber: number }) {
   const selected = answer || [];
   const selectionLimit = q.selectionLimit ?? Math.max(q.correctAnswers.length, 2);
 
@@ -1300,7 +1384,7 @@ function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: n
   return (
     <div className="space-y-4">
       <div key={`q${q.id}-prompt`} className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{q.id}.</span>
+        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
         {q.question} <span className="text-xs text-slate-400">(Select {selectionLimit})</span>
       </div>
       <div key={`q${q.id}-options`} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -1329,7 +1413,7 @@ function CheckboxCard({ q, answer, onAnswer }: { q: CheckboxQuestion; answer?: n
 
 // ========== WRITING ==========
 
-function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: string; onAnswer: (v: string) => void }) {
+function WritingCard({ q, answer, onAnswer, displayNumber }: { q: WritingQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
   const normalizedAnswer = typeof answer === 'string' ? answer : '';
   const wordCount = normalizedAnswer.trim().split(/\s+/).filter(Boolean).length;
   const minWords = typeof q.minWords === 'number' ? q.minWords : undefined;
@@ -1365,6 +1449,7 @@ function WritingCard({ q, answer, onAnswer }: { q: WritingQuestion; answer?: str
       <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
         <p className={`${SPEAKING_WRITING_PROMPT_LABEL_CLASS} text-rose-700`}>Writing Prompt</p>
         <p className={WRITING_PROMPT_TEXT_CLASS}>
+          <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
           {promptText || 'Writing prompt goes here.'}
         </p>
         {wordCountLabel ? (
@@ -1427,12 +1512,14 @@ function InlineClozeMCQSection({
   questions,
   getAnswer,
   setAnswer,
+  getDisplayQuestionNumber,
 }: {
   section: Section;
   sectionId: string;
   questions: MCQQuestion[];
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, value: number) => void;
+  getDisplayQuestionNumber: (questionId: number) => number;
 }) {
   const gapEntries = buildInlineClozeGapEntries(section.passage, questions);
 
@@ -1461,6 +1548,7 @@ function InlineClozeMCQSection({
     const answerIndex = typeof rawAnswer === 'number' ? rawAnswer : Number.parseInt(String(rawAnswer ?? ''), 10);
     const selectedOption = Number.isFinite(answerIndex) && answerIndex >= 0 ? question.options[answerIndex] : '';
     const isActive = selectedGap === gapNumber;
+    const displayNumber = getDisplayQuestionNumber(question.id);
 
     return (
       <button
@@ -1476,7 +1564,7 @@ function InlineClozeMCQSection({
           }
         `}
       >
-        {selectedOption || `(${gapNumber}) ___`}
+        {selectedOption || `(${displayNumber}) ___`}
       </button>
     );
   };
@@ -1517,7 +1605,7 @@ function InlineClozeMCQSection({
       {activeQuestion && (
         <div key={activeQuestion.id} className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
           <div className="mb-2 text-sm font-bold uppercase tracking-wider text-indigo-700">
-            Gap {selectedGap}
+            {`Question ${getDisplayQuestionNumber(activeQuestion.id)}`}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             {activeQuestion.options.map((option, optionIndex) => {
@@ -1562,12 +1650,14 @@ function WIDAReadingSection({
   getAnswer,
   setAnswer,
   readingWordBank,
+  getDisplayQuestionNumber,
 }: {
   section: Section;
   sectionId: string;
   getAnswer: (sectionId: string, id: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, id: number, v: string) => void;
   readingWordBank: { word: string; imageUrl: string }[];
+  getDisplayQuestionNumber: (questionId: number) => number;
 }) {
   const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
   const wordBankQuestions = sectionQuestions.filter((q: Question) => q.type === 'wordbank-fill') as WordBankFillIn[];
@@ -1618,10 +1708,6 @@ function WIDAReadingSection({
   const handleRemoveAnswer = (questionId: number) => {
     setAnswer(sectionId, questionId, '');
   };
-
-  // Global question number offset for reading Part 1
-  // Vocab: 12, Grammar MCQ: 8, Grammar fill: 5, Listening: 6 = 31
-  const globalOffset = 31;
 
   return (
     <div className="space-y-8">
@@ -1681,6 +1767,7 @@ function WIDAReadingSection({
             const answer = getAnswer(sectionId, q.id);
             const answerStr = typeof answer === 'string' ? answer : undefined;
             const matchedItem = answerStr ? readingWordBank.find(item => item.word === answerStr) : null;
+            const displayNumber = getDisplayQuestionNumber(q.id);
 
             return (
               <div
@@ -1732,7 +1819,7 @@ function WIDAReadingSection({
                   {/* Question text */}
                   <div className="flex-1">
                     <p className={PROMPT_TEXT_CLASS}>
-                      <span className="font-bold text-slate-500 mr-2">Q{globalOffset + q.id}.</span>
+                      <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
                       {q.question}
                     </p>
                     {matchedItem && (
@@ -1768,6 +1855,7 @@ function WIDAReadingSection({
                   <div key={q.id} className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                     <StoryFillInCard
                       q={q}
+                      displayNumber={getDisplayQuestionNumber(q.id)}
                       answer={typeof answer === 'string' ? answer : undefined}
                       onAnswer={(v) => setAnswer(sectionId, q.id, v)}
                     />
@@ -1784,18 +1872,21 @@ function WIDAReadingSection({
 
 // ========== UNIVERSAL QUESTION RENDERER ==========
 
-function QuestionRenderer({ question, section, sectionId, answer, onAnswer }: {
+function QuestionRenderer({ question, section, sectionId, answer, onAnswer, displayNumber, getDisplayItemNumber }: {
   question: Question;
   section: Section;
   sectionId: string;
   answer: any;
   onAnswer: (v: any) => void;
+  displayNumber: number;
+  getDisplayItemNumber: (itemKey: string) => number;
 }) {
   switch (question.type) {
     case 'mcq':
       return (
         <MCQQuestionCard
           q={question}
+          displayNumber={displayNumber}
           answer={typeof answer === 'number' || Array.isArray(answer) ? answer : undefined}
           onAnswer={onAnswer}
         />
@@ -1804,6 +1895,7 @@ function QuestionRenderer({ question, section, sectionId, answer, onAnswer }: {
       return (
         <PictureMCQCard
           q={question}
+          displayNumber={displayNumber}
           answer={typeof answer === 'number' || Array.isArray(answer) ? answer : undefined}
           onAnswer={onAnswer}
         />
@@ -1812,44 +1904,45 @@ function QuestionRenderer({ question, section, sectionId, answer, onAnswer }: {
       return (
         <ListeningMCQCard
           q={question}
+          displayNumber={displayNumber}
           answer={typeof answer === 'number' || Array.isArray(answer) ? answer : undefined}
           onAnswer={onAnswer}
         />
       );
     case 'open-ended':
       if (question.responseMode === 'audio' || section.sectionType === 'speaking' || sectionId.toLowerCase().includes('speaking')) {
-        return <SpeakingCard q={question} sectionId={sectionId} answer={answer} onAnswer={onAnswer} />;
+        return <SpeakingCard q={question} sectionId={sectionId} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
       }
-      return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'true-false':
-      return <TrueFalseCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <TrueFalseCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'table':
-      return <TableQuestionCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <TableQuestionCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'reference':
-      return <ReferenceCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <ReferenceCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'order':
-      return <OrderCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <OrderCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'phrase':
-      return <PhraseCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <PhraseCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'sentence-reorder':
-      return <SentenceReorderCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <SentenceReorderCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} getDisplayItemNumber={getDisplayItemNumber} />;
     case 'inline-word-choice':
-      return <InlineWordChoiceCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <InlineWordChoiceCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} getDisplayItemNumber={getDisplayItemNumber} />;
     case 'passage-inline-word-choice':
-      return <PassageInlineWordChoiceCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <PassageInlineWordChoiceCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} getDisplayItemNumber={getDisplayItemNumber} />;
     case 'checkbox':
-      return <CheckboxCard q={question} answer={answer as number[]} onAnswer={onAnswer} />;
+      return <CheckboxCard q={question} answer={answer as number[]} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'writing':
-      return <WritingCard q={question} answer={answer} onAnswer={onAnswer} />;
+      return <WritingCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'fill-blank':
       if (section.wordBank && section.wordBank.length > 0) {
         return null;
       }
-      return <StandaloneFillBlankCard q={question} section={section} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} />;
+      return <StandaloneFillBlankCard q={question} section={section} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'picture-spelling':
-      return <PictureSpellingCard q={question} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} />;
+      return <PictureSpellingCard q={question} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'word-completion':
-      return <WordCompletionCard q={question} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} />;
+      return <WordCompletionCard q={question} answer={typeof answer === 'string' ? answer : undefined} onAnswer={onAnswer} displayNumber={displayNumber} />;
     default:
       return null;
   }
@@ -1967,12 +2060,16 @@ function SectionQuestionBody({
   selectedPaper,
   getAnswer,
   setAnswer,
+  getDisplayQuestionNumber,
+  getDisplayItemNumber,
 }: {
   section: Section;
   answerSectionId: string;
   selectedPaper: Paper | null;
   getAnswer: (sectionId: string, questionId: number) => string | number | number[] | undefined;
   setAnswer: (sectionId: string, questionId: number, value: any) => void;
+  getDisplayQuestionNumber: (sectionId: string, questionId: number) => number;
+  getDisplayItemNumber: (sectionId: string, questionId: number, itemKey: string) => number;
 }) {
   const questions = Array.isArray(section?.questions) ? section.questions : [];
   const hasFillBlank = questions.some(q => q.type === 'fill-blank');
@@ -1990,6 +2087,14 @@ function SectionQuestionBody({
     ? questions.filter(q => q.type !== 'fill-blank')
     : questions;
   const visibleQuestions = (isWIDAGrammar || isHuaZhongGrammar) ? regularQuestions : questions;
+  const getCurrentDisplayQuestionNumber = useCallback(
+    (questionId: number) => getDisplayQuestionNumber(answerSectionId, questionId),
+    [answerSectionId, getDisplayQuestionNumber],
+  );
+  const getCurrentDisplayItemNumber = useCallback(
+    (questionId: number, itemKey: string) => getDisplayItemNumber(answerSectionId, questionId, itemKey),
+    [answerSectionId, getDisplayItemNumber],
+  );
 
   return (
     <>
@@ -2026,6 +2131,7 @@ function SectionQuestionBody({
           getAnswer={getAnswer}
           setAnswer={setAnswer}
           readingWordBank={selectedPaper?.readingWordBank || []}
+          getDisplayQuestionNumber={getCurrentDisplayQuestionNumber}
         />
       ) : isPETInlineCloze ? (
         <InlineClozeMCQSection
@@ -2034,6 +2140,7 @@ function SectionQuestionBody({
           questions={questions.filter((q): q is MCQQuestion => q.type === 'mcq')}
           getAnswer={getAnswer}
           setAnswer={(sectionId, id, value) => setAnswer(sectionId, id, value)}
+          getDisplayQuestionNumber={getCurrentDisplayQuestionNumber}
         />
       ) : (
         <>
@@ -2070,6 +2177,7 @@ function SectionQuestionBody({
               sectionId={answerSectionId}
               getAnswer={getAnswer}
               setAnswer={setAnswer}
+              getDisplayQuestionNumber={getCurrentDisplayQuestionNumber}
             />
           )}
 
@@ -2082,6 +2190,8 @@ function SectionQuestionBody({
                     question={q}
                     section={section}
                     sectionId={answerSectionId}
+                    displayNumber={getCurrentDisplayQuestionNumber(q.id)}
+                    getDisplayItemNumber={(itemKey) => getCurrentDisplayItemNumber(q.id, itemKey)}
                     answer={answer}
                     onAnswer={(v) => setAnswer(answerSectionId, q.id, v)}
                   />
@@ -2101,6 +2211,21 @@ export default function SectionContent() {
   const isLastSection = state.currentSectionIndex === sections.length - 1;
   const questionMap = new Map((Array.isArray(section?.questions) ? section.questions : []).map((question) => [question.id, question]));
   const manualBlocks = section.manualBlocks ?? [];
+  const { questionNumbers: globalQuestionNumberMap, itemNumbers: globalItemNumberMap } = useMemo(
+    () => buildGlobalDisplayNumberMaps(sections),
+    [sections],
+  );
+  const getDisplayQuestionNumber = useCallback(
+    (sectionId: string, questionId: number) => globalQuestionNumberMap.get(`${sectionId}:${questionId}`) ?? questionId,
+    [globalQuestionNumberMap],
+  );
+  const getDisplayItemNumber = useCallback(
+    (sectionId: string, questionId: number, itemKey: string) => (
+      globalItemNumberMap.get(`${sectionId}:${questionId}:${itemKey}`)
+      ?? getDisplayQuestionNumber(sectionId, questionId)
+    ),
+    [globalItemNumberMap, getDisplayQuestionNumber],
+  );
 
   return (
     <AnimatePresence mode="wait">
@@ -2193,6 +2318,8 @@ export default function SectionContent() {
                     selectedPaper={selectedPaper}
                     getAnswer={getAnswer}
                     setAnswer={setAnswer}
+                    getDisplayQuestionNumber={getDisplayQuestionNumber}
+                    getDisplayItemNumber={getDisplayItemNumber}
                   />
                 </div>
               );
@@ -2205,6 +2332,8 @@ export default function SectionContent() {
             selectedPaper={selectedPaper}
             getAnswer={getAnswer}
             setAnswer={setAnswer}
+            getDisplayQuestionNumber={getDisplayQuestionNumber}
+            getDisplayItemNumber={getDisplayItemNumber}
           />
         )}
 

@@ -343,19 +343,19 @@ function describeSectionPerformance(section: SectionDescriptor) {
   if (section.performance === "manual") {
     if (section.kind === "writing") {
       return {
-        en: "This writing section is currently set to teacher review. Please evaluate task completion, organization, language accuracy, and vocabulary manually before finalizing the full report.",
-        cn: "本次写作部分当前设置为老师人工批改。请老师结合任务完成度、结构组织、语言准确性和词汇使用情况进行人工评分后，再最终确定完整报告。",
+        en: "This writing section is currently waiting for refreshed AI evaluation. Read the task completion, organization, language accuracy, and vocabulary signals below as a provisional profile.",
+        cn: "本次写作部分当前正在等待新的 AI 评估结果。现阶段可先把任务完成度、结构组织、语言准确性和词汇使用情况理解为阶段性画像。",
       };
     }
     if (section.kind === "speaking") {
       return {
-        en: "This speaking section is currently set to teacher review. Please listen to the original recording and judge task completion, fluency, vocabulary, grammar, and pronunciation manually.",
-        cn: "本次口语部分当前设置为老师人工批改。请老师结合原始录音，对任务完成度、流利度、词汇、语法和发音进行人工判断。",
+        en: "This speaking section is currently waiting for refreshed AI evaluation. Read the task completion, fluency, vocabulary, grammar, and pronunciation signals below as a provisional profile.",
+        cn: "本次口语部分当前正在等待新的 AI 评估结果。现阶段可先把任务完成度、流利度、词汇、语法和发音表现理解为阶段性画像。",
       };
     }
     return {
-      en: "This section requires manual review before the final report is completed.",
-      cn: "该部分需要人工复核后才能完成最终报告。",
+      en: "This section is waiting for AI evaluation to complete before the report is fully finalized.",
+      cn: "该部分正在等待 AI 评估完成后再更新最终报告。",
     };
   }
 
@@ -568,30 +568,30 @@ function describeSectionPerformance(section: SectionDescriptor) {
 
   const teacherFeedbackEn = section.teacherFeedback_en
     ? pickVariant(`${section.sectionId}:teacher-feedback-en`, [
-        `Teacher feedback noted: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
-        `Teacher scoring notes also point out that ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
-        `From the teacher-marked comments, the clearest signal is: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+        `Additional feedback noted: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+        `The scoring notes also point out that ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+        `From the detailed comments, the clearest signal is: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
       ])
     : "";
   const teacherFeedbackCn = section.teacherFeedback_cn
     ? pickVariant(`${section.sectionId}:teacher-feedback-cn`, [
-        `老师本次批改中提到：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
-        `从老师的批改反馈来看，最需要注意的是：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
-        `老师评语里比较明确地指出：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+        `补充评估反馈提到：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+        `从这次评分反馈来看，最需要注意的是：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+        `评语里比较明确地指出：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
       ])
     : "";
   const suggestionEn = section.teacherSuggestions_en.length > 0
     ? pickVariant(`${section.sectionId}:teacher-suggestions-en`, [
         `Follow-up practice can focus on: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
-        `The teacher's follow-up direction is also quite clear: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
-        `A practical next step from the teacher comments would be: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
+        `The follow-up direction is also quite clear: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
+        `A practical next step from the scoring comments would be: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
       ])
     : "";
   const suggestionCn = section.teacherSuggestions_cn.length > 0
     ? pickVariant(`${section.sectionId}:teacher-suggestions-cn`, [
         `后续练习可优先围绕：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
-        `老师给出的后续方向也比较明确：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
-        `如果按老师的评语继续推进，最值得先抓的是：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
+        `后续方向也比较明确：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
+        `如果按这次评语继续推进，最值得先抓的是：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
       ])
     : "";
   const taskNote = buildTaskSpecificNote(section);
@@ -720,8 +720,8 @@ function buildAbilitySnapshot(grade: string, sections: SectionDescriptor[]) {
   }
 
   const manualKinds = sections.filter((section) => section.performance === "manual").map((section) => section.kind);
-  const manualReviewEn = "Writing and speaking should be finalized together with teacher review.";
-  const manualReviewCn = "写作和口语需要结合老师人工批改后再做完整判断。";
+  const manualReviewEn = "Writing and speaking should be read together with refreshed AI evaluation before treating them as final.";
+  const manualReviewCn = "写作和口语建议结合更新后的 AI 评估结果，再作为最终结论来看。";
   if (manualKinds.includes("writing") || manualKinds.includes("speaking")) {
     snapshotsEn.push(manualReviewEn);
     snapshotsCn.push(manualReviewCn);
@@ -855,12 +855,12 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
     A: {
       en: [
         "Keep full-paper practice regular so that strong sections remain stable under time pressure.",
-        "Use teacher feedback from writing and speaking to refine output quality and flexibility.",
+        "Use writing and speaking feedback to refine output quality and flexibility.",
         "Push weaker sections from 'good enough' to genuinely reliable by reviewing errors promptly.",
       ],
       cn: [
         "继续保持整套题训练，确保较强板块在限时状态下也能稳定发挥。",
-        "结合老师对写作和口语的反馈，继续提升输出质量和表达灵活度。",
+        "结合写作和口语的评估反馈，继续提升输出质量和表达灵活度。",
         "把相对薄弱的板块从“基本可用”继续提升到真正稳定可靠。",
       ],
     },
@@ -880,12 +880,12 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
       en: [
         "Return to core vocabulary, grammar, and sentence-level practice before pushing harder papers.",
         "Break weak sections into smaller drills so that the student can build accuracy step by step.",
-        "Use teacher-reviewed writing and speaking work to connect input skills with output practice.",
+        "Use reviewed writing and speaking work to connect input skills with output practice.",
       ],
       cn: [
         "在做更难题目前，先回到核心词汇、语法和句子层面的基础训练。",
         "把薄弱板块拆成更小的专项任务，一步一步建立准确度。",
-        "结合老师批改过的写作和口语练习，把输入能力逐步转化为输出能力。",
+        "结合已经评估过的写作和口语练习，把输入能力逐步转化为输出能力。",
       ],
     },
     D: {
@@ -909,8 +909,8 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   const recommendationsCn = tailored.map((item) => item.cn);
 
   if (manualTitles.length > 0) {
-    recommendationsEn.push(`Use teacher-reviewed work from ${formatSectionList(manualTitles, "en")} to turn teacher comments into repeatable output routines, not one-off corrections.`);
-    recommendationsCn.push(`把 ${formatSectionList(manualTitles, "cn")} 的老师批改结果真正变成可重复使用的输出训练套路，而不是只看一次评语就结束。`);
+    recommendationsEn.push(`Use the AI feedback from ${formatSectionList(manualTitles, "en")} to turn those comments into repeatable output routines instead of one-off corrections.`);
+    recommendationsCn.push(`把 ${formatSectionList(manualTitles, "cn")} 的 AI 反馈真正变成可重复使用的输出训练套路，而不是只看一次评语就结束。`);
   } else if (strongestSection) {
     recommendationsEn.push(`${strongestSection.sectionTitle}: keep this part active with short maintenance practice so that it can continue supporting the total score while weaker sections are repaired.`);
     recommendationsCn.push(`${strongestSection.sectionTitle}：在补弱过程中也要继续用短练习把这部分维持住，让它继续承担稳定得分的作用。`);
@@ -965,10 +965,10 @@ function buildParentFeedback(grade: string, sections: SectionDescriptor[]) {
     : "另外，家长也可以关注孩子在练习时是否存在犹豫过多、反复检查等影响节奏的问题。";
 
   const manualEn = manualTitles.length > 0
-    ? `For ${formatSectionList(manualTitles, "en")}, teacher scoring comments should be treated as core follow-up guidance rather than as one-off remarks.`
+    ? `For ${formatSectionList(manualTitles, "en")}, the AI feedback should be treated as core follow-up guidance rather than as one-off remarks.`
     : "";
   const manualCn = manualTitles.length > 0
-    ? `${formatSectionList(manualTitles, "cn")} 这部分的老师评分和评语，建议当作后续训练的重要依据，而不是只看一次就结束。`
+    ? `${formatSectionList(manualTitles, "cn")} 这部分的 AI 评分和评语，建议当作后续训练的重要依据，而不是只看一次就结束。`
     : "";
 
   return {
@@ -1004,7 +1004,7 @@ function buildStudyPlan(grade: string, sections: SectionDescriptor[]) {
         focus_cn: "再打磨输出质量",
         actions_en: manualOutput
           ? [
-              "Use teacher-marked writing and speaking work to improve organization and expression.",
+              "Use AI-reviewed writing and speaking work to improve organization and expression.",
               "Practice expanding ideas more fully instead of giving short safe answers.",
             ]
           : [
@@ -1013,7 +1013,7 @@ function buildStudyPlan(grade: string, sections: SectionDescriptor[]) {
             ],
         actions_cn: manualOutput
           ? [
-              "结合老师批改过的写作和口语作业，继续优化结构和表达质量。",
+              "结合 AI 评估过的写作和口语任务，继续优化结构和表达质量。",
               "训练把观点展开得更充分，而不是只停留在较短、较安全的回答层面。",
             ]
           : [
@@ -1058,11 +1058,11 @@ function buildStudyPlan(grade: string, sections: SectionDescriptor[]) {
         focus_cn: "再做专项补弱",
         actions_en: [
           "Use reading, grammar, and vocabulary drills to improve stability before returning to full papers.",
-          manualOutput ? "Use teacher-reviewed writing and speaking tasks to build clearer output routines." : "Strengthen output tasks with clearer sentence patterns and better response logic.",
+          manualOutput ? "Use AI-reviewed writing and speaking tasks to build clearer output routines." : "Strengthen output tasks with clearer sentence patterns and better response logic.",
         ],
         actions_cn: [
           "先通过阅读、语法、词汇专项提高稳定性，再回到整套题训练。",
-          manualOutput ? "结合老师批改过的写作和口语任务，建立更清晰的输出套路。" : "继续加强输出题目的句型结构和回应逻辑。",
+          manualOutput ? "结合 AI 评估过的写作和口语任务，建立更清晰的输出套路。" : "继续加强输出题目的句型结构和回应逻辑。",
         ],
       },
       {
@@ -1102,11 +1102,11 @@ function buildStudyPlan(grade: string, sections: SectionDescriptor[]) {
         focus_cn: "再做专项练习",
         actions_en: [
           "Break weak sections into smaller skills such as locating details, matching conditions, and controlled sentence output.",
-          manualOutput ? "Use teacher-reviewed writing and speaking tasks as guided output practice." : "Keep output practice short and structured rather than asking for long free production too early.",
+          manualOutput ? "Use AI-reviewed writing and speaking tasks as guided output practice." : "Keep output practice short and structured rather than asking for long free production too early.",
         ],
         actions_cn: [
           "把薄弱板块拆成更小的技能训练，例如细节定位、条件匹配和受控句子输出。",
-          manualOutput ? "把老师批改过的写作和口语任务当作带引导的输出训练材料。" : "输出训练先保持短而有结构，不要过早追求长篇自由表达。",
+          manualOutput ? "把 AI 评估过的写作和口语任务当作带引导的输出训练材料。" : "输出训练先保持短而有结构，不要过早追求长篇自由表达。",
         ],
       },
       {
@@ -1146,11 +1146,11 @@ function buildStudyPlan(grade: string, sections: SectionDescriptor[]) {
         focus_cn: "再建立专项习惯",
         actions_en: [
           "Train one section at a time, especially vocabulary, grammar, and reading location skills.",
-          manualOutput ? "Use teacher-guided writing and speaking correction to build simple output routines." : "Keep output practice limited to guided sentence and short-response tasks at first.",
+          manualOutput ? "Use AI-reviewed writing and speaking correction to build simple output routines." : "Keep output practice limited to guided sentence and short-response tasks at first.",
         ],
         actions_cn: [
           "专项训练时一次只抓一个板块，尤其是词汇、语法和阅读定位能力。",
-          manualOutput ? "结合老师的写作和口语批改，先建立最基本的输出表达套路。" : "输出训练先从带引导的句子和短回答开始，不要急着做复杂开放题。",
+          manualOutput ? "结合 AI 的写作和口语评估，先建立最基本的输出表达套路。" : "输出训练先从带引导的句子和短回答开始，不要急着做复杂开放题。",
         ],
       },
       {
@@ -1226,7 +1226,7 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     strongest ? `At the moment, ${strongest.sectionTitle} is functioning as the clearest relative strength in the paper.` : "",
     weakest ? `${weakest.sectionTitle} is currently the section that needs the earliest and most focused correction.` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
-      ? "Writing and speaking should be finalized together with teacher scoring notes, so the current automatic total should be read as a partial academic profile rather than the final full-skill judgment."
+      ? "Writing and speaking are still waiting for refreshed AI evaluation, so the current automatic total should be read as a partial academic profile rather than the final full-skill judgment."
       : "",
   ]
     .filter(Boolean)
@@ -1240,7 +1240,7 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     strongest ? `从分项结果看，${strongest.sectionTitle} 是目前相对更能支撑成绩的板块。` : "",
     weakest ? `${weakest.sectionTitle} 则是接下来最需要优先处理的薄弱点。` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
-      ? "由于写作和口语仍需老师人工评分，当前自动总分应理解为阶段性学业画像，而不是最终完整能力结论。"
+      ? "由于写作和口语仍在等待 AI 评估刷新，当前自动总分应理解为阶段性学业画像，而不是最终完整能力结论。"
       : "",
   ]
     .filter(Boolean)

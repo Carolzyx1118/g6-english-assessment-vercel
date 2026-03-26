@@ -524,6 +524,7 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
   isManualPaper: true;
 } {
   const sections: ConvertedSection[] = [];
+  const runtimeSectionIdCounts = new Map<string, number>();
   let globalQuestionId = 1;
   let totalQuestions = 0;
   let hasListening = false;
@@ -534,8 +535,15 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
     if (section.sectionType === "writing") hasWriting = true;
 
     const colors = SECTION_TYPE_COLORS[section.sectionType] || SECTION_TYPE_COLORS.reading;
+    const baseRuntimeSectionId = `${section.sectionType}-${section.id}`;
+    const runtimeSectionIdOccurrence = runtimeSectionIdCounts.get(baseRuntimeSectionId) ?? 0;
+    runtimeSectionIdCounts.set(baseRuntimeSectionId, runtimeSectionIdOccurrence + 1);
+    const runtimeSectionId = runtimeSectionIdOccurrence === 0
+      ? baseRuntimeSectionId
+      : `${baseRuntimeSectionId}__${runtimeSectionIdOccurrence + 1}`;
+
     const convertedSection: ConvertedSection = {
-      id: `${section.sectionType}-${section.id}`,
+      id: runtimeSectionId,
       title: `${section.partLabel} · ${MANUAL_SECTION_TYPE_LABELS[section.sectionType] || section.sectionType}`,
       subtitle: "",
       icon: SECTION_TYPE_ICONS[section.sectionType] || "📖",

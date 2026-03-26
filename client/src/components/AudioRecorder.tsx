@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Play, Pause, RotateCcw, Upload, Check, Loader2 } from 'lucide-react';
+import { upload as uploadBlob } from '@vercel/blob/client';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { isPersistedAudioUrl } from '@/lib/audioStorage';
@@ -13,16 +14,55 @@ interface AudioRecorderProps {
   onRecorded: (url: string) => void;
 }
 
+const TARGET_SCORING_SAMPLE_RATE = 16000;
+const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
+const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
+const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
+
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
     view.setUint8(offset + index, value.charCodeAt(index));
   }
 }
 
-function encodeAudioBufferToWav(audioBuffer: AudioBuffer) {
-  const channelCount = 1;
-  const sampleRate = audioBuffer.sampleRate;
+function mixAudioBufferToMono(audioBuffer: AudioBuffer) {
   const sampleCount = audioBuffer.length;
+  const mono = new Float32Array(sampleCount);
+
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    let mixedSample = 0;
+    for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
+      mixedSample += audioBuffer.getChannelData(channelIndex)[sampleIndex] || 0;
+    }
+    mono[sampleIndex] = mixedSample / Math.max(audioBuffer.numberOfChannels, 1);
+  }
+
+  return mono;
+}
+
+function resampleMonoAudio(samples: Float32Array, inputRate: number, targetRate: number) {
+  if (inputRate === targetRate) return samples;
+
+  const outputLength = Math.max(1, Math.round(samples.length * (targetRate / inputRate)));
+  const output = new Float32Array(outputLength);
+  const positionScale = inputRate / targetRate;
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const position = index * positionScale;
+    const leftIndex = Math.floor(position);
+    const rightIndex = Math.min(leftIndex + 1, samples.length - 1);
+    const fraction = position - leftIndex;
+    const leftSample = samples[leftIndex] || 0;
+    const rightSample = samples[rightIndex] || leftSample;
+    output[index] = leftSample + ((rightSample - leftSample) * fraction);
+  }
+
+  return output;
+}
+
+function encodeMonoSamplesToWav(samples: Float32Array, sampleRate: number) {
+  const channelCount = 1;
+  const sampleCount = samples.length;
   const bytesPerSample = 2;
   const blockAlign = channelCount * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
@@ -46,19 +86,22 @@ function encodeAudioBufferToWav(audioBuffer: AudioBuffer) {
 
   let offset = 44;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-    let mixedSample = 0;
-    for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
-      mixedSample += audioBuffer.getChannelData(channelIndex)[sampleIndex] || 0;
-    }
-    mixedSample /= Math.max(audioBuffer.numberOfChannels, 1);
-
-    const clamped = Math.max(-1, Math.min(1, mixedSample));
+    const clamped = Math.max(-1, Math.min(1, samples[sampleIndex] || 0));
     const pcm = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
     view.setInt16(offset, Math.round(pcm), true);
     offset += bytesPerSample;
   }
 
   return output;
+}
+
+function canAttemptAutomaticSpeakingScoring(blob: Blob) {
+  const mimeType = blob.type.toLowerCase();
+  const isGatewayCompatible =
+    (mimeType.includes('wav') || mimeType.includes('mpeg') || mimeType.includes('mp3'))
+    && blob.size <= MAX_GATEWAY_AUDIO_BYTES;
+
+  return isGatewayCompatible || blob.size <= MAX_TRANSCRIPTION_AUDIO_BYTES;
 }
 
 export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecorded }: AudioRecorderProps) {
@@ -251,7 +294,13 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
 
     try {
       const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-      const wavBuffer = encodeAudioBufferToWav(decoded);
+      const monoSamples = mixAudioBufferToMono(decoded);
+      const resampled = resampleMonoAudio(
+        monoSamples,
+        decoded.sampleRate,
+        TARGET_SCORING_SAMPLE_RATE,
+      );
+      const wavBuffer = encodeMonoSamplesToWav(resampled, TARGET_SCORING_SAMPLE_RATE);
       return new Blob([wavBuffer], { type: 'audio/wav' });
     } finally {
       await audioContext.close().catch(() => undefined);
@@ -265,12 +314,45 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     }
 
     try {
-      return await convertBlobToWav(blob);
+      const wavBlob = await convertBlobToWav(blob);
+      if (wavBlob.size <= MAX_GATEWAY_AUDIO_BYTES) {
+        return wavBlob;
+      }
+
+      return blob.size < wavBlob.size ? blob : wavBlob;
     } catch (error) {
       console.warn('Failed to convert recording to WAV before upload.', error);
       return blob;
     }
   }, [convertBlobToWav]);
+
+  const uploadAudioBlob = useCallback(async (blob: Blob, contentType: string, extension: string) => {
+    const safeFileName = `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`;
+    const clientPayload = JSON.stringify({
+      contentType,
+      fileSize: blob.size,
+    });
+
+    try {
+      const uploaded = await uploadBlob(`paper-assets/${safeFileName}`, blob, {
+        access: 'public',
+        contentType,
+        handleUploadUrl: '/api/blob/client-token',
+        clientPayload,
+        multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
+      });
+      return uploaded.url;
+    } catch (directUploadError) {
+      console.warn('Direct blob upload failed, falling back to server upload.', directUploadError);
+      const fileBase64 = await blobToBase64(blob);
+      const uploaded = await uploadFileMutation.mutateAsync({
+        fileName: safeFileName,
+        fileBase64,
+        contentType,
+      });
+      return uploaded.url;
+    }
+  }, [blobToBase64, questionId, sectionId, uploadFileMutation]);
 
   const uploadAudio = useCallback(async () => {
     if (!chunksRef.current.length) return;
@@ -283,36 +365,26 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const normalizedBlob = await normalizeAudioBlobForScoring(blob);
       const normalizedMimeType = normalizedBlob.type || mimeType;
-      const provisionalDataUrl = await blobToDataUrl(normalizedBlob);
-      onRecorded(provisionalDataUrl);
-      let persistedUrl: string;
-
-      try {
-        const fileBase64 = await blobToBase64(normalizedBlob);
-        const extension = getAudioExtension(normalizedMimeType);
-        const uploaded = await uploadFileMutation.mutateAsync({
-          fileName: `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`,
-          fileBase64,
-          contentType: normalizedMimeType,
-        });
-        persistedUrl = uploaded.url;
-      } catch (uploadError) {
-        console.warn('Recording upload failed, falling back to embedded audio.', uploadError);
-        persistedUrl = provisionalDataUrl;
+      if (!canAttemptAutomaticSpeakingScoring(normalizedBlob)) {
+        throw new Error('This recording is too large for automatic speaking scoring. Please re-record a shorter response.');
       }
+      const extension = getAudioExtension(normalizedMimeType);
+      const persistedUrl = await uploadAudioBlob(normalizedBlob, normalizedMimeType, extension);
 
       audioUrlRef.current = persistedUrl;
       setStatus('uploaded');
       setError(null);
-      if (persistedUrl !== provisionalDataUrl) {
-        onRecorded(persistedUrl);
-      }
+      onRecorded(persistedUrl);
     } catch (err: any) {
       console.error('Recording save error:', err);
-      setError(typeof err?.message === 'string' && err.message.trim() ? err.message : 'Failed to save recording. Please try again.');
+      setError(
+        typeof err?.message === 'string' && err.message.trim()
+          ? err.message
+          : 'Failed to save recording. Please try again.'
+      );
       setStatus('recorded');
     }
-  }, [blobToBase64, blobToDataUrl, getAudioExtension, normalizeAudioBlobForScoring, onRecorded, questionId, sectionId, uploadFileMutation]);
+  }, [getAudioExtension, normalizeAudioBlobForScoring, onRecorded, uploadAudioBlob]);
 
   useEffect(() => {
     if (status !== 'recorded' || autoUploadAttemptedRef.current || chunksRef.current.length === 0) {
