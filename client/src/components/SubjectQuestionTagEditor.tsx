@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { PaperSubject } from "@/data/papers";
 import type { ManualQuestionTags } from "@shared/manualPaperBlueprint";
 import type { SubjectQuestionTagProfile } from "@shared/englishQuestionTags";
@@ -26,13 +27,26 @@ export default function SubjectQuestionTagEditor({
 }: SubjectQuestionTagEditorProps) {
   const { systems, isLoading } = useSubjectTagSystems(subject);
   const defaultTrack = systems[0]?.id ?? "";
-  const profile = getExistingProfile(subject, value) ?? {
+  const existingProfile = getExistingProfile(subject, value);
+  const rawProfile = existingProfile ?? {
     track: defaultTrack,
     unit: undefined,
     examPart: undefined,
   };
-  const safeTrack = systems.some((system) => system.id === profile.track) ? profile.track : defaultTrack;
+  const safeTrack = systems.some((system) => system.id === rawProfile.track) ? rawProfile.track : defaultTrack;
   const activeSystem = systems.find((system) => system.id === safeTrack) ?? systems[0];
+  const systemMode = activeSystem?.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
+  const profile: SubjectQuestionTagProfile = {
+    track: safeTrack,
+    unit:
+      systemMode === "textbook-practice" && activeSystem?.units.includes(rawProfile.unit || "")
+        ? rawProfile.unit
+        : undefined,
+    examPart:
+      systemMode === "assessment" && activeSystem?.examParts.includes(rawProfile.examPart || "")
+        ? rawProfile.examPart
+        : undefined,
+  };
 
   const updateProfile = (nextProfile: SubjectQuestionTagProfile) => {
     onChange({
@@ -40,6 +54,19 @@ export default function SubjectQuestionTagEditor({
       [subject]: nextProfile,
     });
   };
+
+  useEffect(() => {
+    if (!existingProfile || !activeSystem) return;
+    if (
+      existingProfile.track === profile.track
+      && existingProfile.unit === profile.unit
+      && existingProfile.examPart === profile.examPart
+    ) {
+      return;
+    }
+
+    updateProfile(profile);
+  }, [activeSystem, existingProfile, profile, value]);
 
   if (isLoading) {
     return (
@@ -63,7 +90,11 @@ export default function SubjectQuestionTagEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-900">题目标签</p>
-          <p className="text-xs text-slate-500">这道题会绑定到对应考试体系、Part 和教材单元。</p>
+          <p className="text-xs text-slate-500">
+            {systemMode === "assessment"
+              ? "这道题会绑定到对应考试体系和考试 Part。"
+              : "这道题会绑定到对应考试体系和教材单元。"}
+          </p>
         </div>
         <Button
           type="button"
@@ -75,7 +106,7 @@ export default function SubjectQuestionTagEditor({
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>考试体系</Label>
           <select
@@ -84,10 +115,17 @@ export default function SubjectQuestionTagEditor({
             onChange={(event) => {
               const nextTrack = event.target.value;
               const nextSystem = systems.find((system) => system.id === nextTrack) ?? systems[0];
+              const nextSystemMode = nextSystem?.systemMode === "textbook-practice" ? "textbook-practice" : "assessment";
               updateProfile({
                 track: nextTrack,
-                unit: nextSystem?.units.includes(profile.unit || "") ? profile.unit : undefined,
-                examPart: nextSystem?.examParts.includes(profile.examPart || "") ? profile.examPart : undefined,
+                unit:
+                  nextSystemMode === "textbook-practice" && nextSystem?.units.includes(profile.unit || "")
+                    ? profile.unit
+                    : undefined,
+                examPart:
+                  nextSystemMode === "assessment" && nextSystem?.examParts.includes(profile.examPart || "")
+                    ? profile.examPart
+                    : undefined,
               });
             }}
           >
@@ -98,43 +136,33 @@ export default function SubjectQuestionTagEditor({
         </div>
 
         <div className="space-y-2">
-          <Label>教材单元</Label>
+          <Label>{systemMode === "assessment" ? "考试 Part" : "教材单元"}</Label>
           <select
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={profile.unit || ""}
+            value={systemMode === "assessment" ? (profile.examPart || "") : (profile.unit || "")}
             onChange={(event) => {
               updateProfile({
                 track: safeTrack,
-                unit: event.target.value || undefined,
-                examPart: profile.examPart,
+                unit: systemMode === "textbook-practice" ? (event.target.value || undefined) : undefined,
+                examPart: systemMode === "assessment" ? (event.target.value || undefined) : undefined,
               });
             }}
           >
             <option value="">未设置</option>
-            {activeSystem.units.map((unit) => (
-              <option key={unit} value={unit}>{unit}</option>
-            ))}
+            {systemMode === "assessment"
+              ? activeSystem.examParts.map((part) => (
+                  <option key={part} value={part}>{part}</option>
+                ))
+              : activeSystem.units.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
           </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>考试 Part</Label>
-          <select
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={profile.examPart || ""}
-            onChange={(event) => {
-              updateProfile({
-                track: safeTrack,
-                unit: profile.unit,
-                examPart: event.target.value || undefined,
-              });
-            }}
-          >
-            <option value="">未设置</option>
-            {activeSystem.examParts.map((part) => (
-              <option key={part} value={part}>{part}</option>
-            ))}
-          </select>
+          {systemMode === "assessment" && activeSystem.examParts.length === 0 ? (
+            <p className="text-xs text-amber-600">这个考试体系还没有配置考试 Part，请先到 Paper Generator 设置。</p>
+          ) : null}
+          {systemMode === "textbook-practice" && activeSystem.units.length === 0 ? (
+            <p className="text-xs text-amber-600">这个教材体系还没有配置教材单元，请先到 Paper Generator 设置。</p>
+          ) : null}
         </div>
       </div>
     </div>

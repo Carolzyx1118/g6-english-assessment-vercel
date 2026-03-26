@@ -20,7 +20,7 @@ const PRINT_PAGE_STYLES = `
       background: #ffffff !important;
       margin: 0;
       padding: 0;
-      font-size: 14px !important;
+      font-size: 13px !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
