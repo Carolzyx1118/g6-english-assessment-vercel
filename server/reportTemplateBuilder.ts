@@ -9,6 +9,7 @@ type ReportSectionInput = {
   correct: number;
   total: number;
   timeSeconds: number;
+  taskTypes?: string[];
 };
 
 type WritingSummaryInput = {
@@ -187,6 +188,155 @@ function getSectionKind(sectionId: string, sectionTitle: string): SectionKind {
   if (value.includes("writing")) return "writing";
   if (value.includes("speaking")) return "speaking";
   return "general";
+}
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function pickVariant<T>(seed: string, variants: T[]) {
+  if (variants.length === 0) {
+    throw new Error("pickVariant requires at least one variant");
+  }
+  return variants[hashString(seed) % variants.length];
+}
+
+function hasTaskType(section: Pick<SectionDescriptor, "taskTypes">, types: string[]) {
+  return (section.taskTypes || []).some((item) => types.includes(item));
+}
+
+function buildTaskSpecificNote(section: SectionDescriptor) {
+  const seed = `${section.sectionId}:${section.sectionTitle}:${section.performance}`;
+  const noteVariants: Array<{ en: string; cn: string }> = [];
+
+  if (hasTaskType(section, ["picture-mcq", "listening-mcq", "option-images", "question-image", "scene-image"])) {
+    noteVariants.push({
+      en: section.performance === "strong"
+        ? "Image-based items are already being handled with a clearer eye for visual detail, not just familiar words."
+        : section.performance === "developing"
+          ? "Image-based questions are still a little first-impression driven, so visual detail checking should become more deliberate."
+          : "Image-based questions still need slower visual checking, because the student is not yet using picture detail and option contrast steadily enough.",
+      cn: section.performance === "strong"
+        ? "图片类题目已经开始体现出较清楚的视觉信息判断，而不只是依赖熟悉单词来猜。"
+        : section.performance === "developing"
+          ? "图片题目前仍有些依赖第一感觉作答，后续要把看图细节核对做得更主动。"
+          : "图片类题目还需要更慢、更细的视觉核对，因为孩子暂时还不能稳定利用图像细节和选项差异来判断。",
+    });
+  }
+
+  if (hasTaskType(section, ["true-false", "reference", "open-ended", "open-ended-sub"])) {
+    noteVariants.push({
+      en: section.performance === "strong"
+        ? "Evidence-based question types are beginning to hold up: the student can usually connect a claim or short response back to the passage."
+        : section.performance === "developing"
+          ? "Evidence-based tasks still need cleaner proof from the text, especially when a short answer or statement judgment looks 'almost right'."
+          : "Evidence-based tasks are one of the current pressure points: statement checking, reference tracking, and short open-ended responses still need explicit text proof.",
+      cn: section.performance === "strong"
+        ? "证据型题目已经开始比较能撑住，学生通常能把判断或简答和原文依据对应起来。"
+        : section.performance === "developing"
+          ? "证据型题目还需要更干净的原文证明，尤其是简答题和判断题里“看起来差不多对”的情况。"
+          : "证据型题目是当前比较突出的压力点，判断题、指代题和简答题都还需要更明确的原文依据训练。",
+    });
+  }
+
+  if (hasTaskType(section, ["fill-blank", "wordbank-fill", "story-fill", "inline-word-choice", "passage-inline-word-choice", "word-completion", "picture-spelling", "word-bank"])) {
+    noteVariants.push({
+      en: section.performance === "strong"
+        ? "Context-based blanks are relatively well controlled, which suggests the student can already combine meaning with local sentence form."
+        : section.performance === "developing"
+          ? "Blank-filling and word-choice items are showing partial control, but context, collocation, and sentence form are not yet being checked together consistently."
+          : "Blank-filling and word-choice tasks still show that context, collocation, and sentence form are not yet being linked tightly enough during answering.",
+      cn: section.performance === "strong"
+        ? "语境填空类题目整体控制得相对不错，说明孩子已经能把词义和句子结构开始结合起来看。"
+        : section.performance === "developing"
+          ? "填空和词语选择类题目目前有部分基础，但语境、搭配和句子形式还没有稳定地一起核对。"
+          : "填空和词语选择类题目当前明显暴露出语境、搭配和句子结构还没有真正连在一起判断的问题。",
+    });
+  }
+
+  if (hasTaskType(section, ["mcq", "checkbox"])) {
+    noteVariants.push({
+      en: section.performance === "strong"
+        ? "Standard choice questions are currently one of the more dependable formats, and distractor handling is becoming calmer."
+        : section.performance === "developing"
+          ? "Choice questions still need firmer distractor control, because the student is not yet eliminating similar options consistently enough."
+          : "Choice questions are still leaking marks through distractors and incomplete condition matching, so option-by-option elimination needs to be rebuilt.",
+      cn: section.performance === "strong"
+        ? "常规选择题目前是相对更可靠的题型之一，处理干扰项时也开始更稳。"
+        : section.performance === "developing"
+          ? "选择题还需要更稳定的排干扰能力，因为孩子暂时还不能持续把相似选项真正排除掉。"
+          : "选择题目前仍在因为干扰项和条件核对不完整而失分，选项逐个排除的习惯需要重新建立。",
+    });
+  }
+
+  if (hasTaskType(section, ["sentence-reorder", "order", "phrase", "table", "matching"])) {
+    noteVariants.push({
+      en: section.performance === "strong"
+        ? "Structured task formats such as sequencing, matching, or sentence rebuilding are already showing a workable sense of order."
+        : section.performance === "developing"
+          ? "Structured task types are workable, but the student still needs steadier control over sequence, relation, and sentence shape."
+          : "Structured task types still need more support, especially when the student has to track order, relationships, or how a sentence should be rebuilt.",
+      cn: section.performance === "strong"
+        ? "排序、配对、重组句子这类结构型任务已经开始体现出一定的条理感。"
+        : section.performance === "developing"
+          ? "结构型任务目前基本可做，但顺序、关系和句子成形的控制仍然不够稳定。"
+          : "结构型任务还需要继续补强，尤其是在追踪顺序、对应关系和句子重建方面。",
+    });
+  }
+
+  if (noteVariants.length === 0) {
+    return null;
+  }
+
+  return pickVariant(seed, noteVariants);
+}
+
+function buildTaskFocusedRecommendation(section: SectionDescriptor) {
+  const seed = `${section.sectionId}:${section.sectionTitle}:recommendation`;
+
+  const noteVariants: Array<{ en: string; cn: string }> = [];
+
+  if (hasTaskType(section, ["true-false", "reference", "open-ended", "open-ended-sub"])) {
+    noteVariants.push({
+      en: `${section.sectionTitle}: train statement-by-statement evidence checking and short answers that must be supported directly from the passage.`,
+      cn: `${section.sectionTitle}：训练“逐条核对原文证据”的习惯，并把简答题练成能直接回扣文章依据的短答案。`,
+    });
+  }
+
+  if (hasTaskType(section, ["fill-blank", "wordbank-fill", "story-fill", "inline-word-choice", "passage-inline-word-choice", "word-completion", "picture-spelling", "word-bank"])) {
+    noteVariants.push({
+      en: `${section.sectionTitle}: practice blanks and word-choice items by checking meaning, collocation, and sentence form together instead of one at a time.`,
+      cn: `${section.sectionTitle}：后续练习应把语境、搭配和句子形式放在一起核对，而不是只盯住其中一个点。`,
+    });
+  }
+
+  if (hasTaskType(section, ["mcq", "checkbox", "picture-mcq", "listening-mcq", "option-images", "question-image", "scene-image"])) {
+    noteVariants.push({
+      en: `${section.sectionTitle}: use slower option elimination and explicit distractor checking so that answers are chosen from evidence, not first impressions.`,
+      cn: `${section.sectionTitle}：建议继续训练“慢一步排选项、专门查干扰项”，把作答依据从第一感觉改成明确证据。`,
+    });
+  }
+
+  if (hasTaskType(section, ["sentence-reorder", "order", "phrase", "table", "matching"])) {
+    noteVariants.push({
+      en: `${section.sectionTitle}: break this part into sequencing, matching, or sentence-building micro-drills before putting it back into mixed practice.`,
+      cn: `${section.sectionTitle}：先把这部分拆成排序、配对或句子重建的小练习，再慢慢放回混合训练中。`,
+    });
+  }
+
+  if (noteVariants.length === 0) {
+    noteVariants.push({
+      en: `${section.sectionTitle}: keep correction focused on the exact task mechanics that are still causing repeated errors.`,
+      cn: `${section.sectionTitle}：后续订正应继续围绕真正反复失分的任务动作来练，而不是泛泛多做题。`,
+    });
+  }
+
+  return pickVariant(seed, noteVariants);
 }
 
 function describeSectionPerformance(section: SectionDescriptor) {
@@ -417,22 +567,40 @@ function describeSectionPerformance(section: SectionDescriptor) {
   };
 
   const teacherFeedbackEn = section.teacherFeedback_en
-    ? `Teacher feedback noted: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`
+    ? pickVariant(`${section.sectionId}:teacher-feedback-en`, [
+        `Teacher feedback noted: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+        `Teacher scoring notes also point out that ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+        `From the teacher-marked comments, the clearest signal is: ${section.teacherFeedback_en.replace(/\s+/g, " ").trim()}`,
+      ])
     : "";
   const teacherFeedbackCn = section.teacherFeedback_cn
-    ? `老师本次批改中提到：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`
+    ? pickVariant(`${section.sectionId}:teacher-feedback-cn`, [
+        `老师本次批改中提到：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+        `从老师的批改反馈来看，最需要注意的是：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+        `老师评语里比较明确地指出：${section.teacherFeedback_cn.replace(/\s+/g, " ").trim()}`,
+      ])
     : "";
   const suggestionEn = section.teacherSuggestions_en.length > 0
-    ? `Follow-up practice can focus on: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`
+    ? pickVariant(`${section.sectionId}:teacher-suggestions-en`, [
+        `Follow-up practice can focus on: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
+        `The teacher's follow-up direction is also quite clear: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
+        `A practical next step from the teacher comments would be: ${section.teacherSuggestions_en.slice(0, 2).join("; ")}.`,
+      ])
     : "";
   const suggestionCn = section.teacherSuggestions_cn.length > 0
-    ? `后续练习可优先围绕：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`
+    ? pickVariant(`${section.sectionId}:teacher-suggestions-cn`, [
+        `后续练习可优先围绕：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
+        `老师给出的后续方向也比较明确：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
+        `如果按老师的评语继续推进，最值得先抓的是：${section.teacherSuggestions_cn.slice(0, 2).join("；")}。`,
+      ])
     : "";
+  const taskNote = buildTaskSpecificNote(section);
 
   return {
     en: [
       scorePrefixEn,
       templates[section.kind][section.performance].en,
+      taskNote?.en,
       nextSteps[section.kind][section.performance].en,
       teacherFeedbackEn,
       suggestionEn,
@@ -442,6 +610,7 @@ function describeSectionPerformance(section: SectionDescriptor) {
     cn: [
       scorePrefixCn,
       templates[section.kind][section.performance].cn,
+      taskNote?.cn,
       nextSteps[section.kind][section.performance].cn,
       teacherFeedbackCn,
       suggestionCn,
@@ -490,6 +659,7 @@ function buildSectionDescriptors(input: TemplateReportInput) {
 
     return {
       ...section,
+      taskTypes: uniqueNonEmpty(section.taskTypes || []),
       kind,
       percentage,
       performance,
@@ -644,12 +814,14 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
 
   sections.forEach((section) => {
     if (section.performance === "strong") {
-      strengthsEn.push(`${section.sectionTitle}: ${strengthTemplates[section.kind].en}`);
-      strengthsCn.push(`${section.sectionTitle}：${strengthTemplates[section.kind].cn}`);
+      const taskNote = buildTaskSpecificNote(section);
+      strengthsEn.push([`${section.sectionTitle}: ${strengthTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
+      strengthsCn.push([`${section.sectionTitle}：${strengthTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
     }
     if (section.performance === "weak") {
-      weaknessesEn.push(`${section.sectionTitle}: ${weaknessTemplates[section.kind].en}`);
-      weaknessesCn.push(`${section.sectionTitle}：${weaknessTemplates[section.kind].cn}`);
+      const taskNote = buildTaskSpecificNote(section);
+      weaknessesEn.push([`${section.sectionTitle}: ${weaknessTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
+      weaknessesCn.push([`${section.sectionTitle}：${weaknessTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
     }
   });
 
@@ -674,6 +846,7 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
 function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   const { weakSections } = pickStrongWeakSections(sections);
   const weakTitles = weakSections.slice(0, 2).map((section) => section.sectionTitle);
+  const strongestSection = pickStrongWeakSections(sections).strongest;
   const manualTitles = sections
     .filter((section) => section.performance === "manual")
     .map((section) => section.sectionTitle);
@@ -730,18 +903,34 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   };
 
   const defaults = gradeDefaults[grade] || gradeDefaults.D;
-  if (weakTitles.length > 0) {
-    defaults.en[0] = `Start with focused work on ${weakTitles.join(" and ")} before expanding practice volume again.`;
-    defaults.cn[0] = `建议先围绕 ${weakTitles.join(" 和 ")} 做针对性训练，再逐步扩大练习量。`;
-  }
+  const tailored = weakSections.slice(0, 2).map((section) => buildTaskFocusedRecommendation(section));
+
+  const recommendationsEn = tailored.map((item) => item.en);
+  const recommendationsCn = tailored.map((item) => item.cn);
+
   if (manualTitles.length > 0) {
-    defaults.en[2] = `Use teacher-reviewed work from ${formatSectionList(manualTitles, "en")} to connect input practice with clearer output routines.`;
-    defaults.cn[2] = `把 ${formatSectionList(manualTitles, "cn")} 的老师批改结果真正用起来，帮助孩子把输入训练逐步转化为更清楚的输出套路。`;
+    recommendationsEn.push(`Use teacher-reviewed work from ${formatSectionList(manualTitles, "en")} to turn teacher comments into repeatable output routines, not one-off corrections.`);
+    recommendationsCn.push(`把 ${formatSectionList(manualTitles, "cn")} 的老师批改结果真正变成可重复使用的输出训练套路，而不是只看一次评语就结束。`);
+  } else if (strongestSection) {
+    recommendationsEn.push(`${strongestSection.sectionTitle}: keep this part active with short maintenance practice so that it can continue supporting the total score while weaker sections are repaired.`);
+    recommendationsCn.push(`${strongestSection.sectionTitle}：在补弱过程中也要继续用短练习把这部分维持住，让它继续承担稳定得分的作用。`);
+  }
+
+  while (recommendationsEn.length < 3) {
+    recommendationsEn.push(defaults.en[recommendationsEn.length]);
+  }
+  while (recommendationsCn.length < 3) {
+    recommendationsCn.push(defaults.cn[recommendationsCn.length]);
+  }
+
+  if (recommendationsEn.length > 0 && weakTitles.length > 0) {
+    recommendationsEn[0] = `Start with focused work on ${weakTitles.join(" and ")} before expanding practice volume again. ${recommendationsEn[0]}`;
+    recommendationsCn[0] = `建议先围绕 ${weakTitles.join(" 和 ")} 做针对性训练，再逐步扩大练习量。${recommendationsCn[0]}`;
   }
 
   return {
-    recommendations_en: defaults.en,
-    recommendations_cn: defaults.cn,
+    recommendations_en: recommendationsEn.slice(0, 3),
+    recommendations_cn: recommendationsCn.slice(0, 3),
   };
 }
 

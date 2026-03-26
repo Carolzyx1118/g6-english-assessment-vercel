@@ -44,6 +44,33 @@ type SubmissionContext = {
   totalTimeSeconds: number;
 };
 
+function summarizeSectionTaskTypes(section: Paper["sections"][number]) {
+  const taskTypes = new Set<string>();
+
+  if (section.passage) taskTypes.add("shared-passage");
+  if (section.wordBank?.length) taskTypes.add("word-bank");
+  if (section.sceneImageUrl) taskTypes.add("scene-image");
+  if (section.matchingDescriptions?.length) taskTypes.add("matching");
+
+  section.questions.forEach((question) => {
+    taskTypes.add(question.type);
+
+    if ("imageUrl" in question && typeof question.imageUrl === "string" && question.imageUrl.trim()) {
+      taskTypes.add("question-image");
+    }
+
+    if ((question.type === "picture-mcq" || question.type === "listening-mcq") && question.options.some((option) => option.imageUrl?.trim())) {
+      taskTypes.add("option-images");
+    }
+
+    if (question.type === "open-ended" && question.subQuestions?.length) {
+      taskTypes.add("open-ended-sub");
+    }
+  });
+
+  return Array.from(taskTypes);
+}
+
 function clampProgress(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -383,6 +410,7 @@ export default function ResultsPage() {
             correct,
             total,
             timeSeconds: submission.sectionTimings[section.id] || 0,
+            taskTypes: summarizeSectionTaskTypes(section),
           };
         });
 

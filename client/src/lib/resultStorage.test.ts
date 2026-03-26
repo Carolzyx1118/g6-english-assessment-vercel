@@ -156,7 +156,9 @@ describe('resultStorage', () => {
         {
           id: 'reading',
           title: 'Reading',
+          subtitle: 'Generated reading',
           sectionType: 'reading',
+          description: 'Generated reading section',
           passage: 'A short generated passage.',
           questions: [
             {
@@ -168,6 +170,104 @@ describe('resultStorage', () => {
                 { label: 'B', imageUrl: 'https://example.com/dog.png', text: 'Dog' },
               ],
               correctAnswer: 1,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('keeps non-embedded question materials needed by history review', () => {
+    const generatedPaper: Paper = {
+      id: 'tag-system-english-materials',
+      title: 'Generated Materials Practice',
+      subtitle: 'Generated practice',
+      description: 'A generated paper with review materials.',
+      icon: '🧪',
+      color: '#1d4ed8',
+      subject: 'english',
+      category: 'practice',
+      isGeneratedPaper: true,
+      totalQuestions: 1,
+      hasListening: false,
+      hasWriting: false,
+      sections: [
+        {
+          id: 'reading',
+          title: 'Reading',
+          subtitle: 'Generated reading',
+          icon: '📘',
+          color: 'text-sky-700',
+          bgColor: 'bg-sky-50',
+          description: 'Generated reading section',
+          taskDescription: 'Read the passage and answer the question.',
+          sectionType: 'reading',
+          passage: 'A full generated passage.',
+          sceneImageUrl: 'https://example.com/scene.png',
+          matchingDescriptions: [{ label: 'A', name: 'Alice', text: 'Likes science.' }],
+          manualBlocks: [
+            {
+              id: 'block-1',
+              displayNumber: 1,
+              questionIds: [1],
+              taskDescription: 'Match the note to the person.',
+              passage: 'Block-level passage.',
+              sceneImageUrl: 'https://example.com/block-scene.png',
+              matchingDescriptions: [{ label: 'B', name: 'Ben', text: 'Likes music.' }],
+            },
+          ],
+          questions: [
+            {
+              id: 1,
+              type: 'open-ended',
+              question: 'What does the passage say?',
+              imageUrl: 'https://example.com/question.png',
+              correctAnswer: 'It explains the main idea.',
+            },
+          ],
+        },
+      ],
+    };
+
+    const packed = packStoredAssessmentPayloadForResultStorage(
+      { 'reading:1': 'It explains the main idea.' },
+      generatedPaper,
+    );
+
+    const parsed = parseStoredAssessmentPayload(packed);
+    expect(parsed.paperSnapshot).toEqual({
+      id: 'tag-system-english-materials',
+      title: 'Generated Materials Practice',
+      subject: 'english',
+      sections: [
+        {
+          id: 'reading',
+          title: 'Reading',
+          subtitle: 'Generated reading',
+          description: 'Generated reading section',
+          taskDescription: 'Read the passage and answer the question.',
+          sectionType: 'reading',
+          passage: 'A full generated passage.',
+          sceneImageUrl: 'https://example.com/scene.png',
+          matchingDescriptions: [{ label: 'A', name: 'Alice', text: 'Likes science.' }],
+          manualBlocks: [
+            {
+              id: 'block-1',
+              displayNumber: 1,
+              questionIds: [1],
+              taskDescription: 'Match the note to the person.',
+              passage: 'Block-level passage.',
+              sceneImageUrl: 'https://example.com/block-scene.png',
+              matchingDescriptions: [{ label: 'B', name: 'Ben', text: 'Likes music.' }],
+            },
+          ],
+          questions: [
+            {
+              id: 1,
+              type: 'open-ended',
+              question: 'What does the passage say?',
+              imageUrl: 'https://example.com/question.png',
+              correctAnswer: 'It explains the main idea.',
             },
           ],
         },
@@ -229,7 +329,9 @@ describe('resultStorage', () => {
         {
           id: 'reading',
           title: 'Reading',
+          subtitle: 'legacy',
           sectionType: 'reading',
+          description: 'legacy section',
           passage: 'Legacy passage',
           questions: [
             {

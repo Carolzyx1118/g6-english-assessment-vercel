@@ -1,4 +1,10 @@
-import { getPaperById, type Paper, type Question, type Section, type WritingQuestion } from "@/data/papers";
+import {
+  getPaperById,
+  type Paper,
+  type Question,
+  type Section,
+  type WritingQuestion,
+} from "@/data/papers";
 import { isAudioAnswerValue } from "@/lib/audioStorage";
 import { normalizeVocabularyAnswer } from "@/lib/vocabularyWordHelpers";
 import { parseStoredAssessmentPayload } from "@/lib/storedAssessmentPayload";
@@ -21,6 +27,7 @@ export type ReadingGradingResult = {
   questionId: string;
   isCorrect: boolean;
   score: number;
+  referenceAnswer?: string;
   feedback_en: string;
   feedback_cn: string;
   explanation_en: string;
@@ -76,6 +83,7 @@ export interface AssessmentReviewRecord {
 export interface QuestionReviewOption {
   label: string;
   text: string;
+  imageUrl?: string;
   isCorrect: boolean;
   isSelected: boolean;
 }
@@ -86,12 +94,24 @@ export interface QuestionReviewDetail {
   sectionTitle: string;
   sectionKind: ReviewSectionKind;
   sourceQuestionId: number;
+  questionType: Question["type"] | "open-ended-sub";
+  sourceQuestion: Question;
   questionNum: string;
   questionText: string;
   userAnswer: string;
   correctAnswer: string;
   isCorrect: boolean;
   isAnswered: boolean;
+  taskDescription?: string;
+  sectionDescription?: string;
+  sectionPassage?: string;
+  sectionGrammarPassage?: string;
+  sectionImageUrl?: string;
+  questionImageUrl?: string;
+  sceneImageUrl?: string;
+  matchingDescriptions?: NonNullable<Section["matchingDescriptions"]>;
+  wordBank?: NonNullable<Section["wordBank"]>;
+  focusItemKey?: string;
   context?: string;
   options?: QuestionReviewOption[];
   explanationEn?: string;
@@ -281,24 +301,25 @@ function isAnsweredValue(value: unknown) {
   return true;
 }
 
-function getOptionDisplay(option: string | { label?: string; text?: string } | undefined) {
+function getOptionDisplay(option: string | { label?: string; text?: string; imageUrl?: string } | undefined) {
   if (!option) return "";
   return typeof option === "string" ? option : option.text || option.label || "";
 }
 
-function getOptionLabel(index: number, option: string | { label?: string; text?: string } | undefined) {
+function getOptionLabel(index: number, option: string | { label?: string; text?: string; imageUrl?: string } | undefined) {
   if (option && typeof option !== "string" && option.label) return option.label;
   return String.fromCharCode(65 + index);
 }
 
 function buildReviewOptions(
-  rawOptions: Array<string | { label?: string; text?: string }>,
+  rawOptions: Array<string | { label?: string; text?: string; imageUrl?: string }>,
   selectedIndexes: number[],
   correctIndexes: number[],
 ): QuestionReviewOption[] {
   return rawOptions.map((option, index) => ({
     label: getOptionLabel(index, option),
     text: getOptionDisplay(option),
+    imageUrl: option && typeof option !== "string" ? option.imageUrl : undefined,
     isCorrect: correctIndexes.includes(index),
     isSelected: selectedIndexes.includes(index),
   }));
@@ -405,6 +426,43 @@ function isManualWritingReview(result: WritingEvaluationResult | null | undefine
   );
 }
 
+function findMaterialBlockForQuestion(section: Section, questionId: number) {
+  return section.manualBlocks?.find((block) => block.questionIds.includes(questionId)) || null;
+}
+
+function getQuestionImageUrl(question: Question) {
+  if ("imageUrl" in question && typeof question.imageUrl === "string") {
+    return question.imageUrl || undefined;
+  }
+  return undefined;
+}
+
+function buildQuestionMaterialBase(
+  section: Section,
+  question: Question,
+  scopedQuestionId: number,
+) {
+  const materialBlock = findMaterialBlockForQuestion(section, question.id);
+
+  return {
+    sectionId: section.id,
+    sectionTitle: section.title,
+    sectionKind: inferSectionKind(section),
+    sourceQuestionId: scopedQuestionId,
+    questionType: question.type,
+    sourceQuestion: question,
+    taskDescription: materialBlock?.taskDescription || section.taskDescription,
+    sectionDescription: materialBlock?.instructions || section.description,
+    sectionPassage: materialBlock?.passage || ("passageText" in question ? question.passageText : undefined) || section.passage,
+    sectionGrammarPassage: materialBlock?.grammarPassage || section.grammarPassage,
+    sectionImageUrl: section.imageUrl,
+    questionImageUrl: getQuestionImageUrl(question),
+    sceneImageUrl: materialBlock?.sceneImageUrl || section.sceneImageUrl,
+    matchingDescriptions: materialBlock?.matchingDescriptions || section.matchingDescriptions,
+    wordBank: materialBlock?.wordBank || section.wordBank,
+  };
+}
+
 export function isManualSpeakingReview(result: SpeakingEvaluationResult | null | undefined) {
   return Boolean(
     result
@@ -457,7 +515,6 @@ function buildQuestionDetailsForSection(
   readingResultMap: Map<string, ReadingGradingResult>,
 ): QuestionReviewDetail[] {
   const details: QuestionReviewDetail[] = [];
-  const sectionKind = inferSectionKind(section);
 
   for (const question of section.questions) {
     if (question.type === "writing") continue;
@@ -467,12 +524,7 @@ function buildQuestionDetailsForSection(
     const rawAnswer = answers[key];
     const scopedQuestionId = buildScopedQuestionId(section.id, question.id);
     const explanation = explanationMap.get(scopedQuestionId) || explanationMap.get(question.id);
-    const base = {
-      sectionId: section.id,
-      sectionTitle: section.title,
-      sectionKind,
-      sourceQuestionId: scopedQuestionId,
-    };
+    const base = buildQuestionMaterialBase(section, question, scopedQuestionId);
 
     if (question.type === "picture-mcq" || question.type === "listening-mcq") {
       const selectedIndexes = getSelectedIndexes(rawAnswer);
@@ -495,6 +547,7 @@ function buildQuestionDetailsForSection(
         explanationCn: explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
@@ -523,6 +576,7 @@ function buildQuestionDetailsForSection(
           explanationCn: explanation?.explanation_cn,
           tipEn: explanation?.tip_en,
           tipCn: explanation?.tip_cn,
+          context: base.sectionPassage,
         });
         continue;
       }
@@ -544,6 +598,7 @@ function buildQuestionDetailsForSection(
           explanationCn: explanation?.explanation_cn,
           tipEn: explanation?.tip_en,
           tipCn: explanation?.tip_cn,
+          context: base.sectionPassage,
         });
         continue;
       }
@@ -573,14 +628,16 @@ function buildQuestionDetailsForSection(
         explanationCn: explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
 
     if (question.type === "fill-blank") {
       const rawText = typeof rawAnswer === "string" ? rawAnswer : "";
-      const correctEntry = section.wordBank?.find((entry) => entry.letter === question.correctAnswer);
-      const selectedEntry = section.wordBank?.find((entry) => entry.letter === rawText);
+      const wordBank = base.wordBank;
+      const correctEntry = wordBank?.find((entry) => entry.letter === question.correctAnswer);
+      const selectedEntry = wordBank?.find((entry) => entry.letter === rawText);
       const userDisplay = rawText.trim()
         ? selectedEntry
           ? `${selectedEntry.letter} (${selectedEntry.word})`
@@ -589,14 +646,14 @@ function buildQuestionDetailsForSection(
       const correctDisplay = correctEntry
         ? `${correctEntry.letter} (${correctEntry.word})`
         : question.correctAnswer;
-      const correctIndexes = section.wordBank
-        ? section.wordBank
+      const correctIndexes = wordBank
+        ? wordBank
             .map((entry, index) => ({ entry, index }))
             .filter(({ entry }) => entry.letter === question.correctAnswer)
             .map(({ index }) => index)
         : [];
-      const selectedIndexes = section.wordBank
-        ? section.wordBank
+      const selectedIndexes = wordBank
+        ? wordBank
             .map((entry, index) => ({ entry, index }))
             .filter(({ entry }) => entry.letter === rawText)
             .map(({ index }) => index)
@@ -611,9 +668,9 @@ function buildQuestionDetailsForSection(
         correctAnswer: correctDisplay,
         isCorrect: rawText.trim().length > 0 && normalizeSimpleText(rawText) === normalizeSimpleText(question.correctAnswer),
         isAnswered: rawText.trim().length > 0,
-        options: section.wordBank
+        options: wordBank
           ? buildReviewOptions(
-              section.wordBank.map((entry) => `${entry.letter} (${entry.word})`),
+              wordBank.map((entry) => `${entry.letter} (${entry.word})`),
               selectedIndexes,
               correctIndexes,
             )
@@ -622,6 +679,7 @@ function buildQuestionDetailsForSection(
         explanationCn: explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
@@ -648,6 +706,7 @@ function buildQuestionDetailsForSection(
         explanationCn: readingResult?.explanation_cn || explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
@@ -667,6 +726,7 @@ function buildQuestionDetailsForSection(
         explanationCn: explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
@@ -692,6 +752,7 @@ function buildQuestionDetailsForSection(
         explanationCn: explanation?.explanation_cn,
         tipEn: explanation?.tip_en,
         tipCn: explanation?.tip_cn,
+        context: base.sectionPassage,
       });
       continue;
     }
@@ -724,6 +785,8 @@ function buildQuestionDetailsForSection(
           ),
           explanationEn: readingResult?.explanation_en,
           explanationCn: readingResult?.explanation_cn,
+          focusItemKey: statement.label,
+          context: base.sectionPassage,
         });
       }
       continue;
@@ -756,6 +819,8 @@ function buildQuestionDetailsForSection(
           isAnswered: rawText.trim().length > 0,
           explanationEn: readingResult?.explanation_en,
           explanationCn: readingResult?.explanation_cn,
+          focusItemKey: String(index),
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -778,6 +843,8 @@ function buildQuestionDetailsForSection(
           isAnswered: rawText.trim().length > 0,
           explanationEn: readingResult?.explanation_en,
           explanationCn: readingResult?.explanation_cn,
+          focusItemKey: String(index),
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -801,6 +868,8 @@ function buildQuestionDetailsForSection(
           isAnswered: rawText.trim().length > 0,
           explanationEn: readingResult?.explanation_en,
           explanationCn: readingResult?.explanation_cn,
+          focusItemKey: String(index),
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -823,6 +892,8 @@ function buildQuestionDetailsForSection(
           isAnswered: rawText.trim().length > 0,
           explanationEn: readingResult?.explanation_en,
           explanationCn: readingResult?.explanation_cn,
+          focusItemKey: String(index),
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -846,6 +917,8 @@ function buildQuestionDetailsForSection(
           explanationCn: explanation?.explanation_cn,
           tipEn: explanation?.tip_en,
           tipCn: explanation?.tip_cn,
+          focusItemKey: item.label,
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -870,6 +943,8 @@ function buildQuestionDetailsForSection(
           explanationCn: explanation?.explanation_cn,
           tipEn: explanation?.tip_en,
           tipCn: explanation?.tip_cn,
+          focusItemKey: item.label,
+          context: base.sectionPassage,
         });
       });
       continue;
@@ -895,12 +970,46 @@ function buildQuestionDetailsForSection(
           explanationCn: readingResult?.explanation_cn || explanation?.explanation_cn,
           tipEn: explanation?.tip_en,
           tipCn: explanation?.tip_cn,
+          focusItemKey: item.label,
+          context: question.passageText || base.sectionPassage,
         });
       });
       continue;
     }
 
     if (question.type === "open-ended") {
+      if (question.subQuestions && question.subQuestions.length > 0) {
+        const parsed = parseSerializedRecord(rawAnswer);
+        question.subQuestions.forEach((subQuestion) => {
+          const readingResult = getReadingResult(readingResultMap, section.id, `${question.id}-${subQuestion.label}`);
+          const rawText = typeof parsed[subQuestion.label] === "string" ? String(parsed[subQuestion.label]) : "";
+          details.push({
+            ...base,
+            questionType: "open-ended-sub",
+            id: `${section.id}:${question.id}:${subQuestion.label}`,
+            questionNum: `Q${question.id}(${subQuestion.label})`,
+            questionText: subQuestion.question,
+            userAnswer: rawText.trim().length > 0 ? rawText : "Not Answered",
+            correctAnswer: readingResult?.referenceAnswer || subQuestion.answer || "AI reference answer unavailable",
+            isCorrect: readingResult
+              ? readingResult.isCorrect
+              : rawText.trim().length > 0
+                ? String(subQuestion.answer || "")
+                    .split("/")
+                    .map((item) => normalizeSimpleText(item))
+                    .filter(Boolean)
+                    .includes(normalizeSimpleText(rawText))
+                : false,
+            isAnswered: rawText.trim().length > 0,
+            explanationEn: readingResult?.explanation_en,
+            explanationCn: readingResult?.explanation_cn,
+            focusItemKey: subQuestion.label,
+            context: base.sectionPassage,
+          });
+        });
+        continue;
+      }
+
       const readingResult = getReadingResult(readingResultMap, section.id, String(question.id));
       const audioAnswers = extractAudioAnswers(rawAnswer);
       const rawText = typeof rawAnswer === "string" && audioAnswers.length === 0 ? rawAnswer : "";
@@ -915,7 +1024,7 @@ function buildQuestionDetailsForSection(
           : rawText.trim().length > 0
             ? rawText
             : "Not Answered",
-        correctAnswer: question.answer || question.correctAnswer || "Teacher review required",
+        correctAnswer: readingResult?.referenceAnswer || question.answer || question.correctAnswer || "AI reference answer unavailable",
         isCorrect: readingResult
           ? readingResult.isCorrect
           : rawText.trim().length > 0
@@ -928,6 +1037,7 @@ function buildQuestionDetailsForSection(
         isAnswered: hasAudio || rawText.trim().length > 0,
         explanationEn: readingResult?.explanation_en,
         explanationCn: readingResult?.explanation_cn,
+        context: base.sectionPassage,
       });
     }
   }
@@ -1255,7 +1365,11 @@ function buildReadingInputsForSection(
     }
   }
 
-  return inputs.filter((item) => item.correctAnswer.trim().length > 0);
+  return inputs.filter((item) => (
+    item.correctAnswer.trim().length > 0
+    || item.questionType === "open-ended"
+    || item.questionType === "open-ended-sub"
+  ));
 }
 
 export function buildSubmissionArtifacts(

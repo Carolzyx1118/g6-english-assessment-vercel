@@ -1,5 +1,5 @@
 import type { AssessmentReportResult } from '@shared/assessmentReport';
-import { getPaperById, type Paper, type Question, type Section } from '@/data/papers';
+import { getPaperById, type ManualQuestionBlock, type Paper, type Question, type Section } from '@/data/papers';
 import {
   packStoredAssessmentPayload,
   parseStoredAssessmentPayload,
@@ -44,6 +44,7 @@ function compactQuestionForStorage(question: Question) {
         correctAnswer: question.correctAnswer,
         correctAnswers: question.correctAnswers,
         selectionLimit: question.selectionLimit,
+        imageUrl: question.imageUrl,
       });
     case 'picture-mcq':
     case 'listening-mcq':
@@ -69,12 +70,14 @@ function compactQuestionForStorage(question: Question) {
         type: question.type,
         question: question.question,
         correctAnswer: question.correctAnswer,
+        imageUrl: question.imageUrl,
       });
     case 'word-completion':
       return sanitizeValueForStorage({
         id: question.id,
         type: question.type,
         question: question.question,
+        imageUrl: question.imageUrl,
         wordPattern: question.wordPattern,
         correctAnswer: question.correctAnswer,
       });
@@ -101,6 +104,7 @@ function compactQuestionForStorage(question: Question) {
         subQuestions: question.subQuestions,
         answer: question.answer,
         correctAnswer: question.correctAnswer,
+        imageUrl: question.imageUrl,
         responseMode: question.responseMode,
       });
     case 'true-false':
@@ -158,6 +162,7 @@ function compactQuestionForStorage(question: Question) {
         id: question.id,
         type: question.type,
         question: question.question,
+        passageText: question.passageText,
         items: question.items,
       };
     case 'checkbox':
@@ -176,17 +181,50 @@ function compactQuestionForStorage(question: Question) {
         topic: question.topic,
         instructions: question.instructions,
         wordCount: question.wordCount,
+        prompts: question.prompts,
+        imageUrl: question.imageUrl,
+        minWords: question.minWords,
+        maxWords: question.maxWords,
+        referenceAnswer: question.referenceAnswer,
       });
   }
+}
+
+function compactManualBlockForStorage(block: ManualQuestionBlock) {
+  return sanitizeValueForStorage({
+    id: block.id,
+    displayNumber: block.displayNumber,
+    questionType: block.questionType,
+    instructions: block.instructions,
+    taskDescription: block.taskDescription,
+    questionIds: block.questionIds,
+    passage: block.passage,
+    wordBank: block.wordBank,
+    grammarPassage: block.grammarPassage,
+    audioUrl: block.audioUrl,
+    sceneImageUrl: block.sceneImageUrl,
+    inlineCloze: block.inlineCloze,
+    matchingDescriptions: block.matchingDescriptions,
+  });
 }
 
 function compactSectionForStorage(section: Section) {
   return sanitizeValueForStorage({
     id: section.id,
     title: section.title,
+    subtitle: section.subtitle,
+    description: section.description,
+    taskDescription: section.taskDescription,
     sectionType: section.sectionType,
     passage: section.passage,
+    grammarPassage: section.grammarPassage,
+    imageUrl: section.imageUrl,
+    audioUrl: section.audioUrl,
+    sceneImageUrl: section.sceneImageUrl,
+    inlineCloze: section.inlineCloze,
+    matchingDescriptions: section.matchingDescriptions,
     wordBank: section.wordBank,
+    manualBlocks: section.manualBlocks?.map((block) => compactManualBlockForStorage(block)),
     questions: section.questions.map((question) => compactQuestionForStorage(question)),
   });
 }

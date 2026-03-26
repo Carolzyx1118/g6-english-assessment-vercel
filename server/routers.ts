@@ -38,6 +38,17 @@ type WritingEvaluationResult = {
   manualReviewRequired?: boolean;
 };
 
+type ReadingCheckResult = {
+  questionId: string;
+  isCorrect: boolean;
+  score: number;
+  feedback_en: string;
+  feedback_cn: string;
+  explanation_en: string;
+  explanation_cn: string;
+  referenceAnswer?: string;
+};
+
 const AI_WRITING_MAX_SCORE = 20;
 const AI_SPEAKING_MAX_SCORE = 5;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -207,6 +218,27 @@ function gradeReadingAnswer(answer: {
   const acceptableAnswers = getReadingAcceptableAnswers(correctAnswer);
   const isAnswered = userAnswer.length > 0 && userAnswer.toLowerCase() !== "not answered";
 
+  if ((answer.questionType === "open-ended" || answer.questionType === "open-ended-sub") && correctAnswer.length === 0) {
+    return {
+      questionId: answer.questionId,
+      isCorrect: false,
+      score: 0,
+      feedback_en: isAnswered
+        ? "Automatic grading needs an AI-generated reference answer for this response."
+        : "No answer was submitted.",
+      feedback_cn: isAnswered
+        ? "这道开放题需要先由 AI 生成参考答案后再评分。"
+        : "本题未作答。",
+      explanation_en: isAnswered
+        ? "A reference answer was not saved with this question, so fallback grading cannot judge the response without AI."
+        : "No answer was submitted for this open-ended question.",
+      explanation_cn: isAnswered
+        ? "这道题没有保存参考答案，因此在没有 AI 参考答案的情况下，兜底评分无法判断作答是否正确。"
+        : "这道开放题本次没有提交答案。",
+      referenceAnswer: "AI reference answer unavailable.",
+    } satisfies ReadingCheckResult;
+  }
+
   let isCorrect = false;
   if (isAnswered) {
     if (answer.questionType === "checkbox") {
@@ -228,7 +260,8 @@ function gradeReadingAnswer(answer: {
     explanation_cn: isCorrect
       ? `参考答案：${correctAnswer}。`
       : `参考答案：${correctAnswer}。如果学生表达意思正确但与答案写法不同，请人工复核。`,
-  };
+    referenceAnswer: correctAnswer,
+  } satisfies ReadingCheckResult;
 }
 
 function shouldUseAIForReadingAnswer(answer: {
@@ -238,9 +271,10 @@ function shouldUseAIForReadingAnswer(answer: {
 }) {
   return (
     (answer.questionType === "open-ended" || answer.questionType === "open-ended-sub")
-    && answer.userAnswer.trim().length > 0
-    && answer.userAnswer.trim().toLowerCase() !== "not answered"
-    && answer.correctAnswer.trim().length > 0
+    && (
+      answer.userAnswer.trim().length > 0
+      || answer.correctAnswer.trim().length === 0
+    )
   );
 }
 
@@ -269,6 +303,9 @@ Rules:
 - Accept paraphrases, concise wording, minor grammar mistakes, and semantically equivalent answers.
 - Reject answers that miss a key fact, contradict the reference answer, or are too vague.
 - Use the context passage when provided.
+- Always return a concise referenceAnswer for each item.
+- If a reference answer is missing, infer the best acceptable answer from the passage and question.
+- If the student left the answer blank, mark it incorrect, but still provide the referenceAnswer and a short explanation.
 - Keep feedback short and practical.
 
 Answers to grade:
@@ -276,8 +313,8 @@ ${aiCandidates.map((answer, index) => `
 ${index + 1}. questionId=${answer.questionId}
 Question: ${answer.questionText}
 ${answer.context ? `Context: ${answer.context}` : ""}
-Student answer: ${answer.userAnswer}
-Reference answer: ${answer.correctAnswer}
+Student answer: ${answer.userAnswer.trim() || "[No response submitted]"}
+Reference answer: ${answer.correctAnswer.trim() || "[Not provided - infer it from the question and context]"}
 `).join("\n")}`;
 
     const response = await invokeLLM({
@@ -304,6 +341,7 @@ Reference answer: ${answer.correctAnswer}
                   properties: {
                     questionId: { type: "string" },
                     isCorrect: { type: "boolean" },
+                    referenceAnswer: { type: "string" },
                     feedback_en: { type: "string" },
                     feedback_cn: { type: "string" },
                     explanation_en: { type: "string" },
@@ -312,6 +350,7 @@ Reference answer: ${answer.correctAnswer}
                   required: [
                     "questionId",
                     "isCorrect",
+                    "referenceAnswer",
                     "feedback_en",
                     "feedback_cn",
                     "explanation_en",
@@ -333,6 +372,7 @@ Reference answer: ${answer.correctAnswer}
       results: Array<{
         questionId: string;
         isCorrect: boolean;
+        referenceAnswer: string;
         feedback_en: string;
         feedback_cn: string;
         explanation_en: string;
@@ -351,6 +391,7 @@ Reference answer: ${answer.correctAnswer}
           questionId: item.questionId,
           isCorrect: Boolean(item.isCorrect),
           score: item.isCorrect ? 1 : 0,
+          referenceAnswer: item.referenceAnswer.trim(),
           feedback_en: item.feedback_en.trim(),
           feedback_cn: item.feedback_cn.trim(),
           explanation_en: item.explanation_en.trim(),
@@ -681,6 +722,10 @@ Requirements:
 - Keep the report practical, specific, and easy for parents and teachers to read.
 - Keep bilingual alignment: English and Chinese should say the same thing.
 - Preserve the exact section order from the input.
+- Do not write generic advice that could fit any student. Tie comments to the current part titles and task mechanics whenever the input provides them.
+- Avoid repeating the same sentence frame across strengths, weaknesses, recommendations, and section insights.
+- When taskTypes are available, use them to mention concrete mechanics such as distractor control, evidence checking, collocation, sentence transformation, image-based recognition, short open-ended support, matching, or sequencing.
+- Every recommendation should name what to practise, not just say "improve" or "keep practising".
 - If a section has total=0, explicitly say whether there was no response or automatic scoring is currently unavailable. Do not invent a score.
 - Keep each list concise:
   - strengths / weaknesses / recommendations / abilitySnapshot: 2-4 items
@@ -1738,6 +1783,7 @@ Respond in JSON format:
           correct: z.number(),
           total: z.number(),
           timeSeconds: z.number(),
+          taskTypes: z.array(z.string()).optional(),
         })),
         writingSummary: z.object({
           score: z.number(),

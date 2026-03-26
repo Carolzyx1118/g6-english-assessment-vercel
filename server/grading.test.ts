@@ -106,6 +106,7 @@ describe("grading.checkReadingAnswers", () => {
                 {
                   questionId: "52",
                   isCorrect: true,
+                  referenceAnswer: "The passage is about the importance of exercise.",
                   feedback_en: "The answer matches the main idea.",
                   feedback_cn: "答案抓住了主要意思。",
                   explanation_en: "The student's wording is different, but it conveys the same meaning as the reference answer.",
@@ -136,7 +137,52 @@ describe("grading.checkReadingAnswers", () => {
     expect(result).toHaveLength(1);
     expect(result[0].isCorrect).toBe(true);
     expect(result[0].score).toBe(1);
+    expect(result[0].referenceAnswer).toBe("The passage is about the importance of exercise.");
     expect(result[0].feedback_en).toContain("main idea");
+  });
+
+  it("uses AI to infer a reference answer for open-ended reading when the question has no saved key", async () => {
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              results: [
+                {
+                  questionId: "77",
+                  isCorrect: false,
+                  referenceAnswer: "Digital minimalism can improve quality of life by reducing distraction and making time for deeper, more meaningful activities.",
+                  feedback_en: "No answer was submitted.",
+                  feedback_cn: "本题未作答。",
+                  explanation_en: "A strong response should explain how reducing low-value screen time can improve focus and well-being.",
+                  explanation_cn: "较好的答案应说明减少低价值屏幕时间如何改善专注力和生活状态。",
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.checkReadingAnswers({
+      answers: [
+        {
+          questionId: "77",
+          questionType: "open-ended",
+          questionText: "To what extent do you agree that practicing digital minimalism can improve a person's quality of life?",
+          userAnswer: "",
+          correctAnswer: "",
+          context: "The passage argues that digital minimalism reduces distraction and supports deeper work and relationships.",
+        },
+      ],
+    });
+
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+    expect(result[0].isCorrect).toBe(false);
+    expect(result[0].referenceAnswer).toContain("Digital minimalism");
+    expect(result[0].feedback_cn).toBe("本题未作答。");
   });
 });
 
@@ -207,10 +253,10 @@ describe("grading.generateReport", () => {
       studentGrade: "Grade 6",
       totalScore: 30, totalPossible: 46, percentage: 65, grade: "C", totalTimeSeconds: 1800,
       sectionResults: [
-        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 10, total: 12, timeSeconds: 300 },
-        { sectionId: "grammar", sectionTitle: "Part 2: Grammar", correct: 7, total: 13, timeSeconds: 400 },
-        { sectionId: "listening", sectionTitle: "Part 3: Listening", correct: 4, total: 6, timeSeconds: 200 },
-        { sectionId: "reading", sectionTitle: "Part 4: Reading", correct: 9, total: 15, timeSeconds: 900 },
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 10, total: 12, timeSeconds: 300, taskTypes: ["picture-mcq", "word-completion"] },
+        { sectionId: "grammar", sectionTitle: "Part 2: Grammar", correct: 7, total: 13, timeSeconds: 400, taskTypes: ["fill-blank", "sentence-reorder"] },
+        { sectionId: "listening", sectionTitle: "Part 3: Listening", correct: 4, total: 6, timeSeconds: 200, taskTypes: ["listening-mcq", "option-images"] },
+        { sectionId: "reading", sectionTitle: "Part 4: Reading", correct: 9, total: 15, timeSeconds: 900, taskTypes: ["true-false", "open-ended", "shared-passage"] },
       ],
     });
 
@@ -228,6 +274,8 @@ describe("grading.generateReport", () => {
     expect(result.abilitySnapshot_cn.length).toBeGreaterThanOrEqual(3);
     expect(result.sectionInsights).toHaveLength(4);
     expect(result.sectionInsights[0].summary_en).toContain("Vocabulary");
+    expect(result.sectionInsights[3].summary_en).toContain("Evidence");
+    expect(result.recommendations_en[0]).toMatch(/evidence|blank|distractor|Vocabulary|Reading/i);
     expect(result.studyPlan).toHaveLength(3);
     expect(result.parentFeedback_cn).toBeTruthy();
     expect(result.speakingEvaluation).toBeNull();
@@ -365,12 +413,13 @@ describe("grading.generateReport", () => {
       grade: "C",
       totalTimeSeconds: 1800,
       sectionResults: [
-        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 10, timeSeconds: 300 },
-        { sectionId: "reading", sectionTitle: "Part 2: Reading", correct: 14, total: 22, timeSeconds: 900 },
+        { sectionId: "vocabulary", sectionTitle: "Part 1: Vocabulary", correct: 8, total: 10, timeSeconds: 300, taskTypes: ["picture-mcq", "word-completion"] },
+        { sectionId: "reading", sectionTitle: "Part 2: Reading", correct: 14, total: 22, timeSeconds: 900, taskTypes: ["true-false", "open-ended", "shared-passage"] },
       ],
     });
 
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockInvokeLLM.mock.calls[0][0])).toContain("true-false");
     expect(result.overallSummary_en).toContain("workable foundation");
     expect(result.timeAnalysis_cn).toContain("30 分钟");
     expect(result.sectionInsights).toHaveLength(2);
