@@ -549,7 +549,7 @@ export default function TagManager() {
                   }}
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Exam System
+                  Add Paper
                 </Button>
               </div>
 

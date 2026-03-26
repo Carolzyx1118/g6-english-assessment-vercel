@@ -151,9 +151,6 @@ export default function TestHistory() {
                             <p className="mt-1 truncate text-sm text-slate-500">{item.paperTitle}</p>
                           </button>
                           <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                              #{item.id}
-                            </span>
                             <Button
                               type="button"
                               variant="ghost"
@@ -164,14 +161,14 @@ export default function TestHistory() {
                                 if (!confirmed) return;
                                 deleteMutation.mutate({ id: item.id });
                               }}
-                              className="h-8 w-8 rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                              className="h-9 w-9 rounded-2xl border border-rose-200 bg-white text-rose-600 shadow-sm hover:bg-rose-50 hover:text-rose-700"
                             >
                               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                             </Button>
                             <button
                               type="button"
                               onClick={() => navigate(active ? "/test-history" : `/test-history?id=${item.id}`)}
-                              className="rounded-full p-1 text-slate-400 transition hover:bg-white/70"
+                              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm transition hover:bg-slate-50 hover:text-slate-600"
                             >
                               <ChevronDown
                                 className={`h-4 w-4 transition ${active ? "rotate-180" : ""}`}

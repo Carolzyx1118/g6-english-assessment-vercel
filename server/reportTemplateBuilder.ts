@@ -76,7 +76,7 @@ const SECTION_LABELS: Record<SectionKind, { en: string; cn: string }> = {
   listening: { en: "Listening", cn: "听力" },
   writing: { en: "Writing", cn: "写作" },
   speaking: { en: "Speaking", cn: "口语" },
-  general: { en: "Section", cn: "部分" },
+  general: { en: "Overall Skills", cn: "综合能力" },
 };
 
 const GRADE_TEMPLATES: Record<string, GradeTemplate> = {
@@ -177,6 +177,18 @@ function formatSectionList(items: string[], locale: "en" | "cn") {
     return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
   }
   return items.join("、");
+}
+
+function getSectionLabel(kind: SectionKind, locale: "en" | "cn") {
+  return SECTION_LABELS[kind][locale];
+}
+
+function getSectionLabelForSection(section: Pick<SectionDescriptor, "kind">, locale: "en" | "cn") {
+  return getSectionLabel(section.kind, locale);
+}
+
+function getUniqueSectionLabels(sections: Array<Pick<SectionDescriptor, "kind">>, locale: "en" | "cn") {
+  return uniqueNonEmpty(sections.map((section) => getSectionLabelForSection(section, locale)));
 }
 
 function getSectionKind(sectionId: string, sectionTitle: string): SectionKind {
@@ -298,41 +310,43 @@ function buildTaskSpecificNote(section: SectionDescriptor) {
 
 function buildTaskFocusedRecommendation(section: SectionDescriptor) {
   const seed = `${section.sectionId}:${section.sectionTitle}:recommendation`;
+  const labelEn = getSectionLabelForSection(section, "en");
+  const labelCn = getSectionLabelForSection(section, "cn");
 
   const noteVariants: Array<{ en: string; cn: string }> = [];
 
   if (hasTaskType(section, ["true-false", "reference", "open-ended", "open-ended-sub"])) {
     noteVariants.push({
-      en: `${section.sectionTitle}: train statement-by-statement evidence checking and short answers that must be supported directly from the passage.`,
-      cn: `${section.sectionTitle}：训练“逐条核对原文证据”的习惯，并把简答题练成能直接回扣文章依据的短答案。`,
+      en: `${labelEn}: train statement-by-statement evidence checking and short answers that must be supported directly from the passage.`,
+      cn: `${labelCn}：训练“逐条核对原文证据”的习惯，并把简答题练成能直接回扣文章依据的短答案。`,
     });
   }
 
   if (hasTaskType(section, ["fill-blank", "wordbank-fill", "story-fill", "inline-word-choice", "passage-inline-word-choice", "word-completion", "picture-spelling", "word-bank"])) {
     noteVariants.push({
-      en: `${section.sectionTitle}: practice blanks and word-choice items by checking meaning, collocation, and sentence form together instead of one at a time.`,
-      cn: `${section.sectionTitle}：后续练习应把语境、搭配和句子形式放在一起核对，而不是只盯住其中一个点。`,
+      en: `${labelEn}: practice blanks and word-choice items by checking meaning, collocation, and sentence form together instead of one at a time.`,
+      cn: `${labelCn}：后续练习应把语境、搭配和句子形式放在一起核对，而不是只盯住其中一个点。`,
     });
   }
 
   if (hasTaskType(section, ["mcq", "checkbox", "picture-mcq", "listening-mcq", "option-images", "question-image", "scene-image"])) {
     noteVariants.push({
-      en: `${section.sectionTitle}: use slower option elimination and explicit distractor checking so that answers are chosen from evidence, not first impressions.`,
-      cn: `${section.sectionTitle}：建议继续训练“慢一步排选项、专门查干扰项”，把作答依据从第一感觉改成明确证据。`,
+      en: `${labelEn}: use slower option elimination and explicit distractor checking so that answers are chosen from evidence, not first impressions.`,
+      cn: `${labelCn}：建议继续训练“慢一步排选项、专门查干扰项”，把作答依据从第一感觉改成明确证据。`,
     });
   }
 
   if (hasTaskType(section, ["sentence-reorder", "order", "phrase", "table", "matching"])) {
     noteVariants.push({
-      en: `${section.sectionTitle}: break this part into sequencing, matching, or sentence-building micro-drills before putting it back into mixed practice.`,
-      cn: `${section.sectionTitle}：先把这部分拆成排序、配对或句子重建的小练习，再慢慢放回混合训练中。`,
+      en: `${labelEn}: break this part into sequencing, matching, or sentence-building micro-drills before putting it back into mixed practice.`,
+      cn: `${labelCn}：先把这部分拆成排序、配对或句子重建的小练习，再慢慢放回混合训练中。`,
     });
   }
 
   if (noteVariants.length === 0) {
     noteVariants.push({
-      en: `${section.sectionTitle}: keep correction focused on the exact task mechanics that are still causing repeated errors.`,
-      cn: `${section.sectionTitle}：后续订正应继续围绕真正反复失分的任务动作来练，而不是泛泛多做题。`,
+      en: `${labelEn}: keep correction focused on the exact task mechanics that are still causing repeated errors.`,
+      cn: `${labelCn}：后续订正应继续围绕真正反复失分的任务动作来练，而不是泛泛多做题。`,
     });
   }
 
@@ -710,13 +724,13 @@ function buildAbilitySnapshot(grade: string, sections: SectionDescriptor[]) {
   const snapshotsCn = [...template.snapshot_cn];
 
   if (strongest) {
-    snapshotsEn.push(`Current stronger area: ${strongest.sectionTitle}.`);
-    snapshotsCn.push(`当前相对较好的板块是：${strongest.sectionTitle}。`);
+    snapshotsEn.push(`Current stronger area: ${getSectionLabelForSection(strongest, "en")}.`);
+    snapshotsCn.push(`当前相对较好的板块是：${getSectionLabelForSection(strongest, "cn")}。`);
   }
 
   if (weakest) {
-    snapshotsEn.push(`Current priority area: ${weakest.sectionTitle}.`);
-    snapshotsCn.push(`当前最需要优先提升的板块是：${weakest.sectionTitle}。`);
+    snapshotsEn.push(`Current priority area: ${getSectionLabelForSection(weakest, "en")}.`);
+    snapshotsCn.push(`当前最需要优先提升的板块是：${getSectionLabelForSection(weakest, "cn")}。`);
   }
 
   const manualKinds = sections.filter((section) => section.performance === "manual").map((section) => section.kind);
@@ -813,15 +827,17 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
   };
 
   sections.forEach((section) => {
+    const labelEn = getSectionLabelForSection(section, "en");
+    const labelCn = getSectionLabelForSection(section, "cn");
     if (section.performance === "strong") {
       const taskNote = buildTaskSpecificNote(section);
-      strengthsEn.push([`${section.sectionTitle}: ${strengthTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
-      strengthsCn.push([`${section.sectionTitle}：${strengthTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
+      strengthsEn.push([`${labelEn}: ${strengthTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
+      strengthsCn.push([`${labelCn}：${strengthTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
     }
     if (section.performance === "weak") {
       const taskNote = buildTaskSpecificNote(section);
-      weaknessesEn.push([`${section.sectionTitle}: ${weaknessTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
-      weaknessesCn.push([`${section.sectionTitle}：${weaknessTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
+      weaknessesEn.push([`${labelEn}: ${weaknessTemplates[section.kind].en}`, taskNote?.en].filter(Boolean).join(" "));
+      weaknessesCn.push([`${labelCn}：${weaknessTemplates[section.kind].cn}`, taskNote?.cn].filter(Boolean).join(""));
     }
   });
 
@@ -845,11 +861,12 @@ function buildStrengthsWeaknesses(sections: SectionDescriptor[]) {
 
 function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   const { weakSections } = pickStrongWeakSections(sections);
-  const weakTitles = weakSections.slice(0, 2).map((section) => section.sectionTitle);
+  const weakTitlesEn = getUniqueSectionLabels(weakSections.slice(0, 2), "en");
+  const weakTitlesCn = getUniqueSectionLabels(weakSections.slice(0, 2), "cn");
   const strongestSection = pickStrongWeakSections(sections).strongest;
-  const manualTitles = sections
-    .filter((section) => section.performance === "manual")
-    .map((section) => section.sectionTitle);
+  const manualSections = sections.filter((section) => section.performance === "manual");
+  const manualTitlesEn = getUniqueSectionLabels(manualSections, "en");
+  const manualTitlesCn = getUniqueSectionLabels(manualSections, "cn");
 
   const gradeDefaults: Record<string, { en: string[]; cn: string[] }> = {
     A: {
@@ -908,12 +925,12 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
   const recommendationsEn = tailored.map((item) => item.en);
   const recommendationsCn = tailored.map((item) => item.cn);
 
-  if (manualTitles.length > 0) {
-    recommendationsEn.push(`Use the AI feedback from ${formatSectionList(manualTitles, "en")} to turn those comments into repeatable output routines instead of one-off corrections.`);
-    recommendationsCn.push(`把 ${formatSectionList(manualTitles, "cn")} 的 AI 反馈真正变成可重复使用的输出训练套路，而不是只看一次评语就结束。`);
+  if (manualTitlesEn.length > 0) {
+    recommendationsEn.push(`Use the AI feedback from ${formatSectionList(manualTitlesEn, "en")} to turn those comments into repeatable output routines instead of one-off corrections.`);
+    recommendationsCn.push(`把 ${formatSectionList(manualTitlesCn, "cn")} 的 AI 反馈真正变成可重复使用的输出训练套路，而不是只看一次评语就结束。`);
   } else if (strongestSection) {
-    recommendationsEn.push(`${strongestSection.sectionTitle}: keep this part active with short maintenance practice so that it can continue supporting the total score while weaker sections are repaired.`);
-    recommendationsCn.push(`${strongestSection.sectionTitle}：在补弱过程中也要继续用短练习把这部分维持住，让它继续承担稳定得分的作用。`);
+    recommendationsEn.push(`${getSectionLabelForSection(strongestSection, "en")}: keep this part active with short maintenance practice so that it can continue supporting the total score while weaker sections are repaired.`);
+    recommendationsCn.push(`${getSectionLabelForSection(strongestSection, "cn")}：在补弱过程中也要继续用短练习把这部分维持住，让它继续承担稳定得分的作用。`);
   }
 
   while (recommendationsEn.length < 3) {
@@ -923,9 +940,9 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
     recommendationsCn.push(defaults.cn[recommendationsCn.length]);
   }
 
-  if (recommendationsEn.length > 0 && weakTitles.length > 0) {
-    recommendationsEn[0] = `Start with focused work on ${weakTitles.join(" and ")} before expanding practice volume again. ${recommendationsEn[0]}`;
-    recommendationsCn[0] = `建议先围绕 ${weakTitles.join(" 和 ")} 做针对性训练，再逐步扩大练习量。${recommendationsCn[0]}`;
+  if (recommendationsEn.length > 0 && weakTitlesEn.length > 0) {
+    recommendationsEn[0] = `Start with focused work on ${weakTitlesEn.join(" and ")} before expanding practice volume again. ${recommendationsEn[0]}`;
+    recommendationsCn[0] = `建议先围绕 ${weakTitlesCn.join(" 和 ")} 做针对性训练，再逐步扩大练习量。${recommendationsCn[0]}`;
   }
 
   return {
@@ -937,38 +954,39 @@ function buildRecommendations(grade: string, sections: SectionDescriptor[]) {
 function buildParentFeedback(grade: string, sections: SectionDescriptor[]) {
   const template = GRADE_TEMPLATES[grade];
   const { strongest, weakest, weakSections } = pickStrongWeakSections(sections);
-  const weakTitles = weakSections.slice(0, 2).map((section) => section.sectionTitle);
+  const weakTitlesEn = getUniqueSectionLabels(weakSections.slice(0, 2), "en");
+  const weakTitlesCn = getUniqueSectionLabels(weakSections.slice(0, 2), "cn");
   const longest = [...sections].sort((a, b) => b.timeSeconds - a.timeSeconds)[0];
-  const manualTitles = sections
-    .filter((section) => section.performance === "manual")
-    .map((section) => section.sectionTitle);
+  const manualSections = sections.filter((section) => section.performance === "manual");
+  const manualTitlesEn = getUniqueSectionLabels(manualSections, "en");
+  const manualTitlesCn = getUniqueSectionLabels(manualSections, "cn");
 
-  const followUpEn = weakTitles.length > 0
-    ? `In the short term, home support should stay centered on ${formatSectionList(weakTitles, "en")} instead of spreading practice too widely at once.`
+  const followUpEn = weakTitlesEn.length > 0
+    ? `In the short term, home support should stay centered on ${formatSectionList(weakTitlesEn, "en")} instead of spreading practice too widely at once.`
     : "In the short term, practice should stay focused and consistent instead of becoming too broad or random.";
-  const followUpCn = weakTitles.length > 0
-    ? `短期内，家庭配合的重点应继续放在 ${formatSectionList(weakTitles, "cn")} 上，而不是把练习面一下子铺得过宽。`
+  const followUpCn = weakTitlesCn.length > 0
+    ? `短期内，家庭配合的重点应继续放在 ${formatSectionList(weakTitlesCn, "cn")} 上，而不是把练习面一下子铺得过宽。`
     : "短期内，家庭配合更适合保持聚焦和持续，而不是把练习内容一下子铺得太散。";
 
   const balanceEn = strongest
-    ? `${strongest.sectionTitle} can currently serve as a confidence-supporting area, so it should be maintained while weaker sections are being repaired.`
+    ? `${getSectionLabelForSection(strongest, "en")} can currently serve as a confidence-supporting area, so it should be maintained while weaker sections are being repaired.`
     : "It will be important to protect whichever section is currently more stable, so that confidence is not lost during the rebuilding process.";
   const balanceCn = strongest
-    ? `${strongest.sectionTitle} 目前可以作为帮助孩子建立信心的支撑板块，因此在补弱过程中也要继续维持。`
+    ? `${getSectionLabelForSection(strongest, "cn")} 目前可以作为帮助孩子建立信心的支撑板块，因此在补弱过程中也要继续维持。`
     : "在补弱过程中，也要继续维持相对更稳的部分，避免孩子在重建阶段失去信心。";
 
   const timingEn = longest && longest.timeSeconds > 0
-    ? `Because ${longest.sectionTitle} took the longest time in this paper, parents can also watch whether hesitation, repeated checking, or output pressure is slowing the student down there.`
+    ? `Because ${getSectionLabelForSection(longest, "en")} took the longest time in this paper, parents can also watch whether hesitation, repeated checking, or output pressure is slowing the student down there.`
     : "Parents can also pay attention to whether hesitation and repeated checking are affecting the student’s pace during practice.";
   const timingCn = longest && longest.timeSeconds > 0
-    ? `另外，本次 ${longest.sectionTitle} 耗时相对更长，家长也可以关注孩子在这一部分是否存在犹豫、反复检查或表达压力偏大的情况。`
+    ? `另外，本次 ${getSectionLabelForSection(longest, "cn")} 耗时相对更长，家长也可以关注孩子在这一部分是否存在犹豫、反复检查或表达压力偏大的情况。`
     : "另外，家长也可以关注孩子在练习时是否存在犹豫过多、反复检查等影响节奏的问题。";
 
-  const manualEn = manualTitles.length > 0
-    ? `For ${formatSectionList(manualTitles, "en")}, the AI feedback should be treated as core follow-up guidance rather than as one-off remarks.`
+  const manualEn = manualTitlesEn.length > 0
+    ? `For ${formatSectionList(manualTitlesEn, "en")}, the AI feedback should be treated as core follow-up guidance rather than as one-off remarks.`
     : "";
-  const manualCn = manualTitles.length > 0
-    ? `${formatSectionList(manualTitles, "cn")} 这部分的 AI 评分和评语，建议当作后续训练的重要依据，而不是只看一次就结束。`
+  const manualCn = manualTitlesCn.length > 0
+    ? `${formatSectionList(manualTitlesCn, "cn")} 这部分的 AI 评分和评语，建议当作后续训练的重要依据，而不是只看一次就结束。`
     : "";
 
   return {
@@ -1193,8 +1211,8 @@ function buildTimeAnalysis(totalTimeSeconds: number, sections: SectionDescriptor
   }
 
   return {
-    en: `The full assessment took ${totalMinutes} minutes ${totalSeconds} seconds. The section that took the longest was ${longest.sectionTitle}, so later practice should also monitor whether extra time is being spent because of hesitation, slow checking, or output pressure.`,
-    cn: `本次整套测评总用时 ${totalMinutes} 分 ${totalSeconds} 秒。其中耗时最长的是 ${longest.sectionTitle}，后续训练中可以继续观察这部分是否存在犹豫、反复检查或输出速度偏慢的问题。`,
+    en: `The full assessment took ${totalMinutes} minutes ${totalSeconds} seconds. The area that took the longest was ${getSectionLabelForSection(longest, "en")}, so later practice should also monitor whether extra time is being spent because of hesitation, slow checking, or output pressure.`,
+    cn: `本次整套测评总用时 ${totalMinutes} 分 ${totalSeconds} 秒。其中耗时最长的是 ${getSectionLabelForSection(longest, "cn")}，后续训练中可以继续观察这部分是否存在犹豫、反复检查或输出速度偏慢的问题。`,
   };
 }
 
@@ -1223,8 +1241,8 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     `The student scored ${input.totalScore}/${input.totalPossible} (${input.percentage}%), with an overall grade of ${grade}.`,
     template.summary_en,
     template.overview_en,
-    strongest ? `At the moment, ${strongest.sectionTitle} is functioning as the clearest relative strength in the paper.` : "",
-    weakest ? `${weakest.sectionTitle} is currently the section that needs the earliest and most focused correction.` : "",
+    strongest ? `At the moment, ${getSectionLabelForSection(strongest, "en")} is functioning as the clearest relative strength in the paper.` : "",
+    weakest ? `${getSectionLabelForSection(weakest, "en")} is currently the area that needs the earliest and most focused correction.` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "Writing and speaking are still waiting for refreshed AI evaluation, so the current automatic total should be read as a partial academic profile rather than the final full-skill judgment."
       : "",
@@ -1237,8 +1255,8 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     `本次总分为 ${input.totalScore}/${input.totalPossible}（${input.percentage}%），综合等级为 ${grade}。`,
     template.summary_cn,
     template.overview_cn,
-    strongest ? `从分项结果看，${strongest.sectionTitle} 是目前相对更能支撑成绩的板块。` : "",
-    weakest ? `${weakest.sectionTitle} 则是接下来最需要优先处理的薄弱点。` : "",
+    strongest ? `从分项结果看，${getSectionLabelForSection(strongest, "cn")}是目前相对更能支撑成绩的板块。` : "",
+    weakest ? `${getSectionLabelForSection(weakest, "cn")}则是接下来最需要优先处理的薄弱点。` : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "由于写作和口语仍在等待 AI 评估刷新，当前自动总分应理解为阶段性学业画像，而不是最终完整能力结论。"
       : "",

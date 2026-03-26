@@ -11,8 +11,8 @@ import {
 
 const PRINT_PAGE_STYLES = `
   @page {
-    size: auto;
-    margin: 12mm;
+    size: A4;
+    margin: 10mm;
   }
 
   @media print {
@@ -20,6 +20,7 @@ const PRINT_PAGE_STYLES = `
       background: #ffffff !important;
       margin: 0;
       padding: 0;
+      font-size: 14px !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -31,6 +32,127 @@ const PRINT_PAGE_STYLES = `
     .report-print-shell {
       max-width: none !important;
       padding: 0 !important;
+    }
+
+    .print-assessment-report {
+      gap: 14px !important;
+    }
+
+    .print-assessment-report .report-shell-card,
+    .print-assessment-report .report-summary-card,
+    .print-assessment-report .report-breakdown-card,
+    .print-assessment-report .report-detail-card,
+    .print-assessment-report .report-question-card,
+    .print-assessment-report .report-list-card,
+    .print-assessment-report .report-list-item,
+    .print-assessment-report .report-study-stage,
+    .print-assessment-report .report-parent-card,
+    .print-assessment-report .report-overview-card,
+    .print-assessment-report .report-material-card,
+    .print-assessment-report .report-image-card {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .print-assessment-report .report-shell-card,
+    .print-assessment-report .report-list-card,
+    .print-assessment-report .report-parent-card,
+    .print-assessment-report .report-overview-card {
+      border-radius: 22px !important;
+      box-shadow: none !important;
+    }
+
+    .print-assessment-report .report-hero {
+      padding: 18px 20px !important;
+    }
+
+    .print-assessment-report .report-hero-name {
+      font-size: 1.9rem !important;
+      line-height: 1.1 !important;
+    }
+
+    .print-assessment-report .report-profile-name {
+      font-size: 1rem !important;
+      line-height: 1.3 !important;
+    }
+
+    .print-assessment-report .report-summary-card {
+      padding: 14px !important;
+      border-radius: 18px !important;
+      box-shadow: none !important;
+    }
+
+    .print-assessment-report .report-summary-grade {
+      font-size: 3rem !important;
+    }
+
+    .print-assessment-report .report-summary-score {
+      font-size: 2.25rem !important;
+    }
+
+    .print-assessment-report .report-summary-score > span {
+      font-size: 1.15rem !important;
+    }
+
+    .print-assessment-report .report-summary-time {
+      font-size: 2rem !important;
+      gap: 10px !important;
+    }
+
+    .print-assessment-report .report-summary-time svg {
+      width: 22px !important;
+      height: 22px !important;
+    }
+
+    .print-assessment-report .report-section-heading h2 {
+      font-size: 1.2rem !important;
+    }
+
+    .print-assessment-report .report-section-heading p {
+      font-size: 0.8rem !important;
+      line-height: 1.45 !important;
+    }
+
+    .print-assessment-report .report-breakdown-card,
+    .print-assessment-report .report-detail-card,
+    .print-assessment-report .report-question-card,
+    .print-assessment-report .report-study-stage,
+    .print-assessment-report .report-material-card {
+      border-radius: 18px !important;
+      box-shadow: none !important;
+    }
+
+    .print-assessment-report .report-breakdown-card {
+      padding: 14px !important;
+    }
+
+    .print-assessment-report .report-breakdown-score {
+      font-size: 1.9rem !important;
+    }
+
+    .print-assessment-report .report-detail-summary {
+      padding: 16px 18px !important;
+    }
+
+    .print-assessment-report .report-detail-body {
+      padding: 14px 16px !important;
+      gap: 12px !important;
+    }
+
+    .print-assessment-report .report-question-card,
+    .print-assessment-report .report-list-card,
+    .print-assessment-report .report-overview-card,
+    .print-assessment-report .report-parent-card {
+      padding: 16px !important;
+    }
+
+    .print-assessment-report .report-list-item {
+      padding: 12px !important;
+      border-radius: 14px !important;
+    }
+
+    .print-assessment-report p {
+      line-height: 1.65 !important;
     }
   }
 `;

@@ -40,7 +40,7 @@ export default function StudentInfoForm({ onBack }: StudentInfoFormProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gradient-to-br from-[#FAFBFD] via-white to-[#EEF4FF] flex items-center justify-center px-4"
+      className="min-h-screen bg-gradient-to-br from-[#F7F9FC] via-white to-[#EDF2F8] flex items-center justify-center px-4"
     >
       <div className="w-full max-w-lg">
         <motion.div
@@ -50,7 +50,7 @@ export default function StudentInfoForm({ onBack }: StudentInfoFormProps) {
           className="text-center mb-8"
         >
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
-            Student <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Information</span>
+            Student <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1E3A5F] to-[#2A4A6F]">Information</span>
           </h1>
           <p className="mt-3 text-base text-slate-500">
             Please fill in your details before starting the assessment.
@@ -67,7 +67,7 @@ export default function StudentInfoForm({ onBack }: StudentInfoFormProps) {
           {/* Name - Required */}
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-              <User className="w-4 h-4 text-blue-500" />
+              <User className="w-4 h-4 text-[#1E3A5F]" />
               Name <span className="text-red-400">*</span>
             </label>
             <Input
@@ -102,7 +102,7 @@ export default function StudentInfoForm({ onBack }: StudentInfoFormProps) {
             <Button
               type="submit"
               size="lg"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-6 text-lg rounded-xl shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all duration-300"
+              className="w-full bg-gradient-to-r from-[#1E3A5F] to-[#2A4A6F] hover:from-[#17324F] hover:to-[#234160] text-white py-6 text-lg rounded-xl shadow-lg shadow-[#1E3A5F]/20 hover:shadow-xl hover:shadow-[#1E3A5F]/25 transition-all duration-300"
             >
               {isStarted ? 'Continue Assessment' : 'Start Assessment'}
               <ArrowRight className="ml-2 w-5 h-5" />

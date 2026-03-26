@@ -4795,7 +4795,6 @@ export default function PaperIntake() {
               <GeneratedPaperConfigEditor
                 value={generationConfig}
                 sourcePapers={publishedEnglishSourcePapers}
-                previewWarnings={generatedPreview?.warnings ?? []}
                 onChange={setGenerationConfig}
               />
             ) : null}

@@ -755,7 +755,8 @@ Requirements:
 - Keep the report practical, specific, and easy for parents and teachers to read.
 - Keep bilingual alignment: English and Chinese should say the same thing.
 - Preserve the exact section order from the input.
-- Do not write generic advice that could fit any student. Tie comments to the current part titles and task mechanics whenever the input provides them.
+- Do not write generic advice that could fit any student. Tie comments to the current skill areas and task mechanics whenever the input provides them.
+- In high-level sections such as overallSummary, timeAnalysis, abilitySnapshot, strengths, weaknesses, recommendations, studyPlan, and parentFeedback, refer to skills like vocabulary, grammar, reading, listening, writing, and speaking instead of raw labels like "Part 1" or "Part 11".
 - Avoid repeating the same sentence frame across strengths, weaknesses, recommendations, and section insights.
 - When taskTypes are available, use them to mention concrete mechanics such as distractor control, evidence checking, collocation, sentence transformation, image-based recognition, short open-ended support, matching, or sequencing.
 - Every recommendation should name what to practise, not just say "improve" or "keep practising".

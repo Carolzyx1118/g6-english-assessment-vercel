@@ -18,6 +18,9 @@ const TARGET_SCORING_SAMPLE_RATE = 16000;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
 const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
+const DIRECT_UPLOAD_TIMEOUT_MS = 20_000;
+const SERVER_UPLOAD_TIMEOUT_MS = 15_000;
+const PREFERRED_SERVER_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
@@ -102,6 +105,25 @@ function canAttemptAutomaticSpeakingScoring(blob: Blob) {
     && blob.size <= MAX_GATEWAY_AUDIO_BYTES;
 
   return isGatewayCompatible || blob.size <= MAX_TRANSCRIPTION_AUDIO_BYTES;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`${label} timed out. Please try again.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecorded }: AudioRecorderProps) {
@@ -333,25 +355,52 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       fileSize: blob.size,
     });
 
-    try {
-      const uploaded = await uploadBlob(`paper-assets/${safeFileName}`, blob, {
-        access: 'public',
-        contentType,
-        handleUploadUrl: '/api/blob/client-token',
-        clientPayload,
-        multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
-      });
+    const uploadDirectly = async () => {
+      const uploaded = await withTimeout(
+        uploadBlob(`paper-assets/${safeFileName}`, blob, {
+          access: 'public',
+          contentType,
+          handleUploadUrl: '/api/blob/client-token',
+          clientPayload,
+          multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
+        }),
+        DIRECT_UPLOAD_TIMEOUT_MS,
+        'Direct audio upload',
+      );
       return uploaded.url;
-    } catch (directUploadError) {
-      console.warn('Direct blob upload failed, falling back to server upload.', directUploadError);
+    };
+
+    const uploadViaServer = async () => {
       const fileBase64 = await blobToBase64(blob);
-      const uploaded = await uploadFileMutation.mutateAsync({
-        fileName: safeFileName,
-        fileBase64,
-        contentType,
-      });
+      const uploaded = await withTimeout(
+        uploadFileMutation.mutateAsync({
+          fileName: safeFileName,
+          fileBase64,
+          contentType,
+        }),
+        SERVER_UPLOAD_TIMEOUT_MS,
+        'Audio save',
+      );
       return uploaded.url;
+    };
+
+    const errors: string[] = [];
+    const tryServerFirst = blob.size <= PREFERRED_SERVER_UPLOAD_MAX_BYTES;
+    const strategies = tryServerFirst
+      ? [uploadViaServer, uploadDirectly]
+      : [uploadDirectly, uploadViaServer];
+
+    for (const strategy of strategies) {
+      try {
+        return await strategy();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown upload error.';
+        errors.push(message);
+        console.warn('[AudioRecorder] Upload attempt failed.', error);
+      }
     }
+
+    throw new Error(errors[errors.length - 1] || 'Failed to save recording.');
   }, [blobToBase64, questionId, sectionId, uploadFileMutation]);
 
   const uploadAudio = useCallback(async () => {

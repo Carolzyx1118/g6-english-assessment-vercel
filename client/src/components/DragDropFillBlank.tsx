@@ -13,7 +13,7 @@
  * 2. SENTENCE MODE (when no grammarPassage, questions have individual sentences):
  *    - Shows individual sentences with ___ blanks
  *    - User drags word bank words into blanks
- *    - Words can be reused (same word may fit multiple blanks)
+ *    - Each word can only be used once
  *    - Answer stored as the WORD itself (e.g., "next to")
  */
 
@@ -302,17 +302,23 @@ function SentenceModeFillBlank({
   const [draggedWord, setDraggedWord] = useState<{ letter: string; word: string } | null>(null);
   const [selectedWord, setSelectedWord] = useState<{ letter: string; word: string } | null>(null);
 
-  // In sentence mode, words can be reused
+  const usedWords = new Set<string>();
+  questions.forEach((q) => {
+    const answer = getAnswer(sectionId, q.id);
+    if (answer && typeof answer === 'string') {
+      usedWords.add(answer);
+    }
+  });
 
   const handleDragStart = (e: React.DragEvent, item: { letter: string; word: string }) => {
     setDraggedWord(item);
     e.dataTransfer.setData('text/plain', item.word);
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (e: React.DragEvent, questionId: number) => {
@@ -325,6 +331,7 @@ function SentenceModeFillBlank({
   };
 
   const handleWordClick = (item: { letter: string; word: string }) => {
+    if (usedWords.has(item.word)) return;
     setSelectedWord(prev => prev?.word === item.word ? null : item);
   };
 
@@ -407,28 +414,31 @@ function SentenceModeFillBlank({
         <h3 className="font-bold text-sm text-amber-700 mb-3 uppercase tracking-wider">
           Word Bank
           <span className="ml-2 text-xs font-normal text-amber-500 normal-case">
-            (Drag words to blanks — words can be reused)
+            (Drag words to blanks, or click to select — each word used once)
           </span>
         </h3>
         <div className="flex flex-wrap gap-2">
           {wordBank.map(({ letter, word }) => {
+            const isUsed = usedWords.has(word);
             const isSelected = selectedWord?.word === word;
             return (
               <div
                 key={letter}
-                draggable
+                draggable={!isUsed}
                 onDragStart={(e) => handleDragStart(e, { letter, word })}
                 onDragEnd={() => setDraggedWord(null)}
-                onClick={() => handleWordClick({ letter, word })}
+                onClick={() => !isUsed && handleWordClick({ letter, word })}
                 className={`
                   flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-base font-medium transition-all duration-200
-                  ${isSelected
+                  ${isUsed
+                    ? 'border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed line-through opacity-60'
+                    : isSelected
                     ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-md cursor-pointer ring-2 ring-blue-200'
                     : 'border-amber-200 bg-white text-slate-700 cursor-grab hover:border-amber-400 hover:shadow-sm active:cursor-grabbing'
                   }
                 `}
               >
-                <GripVertical className="w-3 h-3 text-slate-400" />
+                {!isUsed && <GripVertical className="w-3 h-3 text-slate-400" />}
                 {word}
               </div>
             );

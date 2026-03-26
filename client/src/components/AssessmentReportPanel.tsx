@@ -44,8 +44,12 @@ const REPORT_SECTION_LABELS = {
   listening: { cn: "听力", en: "Listening" },
   writing: { cn: "写作", en: "Writing" },
   speaking: { cn: "口语", en: "Speaking" },
-  other: { cn: "部分", en: "Section" },
+  other: { cn: "综合能力", en: "Overall Skills" },
 } as const;
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function formatDate(value: string | Date, locale: ReviewLocale) {
   const date = value instanceof Date ? value : new Date(value);
@@ -119,6 +123,61 @@ function getReviewProblemDetails(details: QuestionReviewDetail[]) {
   return details.filter((detail) => !detail.isAnswered || !detail.isCorrect);
 }
 
+function getSummarySkillLabel(
+  section: Pick<AssessmentReviewModel["sections"][number], "kind">,
+  locale: ReviewLocale,
+) {
+  return REPORT_SECTION_LABELS[section.kind]?.[locale] || REPORT_SECTION_LABELS.other[locale];
+}
+
+function normalizeSummaryReportText(
+  value: string | undefined,
+  sections: AssessmentReviewModel["sections"],
+  locale: ReviewLocale,
+) {
+  if (!value) return value;
+
+  let normalized = value;
+  const replacements = Array.from(
+    new Map(
+      sections.flatMap((section) => {
+        const label = getSummarySkillLabel(section, locale);
+        return [
+          [section.sectionTitle.trim(), label],
+          [getSectionDisplayName(section.sectionTitle, section.sectionId, locale).trim(), label],
+        ];
+      }),
+    ).entries(),
+  )
+    .filter(([from]) => from)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  replacements.forEach(([from, to]) => {
+    normalized = normalized.replace(new RegExp(escapeRegExp(from), "g"), to);
+  });
+
+  const skillPatterns = (Object.entries(REPORT_SECTION_LABELS) as Array<
+    [keyof typeof REPORT_SECTION_LABELS, (typeof REPORT_SECTION_LABELS)[keyof typeof REPORT_SECTION_LABELS]]
+  >)
+    .filter(([key]) => key !== "other")
+    .flatMap(([, labels]) => [
+      {
+        regex: new RegExp(`Part\\s*\\d+\\s*(?:[·.:：-]\\s*|\\s+)${escapeRegExp(labels.en)}`, "gi"),
+        replacement: locale === "cn" ? labels.cn : labels.en,
+      },
+      {
+        regex: new RegExp(`Part\\s*\\d+\\s*(?:[·.:：-]\\s*|\\s+)${escapeRegExp(labels.cn)}`, "g"),
+        replacement: locale === "cn" ? labels.cn : labels.en,
+      },
+    ]);
+
+  skillPatterns.forEach(({ regex, replacement }) => {
+    normalized = normalized.replace(regex, replacement);
+  });
+
+  return normalized.replace(/\s{2,}/g, " ").trim();
+}
+
 function alignSectionInsightByOccurrence(
   sections: AssessmentReviewModel["sections"],
   insights: NonNullable<AssessmentReviewModel["report"]>["sectionInsights"] | undefined,
@@ -178,7 +237,7 @@ function renderDetailList(
   }[variant];
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="report-list-card rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
         <span className={`h-2.5 w-2.5 rounded-full ${palette.dot}`} />
         <h3 className={`text-base font-semibold ${palette.title}`}>
@@ -189,7 +248,7 @@ function renderDetailList(
         {items.map((item, index) => (
           <div
             key={`${titleEn}-${index}`}
-            className="grid grid-cols-[38px_minmax(0,1fr)] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm leading-6 text-slate-700"
+            className="report-list-item grid grid-cols-[38px_minmax(0,1fr)] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm leading-6 text-slate-700"
           >
             <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ${palette.badge}`}>
               {String(index + 1).padStart(2, "0")}
@@ -216,7 +275,7 @@ function DetailMaterialSection(props: {
   }[props.tone || "slate"];
 
   return (
-    <div className={`rounded-2xl px-4 py-4 ${toneClasses}`}>
+    <div className={`report-material-card rounded-2xl px-4 py-4 ${toneClasses}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
         {props.locale === "cn" ? props.titleCn : props.titleEn}
       </p>
@@ -227,7 +286,7 @@ function DetailMaterialSection(props: {
 
 function ReviewImageCard(props: { src: string; alt: string }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+    <div className="report-image-card overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
       <img src={props.src} alt={props.alt} className="h-full max-h-72 w-full object-contain bg-white" loading="lazy" />
     </div>
   );
@@ -588,7 +647,7 @@ function StepHeading(props: {
   iconClassName: string;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="report-section-heading flex flex-wrap items-start justify-between gap-3">
       <div className="flex items-center gap-3 text-slate-900">
         <div className={`rounded-2xl p-3 ${props.iconClassName}`}>
           {props.icon}
@@ -657,15 +716,21 @@ export default function AssessmentReportPanel({
     () => alignSectionInsightByOccurrence(orderedSections, report?.sectionInsights),
     [orderedSections, report?.sectionInsights],
   );
-  const strengthItems = locale === "cn" ? report?.strengths_cn : report?.strengths_en;
-  const weaknessItems = locale === "cn" ? report?.weaknesses_cn : report?.weaknesses_en;
-  const recommendationItems = locale === "cn" ? report?.recommendations_cn : report?.recommendations_en;
-  const abilityItems = locale === "cn" ? report?.abilitySnapshot_cn : report?.abilitySnapshot_en;
   const isCn = locale === "cn";
+  const normalizeSummaryText = (value: string | undefined) =>
+    normalizeSummaryReportText(value, orderedSections, locale);
+  const strengthItems = (locale === "cn" ? report?.strengths_cn : report?.strengths_en)
+    ?.map((item) => normalizeSummaryText(item) || item);
+  const weaknessItems = (locale === "cn" ? report?.weaknesses_cn : report?.weaknesses_en)
+    ?.map((item) => normalizeSummaryText(item) || item);
+  const recommendationItems = (locale === "cn" ? report?.recommendations_cn : report?.recommendations_en)
+    ?.map((item) => normalizeSummaryText(item) || item);
+  const abilityItems = (locale === "cn" ? report?.abilitySnapshot_cn : report?.abilitySnapshot_en)
+    ?.map((item) => normalizeSummaryText(item) || item);
   const displayStudentName = getDisplayStudentName(record.studentName, locale);
   const studentMonogram = getStudentMonogram(record.studentName, locale);
   const gradeDescriptor = getGradeDescriptor(model.grade, locale);
-  const headerCardClassName = "rounded-[28px] border border-amber-200/80 bg-white/70 p-5 shadow-[0_18px_40px_rgba(120,53,15,0.08),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-sm";
+  const headerCardClassName = "report-summary-card rounded-[28px] border border-amber-200/80 bg-white/70 p-5 shadow-[0_18px_40px_rgba(120,53,15,0.08),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-sm";
   const headerLabelClassName = "text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800/80";
 
   const speakingEvaluationsBySection = useMemo(() => {
@@ -702,8 +767,8 @@ export default function AssessmentReportPanel({
 
   return (
     <div className={`space-y-6 ${printMode ? "print-assessment-report" : ""}`}>
-      <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-        <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_26%),radial-gradient(circle_at_88%_16%,_rgba(217,119,6,0.16),_transparent_22%),linear-gradient(135deg,#fffaf0_0%,#f8ebcb_50%,#ebcb8d_100%)] px-6 py-7 text-slate-900 sm:px-8 sm:py-8">
+      <section className="report-shell-card overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+        <div className="report-hero relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_26%),radial-gradient(circle_at_88%_16%,_rgba(217,119,6,0.16),_transparent_22%),linear-gradient(135deg,#fffaf0_0%,#f8ebcb_50%,#ebcb8d_100%)] px-6 py-7 text-slate-900 sm:px-8 sm:py-8">
           <div className="pointer-events-none absolute inset-0 opacity-50">
             <div className="absolute -left-10 top-6 h-44 w-44 rounded-full bg-amber-300/35 blur-3xl" />
             <div className="absolute right-6 top-0 h-52 w-52 rounded-full bg-yellow-200/35 blur-3xl" />
@@ -728,7 +793,7 @@ export default function AssessmentReportPanel({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800/80">
                   {isCn ? "学生档案" : "Student Profile"}
                 </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-900 sm:text-[40px]">
+                <h1 className="report-hero-name mt-2 text-[28px] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[34px]">
                   {displayStudentName}
                 </h1>
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
@@ -796,7 +861,7 @@ export default function AssessmentReportPanel({
                   {studentMonogram}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xl font-semibold text-slate-900">{displayStudentName}</p>
+                  <p className="report-profile-name truncate text-lg font-semibold text-slate-900">{displayStudentName}</p>
                   <p className="mt-1 text-sm text-slate-600">
                     {record.studentGrade
                       ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
@@ -817,7 +882,7 @@ export default function AssessmentReportPanel({
                 </span>
               </div>
               <div className="mt-4 flex items-end gap-3">
-                <span className="text-5xl font-semibold leading-none text-slate-900">{model.grade}</span>
+                <span className="report-summary-grade text-[60px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
                 <span className="mb-1 text-sm font-medium text-slate-500">
                   {isCn ? "综合表现" : "Overall"}
                 </span>
@@ -836,9 +901,9 @@ export default function AssessmentReportPanel({
                   {model.percentage}%
                 </span>
               </div>
-              <p className="mt-4 text-[48px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
+              <p className="report-summary-score mt-4 text-[40px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
                 {model.totalScore}
-                <span className="text-2xl font-medium text-slate-500">/{model.totalPossible}</span>
+                <span className="text-xl font-medium text-slate-500">/{model.totalPossible}</span>
               </p>
               <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-amber-100/80">
                 <div
@@ -855,8 +920,8 @@ export default function AssessmentReportPanel({
               <p className={headerLabelClassName}>
                 {isCn ? "总用时" : "Total Time"}
               </p>
-              <p className="mt-4 flex items-center gap-3 text-[38px] font-semibold leading-none tracking-[-0.03em] text-slate-900">
-                <Clock3 className="h-8 w-8 text-amber-700" />
+              <p className="report-summary-time mt-4 flex items-center gap-3 text-[30px] font-semibold leading-none tracking-[-0.03em] text-slate-900">
+                <Clock3 className="h-7 w-7 text-amber-700" />
                 {formatDuration(model.totalTimeSeconds, locale)}
               </p>
               <p className="mt-4 text-sm leading-7 text-slate-600">
@@ -867,7 +932,7 @@ export default function AssessmentReportPanel({
         </div>
       </section>
 
-      <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="report-shell-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <StepHeading
           step="01"
           title={isCn ? "Part Breakdown" : "Part Breakdown"}
@@ -887,7 +952,7 @@ export default function AssessmentReportPanel({
             return (
               <div
                 key={`breakdown-${section.sectionId}-${index}`}
-                className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5"
+                className="report-breakdown-card rounded-[28px] border border-slate-200 bg-slate-50/80 p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -905,7 +970,7 @@ export default function AssessmentReportPanel({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                       {section.manualReview ? (isCn ? "评估方式" : "Review Mode") : (isCn ? "得分" : "Score")}
                     </p>
-                    <p className="mt-1 text-[38px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
+                    <p className="report-breakdown-score mt-1 text-[38px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
                       {section.manualReview
                         ? (isCn ? "AI 评估" : "AI Review")
                         : `${section.correct}/${section.total}`}
@@ -969,10 +1034,10 @@ export default function AssessmentReportPanel({
           return (
             <details
               key={`ordered-review-${section.sectionId}-${index}`}
-              className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+              className="report-detail-card group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               open
             >
-              <summary className="cursor-pointer list-none px-6 py-5">
+              <summary className="report-detail-summary cursor-pointer list-none px-6 py-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-3">
@@ -1000,7 +1065,7 @@ export default function AssessmentReportPanel({
                 </div>
               </summary>
 
-              <div className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:px-6">
+              <div className="report-detail-body space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:px-6">
                 {insight ? (
                   <div className="rounded-[24px] bg-indigo-50 px-5 py-4 text-sm leading-7 text-indigo-950">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">
@@ -1013,7 +1078,7 @@ export default function AssessmentReportPanel({
                 {isWritingSection && model.writing ? (
                   <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="space-y-4">
-                      <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                         <div className="flex items-center gap-2 text-slate-900">
                           <PenSquare className="h-5 w-5 text-rose-600" />
                           <p className="text-base font-semibold">{isCn ? "写作任务" : "Writing Task"}</p>
@@ -1069,7 +1134,7 @@ export default function AssessmentReportPanel({
                       </div>
 
                       {model.writing.evaluation?.grammarErrors?.length ? (
-                        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                             {isCn ? "重点语法修改" : "Grammar Corrections"}
                           </p>
@@ -1120,7 +1185,7 @@ export default function AssessmentReportPanel({
                     ) : null}
 
                     {speakingItems.map((item) => (
-                      <div key={`${item.sectionId}-${item.questionId}`} className="rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
@@ -1195,7 +1260,7 @@ export default function AssessmentReportPanel({
                     {reviewDetails.map((detail) => {
                       const status = getStatusStyle(detail);
                       return (
-                        <div key={`${section.sectionId}-${index}-${detail.id}`} className="rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div key={`${section.sectionId}-${index}-${detail.id}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="flex min-w-0 items-start gap-3">
                               {detail.isAnswered && detail.isCorrect ? (
@@ -1294,7 +1359,7 @@ export default function AssessmentReportPanel({
       </section>
 
       {report ? (
-        <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="report-shell-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <StepHeading
             step="03"
             title={isCn ? "总结与提升建议" : "Summary & Next Steps"}
@@ -1304,7 +1369,7 @@ export default function AssessmentReportPanel({
           />
 
           <div className="mt-6 space-y-5">
-            <div className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-6 shadow-sm">
+            <div className="report-overview-card rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-6 shadow-sm">
               <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
@@ -1314,7 +1379,7 @@ export default function AssessmentReportPanel({
                     </h3>
                   </div>
                   <p className="mt-4 text-sm leading-8 text-slate-700">
-                    {isCn ? (report.overallSummary_cn || report.summary_cn) : (report.overallSummary_en || report.summary_en)}
+                    {normalizeSummaryText(isCn ? (report.overallSummary_cn || report.summary_cn) : (report.overallSummary_en || report.summary_en))}
                   </p>
                 </div>
 
@@ -1323,7 +1388,7 @@ export default function AssessmentReportPanel({
                     {isCn ? "时间表现" : "Time Management"}
                   </p>
                   <p className="mt-3 text-sm leading-7 text-slate-700">
-                    {isCn ? report.timeAnalysis_cn : report.timeAnalysis_en}
+                    {normalizeSummaryText(isCn ? report.timeAnalysis_cn : report.timeAnalysis_en)}
                   </p>
                 </div>
               </div>
@@ -1350,7 +1415,7 @@ export default function AssessmentReportPanel({
                   {report.studyPlan.map((stage, stageIndex) => (
                     <div
                       key={`study-stage-${stageIndex}`}
-                      className="rounded-[26px] border border-slate-200 bg-slate-50/80 p-5"
+                      className="report-study-stage rounded-[26px] border border-slate-200 bg-slate-50/80 p-5"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">
@@ -1361,10 +1426,10 @@ export default function AssessmentReportPanel({
                         </span>
                       </div>
                       <p className="mt-4 text-lg font-semibold text-slate-900">
-                        {isCn ? stage.stage_cn : stage.stage_en}
+                        {normalizeSummaryText(isCn ? stage.stage_cn : stage.stage_en)}
                       </p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {isCn ? stage.focus_cn : stage.focus_en}
+                        {normalizeSummaryText(isCn ? stage.focus_cn : stage.focus_en)}
                       </p>
                       <div className="mt-4 space-y-3">
                         {(isCn ? stage.actions_cn : stage.actions_en).map((action, actionIndex) => (
@@ -1375,7 +1440,7 @@ export default function AssessmentReportPanel({
                             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500">
                               {actionIndex + 1}
                             </span>
-                            <p>{action}</p>
+                            <p>{normalizeSummaryText(action)}</p>
                           </div>
                         ))}
                       </div>
@@ -1386,7 +1451,7 @@ export default function AssessmentReportPanel({
             ) : null}
 
             {(isCn ? report.parentFeedback_cn : report.parentFeedback_en) ? (
-              <div className="rounded-[30px] border border-rose-100 bg-[linear-gradient(180deg,#fff6f7_0%,#fff1f3_100%)] px-6 py-6 shadow-sm">
+              <div className="report-parent-card rounded-[30px] border border-rose-100 bg-[linear-gradient(180deg,#fff6f7_0%,#fff1f3_100%)] px-6 py-6 shadow-sm">
                 <div className="flex items-center gap-3">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
                   <h3 className="text-base font-semibold text-rose-900">
@@ -1394,7 +1459,7 @@ export default function AssessmentReportPanel({
                   </h3>
                 </div>
                 <p className="mt-4 text-sm leading-8 text-rose-900">
-                  {isCn ? report.parentFeedback_cn : report.parentFeedback_en}
+                  {normalizeSummaryText(isCn ? report.parentFeedback_cn : report.parentFeedback_en)}
                 </p>
               </div>
             ) : null}

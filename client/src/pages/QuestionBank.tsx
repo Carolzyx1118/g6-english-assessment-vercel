@@ -895,7 +895,7 @@ export default function QuestionBank() {
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle className="text-base text-[#1E3A5F] sm:text-lg">{paper.title}</CardTitle>
+                            <CardTitle className="text-3xl font-bold tracking-tight text-[#1E3A5F]">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
                               {itemCountLabel}

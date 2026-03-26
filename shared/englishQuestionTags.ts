@@ -212,15 +212,8 @@ const FLEXIBLE_ENGLISH_GENERATED_QUESTION_TYPE_OPTIONS = [
 const BASIC_GENERATED_QUESTION_TYPE_OPTIONS: Record<Exclude<ConfigurableTagSubject, "english">, string[]> = {
   math: ["mcq", "typed-fill-blank", "passage-open-ended", "ordering"],
   vocabulary: [
-    "mcq",
-    "fill-blank",
-    "typed-fill-blank",
-    "inline-word-choice",
-    "passage-inline-word-choice",
     "picture-spelling",
     "word-completion",
-    "checkbox",
-    "ordering",
   ],
 };
 

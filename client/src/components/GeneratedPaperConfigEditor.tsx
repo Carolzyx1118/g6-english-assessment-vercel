@@ -104,14 +104,12 @@ export interface GeneratedSourcePaperOption {
 interface GeneratedPaperConfigEditorProps {
   value: ManualPaperGenerationConfig | undefined;
   sourcePapers: GeneratedSourcePaperOption[];
-  previewWarnings: string[];
   onChange: (next: ManualPaperGenerationConfig) => void;
 }
 
 export default function GeneratedPaperConfigEditor({
   value,
   sourcePapers,
-  previewWarnings,
   onChange,
 }: GeneratedPaperConfigEditorProps) {
   const { schemas, schemaEntries, defaultTrack } = useEnglishTagSchemas();
@@ -584,17 +582,6 @@ export default function GeneratedPaperConfigEditor({
           添加组卷分区
         </Button>
       </div>
-
-      {previewWarnings.length > 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-900">预览提醒</p>
-          <ul className="mt-2 space-y-1 text-sm text-amber-800">
-            {previewWarnings.map((warning) => (
-              <li key={warning}>• {warning}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }

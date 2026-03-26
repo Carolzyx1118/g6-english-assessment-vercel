@@ -27,7 +27,7 @@ type SelectableAnswer = number | number[] | undefined;
 const PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-base text-slate-700 leading-relaxed';
 const PROMPT_HEADING_CLASS = 'whitespace-pre-wrap break-words text-base font-medium text-slate-700 leading-relaxed';
 const SPEAKING_WRITING_PROMPT_LABEL_CLASS = 'mb-2 text-[15px] font-bold uppercase tracking-[0.12em]';
-const SPEAKING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[1.05rem] leading-[1.9] text-slate-700';
+const SPEAKING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[0.98rem] leading-[1.85] text-slate-700';
 const WRITING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[1rem] leading-[1.85] text-slate-700';
 
 function getCorrectIndexes(question: MCQQuestion | PictureMCQ | ListeningMCQ) {
@@ -860,7 +860,17 @@ function SpeakingCard({ q, sectionId, answer, onAnswer, displayNumber }: { q: Op
 
 // ========== TRUE/FALSE (HuaZhong) ==========
 
-function TrueFalseCard({ q, answer, onAnswer, displayNumber }: { q: TrueFalseQuestion; answer?: string; onAnswer: (v: string) => void; displayNumber: number }) {
+function TrueFalseCard({
+  q,
+  answer,
+  onAnswer,
+  getDisplayItemNumber,
+}: {
+  q: TrueFalseQuestion;
+  answer?: string;
+  onAnswer: (v: string) => void;
+  getDisplayItemNumber: (itemKey: string) => number;
+}) {
   const parsed = (() => {
     try { return typeof answer === 'string' ? JSON.parse(answer) : {}; } catch { return {}; }
   })();
@@ -874,12 +884,14 @@ function TrueFalseCard({ q, answer, onAnswer, displayNumber }: { q: TrueFalseQue
 
   const items = [
     <div key={`q${q.id}-prompt`} className={PROMPT_HEADING_CLASS}>
-      <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
       {q.question || 'State whether each statement is True, False, or Not Given.'}
     </div>,
     ...q.statements.map((s, idx) => (
       <div key={`q${q.id}-stmt-${idx}`} className="ml-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-        <p className={PROMPT_TEXT_CLASS}><span className="font-bold">{s.label})</span> {s.statement}</p>
+        <p className={PROMPT_TEXT_CLASS}>
+          <span className="font-bold text-slate-500 mr-2">Q{getDisplayItemNumber(s.label)}.</span>
+          {s.statement}
+        </p>
         <div className="flex gap-3">
           {choices.map((tf) => (
             <button
@@ -1915,7 +1927,7 @@ function QuestionRenderer({ question, section, sectionId, answer, onAnswer, disp
       }
       return <OpenEndedCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'true-false':
-      return <TrueFalseCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
+      return <TrueFalseCard q={question} answer={answer} onAnswer={onAnswer} getDisplayItemNumber={getDisplayItemNumber} />;
     case 'table':
       return <TableQuestionCard q={question} answer={answer} onAnswer={onAnswer} displayNumber={displayNumber} />;
     case 'reference':
