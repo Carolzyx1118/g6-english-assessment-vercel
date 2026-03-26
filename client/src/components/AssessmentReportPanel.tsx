@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -27,6 +27,9 @@ interface AssessmentReportPanelProps {
   record: AssessmentReviewRecord;
   extraHeaderActions?: ReactNode;
   showDownload?: boolean;
+  initialLocale?: ReviewLocale;
+  hideLocaleToggle?: boolean;
+  printMode?: boolean;
 }
 
 type SpeakingEvaluationItem =
@@ -135,8 +138,11 @@ export default function AssessmentReportPanel({
   record,
   extraHeaderActions,
   showDownload = true,
+  initialLocale = "cn",
+  hideLocaleToggle = false,
+  printMode = false,
 }: AssessmentReportPanelProps) {
-  const [locale, setLocale] = useState<ReviewLocale>("cn");
+  const [locale, setLocale] = useState<ReviewLocale>(initialLocale);
   const [downloading, setDownloading] = useState(false);
   const model = useMemo(() => buildAssessmentReviewModel(record), [record]);
   const report = model.report;
@@ -163,6 +169,11 @@ export default function AssessmentReportPanel({
     const hasSpeaking = section.kind === "speaking" && (speakingEvaluationsBySection.get(section.sectionId) || []).length > 0;
     return hasWriting || hasSpeaking || section.details.length > 0;
   });
+  const hasHeaderControls = !hideLocaleToggle || showDownload || Boolean(extraHeaderActions);
+
+  useEffect(() => {
+    setLocale(initialLocale);
+  }, [initialLocale]);
 
   const handleDownload = async () => {
     try {
@@ -176,7 +187,7 @@ export default function AssessmentReportPanel({
   };
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${printMode ? "print-assessment-report" : ""}`}>
       <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
         <div className="bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.22),_transparent_42%),linear-gradient(135deg,#0f172a_0%,#1d4ed8_100%)] px-6 py-7 text-white sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -201,41 +212,45 @@ export default function AssessmentReportPanel({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-full border border-white/20 bg-white/10 p-1">
-                <button
-                  type="button"
-                  onClick={() => setLocale("cn")}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    isCn ? "bg-white text-slate-900 shadow-sm" : "text-white/80"
-                  }`}
-                >
-                  中文
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocale("en")}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    !isCn ? "bg-white text-slate-900 shadow-sm" : "text-white/80"
-                  }`}
-                >
-                  English
-                </button>
+            {hasHeaderControls ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {!hideLocaleToggle ? (
+                  <div className="inline-flex rounded-full border border-white/20 bg-white/10 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setLocale("cn")}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                        isCn ? "bg-white text-slate-900 shadow-sm" : "text-white/80"
+                      }`}
+                    >
+                      中文
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLocale("en")}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                        !isCn ? "bg-white text-slate-900 shadow-sm" : "text-white/80"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                ) : null}
+                {showDownload ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
+                  >
+                    <Download className="h-4 w-4" />
+                    {downloading ? (isCn ? "生成中..." : "Generating...") : (isCn ? "下载 PDF" : "Download PDF")}
+                  </Button>
+                ) : null}
+                {extraHeaderActions}
               </div>
-              {showDownload ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className="gap-2 rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15"
-                >
-                  <Download className="h-4 w-4" />
-                  {downloading ? (isCn ? "生成中..." : "Generating...") : (isCn ? "下载 PDF" : "Download PDF")}
-                </Button>
-              ) : null}
-              {extraHeaderActions}
-            </div>
+            ) : null}
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">

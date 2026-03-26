@@ -22,6 +22,10 @@ export default function AssessmentHistoryPreview({
   const [downloading, setDownloading] = useState(false);
   const model = useMemo(() => buildAssessmentReviewModel(record), [record]);
   const isCn = locale === "cn";
+  const report = model.report;
+  const strengthItems = (isCn ? report?.strengths_cn : report?.strengths_en) || [];
+  const weaknessItems = (isCn ? report?.weaknesses_cn : report?.weaknesses_en) || [];
+  const recommendationItems = (isCn ? report?.recommendations_cn : report?.recommendations_en) || [];
 
   const handleDownload = async () => {
     try {
@@ -84,7 +88,7 @@ export default function AssessmentHistoryPreview({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mx-auto mt-5 grid max-w-[1180px] gap-3 md:grid-cols-3">
           <div className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4">
             <p className="text-xs uppercase tracking-[0.18em] text-blue-100">
               {isCn ? "总评等级" : "Overall Grade"}
@@ -137,6 +141,76 @@ export default function AssessmentHistoryPreview({
           </div>
         ))}
       </div>
+
+      {report ? (
+        <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
+          <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-[28px] bg-slate-50 px-5 py-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {isCn ? "整体结论" : "Overall Analysis"}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-slate-700">
+                {isCn ? (report.overallSummary_cn || report.summary_cn) : (report.overallSummary_en || report.summary_en)}
+              </p>
+              <div className="mt-4 rounded-2xl bg-white px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  {isCn ? "时间表现" : "Time Management"}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-slate-700">
+                  {isCn ? report.timeAnalysis_cn : report.timeAnalysis_en}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {strengthItems.length > 0 ? (
+                <div className="rounded-[28px] border border-emerald-100 bg-emerald-50 px-5 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                    {isCn ? "当前强项" : "Strengths"}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {strengthItems.slice(0, 3).map((item, index) => (
+                      <div key={`strength-${index}`} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {weaknessItems.length > 0 ? (
+                <div className="rounded-[28px] border border-amber-100 bg-amber-50 px-5 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+                    {isCn ? "当前弱项" : "Weaknesses"}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {weaknessItems.slice(0, 3).map((item, index) => (
+                      <div key={`weakness-${index}`} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {recommendationItems.length > 0 ? (
+                <div className="rounded-[28px] border border-blue-100 bg-blue-50 px-5 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                    {isCn ? "学习建议" : "Recommendations"}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {recommendationItems.slice(0, 3).map((item, index) => (
+                      <div key={`recommendation-${index}`} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

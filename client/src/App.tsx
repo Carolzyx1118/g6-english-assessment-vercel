@@ -9,6 +9,7 @@ import { QuizProvider } from "./contexts/QuizContext";
 import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import AssessmentReportPrint from "./pages/AssessmentReportPrint";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
 import QuestionBank from "./pages/QuestionBank";
@@ -23,6 +24,7 @@ function Router() {
       {/* Public auth routes */}
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
+      <Route path={"/assessment-report/print"} component={AssessmentReportPrint} />
 
       {/* Protected routes - require local auth */}
       <Route path={"/"}>

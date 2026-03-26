@@ -3,7 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { ArrowLeft, ChevronDown, FileSearch, Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
-import AssessmentHistoryPreview from "@/components/AssessmentHistoryPreview";
+import AssessmentReportPanel from "@/components/AssessmentReportPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
@@ -86,7 +86,7 @@ export default function TestHistory() {
               </Link>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Test History</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Click any saved assessment to expand a compact overview. Full analysis, feedback, and question-by-question review stay in the PDF.
+                Click any saved assessment to expand the full report directly below the selected history card.
               </p>
             </div>
           </div>
@@ -205,7 +205,7 @@ export default function TestHistory() {
                             </p>
                           </div>
                         ) : detailQuery.data?.id === item.id ? (
-                          <AssessmentHistoryPreview record={detailQuery.data} />
+                          <AssessmentReportPanel record={detailQuery.data} showDownload />
                         ) : (
                           <div className="rounded-[28px] border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-900 shadow-sm">
                             This assessment record is not available anymore.

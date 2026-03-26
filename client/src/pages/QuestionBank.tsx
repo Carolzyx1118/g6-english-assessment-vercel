@@ -716,8 +716,11 @@ export default function QuestionBank() {
   }, [hasActiveFilters, paperViews, searchText, selectedExamSystem, selectedQuestionType]);
 
   const summary = useMemo(() => ({
-    totalBanks: filteredPapers.length,
-  }), [filteredPapers]);
+    totalItems: filteredPapers.reduce(
+      (sum, paper) => sum + (hasActiveFilters ? paper.filteredItems.length : paper.items.length),
+      0,
+    ),
+  }), [filteredPapers, hasActiveFilters]);
 
   const refreshQuestionBankQueries = async () => {
     await Promise.all([
@@ -791,7 +794,7 @@ export default function QuestionBank() {
                 Back to Teacher Home
               </Link>
               <h1 className="mt-3 text-2xl font-bold tracking-tight text-[#1E3A5F] sm:text-3xl">
-                {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question Bank`}
+                {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question`}
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Review the question-bank items used for random paper building. Each entry shows the saved tags and a live preview of the question content.
@@ -802,8 +805,8 @@ export default function QuestionBank() {
           <div className="grid gap-4 sm:grid-cols-1">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>{hasActiveFilters ? "Matching Question Bank Papers" : "Question Bank Papers"}</CardDescription>
-                <CardTitle className="text-xl">{summary.totalBanks}</CardTitle>
+                <CardDescription>{hasActiveFilters ? "Matching Question Bank Items" : "Question Bank Items"}</CardDescription>
+                <CardTitle className="text-xl">{summary.totalItems}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -913,6 +916,19 @@ export default function QuestionBank() {
                           <Button
                             type="button"
                             variant="outline"
+                            className="border-slate-200"
+                            onClick={() => toggleExpanded(paper.id)}
+                          >
+                            {expanded ? (
+                              <ChevronUp className="mr-2 h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="mr-2 h-4 w-4" />
+                            )}
+                            {expanded ? "Hide Items" : "View Items"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
                             className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                             disabled={Boolean(pendingDeleteKey)}
                             onClick={() =>
@@ -929,19 +945,6 @@ export default function QuestionBank() {
                               <Trash2 className="mr-2 h-4 w-4" />
                             )}
                             Delete Bank
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-slate-200"
-                            onClick={() => toggleExpanded(paper.id)}
-                          >
-                            {expanded ? (
-                              <ChevronUp className="mr-2 h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="mr-2 h-4 w-4" />
-                            )}
-                            {expanded ? "Hide Items" : "View Items"}
                           </Button>
                         </div>
                       </div>
