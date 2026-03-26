@@ -147,24 +147,10 @@ export default function TestHistory() {
                             onClick={() => navigate(active ? "/test-history" : `/test-history?id=${item.id}`)}
                             className="min-w-0 flex-1 text-left"
                           >
-                            <p className="truncate text-base font-semibold text-slate-900">{item.studentName}</p>
+                            <p className="truncate text-xl font-bold tracking-tight text-[#1E3A5F]">{item.studentName}</p>
                             <p className="mt-1 truncate text-sm text-slate-500">{item.paperTitle}</p>
                           </button>
                           <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              disabled={deleting}
-                              onClick={() => {
-                                const confirmed = window.confirm("Delete this test history entry? This cannot be undone.");
-                                if (!confirmed) return;
-                                deleteMutation.mutate({ id: item.id });
-                              }}
-                              className="h-9 w-9 rounded-2xl border border-rose-200 bg-white text-rose-600 shadow-sm hover:bg-rose-50 hover:text-rose-700"
-                            >
-                              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                            </Button>
                             <button
                               type="button"
                               onClick={() => navigate(active ? "/test-history" : `/test-history?id=${item.id}`)}
@@ -174,6 +160,20 @@ export default function TestHistory() {
                                 className={`h-4 w-4 transition ${active ? "rotate-180" : ""}`}
                               />
                             </button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              disabled={deleting}
+                              onClick={() => {
+                                const confirmed = window.confirm("Delete this test history entry? This cannot be undone.");
+                                if (!confirmed) return;
+                                deleteMutation.mutate({ id: item.id });
+                              }}
+                              className="h-9 rounded-2xl border border-rose-200 bg-white px-3 text-rose-600 shadow-sm hover:bg-rose-50 hover:text-rose-700"
+                            >
+                              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                              Delete
+                            </Button>
                           </div>
                         </div>
                         <button
