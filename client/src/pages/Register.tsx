@@ -5,7 +5,7 @@ import { saveAuthToken } from "@/hooks/useLocalAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from "@/lib/branding";
 import { toast } from "sonner";
 import { Eye, EyeOff, UserPlus, KeyRound } from "lucide-react";
@@ -108,9 +108,6 @@ export default function Register() {
           <Card className="shadow-xl border border-slate-200/60 bg-white">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">注册账号</CardTitle>
-            <CardDescription className="text-center">
-                填写以下信息创建账号。邀请码会决定这个账号可以进入哪些科目页面。
-              </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
               <CardContent className="space-y-4">
@@ -201,7 +198,7 @@ export default function Register() {
                     className="tracking-wider"
                   />
                   <p className="text-xs text-muted-foreground">
-                    请联系管理员获取邀请码。不同邀请码可对应英语+词汇、数学，或教师全科权限。
+                    请联系管理员获取邀请码。
                   </p>
                 </div>
               </CardContent>

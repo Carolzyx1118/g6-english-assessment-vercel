@@ -137,8 +137,8 @@ export function validateAudioFile(file: File): string | null {
   if (!validTypes.includes(file.type)) {
     return 'Please select an audio file (MP3, WAV, OGG, M4A, AAC, WebM)';
   }
-  if (file.size > 16 * 1024 * 1024) {
-    return 'Audio file size must be under 16MB';
+  if (file.size > 100 * 1024 * 1024) {
+    return 'Audio file size must be under 100MB';
   }
   return null;
 }

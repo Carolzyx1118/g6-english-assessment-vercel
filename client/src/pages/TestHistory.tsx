@@ -137,7 +137,7 @@ export default function TestHistory() {
                       <div
                         className={`w-full rounded-[28px] border px-5 py-4 text-left shadow-sm transition ${
                           active
-                            ? "border-blue-200 bg-blue-50 shadow-blue-100/80"
+                            ? "border-blue-200 bg-white shadow-sm"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                         }`}
                       >
@@ -154,8 +154,9 @@ export default function TestHistory() {
                             <button
                               type="button"
                               onClick={() => navigate(active ? "/test-history" : `/test-history?id=${item.id}`)}
-                              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm transition hover:bg-slate-50 hover:text-slate-600"
+                              className="inline-flex h-9 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700"
                             >
+                              <span>{active ? "Hide" : "View"}</span>
                               <ChevronDown
                                 className={`h-4 w-4 transition ${active ? "rotate-180" : ""}`}
                               />

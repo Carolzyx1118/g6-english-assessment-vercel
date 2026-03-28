@@ -19,6 +19,23 @@ describe("createPaperAssetUploadConfig", () => {
     });
   });
 
+  it("normalizes recorder MIME types that include codec parameters", () => {
+    expect(
+      createPaperAssetUploadConfig(
+        "paper-assets/speaking-response.webm",
+        JSON.stringify({
+          contentType: "audio/webm;codecs=opus",
+          fileSize: 4 * 1024 * 1024,
+        }),
+      ),
+    ).toEqual({
+      allowedContentTypes: ["audio/webm"],
+      maximumSizeInBytes: 4 * 1024 * 1024,
+      allowOverwrite: true,
+      addRandomSuffix: false,
+    });
+  });
+
   it("rejects non-audio uploads", () => {
     expect(() =>
       createPaperAssetUploadConfig(

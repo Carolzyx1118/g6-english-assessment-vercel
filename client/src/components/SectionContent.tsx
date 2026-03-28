@@ -9,7 +9,7 @@ import type {
 } from '@/data/papers';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Send, AlertTriangle, GripVertical, Play, Pause, Volume2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, GripVertical, Play, Pause, Volume2 } from 'lucide-react';
 import DragDropFillBlank from '@/components/DragDropFillBlank';
 import AudioRecorder from '@/components/AudioRecorder';
 import { isPersistedAudioUrl } from '@/lib/audioStorage';
@@ -1960,61 +1960,6 @@ function QuestionRenderer({ question, section, sectionId, answer, onAnswer, disp
   }
 }
 
-// ========== SUBMIT CONFIRMATION DIALOG ==========
-
-function SubmitConfirmation() {
-  const { submitQuiz, getSectionProgress } = useQuiz();
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  const { sections } = useQuiz();
-  const totalAnswered = sections.reduce((sum: number, s: { id: string }) => sum + getSectionProgress(s.id).answered, 0);
-  const totalQuestions = sections.reduce((sum: number, s: { id: string }) => sum + getSectionProgress(s.id).total, 0);
-  const unanswered = totalQuestions - totalAnswered;
-
-  if (showConfirm) {
-    return (
-      <div className="mt-6 p-5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-        {unanswered > 0 && (
-          <div className="flex items-start gap-2 mb-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-            <span className="text-sm text-amber-700">
-              You have <span className="font-bold">{unanswered}</span> unanswered question{unanswered > 1 ? 's' : ''}.
-            </span>
-          </div>
-        )}
-        <p className="text-sm text-slate-600 mb-4">Are you sure you want to submit your assessment? This action cannot be undone.</p>
-        <div className="flex gap-3">
-          <Button
-            onClick={() => { submitQuiz(); setShowConfirm(false); }}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-          >
-            <Send className="w-4 h-4 mr-2" />
-            Yes, Submit
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowConfirm(false)}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <Button
-      onClick={() => setShowConfirm(true)}
-      size="lg"
-      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 hover:shadow-xl transition-all duration-300 gap-2" style={{width: '180px'}}
-    >
-      <Send className="w-5 h-5" />
-      Submit Assessment
-    </Button>
-  );
-}
-
 function MatchingDescriptionsBlock({ items }: { items: NonNullable<Section['matchingDescriptions']> }) {
   const hasDescriptions = items.some((item) => Boolean(item.text?.trim()));
 
@@ -2350,7 +2295,7 @@ export default function SectionContent() {
         )}
 
         {/* Navigation */}
-        <div className="mt-10 flex items-center justify-between">
+        <div className={`mt-10 flex items-center ${isLastSection ? 'justify-start' : 'justify-between'}`}>
           <Button
             variant="outline"
             onClick={() => setCurrentSection(state.currentSectionIndex - 1)}
@@ -2361,9 +2306,7 @@ export default function SectionContent() {
             Previous Section
           </Button>
 
-          {isLastSection ? (
-            <SubmitConfirmation />
-          ) : (
+          {!isLastSection ? (
             <Button
               onClick={() => setCurrentSection(state.currentSectionIndex + 1)}
               disabled={isLastSection}
@@ -2372,7 +2315,7 @@ export default function SectionContent() {
               Next Section
               <ChevronRight className="w-4 h-4" />
             </Button>
-          )}
+          ) : null}
         </div>
       </motion.div>
     </AnimatePresence>

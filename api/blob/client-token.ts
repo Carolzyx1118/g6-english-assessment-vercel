@@ -15,12 +15,21 @@ const pathnameSchema = z
   .min(1)
   .regex(/^paper-assets\/[a-zA-Z0-9._/-]+$/, "Invalid asset path.");
 
+const audioContentTypeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .transform((value) => value.split(";")[0]?.trim().toLowerCase() || "")
+  .pipe(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .regex(/^audio\/[a-zA-Z0-9.+-]+$/, "Only audio uploads are supported."),
+  );
+
 const clientPayloadSchema = z.object({
-  contentType: z
-    .string()
-    .trim()
-    .min(1)
-    .regex(/^audio\/[a-zA-Z0-9.+-]+$/, "Only audio uploads are supported."),
+  contentType: audioContentTypeSchema,
   fileSize: z
     .number()
     .int()

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
 import {
+  AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   Copy,
   Eye,
   EyeOff,
@@ -10,6 +12,7 @@ import {
   Layers3,
   Loader2,
   Pencil,
+  Search,
   Settings2,
   Trash2,
 } from "lucide-react";
@@ -18,6 +21,7 @@ import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -54,6 +58,41 @@ function formatDate(value: string | Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatGenerationWarningSectionLabel(label: string) {
+  const trimmed = label.trim();
+  const partMatch = trimmed.match(/^Part\s+(\d+)$/i);
+  if (partMatch) {
+    return `第 ${partMatch[1]} 部分`;
+  }
+  return trimmed;
+}
+
+function localizeGenerationWarning(warning: string) {
+  const trimmed = warning.trim();
+
+  if (trimmed === "This generated paper has no section rules yet.") {
+    return "这份自动组卷试卷还没有配置任何组卷规则。";
+  }
+
+  if (trimmed === "No eligible source papers were found for this generated paper.") {
+    return "这份自动组卷试卷没有找到可用的题源试卷。";
+  }
+
+  const ruleMatch = trimmed.match(/^(.+?): rule "(.+)" needed (\d+) question\(s\), but only (\d+) matched\.$/);
+  if (ruleMatch) {
+    const [, sectionLabel, ruleLabel, neededCount, matchedCount] = ruleMatch;
+    return `${formatGenerationWarningSectionLabel(sectionLabel)}：规则“${ruleLabel}”需要 ${neededCount} 题，但目前只匹配到 ${matchedCount} 题。`;
+  }
+
+  const assembledMatch = trimmed.match(/^(.+?): only assembled (\d+)\/(\d+) question\(s\)\.$/);
+  if (assembledMatch) {
+    const [, sectionLabel, assembledCount, targetCount] = assembledMatch;
+    return `${formatGenerationWarningSectionLabel(sectionLabel)}：当前只成功组出了 ${assembledCount}/${targetCount} 题。`;
+  }
+
+  return trimmed;
 }
 
 type ManualManagedPaper = {
@@ -99,6 +138,8 @@ export default function PaperManager() {
   const { isTeacher } = useLocalAuth();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [pendingPaperKey, setPendingPaperKey] = useState<string | null>(null);
+  const [expandedWarningKey, setExpandedWarningKey] = useState<string | null>(null);
+  const [keyword, setKeyword] = useState("");
 
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get("subject");
@@ -283,6 +324,25 @@ export default function PaperManager() {
     };
   }, [managedPapers]);
 
+  const filteredManagedPapers = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) return managedPapers;
+
+    return managedPapers.filter((paper) => {
+      const subjectLabel = PAPER_SUBJECT_LABELS[paper.subject].toLowerCase();
+      const categoryLabel = PAPER_CATEGORY_LABELS[paper.category].toLowerCase();
+      const primaryId = paper.kind === "manual" ? paper.paperId : paper.systemId;
+
+      return (
+        paper.title.toLowerCase().includes(normalizedKeyword)
+        || paper.description.toLowerCase().includes(normalizedKeyword)
+        || primaryId.toLowerCase().includes(normalizedKeyword)
+        || subjectLabel.includes(normalizedKeyword)
+        || categoryLabel.includes(normalizedKeyword)
+      );
+    });
+  }, [keyword, managedPapers]);
+
   const isLoading = manualPapersQuery.isLoading
     || questionBankPapersQuery.isLoading
     || englishSystemsQuery.isLoading
@@ -445,13 +505,27 @@ export default function PaperManager() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                    placeholder="Search papers, IDs, or descriptions"
+                    className="rounded-2xl border-slate-200 bg-white pl-9"
+                  />
+                </div>
+                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+                  {filteredManagedPapers.length} paper{filteredManagedPapers.length === 1 ? "" : "s"}
+                </p>
+              </div>
               {isLoading ? (
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Loading student papers...
                 </div>
-              ) : managedPapers.length > 0 ? (
-                managedPapers.map((paper) => {
+              ) : filteredManagedPapers.length > 0 ? (
+                filteredManagedPapers.map((paper) => {
                   const isPending = pendingPaperKey === paper.key;
                   const subjectLabel = PAPER_SUBJECT_LABELS[paper.subject];
                   const categoryLabel = PAPER_CATEGORY_LABELS[paper.category];
@@ -461,7 +535,7 @@ export default function PaperManager() {
                       <div className="flex items-start gap-6">
                         <div className="min-w-0 flex-1 space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-semibold text-slate-800">{paper.title}</h2>
+                            <h2 className="font-[family-name:var(--font-sans)] text-lg font-bold tracking-tight text-slate-800">{paper.title}</h2>
                             <Badge variant={paper.published ? "default" : "outline"}>
                               {paper.published ? "Published" : "Hidden"}
                             </Badge>
@@ -492,17 +566,49 @@ export default function PaperManager() {
                               </>
                             ) : (
                               <>
-                                <span>System ID: {paper.systemId}</span>
+                                <span>Paper ID: {paper.systemId}</span>
                                 <span>{paper.totalSections} configured parts</span>
                                 <span>{paper.totalQuestions} configured questions</span>
                                 {paper.generationWarnings.length > 0 && (
-                                  <span className="text-amber-600">
-                                    {paper.generationWarnings.length} generation warning{paper.generationWarnings.length > 1 ? "s" : ""}
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedWarningKey((current) => current === paper.key ? null : paper.key)}
+                                    className="inline-flex items-center gap-1.5 text-amber-600 transition hover:text-amber-700"
+                                  >
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                    <span>{paper.generationWarnings.length} 条组卷提醒</span>
+                                    <ChevronDown
+                                      className={`h-3.5 w-3.5 transition ${expandedWarningKey === paper.key ? "rotate-180" : ""}`}
+                                    />
+                                  </button>
                                 )}
                               </>
                             )}
                           </div>
+                          {paper.kind === "system" && paper.generationWarnings.length > 0 && expandedWarningKey === paper.key ? (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+                              <div className="flex items-start gap-3">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-amber-900">组卷提醒</p>
+                                  <p className="mt-1 text-xs leading-5 text-amber-700">
+                                    这份自动组卷试卷目前有 {paper.generationWarnings.length} 条规则没有完全满足。
+                                  </p>
+                                  <div className="mt-3 space-y-2">
+                                    {paper.generationWarnings.map((warning, index) => (
+                                      <div
+                                        key={`${paper.key}-warning-${index}`}
+                                        className="rounded-xl border border-amber-200/80 bg-white/85 px-3 py-2"
+                                      >
+                                        <p className="text-sm leading-6 text-amber-950">{localizeGenerationWarning(warning)}</p>
+                                        <p className="mt-1 break-words text-xs leading-5 text-amber-700/80">{warning}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="shrink-0 flex flex-wrap items-center justify-end gap-4 self-start">
@@ -588,9 +694,11 @@ export default function PaperManager() {
                 })
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                  {subjectFilter
-                    ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} student-facing papers yet. Add one from Paper Generator or Question Intake first.`
-                    : "No student-facing papers yet. Add one from Paper Generator or Question Intake first."}
+                  {keyword.trim()
+                    ? "No papers match this search."
+                    : (subjectFilter
+                      ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} student-facing papers yet. Add one from Paper Generator or Question Intake first.`
+                      : "No student-facing papers yet. Add one from Paper Generator or Question Intake first.")}
                 </div>
               )}
             </CardContent>

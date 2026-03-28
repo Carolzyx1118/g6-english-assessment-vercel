@@ -525,7 +525,7 @@ export default function TagManager() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
                   <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                    {systems.length} exam systems
+                    {systems.length} papers
                   </Badge>
                   <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
                     {PAPER_SUBJECT_LABELS[subjectFilter]}
@@ -556,6 +556,32 @@ export default function TagManager() {
               <div className="space-y-4">
                 {systems.map((system, index) => (
                   <Card key={system.id} className="border-slate-200 shadow-sm">
+                    {(() => {
+                      const generatedPaperPlaceholder = buildGeneratedPaperConfig(
+                        subjectFilter,
+                        system.label,
+                        system.examParts,
+                        system.generatedPaper
+                          ? {
+                              ...system.generatedPaper,
+                              title: "",
+                              description: "",
+                            }
+                          : undefined,
+                        system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
+                        system.units,
+                      );
+                      const paperNameValue = system.generatedPaper?.title?.trim()
+                        && system.generatedPaper.title.trim() !== generatedPaperPlaceholder.title
+                        ? system.generatedPaper.title
+                        : "";
+                      const descriptionValue = system.generatedPaper?.description?.trim()
+                        && system.generatedPaper.description.trim() !== generatedPaperPlaceholder.description
+                        ? system.generatedPaper.description
+                        : "";
+
+                      return (
+                    <>
                     <CardHeader className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -563,7 +589,7 @@ export default function TagManager() {
                             <Layers3 className="h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle className="text-sm text-[#1E3A5F] sm:text-base">{system.label.trim() || `Exam System ${index + 1}`}</CardTitle>
+                            <CardTitle className="text-sm text-[#1E3A5F] sm:text-base">{system.label.trim() || `Exam ${index + 1}`}</CardTitle>
                             <CardDescription className="text-xs sm:text-sm">System ID: {system.id}</CardDescription>
                           </div>
                         </div>
@@ -615,7 +641,7 @@ export default function TagManager() {
                     {expandedSystemIds.includes(system.id) ? (
                       <CardContent className="grid gap-5 lg:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>System Type</Label>
+                          <Label>Type</Label>
                           <select
                             className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                             value={system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"}
@@ -629,17 +655,7 @@ export default function TagManager() {
                         <div className="space-y-2">
                           <Label>Paper Name</Label>
                           <Input
-                            value={
-                              system.generatedPaper?.title
-                              ?? buildGeneratedPaperConfig(
-                                subjectFilter,
-                                system.label,
-                                system.examParts,
-                                system.generatedPaper,
-                                system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
-                                system.units,
-                              ).title
-                            }
+                            value={paperNameValue}
                             onChange={(event) => {
                               const nextTitle = event.target.value;
                               if (subjectFilter === "english") {
@@ -677,31 +693,21 @@ export default function TagManager() {
                                 },
                               }));
                             }}
-                            placeholder={subjectFilter === "english" ? "e.g. KET Assessment" : "e.g. Grade 5 Math Review"}
+                            placeholder={generatedPaperPlaceholder.title}
                           />
                         </div>
 
                         <div className="space-y-2">
                           <Label>Description</Label>
                           <Input
-                            value={
-                              system.generatedPaper?.description
-                              ?? buildGeneratedPaperConfig(
-                                subjectFilter,
-                                system.label,
-                                system.examParts,
-                                system.generatedPaper,
-                                system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment",
-                                system.units,
-                              ).description
-                            }
+                            value={descriptionValue}
                             onChange={(event) =>
                               updateGeneratedPaper(system.id, (current) => ({
                                 ...current,
                                 description: event.target.value,
                               }))
                             }
-                            placeholder="Describe what this random paper is for."
+                            placeholder={generatedPaperPlaceholder.description}
                           />
                         </div>
 
@@ -1093,6 +1099,9 @@ export default function TagManager() {
                         </div>
                       </CardContent>
                     ) : null}
+                    </>
+                      );
+                    })()}
                   </Card>
                 ))}
               </div>

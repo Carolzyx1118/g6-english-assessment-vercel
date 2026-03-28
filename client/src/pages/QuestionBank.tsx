@@ -924,7 +924,7 @@ export default function QuestionBank() {
                             ) : (
                               <ChevronDown className="mr-2 h-4 w-4" />
                             )}
-                            {expanded ? "Hide Items" : "View Items"}
+                            {expanded ? "Hide" : "View"}
                           </Button>
                           <Button
                             type="button"
@@ -944,7 +944,7 @@ export default function QuestionBank() {
                             ) : (
                               <Trash2 className="mr-2 h-4 w-4" />
                             )}
-                            Delete Bank
+                            Delete
                           </Button>
                         </div>
                       </div>

@@ -70,6 +70,10 @@ type SpeechProviderConfig = {
 
 const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
 
+function normalizeAudioMimeType(value: string | null | undefined) {
+  return value?.split(";")[0]?.trim().toLowerCase() || "";
+}
+
 function buildApiUrl(baseUrl: string, path: string): string {
   const normalizedBase = baseUrl.replace(/\/+$/, "");
   const normalizedPath = path.replace(/^\/+/, "");
@@ -150,7 +154,7 @@ export async function transcribeAudio(
       }
       
       audioBuffer = Buffer.from(await response.arrayBuffer());
-      mimeType = response.headers.get('content-type') || 'audio/mpeg';
+      mimeType = normalizeAudioMimeType(response.headers.get('content-type')) || 'audio/mpeg';
       
       // Keep this aligned with the upstream transcription endpoint limit.
       const sizeMB = audioBuffer.length / (1024 * 1024);
@@ -174,7 +178,7 @@ export async function transcribeAudio(
     
     // Create a Blob from the buffer and append to form
     const filename = `audio.${getFileExtension(mimeType)}`;
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: normalizeAudioMimeType(mimeType) || 'audio/mpeg' });
     formData.append("file", audioBlob, filename);
     
     formData.append("model", provider.model);
@@ -238,18 +242,22 @@ export async function transcribeAudio(
  * Helper function to get file extension from MIME type
  */
 function getFileExtension(mimeType: string): string {
+  const normalizedMimeType = normalizeAudioMimeType(mimeType);
   const mimeToExt: Record<string, string> = {
     'audio/webm': 'webm',
     'audio/mp3': 'mp3',
     'audio/mpeg': 'mp3',
     'audio/wav': 'wav',
     'audio/wave': 'wav',
+    'audio/x-wav': 'wav',
     'audio/ogg': 'ogg',
     'audio/m4a': 'm4a',
+    'audio/x-m4a': 'm4a',
     'audio/mp4': 'm4a',
+    'audio/aac': 'aac',
   };
   
-  return mimeToExt[mimeType] || 'audio';
+  return mimeToExt[normalizedMimeType] || 'audio';
 }
 
 /**

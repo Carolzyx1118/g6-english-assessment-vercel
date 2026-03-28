@@ -614,7 +614,7 @@ export default function ResultsPage() {
 
               <div className="min-w-[220px] rounded-[28px] border border-white/15 bg-white/10 px-5 py-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100">Assessment</p>
-                <p className="mt-2 text-xl font-bold text-white">{displayPaperTitle}</p>
+                <p className="mt-2 font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-white">{displayPaperTitle}</p>
                 <p className="mt-2 text-sm text-blue-100">
                   {displayStudentName}
                   {latestSavedResultId ? ` · History #${latestSavedResultId}` : ""}

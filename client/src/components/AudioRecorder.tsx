@@ -18,9 +18,14 @@ const TARGET_SCORING_SAMPLE_RATE = 16000;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
 const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
 const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
-const DIRECT_UPLOAD_TIMEOUT_MS = 20_000;
-const SERVER_UPLOAD_TIMEOUT_MS = 15_000;
+const DIRECT_UPLOAD_TIMEOUT_MS = 60_000;
+const SERVER_UPLOAD_TIMEOUT_MS = 30_000;
 const PREFERRED_SERVER_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+const RECORDING_AUDIO_BITS_PER_SECOND = 64_000;
+
+function normalizeAudioContentType(value: string | null | undefined) {
+  return value?.split(';')[0]?.trim().toLowerCase() || '';
+}
 
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
@@ -99,7 +104,7 @@ function encodeMonoSamplesToWav(samples: Float32Array, sampleRate: number) {
 }
 
 function canAttemptAutomaticSpeakingScoring(blob: Blob) {
-  const mimeType = blob.type.toLowerCase();
+  const mimeType = normalizeAudioContentType(blob.type);
   const isGatewayCompatible =
     (mimeType.includes('wav') || mimeType.includes('mpeg') || mimeType.includes('mp3'))
     && blob.size <= MAX_GATEWAY_AUDIO_BYTES;
@@ -131,6 +136,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const [recordingTime, setRecordingTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -150,6 +156,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     if (savedUrl && isPersistedAudioUrl(savedUrl)) {
       setStatus('uploaded');
       audioUrlRef.current = savedUrl;
+      setWarning(null);
     }
   }, [savedUrl]);
 
@@ -169,6 +176,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const startRecording = useCallback(async () => {
     try {
       setError(null);
+      setWarning(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
@@ -179,7 +187,10 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
           ? 'audio/mp4'
           : 'audio/webm';
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: RECORDING_AUDIO_BITS_PER_SECOND,
+      });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
       autoUploadAttemptedRef.current = false;
@@ -267,6 +278,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     setRecordingTime(0);
     setIsPlaying(false);
     setError(null);
+    setWarning(null);
   }, [isRevokableAudioUrl]);
 
   const blobToDataUrl = useCallback(async (blob: Blob) => {
@@ -294,11 +306,12 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   }, [blobToDataUrl]);
 
   const getAudioExtension = useCallback((mimeType: string) => {
-    if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
-    if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'mp3';
-    if (mimeType.includes('wav')) return 'wav';
-    if (mimeType.includes('ogg')) return 'ogg';
-    if (mimeType.includes('aac')) return 'aac';
+    const normalizedMimeType = normalizeAudioContentType(mimeType);
+    if (normalizedMimeType.includes('mp4') || normalizedMimeType.includes('m4a')) return 'm4a';
+    if (normalizedMimeType.includes('mpeg') || normalizedMimeType.includes('mp3')) return 'mp3';
+    if (normalizedMimeType.includes('wav')) return 'wav';
+    if (normalizedMimeType.includes('ogg')) return 'ogg';
+    if (normalizedMimeType.includes('aac')) return 'aac';
     return 'webm';
   }, []);
 
@@ -330,7 +343,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   }, []);
 
   const normalizeAudioBlobForScoring = useCallback(async (blob: Blob) => {
-    const mimeType = blob.type.toLowerCase();
+    const mimeType = normalizeAudioContentType(blob.type);
     if (mimeType.includes('wav') || mimeType.includes('mpeg') || mimeType.includes('mp3')) {
       return blob;
     }
@@ -349,9 +362,10 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   }, [convertBlobToWav]);
 
   const uploadAudioBlob = useCallback(async (blob: Blob, contentType: string, extension: string) => {
+    const normalizedContentType = normalizeAudioContentType(contentType) || 'audio/webm';
     const safeFileName = `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`;
     const clientPayload = JSON.stringify({
-      contentType,
+      contentType: normalizedContentType,
       fileSize: blob.size,
     });
 
@@ -359,7 +373,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       const uploaded = await withTimeout(
         uploadBlob(`paper-assets/${safeFileName}`, blob, {
           access: 'public',
-          contentType,
+          contentType: normalizedContentType,
           handleUploadUrl: '/api/blob/client-token',
           clientPayload,
           multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
@@ -376,7 +390,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
         uploadFileMutation.mutateAsync({
           fileName: safeFileName,
           fileBase64,
-          contentType,
+          contentType: normalizedContentType,
         }),
         SERVER_UPLOAD_TIMEOUT_MS,
         'Audio save',
@@ -413,16 +427,23 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       const mimeType = chunksRef.current[0].type || 'audio/webm';
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const normalizedBlob = await normalizeAudioBlobForScoring(blob);
-      const normalizedMimeType = normalizedBlob.type || mimeType;
-      if (!canAttemptAutomaticSpeakingScoring(normalizedBlob)) {
-        throw new Error('This recording is too large for automatic speaking scoring. Please re-record a shorter response.');
-      }
+      const scoringEligible = canAttemptAutomaticSpeakingScoring(normalizedBlob);
+      const blobForUpload = scoringEligible ? normalizedBlob : blob;
+      const normalizedMimeType =
+        normalizeAudioContentType(blobForUpload.type)
+        || normalizeAudioContentType(mimeType)
+        || 'audio/webm';
       const extension = getAudioExtension(normalizedMimeType);
-      const persistedUrl = await uploadAudioBlob(normalizedBlob, normalizedMimeType, extension);
+      const persistedUrl = await uploadAudioBlob(blobForUpload, normalizedMimeType, extension);
 
       audioUrlRef.current = persistedUrl;
       setStatus('uploaded');
       setError(null);
+      setWarning(
+        scoringEligible
+          ? null
+          : 'Recording saved. This response is too large for automatic AI speaking scoring and may require manual review.',
+      );
       onRecorded(persistedUrl);
     } catch (err: any) {
       console.error('Recording save error:', err);
@@ -549,6 +570,10 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       {/* Error message */}
       {error && (
         <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
+
+      {warning && !error && (
+        <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">{warning}</p>
       )}
     </div>
   );

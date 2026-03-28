@@ -74,6 +74,65 @@ describe("transcribeAudio", () => {
     expect(body.get("prompt")).toBe("Transcribe this clip.");
   });
 
+  it("normalizes response MIME types with codec parameters before building the upload file", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        headers: {
+          get: (header: string) =>
+            header.toLowerCase() === "content-type" ? "audio/webm;codecs=opus" : null,
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          text: "Hello again",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.doMock("./env", () => ({
+      ENV: {
+        appId: "",
+        cookieSecret: "",
+        databaseUrl: "",
+        aiGatewayApiKey: "",
+        aiGatewayBaseUrl: "",
+        aiGatewayModel: "",
+        aiGatewaySpeakingModel: "",
+        openaiApiBaseUrl: "",
+        openaiApiKey: "openai-key",
+        openaiChatModel: "",
+        openaiTranscriptionModel: "",
+        oAuthServerUrl: "",
+        ownerOpenId: "",
+        isProduction: false,
+        forgeApiUrl: "",
+        forgeApiKey: "",
+        blobReadWriteToken: "",
+      },
+      getSpeechConfigErrorMessage: () => "",
+    }));
+
+    const { transcribeAudio } = await import("./voiceTranscription");
+    const result = await transcribeAudio({
+      audioUrl: "https://example.com/audio.webm",
+      language: "en",
+    });
+
+    expect("error" in result).toBe(false);
+
+    const request = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const body = request.body as FormData;
+    const uploadedFile = body.get("file");
+
+    expect(uploadedFile).toBeInstanceOf(File);
+    expect((uploadedFile as File).name).toBe("audio.webm");
+    expect((uploadedFile as File).type).toBe("audio/webm");
+  });
+
   it("returns a configuration error when no speech provider is available", async () => {
     vi.doMock("./env", () => ({
       ENV: {

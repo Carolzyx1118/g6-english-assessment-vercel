@@ -784,7 +784,7 @@ export default function AssessmentReportPanel({
                   <Sparkle className="h-3 w-3 text-[#1E3A5F]" />
                   {isCn ? "测评反馈报告" : "Assessment Report"}
                 </span>
-                <span className="rounded-full border border-[#1E3A5F]/16 bg-white/65 px-3 py-1 text-[10px] tracking-[0.14em] text-slate-700">
+                <span className="rounded-full border border-[#1E3A5F]/16 bg-white/65 px-3 py-1 font-[family-name:var(--font-sans)] text-[10px] font-bold tracking-tight text-slate-700">
                   {record.paperTitle}
                 </span>
               </div>
@@ -882,7 +882,7 @@ export default function AssessmentReportPanel({
                 </span>
               </div>
               <div className="mt-3 flex items-end gap-2.5">
-                <span className="report-summary-grade text-[52px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
+                <span className="report-summary-grade text-[44px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
                 <span className="mb-1 text-[13px] font-medium text-slate-500">
                   {isCn ? "综合表现" : "Overall"}
                 </span>
@@ -970,7 +970,7 @@ export default function AssessmentReportPanel({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                       {section.manualReview ? (isCn ? "评估方式" : "Review Mode") : (isCn ? "得分" : "Score")}
                     </p>
-                    <p className="report-breakdown-score mt-1 text-[32px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
+                    <p className="report-breakdown-score mt-1 font-[family-name:var(--font-sans)] text-[24px] font-bold leading-none tracking-tight text-slate-900">
                       {section.manualReview
                         ? (isCn ? "AI 评估" : "AI Review")
                         : `${section.correct}/${section.total}`}

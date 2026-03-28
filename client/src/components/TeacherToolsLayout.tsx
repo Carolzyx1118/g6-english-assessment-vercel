@@ -200,8 +200,7 @@ export default function TeacherToolsLayout({
           <div className={`flex items-center border-b border-slate-200 px-4 py-4 ${collapsed ? "justify-center" : "justify-between"}`}>
             {!collapsed ? (
               <div>
-                <p className="text-sm font-semibold text-[#1E3A5F]">Teacher Tools</p>
-                <p className="text-xs text-slate-400">Workspace navigation</p>
+                <p className="text-lg font-bold tracking-tight text-[#1E3A5F]">Workspace Navigation</p>
               </div>
             ) : null}
             <button

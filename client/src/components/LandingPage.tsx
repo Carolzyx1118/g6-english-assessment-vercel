@@ -17,6 +17,53 @@ const ENGLISH_DASHBOARD_HERO_IMAGE = '/teacher-english-hero.svg';
 const MATH_DASHBOARD_HERO_IMAGE = '/teacher-math-hero.svg';
 const VOCABULARY_DASHBOARD_HERO_IMAGE = '/teacher-vocabulary-hero.svg';
 
+const paperIconPools: Record<PaperSubject, Array<{ glyph: string; surface: string }>> = {
+  english: [
+    { glyph: '📘', surface: 'bg-[#E8F1FB]' },
+    { glyph: '📗', surface: 'bg-[#EDF7EE]' },
+    { glyph: '📕', surface: 'bg-[#FCEEEE]' },
+    { glyph: '🎧', surface: 'bg-[#EFF1FF]' },
+    { glyph: '📝', surface: 'bg-[#FFF5E6]' },
+    { glyph: '🗣️', surface: 'bg-[#F5EEFF]' },
+  ],
+  math: [
+    { glyph: '🧮', surface: 'bg-[#EAF8F4]' },
+    { glyph: '📐', surface: 'bg-[#EEF7FB]' },
+    { glyph: '📏', surface: 'bg-[#F1F8EC]' },
+    { glyph: '📊', surface: 'bg-[#FFF5E8]' },
+    { glyph: '📈', surface: 'bg-[#EEF4FF]' },
+    { glyph: '🔢', surface: 'bg-[#F2F7FF]' },
+  ],
+  vocabulary: [
+    { glyph: '📚', surface: 'bg-[#FFF6E8]' },
+    { glyph: '📖', surface: 'bg-[#FFF1E8]' },
+    { glyph: '🔤', surface: 'bg-[#EEF6FF]' },
+    { glyph: '📝', surface: 'bg-[#FFF0F0]' },
+    { glyph: '🏷️', surface: 'bg-[#FFF8E1]' },
+    { glyph: '🗂️', surface: 'bg-[#EEF8F0]' },
+  ],
+};
+
+function getStableIconIndex(seed: string, length: number) {
+  let hash = 0;
+  for (const char of seed) {
+    hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
+  }
+  return length > 0 ? hash % length : 0;
+}
+
+function getPaperDisplayIcon(paper: Paper) {
+  const pool = paperIconPools[paper.subject];
+  if (!pool || pool.length === 0) {
+    return {
+      glyph: paper.icon || '📘',
+      surface: 'bg-[#1E3A5F]/5',
+    };
+  }
+
+  return pool[getStableIconIndex(`${paper.subject}:${paper.id}:${paper.title}`, pool.length)];
+}
+
 function getPaperHeroImage(subject: PaperSubject) {
   if (subject === 'english') return ENGLISH_DASHBOARD_HERO_IMAGE;
   if (subject === 'math') return MATH_DASHBOARD_HERO_IMAGE;
@@ -108,7 +155,7 @@ function BrandHeader() {
               className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/90 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">退出</span>
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         )}
@@ -154,7 +201,7 @@ function TeacherWorkspaceTopBar({
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:border-slate-300 hover:text-[#1E3A5F]"
             >
               <LogOut className="h-4 w-4" />
-              <span>退出</span>
+              <span>Sign out</span>
             </button>
           </div>
         ) : null}
@@ -400,6 +447,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     {filteredPapers.map((paper: Paper, i: number) => {
                       const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
                       const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                      const paperDisplayIcon = getPaperDisplayIcon(paper);
 
                       return (
                         <motion.button
@@ -414,11 +462,11 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                             <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
                           </div>
                           <div className="flex items-center gap-4 mb-4">
-                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
-                              {paper.icon}
+                            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl ${paperDisplayIcon.surface}`}>
+                              <span className="leading-none">{paperDisplayIcon.glyph}</span>
                             </div>
                             <div>
-                              <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                              <h3 className="font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
                             </div>
                           </div>
                           <div className="mb-4 flex flex-wrap gap-2">
@@ -464,7 +512,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   <img src={PUREON_LOGO} alt="璞源教育" className="w-6 h-6 object-contain opacity-50" />
                   <span className="text-xs text-slate-400">© 2026 璞源教育 Pureon Education</span>
                 </div>
-                <span className="text-xs text-slate-400">专注新加坡国际教育</span>
+                <span className="text-xs text-slate-400">Focused on Singapore International Education</span>
               </div>
             </div>
           </div>
@@ -589,6 +637,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               {filteredPapers.map((paper: Paper, i: number) => {
                 const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
                 const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                const paperDisplayIcon = getPaperDisplayIcon(paper);
 
                 return (
                   <motion.button
@@ -603,11 +652,11 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                       <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
                     </div>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl bg-[#1E3A5F]/5">
-                        {paper.icon}
+                      <div className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl ${paperDisplayIcon.surface}`}>
+                        <span className="leading-none">{paperDisplayIcon.glyph}</span>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-[#1E3A5F] group-hover:text-[#D4A84B] transition-colors">{paper.title}</h3>
+                        <h3 className="font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
                       </div>
                     </div>
                     <div className="mb-4 flex flex-wrap gap-2">
@@ -646,7 +695,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 <img src={PUREON_LOGO} alt="璞源教育" className="w-6 h-6 object-contain opacity-50" />
                 <span className="text-xs text-slate-400">© 2026 璞源教育 Pureon Education</span>
               </div>
-              <span className="text-xs text-slate-400">专注新加坡国际教育</span>
+              <span className="text-xs text-slate-400">Focused on Singapore International Education</span>
             </div>
           </div>
         </>
@@ -667,6 +716,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const readinessMessage = getPaperReadinessMessage(paper);
   const heroImage = getPaperHeroImage(paper.subject);
   const heroAlt = getPaperHeroAlt(paper.subject);
+  const paperDisplayIcon = getPaperDisplayIcon(paper);
 
   if (showStudentInfoForm) {
     return <StudentInfoForm onBack={() => setShowStudentInfoForm(false)} />;
@@ -701,7 +751,9 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               transition={{ duration: 0.6 }}
             >
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-4xl">{paper.icon}</span>
+                <div className={`flex h-[72px] w-[72px] items-center justify-center rounded-[26px] border border-white/10 ${paperDisplayIcon.surface}`}>
+                  <span className="text-4xl leading-none">{paperDisplayIcon.glyph}</span>
+                </div>
               </div>
               <div className="mb-4 flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">
@@ -716,7 +768,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
                   </span>
                 ))}
               </div>
-              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
+              <h1 className="font-[family-name:var(--font-sans)] text-4xl sm:text-5xl font-bold tracking-tight leading-tight text-white">
                 {paper.title}
                 {hasDistinctSubtitle ? (
                   <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876] text-2xl sm:text-3xl mt-1">
@@ -823,7 +875,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
             <img src={PUREON_LOGO} alt="璞源教育" className="w-6 h-6 object-contain opacity-50" />
             <span className="text-xs text-slate-400">© 2026 璞源教育 Pureon Education</span>
           </div>
-          <span className="text-xs text-slate-400">专注新加坡国际教育</span>
+          <span className="text-xs text-slate-400">Focused on Singapore International Education</span>
         </div>
       </div>
     </div>

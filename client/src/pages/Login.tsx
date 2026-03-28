@@ -5,7 +5,7 @@ import { saveAuthToken } from "@/hooks/useLocalAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from "@/lib/branding";
 import { toast } from "sonner";
 import { Eye, EyeOff, LogIn } from "lucide-react";
@@ -79,9 +79,6 @@ export default function Login() {
           <Card className="shadow-xl border border-slate-200/60 bg-white">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">登录</CardTitle>
-            <CardDescription className="text-center">
-                输入用户名和密码登录系统。账号可访问的科目由注册时的邀请码决定。
-              </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
               <CardContent className="space-y-4">
