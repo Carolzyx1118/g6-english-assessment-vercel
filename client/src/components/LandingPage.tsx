@@ -12,11 +12,24 @@ import TeacherToolsLayout from '@/components/TeacherToolsLayout';
 
 const PUREON_LOGO = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bJDnAegOAPWmMppj.png';
 
-const HERO_IMAGE = 'https://private-us-east-1.manuscdn.com/sessionFile/EkfYMR94S7iTs27MlKPHhG/sandbox/EXd2rAVuTpleP76sVHRwu5-img-1_1771255551000_na1fn_aGVyby1iYW5uZXI.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRWtmWU1SOTRTN2lUczI3TWxLUEhoRy9zYW5kYm94L0VYZDJyQVZ1VHBsZVA3NnNWSFJ3dTUtaW1nLTFfMTc3MTI1NTU1MTAwMF9uYTFmbl9hR1Z5YnkxaVlXNXVaWEkucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=I5fojTC3dYU1azrXcxeOhHGaexKXmznPAcGFS~lV8L7Mg4foEr2gVTG8bWCRAFcNxWpHkpz6nN2LYnhtbkVgpR6LJgFhSgixOlBrFTrn10YhLyMDjFH395DUPFebb3vmNWW4AtScobvWAmQKFCbyRkSCwV2lqQjc6UtGXWp0UNZVGZU93MZ-Lc6Tnjz7Y-~D1BRvpGWq8tZLrE1EeyFCN-2QxJNOaJrlvv0Zqp443MkcRgAiOKhqYi8Jux0MB8ue0LLEMJZ7GIRQOzu1lbf6FHGk5jHn3ctuue-nzVHvjc~hX60cyBA3odGGtWFaxd56S8rofjTUDitaGRwWStBX7A__';
 const DASHBOARD_HERO_IMAGE = '/teacher-workspace-hero.svg';
 const ENGLISH_DASHBOARD_HERO_IMAGE = '/teacher-english-hero.svg';
 const MATH_DASHBOARD_HERO_IMAGE = '/teacher-math-hero.svg';
 const VOCABULARY_DASHBOARD_HERO_IMAGE = '/teacher-vocabulary-hero.svg';
+
+function getPaperHeroImage(subject: PaperSubject) {
+  if (subject === 'english') return ENGLISH_DASHBOARD_HERO_IMAGE;
+  if (subject === 'math') return MATH_DASHBOARD_HERO_IMAGE;
+  if (subject === 'vocabulary') return VOCABULARY_DASHBOARD_HERO_IMAGE;
+  return DASHBOARD_HERO_IMAGE;
+}
+
+function getPaperHeroAlt(subject: PaperSubject) {
+  if (subject === 'english') return 'English Learning Illustration';
+  if (subject === 'math') return 'Math Learning Illustration';
+  if (subject === 'vocabulary') return 'Vocabulary Learning Illustration';
+  return 'Learning Illustration';
+}
 
 function normalizeSummaryText(value?: string) {
   return value?.trim().replace(/\s+/g, ' ').toLowerCase() || '';
@@ -652,6 +665,8 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
   const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
   const readinessMessage = getPaperReadinessMessage(paper);
+  const heroImage = getPaperHeroImage(paper.subject);
+  const heroAlt = getPaperHeroAlt(paper.subject);
 
   if (showStudentInfoForm) {
     return <StudentInfoForm onBack={() => setShowStudentInfoForm(false)} />;
@@ -750,8 +765,8 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <div className="relative">
                 <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
                 <img
-                  src={HERO_IMAGE}
-                  alt="English Learning Illustration"
+                  src={heroImage}
+                  alt={heroAlt}
                   className="relative w-full rounded-2xl opacity-90"
                 />
               </div>
