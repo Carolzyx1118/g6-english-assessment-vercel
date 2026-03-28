@@ -159,8 +159,6 @@ export default function TeacherToolsLayout({
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
   });
   const [tagManagerExpanded, setTagManagerExpanded] = useState(activeTool === "tag-manager");
-  const [questionBankExpanded, setQuestionBankExpanded] = useState(activeTool === "question-bank");
-  const [paperManagerExpanded, setPaperManagerExpanded] = useState(activeTool === "paper-manager");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -170,12 +168,6 @@ export default function TeacherToolsLayout({
   useEffect(() => {
     if (activeTool === "tag-manager") {
       setTagManagerExpanded(true);
-    }
-    if (activeTool === "question-bank") {
-      setQuestionBankExpanded(true);
-    }
-    if (activeTool === "paper-manager") {
-      setPaperManagerExpanded(true);
     }
   }, [activeTool]);
 
@@ -291,87 +283,21 @@ export default function TeacherToolsLayout({
               />
             )}
 
-            {!collapsed ? (
-              <div className="space-y-1">
-                <NavItemRow
-                  collapsed={false}
-                  expandable
-                  expanded={questionBankExpanded}
-                  onToggle={() => setQuestionBankExpanded((current) => !current)}
-                  toggleLabel="Question Bank subjects"
-                  link={
-                    <PrimaryLink
-                      href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
-                      icon={<Database className="h-4 w-4" />}
-                      label="Question Bank"
-                      active={activeTool === "question-bank"}
-                      collapsed={false}
-                    />
-                  }
-                />
-                {questionBankExpanded ? (
-                  <div className="space-y-1 pl-10">
-                    {allowedSubjects.map((subject) => (
-                      <SubjectLink
-                        key={`question-bank-${subject}`}
-                        href={`/question-bank?subject=${subject}`}
-                        label={PAPER_SUBJECT_LABELS[subject]}
-                        active={activeTool === "question-bank" && currentSubject === subject}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <PrimaryLink
-                href={`/question-bank?subject=${currentSubject ?? defaultSubject}`}
-                icon={<Database className="h-4 w-4" />}
-                label="Question Bank"
-                active={activeTool === "question-bank"}
-                collapsed={collapsed}
-              />
-            )}
+            <PrimaryLink
+              href="/question-bank"
+              icon={<Database className="h-4 w-4" />}
+              label="Question Bank"
+              active={activeTool === "question-bank"}
+              collapsed={collapsed}
+            />
 
-            {!collapsed ? (
-              <div className="space-y-1">
-                <NavItemRow
-                  collapsed={false}
-                  expandable
-                  expanded={paperManagerExpanded}
-                  onToggle={() => setPaperManagerExpanded((current) => !current)}
-                  toggleLabel="Paper Manager subjects"
-                  link={
-                    <PrimaryLink
-                      href="/paper-manager"
-                      icon={<BookCopy className="h-4 w-4" />}
-                      label="Paper Manager"
-                      active={activeTool === "paper-manager"}
-                      collapsed={false}
-                    />
-                  }
-                />
-                {paperManagerExpanded ? (
-                  <div className="space-y-1 pl-10">
-                    {allowedSubjects.map((subject) => (
-                      <SubjectLink
-                        key={`manager-${subject}`}
-                        href={`/paper-manager?subject=${subject}`}
-                        label={PAPER_SUBJECT_LABELS[subject]}
-                        active={activeTool === "paper-manager" && currentSubject === subject}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <PrimaryLink
-                href="/paper-manager"
-                icon={<BookCopy className="h-4 w-4" />}
-                label="Paper Manager"
-                active={activeTool === "paper-manager"}
-                collapsed={collapsed}
-              />
-            )}
+            <PrimaryLink
+              href="/paper-manager"
+              icon={<BookCopy className="h-4 w-4" />}
+              label="Paper Manager"
+              active={activeTool === "paper-manager"}
+              collapsed={collapsed}
+            />
 
             {collapsed ? (
               <PrimaryLink

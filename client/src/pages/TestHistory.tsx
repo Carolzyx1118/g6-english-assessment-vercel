@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import AssessmentReportPanel from "@/components/AssessmentReportPanel";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PAPER_SUBJECT_LABELS, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
@@ -134,22 +135,30 @@ export default function TestHistory() {
 
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">Total History Records</p>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-slate-900">{historyStats.totalRecords}</p>
-              </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.english} Papers</p>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-[#1E3A5F]">{historyStats.englishPapers}</p>
-              </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.math} Papers</p>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-emerald-700">{historyStats.mathPapers}</p>
-              </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.vocabulary} Papers</p>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-amber-700">{historyStats.vocabularyPapers}</p>
-              </div>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardDescription>Total History Records</CardDescription>
+                  <CardTitle className="text-2xl text-slate-900">{historyStats.totalRecords}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardDescription>{PAPER_SUBJECT_LABELS.english} Papers</CardDescription>
+                  <CardTitle className="text-2xl text-[#1E3A5F]">{historyStats.englishPapers}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardDescription>{PAPER_SUBJECT_LABELS.math} Papers</CardDescription>
+                  <CardTitle className="text-2xl text-emerald-700">{historyStats.mathPapers}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardDescription>{PAPER_SUBJECT_LABELS.vocabulary} Papers</CardDescription>
+                  <CardTitle className="text-2xl text-amber-700">{historyStats.vocabularyPapers}</CardTitle>
+                </CardHeader>
+              </Card>
             </div>
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">

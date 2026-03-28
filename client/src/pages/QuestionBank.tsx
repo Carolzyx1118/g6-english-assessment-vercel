@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useSearch } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
@@ -69,6 +69,7 @@ type QuestionBankItemRecord = {
 
 type QuestionBankPaperView = {
   paper: QuestionBankPaperRecord;
+  subject: PaperSubject;
   blueprint: ManualPaperBlueprint | null;
   items: QuestionBankItemRecord[];
 };
@@ -91,6 +92,10 @@ type DeleteTarget =
 
 function isPaperSubjectValue(value: unknown): value is PaperSubject {
   return typeof value === "string" && PAPER_SUBJECT_ORDER.includes(value as PaperSubject);
+}
+
+function normalizePaperSubject(value: unknown): PaperSubject {
+  return value === "math" || value === "vocabulary" ? value : "english";
 }
 
 function formatDate(value: string | Date) {
@@ -585,6 +590,7 @@ function SubsectionPreview({ subsection }: { subsection: ManualSubsection }) {
 
 export default function QuestionBank() {
   const search = useSearch();
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const [expandedPaperIds, setExpandedPaperIds] = useState<number[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -594,8 +600,13 @@ export default function QuestionBank() {
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
   const subjectFilter = useMemo(() => {
     const value = new URLSearchParams(search).get("subject");
-    return isPaperSubjectValue(value) ? value : "english";
+    return isPaperSubjectValue(value) ? value : null;
   }, [search]);
+
+  useEffect(() => {
+    setSelectedExamSystem("all");
+    setSelectedQuestionType("all");
+  }, [subjectFilter]);
 
   const listQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
     staleTime: 5_000,
@@ -618,28 +629,35 @@ export default function QuestionBank() {
     vocabulary: Object.fromEntries((vocabularySystemsQuery.data ?? []).map((system) => [system.id, system.label])),
   }), [englishSystemsQuery.data, mathSystemsQuery.data, vocabularySystemsQuery.data]);
 
-  const subjectPapers = useMemo(
-    () => ((listQuery.data ?? []) as QuestionBankPaperRecord[]).filter((paper) => paper.subject === subjectFilter),
-    [listQuery.data, subjectFilter],
-  );
+  const getSystemLabel = (systemId: string, subject?: PaperSubject) => {
+    if (subject) {
+      return systemLabelBySubject[subject][systemId] ?? systemId;
+    }
+
+    return systemLabelBySubject.english[systemId]
+      ?? systemLabelBySubject.math[systemId]
+      ?? systemLabelBySubject.vocabulary[systemId]
+      ?? systemId;
+  };
 
   const paperViews = useMemo<QuestionBankPaperView[]>(() => {
-    return subjectPapers.map((paper) => {
+    return ((listQuery.data ?? []) as QuestionBankPaperRecord[]).map((paper) => {
+      const paperSubject = normalizePaperSubject(paper.subject);
       const blueprint = parseBlueprint(paper.blueprintJson);
       const items = (blueprint?.sections ?? []).flatMap((section) => {
         const previewSubsections = section.subsections.filter(Boolean);
         if (previewSubsections.length === 0) return [];
 
-        const displayTags = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionTagValues(subjectFilter, subsection))));
-        const systemIds = Array.from(new Set(previewSubsections.map((subsection) => getSubsectionFilterMetadata(subjectFilter, subsection).systemId).filter(Boolean)));
+        const displayTags = Array.from(new Set(previewSubsections.flatMap((subsection) => getSubsectionTagValues(paperSubject, subsection))));
+        const systemIds = Array.from(new Set(previewSubsections.map((subsection) => getSubsectionFilterMetadata(paperSubject, subsection).systemId).filter(Boolean)));
         const questionTypes = Array.from(new Set(previewSubsections.map((subsection) => subsection.questionType)));
-        const itemId = formatQuestionBankItemId(subjectFilter, section.id);
+        const itemId = formatQuestionBankItemId(paperSubject, section.id);
         const searchChunks = [
           paper.title,
           paper.paperId,
           itemId,
           ...displayTags,
-          ...systemIds.map((systemId) => systemLabelBySubject[subjectFilter][systemId] ?? systemId),
+          ...systemIds.map((systemId) => systemLabelBySubject[paperSubject][systemId] ?? systemId),
           ...questionTypes.map((questionType) => MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType),
           ...previewSubsections.flatMap((subsection) => [
             subsection.title,
@@ -664,17 +682,23 @@ export default function QuestionBank() {
 
       return {
         paper,
+        subject: paperSubject,
         blueprint,
         items,
       };
     });
-  }, [subjectFilter, subjectPapers, systemLabelBySubject]);
+  }, [listQuery.data, systemLabelBySubject]);
+
+  const filteredBySubjectPaperViews = useMemo(
+    () => (subjectFilter ? paperViews.filter((paper) => paper.subject === subjectFilter) : paperViews),
+    [paperViews, subjectFilter],
+  );
 
   const filterOptions = useMemo(() => {
     const systemIdSet = new Set<string>();
     const questionTypeSet = new Set<ManualQuestionType>();
 
-    paperViews.forEach((paper) => {
+    filteredBySubjectPaperViews.forEach((paper) => {
       paper.items.forEach((item) => {
         item.systemIds.forEach((systemId) => systemIdSet.add(systemId));
         item.questionTypes.forEach((questionType) => questionTypeSet.add(questionType));
@@ -685,20 +709,20 @@ export default function QuestionBank() {
       systems: Array.from(systemIdSet)
         .map((systemId) => ({
           id: systemId,
-          label: systemLabelBySubject[subjectFilter][systemId] ?? systemId,
+          label: getSystemLabel(systemId, subjectFilter ?? undefined),
         }))
         .sort((left, right) => left.label.localeCompare(right.label)),
       questionTypes: Array.from(questionTypeSet).sort((left, right) =>
         (MANUAL_QUESTION_TYPE_LABELS[left] ?? left).localeCompare(MANUAL_QUESTION_TYPE_LABELS[right] ?? right),
       ),
     };
-  }, [paperViews, subjectFilter, systemLabelBySubject]);
+  }, [filteredBySubjectPaperViews, getSystemLabel, subjectFilter]);
 
   const hasActiveFilters = Boolean(searchText.trim()) || selectedExamSystem !== "all" || selectedQuestionType !== "all";
 
   const filteredPapers = useMemo(() => {
     const keyword = normalizeSearchText(searchText);
-    return paperViews
+    return filteredBySubjectPaperViews
       .map((paper) => {
         const filteredItems = paper.items.filter((item) => {
           if (keyword && !item.searchText.includes(keyword)) return false;
@@ -713,7 +737,14 @@ export default function QuestionBank() {
         };
       })
       .filter((paper) => (hasActiveFilters ? paper.filteredItems.length > 0 : true));
-  }, [hasActiveFilters, paperViews, searchText, selectedExamSystem, selectedQuestionType]);
+  }, [filteredBySubjectPaperViews, hasActiveFilters, searchText, selectedExamSystem, selectedQuestionType]);
+
+  const paperCounts = useMemo(() => ({
+    all: paperViews.length,
+    english: paperViews.filter((paper) => paper.subject === "english").length,
+    math: paperViews.filter((paper) => paper.subject === "math").length,
+    vocabulary: paperViews.filter((paper) => paper.subject === "vocabulary").length,
+  }), [paperViews]);
 
   const summary = useMemo(() => ({
     totalItems: filteredPapers.reduce(
@@ -794,7 +825,7 @@ export default function QuestionBank() {
                 Back to Teacher Home
               </Link>
               <h1 className="mt-3 text-2xl font-bold tracking-tight text-[#1E3A5F] sm:text-3xl">
-                {`${PAPER_SUBJECT_LABELS[subjectFilter]} Question`}
+                Question Bank
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Review the question-bank items used for random paper building. Each entry shows the saved tags and a live preview of the question content.
@@ -802,63 +833,107 @@ export default function QuestionBank() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-1">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>{hasActiveFilters ? "Matching Question Bank Items" : "Question Bank Items"}</CardDescription>
-                <CardTitle className="text-xl">{summary.totalItems}</CardTitle>
+                <CardDescription>Total Question Banks</CardDescription>
+                <CardTitle className="text-2xl">{paperCounts.all}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardDescription>{PAPER_SUBJECT_LABELS.english} Papers</CardDescription>
+                <CardTitle className="text-2xl text-[#1E3A5F]">{paperCounts.english}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardDescription>{PAPER_SUBJECT_LABELS.math} Papers</CardDescription>
+                <CardTitle className="text-2xl text-emerald-700">{paperCounts.math}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardDescription>{PAPER_SUBJECT_LABELS.vocabulary} Papers</CardDescription>
+                <CardTitle className="text-2xl text-amber-700">{paperCounts.vocabulary}</CardTitle>
               </CardHeader>
             </Card>
           </div>
 
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base text-[#1E3A5F]">Filters</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">Keyword</p>
-                <Input
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Search ID, prompt, title..."
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">Exam System</p>
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={selectedExamSystem}
-                  onChange={(event) => setSelectedExamSystem(event.target.value)}
-                >
-                  <option value="all">All Exam Systems</option>
-                  {filterOptions.systems.map((system) => (
-                    <option key={system.id} value={system.id}>{system.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">Question Type</p>
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={selectedQuestionType}
-                  onChange={(event) => setSelectedQuestionType(event.target.value)}
-                >
-                  <option value="all">All Question Types</option>
-                  {filterOptions.questionTypes.map((questionType) => (
-                    <option key={questionType} value={questionType}>
-                      {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {hasActiveFilters ? (
-                <div className="md:col-span-2 xl:col-span-3 flex justify-end">
-                  <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
-                    Clear Filters
-                  </Button>
+          <Card className="gap-4 border-slate-200 py-5 shadow-sm">
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Keyword</p>
+                  <Input
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="Search ID, prompt, title..."
+                  />
                 </div>
-              ) : null}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Exam System</p>
+                  <select
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    value={selectedExamSystem}
+                    onChange={(event) => setSelectedExamSystem(event.target.value)}
+                  >
+                    <option value="all">All Exam Systems</option>
+                    {filterOptions.systems.map((system) => (
+                      <option key={system.id} value={system.id}>{system.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Question Type</p>
+                  <select
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    value={selectedQuestionType}
+                    onChange={(event) => setSelectedQuestionType(event.target.value)}
+                  >
+                    <option value="all">All Question Types</option>
+                    {filterOptions.questionTypes.map((questionType) => (
+                      <option key={questionType} value={questionType}>
+                        {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {hasActiveFilters ? (
+                  <div className="flex justify-end md:col-span-2 xl:col-span-3">
+                    <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
+                      Clear Filters
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: "all", label: "All Subjects", count: paperCounts.all },
+                  ...PAPER_SUBJECT_ORDER.map((subject) => ({
+                    key: subject,
+                    label: PAPER_SUBJECT_LABELS[subject],
+                    count: paperCounts[subject],
+                  })),
+                ] as Array<{ key: "all" | PaperSubject; label: string; count: number }>).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => navigate(option.key === "all" ? "/question-bank" : `/question-bank?subject=${option.key}`)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      (subjectFilter ?? "all") === option.key
+                        ? "bg-[#1E3A5F] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                    }`}
+                  >
+                    {option.label}
+                    <span className="ml-2 text-xs opacity-70">{option.count}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                {summary.totalItems} matching item{summary.totalItems === 1 ? "" : "s"}
+              </p>
             </CardContent>
           </Card>
 
@@ -874,7 +949,9 @@ export default function QuestionBank() {
               <CardContent className="py-16 text-center text-sm text-slate-500">
                 {hasActiveFilters
                   ? "No question-bank items match the current filters."
-                  : "No question-bank papers have been recorded for this subject yet. Add some from Question Intake first."}
+                  : (subjectFilter
+                    ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} question-bank papers have been recorded yet. Add some from Question Intake first.`
+                    : "No question-bank papers have been recorded yet. Add some from Question Intake first.")}
               </CardContent>
             </Card>
           ) : (
@@ -894,7 +971,7 @@ export default function QuestionBank() {
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F]">{paper.title}</CardTitle>
+                            <CardTitle className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
                               {itemCountLabel}

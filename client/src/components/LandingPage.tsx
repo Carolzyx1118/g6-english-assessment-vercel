@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import StudentInfoForm from '@/components/StudentInfoForm';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator, WholeWord } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator, BookText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
@@ -83,7 +83,7 @@ function normalizeSummaryText(value?: string) {
 }
 
 const sectionIcons: Record<string, React.ReactNode> = {
-  vocabulary: <WholeWord className="w-6 h-6" />,
+  vocabulary: <BookText className="w-6 h-6" />,
   grammar: <PenTool className="w-6 h-6" />,
   listening: <Headphones className="w-6 h-6" />,
   reading: <FileText className="w-6 h-6" />,
@@ -120,7 +120,7 @@ const subjectModuleConfig: Record<PaperSubject, { icon: React.ReactNode; accent:
     summary: 'Problem solving, calculation, reasoning, and future math papers.',
   },
   vocabulary: {
-    icon: <WholeWord className="w-7 h-7" />,
+    icon: <BookText className="w-7 h-7" />,
     accent: 'text-amber-700',
     surface: 'from-amber-50 to-orange-50 border-amber-200/70',
     summary: 'Word study, meaning match, memorization, and vocabulary drills.',

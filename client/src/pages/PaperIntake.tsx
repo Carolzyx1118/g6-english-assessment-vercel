@@ -5276,56 +5276,58 @@ export default function PaperIntake() {
                                       ? "Uploading audio now. Keep this page open until the upload finishes."
                                       : "Upload an audio clip for this big question. Students will listen to it before answering."}
                                   </p>
-                                  <label className={`inline-flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-2 text-sm font-medium transition-colors ${
-                                    isUploadingAudio
-                                      ? "cursor-not-allowed border-slate-300 text-slate-400"
-                                      : "cursor-pointer border-sky-400/50 text-sky-700 hover:border-sky-500 hover:text-sky-800"
-                                  }`}>
-                                    {isUploadingAudio ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Music className="h-4 w-4" />
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <label className={`inline-flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-2 text-sm font-medium transition-colors ${
+                                      isUploadingAudio
+                                        ? "cursor-not-allowed border-slate-300 text-slate-400"
+                                        : "cursor-pointer border-sky-400/50 text-sky-700 hover:border-sky-500 hover:text-sky-800"
+                                    }`}>
+                                      {isUploadingAudio ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Music className="h-4 w-4" />
+                                      )}
+                                      {isUploadingAudio
+                                        ? "Uploading Audio..."
+                                        : subsection.audio
+                                          ? "Replace Audio"
+                                          : "Upload Audio"}
+                                      <input
+                                        type="file"
+                                        accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
+                                        className="hidden"
+                                        disabled={isUploadingAudio}
+                                        onClick={(event) => {
+                                          event.currentTarget.value = "";
+                                        }}
+                                        onChange={(event) => {
+                                          void handleSubsectionAudioUpload(
+                                            section.id,
+                                            subsection.id,
+                                            event.target.files?.[0],
+                                          );
+                                        }}
+                                      />
+                                    </label>
+                                    {subsection.audio && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
+                                        disabled={isUploadingAudio}
+                                        onClick={() => {
+                                          releasePendingSubsectionAudioUrl(subsection.audio?.previewUrl);
+                                          releasePendingSubsectionAudioUrl(subsection.audio?.dataUrl);
+                                          updateSubsection(section.id, subsection.id, (currentSubsection) => ({
+                                            ...currentSubsection,
+                                            audio: undefined,
+                                          }));
+                                        }}
+                                      >
+                                        Remove Audio
+                                      </Button>
                                     )}
-                                    {isUploadingAudio
-                                      ? "Uploading Audio..."
-                                      : subsection.audio
-                                        ? "Replace Audio"
-                                        : "Upload Audio"}
-                                    <input
-                                      type="file"
-                                      accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
-                                      className="hidden"
-                                      disabled={isUploadingAudio}
-                                      onClick={(event) => {
-                                        event.currentTarget.value = "";
-                                      }}
-                                      onChange={(event) => {
-                                        void handleSubsectionAudioUpload(
-                                          section.id,
-                                          subsection.id,
-                                          event.target.files?.[0],
-                                        );
-                                      }}
-                                    />
-                                  </label>
-                                  {subsection.audio && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
-                                      disabled={isUploadingAudio}
-                                      onClick={() => {
-                                        releasePendingSubsectionAudioUrl(subsection.audio?.previewUrl);
-                                        releasePendingSubsectionAudioUrl(subsection.audio?.dataUrl);
-                                        updateSubsection(section.id, subsection.id, (currentSubsection) => ({
-                                          ...currentSubsection,
-                                          audio: undefined,
-                                        }));
-                                      }}
-                                    >
-                                      Remove Audio
-                                    </Button>
-                                  )}
+                                  </div>
                                       </>
                                     );
                                   })()}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -38,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 import {
   PAPER_CATEGORY_LABELS,
   PAPER_SUBJECT_LABELS,
+  PAPER_SUBJECT_ORDER,
   type PaperCategory,
   type PaperSubject,
 } from "@/data/papers";
@@ -134,6 +135,7 @@ type DeleteTarget =
 
 export default function PaperManager() {
   const search = useSearch();
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { isTeacher } = useLocalAuth();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -306,15 +308,17 @@ export default function PaperManager() {
       });
     });
 
-    const combined = [...systemPapers, ...manualPapers];
-    if (!subjectFilter) return combined;
-    return combined.filter((paper) => paper.subject === subjectFilter);
+    return [...systemPapers, ...manualPapers];
   }, [
     manualPapersQuery.data,
     questionBankSourceBySubject,
-    subjectFilter,
     systemsBySubject,
   ]);
+
+  const filteredBySubjectPapers = useMemo(() => {
+    if (!subjectFilter) return managedPapers;
+    return managedPapers.filter((paper) => paper.subject === subjectFilter);
+  }, [managedPapers, subjectFilter]);
 
   const summary = useMemo(() => {
     return {
@@ -324,11 +328,27 @@ export default function PaperManager() {
     };
   }, [managedPapers]);
 
+  const subjectCounts = useMemo(() => {
+    return {
+      all: managedPapers.length,
+      english: managedPapers.filter((paper) => paper.subject === "english").length,
+      math: managedPapers.filter((paper) => paper.subject === "math").length,
+      vocabulary: managedPapers.filter((paper) => paper.subject === "vocabulary").length,
+    };
+  }, [managedPapers]);
+
+  const filteredSubjectSummary = useMemo(() => {
+    return {
+      published: filteredBySubjectPapers.filter((paper) => paper.published).length,
+      unpublished: filteredBySubjectPapers.filter((paper) => !paper.published).length,
+    };
+  }, [filteredBySubjectPapers]);
+
   const filteredManagedPapers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
-    if (!normalizedKeyword) return managedPapers;
+    if (!normalizedKeyword) return filteredBySubjectPapers;
 
-    return managedPapers.filter((paper) => {
+    return filteredBySubjectPapers.filter((paper) => {
       const subjectLabel = PAPER_SUBJECT_LABELS[paper.subject].toLowerCase();
       const categoryLabel = PAPER_CATEGORY_LABELS[paper.category].toLowerCase();
       const primaryId = paper.kind === "manual" ? paper.paperId : paper.systemId;
@@ -341,7 +361,7 @@ export default function PaperManager() {
         || categoryLabel.includes(normalizedKeyword)
       );
     });
-  }, [keyword, managedPapers]);
+  }, [filteredBySubjectPapers, keyword]);
 
   const isLoading = manualPapersQuery.isLoading
     || questionBankPapersQuery.isLoading
@@ -469,14 +489,14 @@ export default function PaperManager() {
               Back to Assessments
             </Link>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
-              {subjectFilter ? `${PAPER_SUBJECT_LABELS[subjectFilter]} Paper Manager` : "Paper Manager"}
+              Paper Manager
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
               Manage the papers students can actually see. Question-bank containers are handled separately in Question Bank.
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription>Total Student Papers</CardDescription>
@@ -485,38 +505,63 @@ export default function PaperManager() {
             </Card>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>Visible to Students</CardDescription>
-                <CardTitle className="text-2xl text-emerald-700">{summary.published}</CardTitle>
+                <CardDescription>{PAPER_SUBJECT_LABELS.english} Papers</CardDescription>
+                <CardTitle className="text-2xl text-[#1E3A5F]">{subjectCounts.english}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription>Hidden</CardDescription>
-                <CardTitle className="text-2xl text-amber-700">{summary.unpublished}</CardTitle>
+                <CardDescription>{PAPER_SUBJECT_LABELS.math} Papers</CardDescription>
+                <CardTitle className="text-2xl text-emerald-700">{subjectCounts.math}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardDescription>{PAPER_SUBJECT_LABELS.vocabulary} Papers</CardDescription>
+                <CardTitle className="text-2xl text-amber-700">{subjectCounts.vocabulary}</CardTitle>
               </CardHeader>
             </Card>
           </div>
 
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle>Student Papers</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    placeholder="Search papers, IDs, or descriptions"
-                    className="rounded-2xl border-slate-200 bg-white pl-9"
-                  />
-                </div>
-                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
-                  {filteredManagedPapers.length} paper{filteredManagedPapers.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              {isLoading ? (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="Search papers, IDs, or descriptions"
+                className="rounded-2xl border-slate-200 pl-9"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {([
+                { key: "all", label: "All Subjects", count: subjectCounts.all },
+                ...PAPER_SUBJECT_ORDER.map((subject) => ({
+                  key: subject,
+                  label: PAPER_SUBJECT_LABELS[subject],
+                  count: subjectCounts[subject],
+                })),
+              ] as Array<{ key: "all" | PaperSubject; label: string; count: number }>).map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => navigate(option.key === "all" ? "/paper-manager" : `/paper-manager?subject=${option.key}`)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    (subjectFilter ?? "all") === option.key
+                      ? "bg-[#1E3A5F] text-white shadow-sm"
+                      : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                  }`}
+                >
+                  {option.label}
+                  <span className="ml-2 text-xs opacity-70">{option.count}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+              {filteredManagedPapers.length} paper{filteredManagedPapers.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          {isLoading ? (
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Loading student papers...
@@ -532,7 +577,7 @@ export default function PaperManager() {
                       <div className="flex items-start gap-6">
                         <div className="min-w-0 flex-1 space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-[family-name:var(--font-sans)] text-lg font-bold tracking-tight text-slate-800">{paper.title}</h2>
+                            <h2 className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">{paper.title}</h2>
                             <Badge variant={paper.published ? "default" : "outline"}>
                               {paper.published ? "Published" : "Hidden"}
                             </Badge>
@@ -563,7 +608,7 @@ export default function PaperManager() {
                               </>
                             ) : (
                               <>
-                                <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                                <div className="w-full space-y-2">
                                   <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
                                     <span>Paper ID: {paper.systemId}</span>
                                     <span>{paper.totalSections} configured parts</span>
@@ -573,7 +618,7 @@ export default function PaperManager() {
                                     <button
                                       type="button"
                                       onClick={() => setExpandedWarningKey((current) => current === paper.key ? null : paper.key)}
-                                      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-amber-600 transition hover:text-amber-700"
+                                      className="inline-flex items-center gap-1.5 text-amber-600 transition hover:text-amber-700"
                                     >
                                       <AlertTriangle className="h-3.5 w-3.5" />
                                       <span>
@@ -664,7 +709,8 @@ export default function PaperManager() {
 
                           <Button
                             type="button"
-                            variant="destructive"
+                            variant="outline"
+                            className="border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
                             disabled={isPending}
                             onClick={() => setDeleteTarget(
                               paper.kind === "manual"
@@ -695,7 +741,7 @@ export default function PaperManager() {
                     </div>
                   );
                 })
-              ) : (
+          ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
                   {keyword.trim()
                     ? "No papers match this search."
@@ -703,9 +749,7 @@ export default function PaperManager() {
                       ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} student-facing papers yet. Add one from Paper Generator or Question Intake first.`
                       : "No student-facing papers yet. Add one from Paper Generator or Question Intake first.")}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+          )}
         </div>
 
         <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>

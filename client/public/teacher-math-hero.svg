@@ -1,67 +1,170 @@
 <svg width="1200" height="860" viewBox="0 0 1200 860" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="860" rx="48" fill="#F8FBFF"/>
-  <rect x="86" y="86" width="1028" height="688" rx="36" fill="white"/>
-  <rect x="86" y="86" width="1028" height="688" rx="36" stroke="#D8E6F6" stroke-width="4"/>
+  <defs>
+    <linearGradient id="math-bg" x1="88" y1="78" x2="1120" y2="784" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset="1" stop-color="#EEF4FF"/>
+    </linearGradient>
+    <linearGradient id="math-shell" x1="90" y1="90" x2="1110" y2="772" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F7FAFF"/>
+    </linearGradient>
+    <linearGradient id="math-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#E8F2FF"/>
+      <stop offset="1" stop-color="#D3E4FF"/>
+    </linearGradient>
+    <linearGradient id="math-green" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ECFAF2"/>
+      <stop offset="1" stop-color="#D6EEDF"/>
+    </linearGradient>
+    <linearGradient id="math-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF5E1"/>
+      <stop offset="1" stop-color="#F1DEAD"/>
+    </linearGradient>
+    <linearGradient id="math-surface" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F8FE"/>
+    </linearGradient>
+    <linearGradient id="math-navy" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#294B7A"/>
+      <stop offset="1" stop-color="#1E3A5F"/>
+    </linearGradient>
+    <filter id="math-shadow" x="24" y="24" width="1152" height="812" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#274971" flood-opacity="0.12"/>
+    </filter>
+    <filter id="math-card-shadow" x="0" y="0" width="1200" height="860" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#30527C" flood-opacity="0.10"/>
+    </filter>
+  </defs>
 
-  <circle cx="930" cy="230" r="116" fill="#E7F7EF"/>
-  <circle cx="930" cy="230" r="78" fill="#C7ECD7"/>
-  <path d="M930 144L952.335 211.665H1023.5L965.582 253.47L987.917 321.135L930 279.329L872.083 321.135L894.418 253.47L836.5 211.665H907.665L930 144Z" fill="#38B26C"/>
+  <rect width="1200" height="860" rx="48" fill="#F5F9FF"/>
+  <rect width="1200" height="860" rx="48" fill="url(#math-bg)"/>
 
-  <rect x="176" y="172" width="318" height="218" rx="26" fill="#F4FAF6"/>
-  <rect x="176" y="172" width="318" height="218" rx="26" stroke="#C9E8D3" stroke-width="4"/>
-  <text x="212" y="242" fill="#1F7A43" font-family="Arial, sans-serif" font-size="48" font-weight="700">1/2</text>
-  <path d="M208 261H292" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
-  <text x="212" y="324" fill="#1F7A43" font-family="Arial, sans-serif" font-size="48" font-weight="700">3/4</text>
-  <path d="M208 342H292" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
-  <text x="332" y="258" fill="#5D7895" font-family="Arial, sans-serif" font-size="40" font-weight="700">+</text>
-  <text x="404" y="258" fill="#D3A63B" font-family="Arial, sans-serif" font-size="40" font-weight="700">8</text>
-  <text x="332" y="340" fill="#5D7895" font-family="Arial, sans-serif" font-size="40" font-weight="700">=</text>
-  <text x="404" y="340" fill="#2D63E2" font-family="Arial, sans-serif" font-size="40" font-weight="700">?</text>
-
-  <g transform="translate(584 170)">
-    <rect width="244" height="344" rx="28" fill="#EDF5FF"/>
-    <rect x="0" y="0" width="244" height="344" rx="28" stroke="#CFE0F7" stroke-width="4"/>
-    <rect x="26" y="28" width="192" height="72" rx="16" fill="white"/>
-    <text x="48" y="75" fill="#284B73" font-family="Arial, sans-serif" font-size="36" font-weight="700">24 ÷ 6</text>
-    <rect x="26" y="126" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <rect x="97" y="126" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <rect x="168" y="126" width="50" height="46" rx="12" fill="#FFDCA6"/>
-    <rect x="26" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <rect x="97" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <rect x="168" y="191" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <rect x="26" y="256" width="121" height="46" rx="12" fill="#CFEEDB"/>
-    <rect x="168" y="256" width="50" height="46" rx="12" fill="#DDEAFF"/>
-    <text x="44" y="157" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">7</text>
-    <text x="115" y="157" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">8</text>
-    <text x="183" y="157" fill="#8E6403" font-family="Arial, sans-serif" font-size="22" font-weight="700">÷</text>
-    <text x="42" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">4</text>
-    <text x="113" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">5</text>
-    <text x="183" y="222" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">9</text>
-    <text x="58" y="287" fill="#1F7A43" font-family="Arial, sans-serif" font-size="22" font-weight="700">ENTER</text>
-    <text x="183" y="287" fill="#284B73" font-family="Arial, sans-serif" font-size="22" font-weight="700">0</text>
+  <g opacity="0.42">
+    <circle cx="1018" cy="148" r="126" fill="#E6F5EC"/>
+    <circle cx="1018" cy="148" r="88" fill="#D4ECDD"/>
+    <circle cx="166" cy="738" r="114" fill="#FFF0CA"/>
+    <circle cx="1048" cy="706" r="92" fill="#E9F0FF"/>
   </g>
 
-  <g transform="translate(224 456)">
-    <rect width="286" height="194" rx="24" fill="#FFF8E7"/>
-    <rect x="0" y="0" width="286" height="194" rx="24" stroke="#F0D391" stroke-width="4"/>
-    <path d="M44 146L114 56L182 120L242 72" stroke="#D6A63C" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="44" cy="146" r="12" fill="#2D63E2"/>
-    <circle cx="114" cy="56" r="12" fill="#2D63E2"/>
-    <circle cx="182" cy="120" r="12" fill="#2D63E2"/>
-    <circle cx="242" cy="72" r="12" fill="#2D63E2"/>
-    <path d="M46 28V164" stroke="#A9BFD7" stroke-width="4"/>
-    <path d="M30 148H254" stroke="#A9BFD7" stroke-width="4"/>
+  <g opacity="0.48" fill="#D4E0F0">
+    <circle cx="96" cy="76" r="2.4"/>
+    <circle cx="180" cy="112" r="2.4"/>
+    <circle cx="266" cy="88" r="2.4"/>
+    <circle cx="1104" cy="122" r="2.4"/>
+    <circle cx="1136" cy="182" r="2.4"/>
+    <circle cx="170" cy="802" r="2.4"/>
+    <circle cx="1034" cy="788" r="2.4"/>
   </g>
 
-  <g transform="translate(536 560)">
-    <rect width="384" height="112" rx="26" fill="#F3F8FE"/>
-    <rect x="0" y="0" width="384" height="112" rx="26" stroke="#D5E3F4" stroke-width="4"/>
-    <text x="34" y="48" fill="#2D63E2" font-family="Arial, sans-serif" font-size="36" font-weight="700">x</text>
-    <text x="88" y="48" fill="#1F7A43" font-family="Arial, sans-serif" font-size="36" font-weight="700">y</text>
-    <text x="140" y="48" fill="#D6A63C" font-family="Arial, sans-serif" font-size="36" font-weight="700">π</text>
-    <text x="192" y="48" fill="#5D7895" font-family="Arial, sans-serif" font-size="36" font-weight="700">√</text>
-    <text x="246" y="48" fill="#2D63E2" font-family="Arial, sans-serif" font-size="36" font-weight="700">%</text>
-    <text x="300" y="48" fill="#1F7A43" font-family="Arial, sans-serif" font-size="36" font-weight="700">÷</text>
-    <rect x="34" y="68" width="314" height="12" rx="6" fill="#DFE9F5"/>
+  <g filter="url(#math-shadow)">
+    <rect x="72" y="74" width="1056" height="712" rx="40" fill="url(#math-shell)"/>
+  </g>
+
+  <rect x="112" y="116" width="976" height="628" rx="34" fill="white" stroke="#E2EAF5" stroke-width="4"/>
+  <rect x="148" y="146" width="272" height="28" rx="14" fill="#EEF4FC"/>
+  <circle cx="176" cy="160" r="6" fill="#D4A84B"/>
+  <circle cx="198" cy="160" r="6" fill="#4A73E8"/>
+  <circle cx="220" cy="160" r="6" fill="#3DAA74"/>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="186" y="198" width="328" height="198" rx="30" fill="#F4FAF6"/>
+    <rect x="186" y="198" width="328" height="198" rx="30" stroke="#CFE8D8" stroke-width="3"/>
+  </g>
+  <rect x="214" y="224" width="92" height="30" rx="15" fill="#EAF6EF"/>
+  <text x="234" y="245" fill="#59826C" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="15" font-weight="700">Fractions</text>
+  <text x="226" y="300" fill="#1F7A43" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="50" font-weight="700">1/2</text>
+  <path d="M220 318H308" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
+  <text x="226" y="382" fill="#1F7A43" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="50" font-weight="700">3/4</text>
+  <path d="M220 400H308" stroke="#1F7A43" stroke-width="4" stroke-linecap="round"/>
+  <text x="348" y="316" fill="#607B97" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="42" font-weight="700">+</text>
+  <text x="420" y="316" fill="#D4A84B" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="42" font-weight="700">8%</text>
+  <text x="346" y="394" fill="#607B97" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="42" font-weight="700">=</text>
+  <text x="422" y="394" fill="#2E66E5" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="42" font-weight="700">?</text>
+  <rect x="392" y="234" width="92" height="28" rx="14" fill="#FFF3DF"/>
+  <text x="415" y="254" fill="#8A6A27" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="14" font-weight="700">Ratio</text>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="572" y="196" width="260" height="332" rx="30" fill="#EEF5FF"/>
+    <rect x="572" y="196" width="260" height="332" rx="30" stroke="#D4E4F8" stroke-width="3"/>
+  </g>
+  <rect x="606" y="228" width="192" height="72" rx="20" fill="#FBFDFF"/>
+  <text x="630" y="274" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">24 ÷ 6</text>
+  <rect x="606" y="322" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <rect x="676" y="322" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <rect x="746" y="322" width="56" height="46" rx="14" fill="#FFDCA6"/>
+  <rect x="606" y="384" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <rect x="676" y="384" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <rect x="746" y="384" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <rect x="606" y="446" width="126" height="46" rx="14" fill="#CFEEDB"/>
+  <rect x="746" y="446" width="56" height="46" rx="14" fill="#DDEAFF"/>
+  <text x="626" y="353" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">7</text>
+  <text x="696" y="353" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">8</text>
+  <text x="768" y="353" fill="#8A6A27" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="24" font-weight="700">÷</text>
+  <text x="624" y="415" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">4</text>
+  <text x="694" y="415" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">5</text>
+  <text x="764" y="415" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">9</text>
+  <text x="638" y="477" fill="#1F7A43" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="21" font-weight="700">ENTER</text>
+  <text x="764" y="477" fill="#294A72" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="22" font-weight="700">0</text>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="196" y="456" width="332" height="210" rx="30" fill="#FFF8E9"/>
+    <rect x="196" y="456" width="332" height="210" rx="30" stroke="#EFD89E" stroke-width="3"/>
+  </g>
+  <path d="M242 490V620" stroke="#AEC3DC" stroke-width="4"/>
+  <path d="M220 620H482" stroke="#AEC3DC" stroke-width="4"/>
+  <path d="M242 620L312 538L384 596L458 550" stroke="#D4A33A" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="242" cy="620" r="13" fill="#2E66E5"/>
+  <circle cx="312" cy="538" r="13" fill="#2E66E5"/>
+  <circle cx="384" cy="596" r="13" fill="#2E66E5"/>
+  <circle cx="458" cy="550" r="13" fill="#2E66E5"/>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="548" y="560" width="372" height="110" rx="28" fill="#F3F8FE"/>
+    <rect x="548" y="560" width="372" height="110" rx="28" stroke="#D7E4F6" stroke-width="3"/>
+  </g>
+  <text x="582" y="606" fill="#2E66E5" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">x</text>
+  <text x="638" y="606" fill="#1F7A43" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">y</text>
+  <text x="690" y="606" fill="#D4A84B" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">π</text>
+  <text x="742" y="606" fill="#5E7894" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">√</text>
+  <text x="798" y="606" fill="#2E66E5" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">%</text>
+  <text x="852" y="606" fill="#1F7A43" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="700">÷</text>
+  <rect x="582" y="626" width="300" height="12" rx="6" fill="#DEE8F5"/>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="896" y="198" width="124" height="124" rx="34" fill="#F1FAF5"/>
+    <rect x="896" y="198" width="124" height="124" rx="34" stroke="#D8EBDD" stroke-width="3"/>
+  </g>
+  <circle cx="958" cy="260" r="38" fill="#3DAA74" fill-opacity="0.16"/>
+  <path d="M958 220L970 250H1002L976 268L986 298L958 280L930 298L940 268L914 250H946L958 220Z" fill="#3DAA74"/>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="938" y="354" width="104" height="88" rx="26" fill="#EEF4FF"/>
+    <rect x="938" y="354" width="104" height="88" rx="26" stroke="#D8E6F8" stroke-width="3"/>
+  </g>
+  <path d="M972 396L1006 364" stroke="#B2C7E4" stroke-width="5" stroke-linecap="round"/>
+  <path d="M972 396H1014" stroke="#B2C7E4" stroke-width="5" stroke-linecap="round"/>
+  <path d="M972 396L990 428" stroke="#D4A84B" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="972" cy="396" r="7" fill="#2E66E5"/>
+  <circle cx="1006" cy="364" r="7" fill="#3DAA74"/>
+  <circle cx="990" cy="428" r="7" fill="#D4A84B"/>
+
+  <g filter="url(#math-card-shadow)">
+    <rect x="924" y="478" width="118" height="118" rx="30" fill="#FFF6E3"/>
+    <rect x="924" y="478" width="118" height="118" rx="30" stroke="#EFDCA8" stroke-width="3"/>
+  </g>
+  <circle cx="983" cy="537" r="34" fill="#F0C96A"/>
+  <path d="M983 503C1001.78 503 1017 518.222 1017 537H983V503Z" fill="#D39A36"/>
+  <path d="M983 537L1008 562" stroke="#8D6A1D" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="983" cy="537" r="6" fill="#8D6A1D"/>
+
+  <rect x="566" y="500" width="104" height="30" rx="15" fill="#EDF5FF"/>
+  <text x="590" y="521" fill="#6281AA" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="15" font-weight="700">Problem Set</text>
+
+  <g opacity="0.84">
+    <path d="M1060 538L1068 556L1086 564L1068 572L1060 590L1052 572L1034 564L1052 556L1060 538Z" fill="#B7E7C7"/>
+    <path d="M478 178L486 196L504 204L486 212L478 230L470 212L452 204L470 196L478 178Z" fill="#A9C7FF"/>
+    <path d="M1002 164L1010 182L1028 190L1010 198L1002 216L994 198L976 190L994 182L1002 164Z" fill="#F1CF79"/>
+    <circle cx="542" cy="544" r="10" fill="#DDE8F7"/>
+    <circle cx="520" cy="582" r="8" fill="#FFE0B3"/>
   </g>
 </svg>

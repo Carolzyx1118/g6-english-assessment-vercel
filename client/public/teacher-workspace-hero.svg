@@ -1,108 +1,180 @@
 <svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="80" y1="80" x2="1120" y2="820" gradientUnits="userSpaceOnUse">
+    <linearGradient id="workspace-bg" x1="86" y1="74" x2="1118" y2="816" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F8FBFF"/>
       <stop offset="1" stop-color="#EEF4FF"/>
     </linearGradient>
-    <linearGradient id="cardBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#E2F0FF"/>
-      <stop offset="1" stop-color="#CFE7FF"/>
+    <linearGradient id="workspace-shell" x1="80" y1="80" x2="1110" y2="816" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F6FAFF"/>
     </linearGradient>
-    <linearGradient id="cardGold" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#FFF3D6"/>
-      <stop offset="1" stop-color="#F9E3A8"/>
+    <linearGradient id="workspace-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#E8F2FF"/>
+      <stop offset="1" stop-color="#CFE4FF"/>
     </linearGradient>
-    <linearGradient id="cardMint" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#E8FAF3"/>
-      <stop offset="1" stop-color="#CFEFDE"/>
+    <linearGradient id="workspace-green" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ECFAF2"/>
+      <stop offset="1" stop-color="#D4EEDC"/>
     </linearGradient>
-    <filter id="shadow" x="30" y="30" width="1140" height="840" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-      <feOffset dy="20"/>
-      <feGaussianBlur stdDeviation="25"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 0.117647 0 0 0 0 0.227451 0 0 0 0 0.372549 0 0 0 0.12 0"/>
-      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
-      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    <linearGradient id="workspace-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF6E2"/>
+      <stop offset="1" stop-color="#F3DFAC"/>
+    </linearGradient>
+    <linearGradient id="workspace-lilac" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F1F4FF"/>
+      <stop offset="1" stop-color="#E1E9FF"/>
+    </linearGradient>
+    <linearGradient id="workspace-navy" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#294A79"/>
+      <stop offset="1" stop-color="#1E3A5F"/>
+    </linearGradient>
+    <filter id="workspace-outer-shadow" x="28" y="26" width="1144" height="848" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#274971" flood-opacity="0.13"/>
+    </filter>
+    <filter id="workspace-card-shadow" x="0" y="0" width="1200" height="900" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#2D4E76" flood-opacity="0.10"/>
     </filter>
   </defs>
 
-  <rect width="1200" height="900" rx="48" fill="url(#bg)"/>
-  <g opacity="0.35">
-    <circle cx="1060" cy="140" r="96" fill="#D4A84B"/>
-    <circle cx="1060" cy="140" r="96" fill-opacity="0.08" fill="#D4A84B"/>
-    <circle cx="170" cy="760" r="120" fill="#88B9FF"/>
-    <circle cx="170" cy="760" r="120" fill-opacity="0.08" fill="#88B9FF"/>
+  <rect width="1200" height="900" rx="48" fill="#F4F8FE"/>
+  <rect width="1200" height="900" rx="48" fill="url(#workspace-bg)"/>
+
+  <g opacity="0.45">
+    <circle cx="1018" cy="154" r="114" fill="#E9D9A8"/>
+    <circle cx="1018" cy="154" r="78" fill="#F5E7BB"/>
+    <circle cx="152" cy="748" r="112" fill="#B8D3FF"/>
+    <circle cx="152" cy="748" r="72" fill="#D8E8FF"/>
   </g>
 
-  <g filter="url(#shadow)">
-    <rect x="80" y="80" width="1040" height="740" rx="36" fill="white"/>
+  <g opacity="0.5" fill="#D4E0F0">
+    <circle cx="74" cy="72" r="2.4"/>
+    <circle cx="142" cy="116" r="2.4"/>
+    <circle cx="224" cy="84" r="2.4"/>
+    <circle cx="332" cy="132" r="2.4"/>
+    <circle cx="1098" cy="112" r="2.4"/>
+    <circle cx="1128" cy="178" r="2.4"/>
+    <circle cx="1064" cy="214" r="2.4"/>
+    <circle cx="116" cy="836" r="2.4"/>
+    <circle cx="212" cy="792" r="2.4"/>
+    <circle cx="1082" cy="778" r="2.4"/>
   </g>
 
-  <rect x="120" y="120" width="300" height="38" rx="19" fill="#EEF3FB"/>
-  <circle cx="148" cy="139" r="7" fill="#D4A84B"/>
-  <circle cx="171" cy="139" r="7" fill="#3C6EF0"/>
-  <circle cx="194" cy="139" r="7" fill="#3BAA73"/>
-  <rect x="120" y="190" width="340" height="36" rx="18" fill="#F4F7FD"/>
-  <rect x="120" y="244" width="430" height="88" rx="26" fill="#1E3A5F"/>
-  <text x="160" y="298" fill="white" font-family="Arial, sans-serif" font-size="44" font-weight="700">Teacher Workspace</text>
-  <text x="120" y="372" fill="#61708B" font-family="Arial, sans-serif" font-size="28">Manage assessments by subject, review papers,</text>
-  <text x="120" y="410" fill="#61708B" font-family="Arial, sans-serif" font-size="28">and open your English tools from one place.</text>
+  <g filter="url(#workspace-outer-shadow)">
+    <rect x="72" y="74" width="1056" height="752" rx="40" fill="url(#workspace-shell)"/>
+  </g>
 
-  <rect x="120" y="470" width="300" height="126" rx="28" fill="url(#cardBlue)"/>
-  <rect x="440" y="470" width="300" height="126" rx="28" fill="url(#cardMint)"/>
-  <rect x="120" y="620" width="300" height="126" rx="28" fill="url(#cardGold)"/>
+  <rect x="112" y="116" width="976" height="668" rx="34" fill="white" stroke="#E2EAF5" stroke-width="4"/>
 
-  <circle cx="178" cy="528" r="26" fill="#1E3A5F"/>
-  <rect x="167" y="512" width="22" height="32" rx="6" stroke="white" stroke-width="4"/>
-  <line x1="173" y1="522" x2="183" y2="522" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <line x1="173" y1="531" x2="183" y2="531" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <text x="220" y="520" fill="#1E3A5F" font-family="Arial, sans-serif" font-size="24" font-weight="700">English</text>
-  <text x="220" y="554" fill="#5E708F" font-family="Arial, sans-serif" font-size="20">Papers, history, intake,</text>
-  <text x="220" y="582" fill="#5E708F" font-family="Arial, sans-serif" font-size="20">and teacher tools.</text>
+  <rect x="148" y="146" width="284" height="30" rx="15" fill="#EEF4FC"/>
+  <circle cx="176" cy="161" r="6" fill="#D4A84B"/>
+  <circle cx="198" cy="161" r="6" fill="#4A73E8"/>
+  <circle cx="220" cy="161" r="6" fill="#3DAA74"/>
 
-  <circle cx="498" cy="528" r="26" fill="#3BAA73"/>
-  <path d="M484 540L496 514L504 530L513 522L522 540" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="540" y="520" fill="#175B3E" font-family="Arial, sans-serif" font-size="24" font-weight="700">Math</text>
-  <text x="540" y="554" fill="#4E7B67" font-family="Arial, sans-serif" font-size="20">Number work, reasoning,</text>
-  <text x="540" y="582" fill="#4E7B67" font-family="Arial, sans-serif" font-size="20">and future problem sets.</text>
+  <rect x="148" y="204" width="102" height="34" rx="17" fill="#EEF5FF"/>
+  <text x="166" y="227" fill="#5D7394" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="16" font-weight="700">English</text>
+  <rect x="262" y="204" width="90" height="34" rx="17" fill="#F1FAF5"/>
+  <text x="283" y="227" fill="#5C7D6E" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="16" font-weight="700">Math</text>
+  <rect x="364" y="204" width="120" height="34" rx="17" fill="#FFF5E3"/>
+  <text x="388" y="227" fill="#8A6C27" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="16" font-weight="700">Vocabulary</text>
 
-  <circle cx="178" cy="678" r="26" fill="#D4A84B"/>
-  <path d="M166 664H190C194.418 664 198 667.582 198 672V686C198 690.418 194.418 694 190 694H166C161.582 694 158 690.418 158 686V672C158 667.582 161.582 664 166 664Z" stroke="white" stroke-width="4"/>
-  <line x1="168" y1="673" x2="188" y2="673" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <line x1="168" y1="681" x2="182" y2="681" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <text x="220" y="670" fill="#875F12" font-family="Arial, sans-serif" font-size="24" font-weight="700">Vocabulary</text>
-  <text x="220" y="704" fill="#8F7437" font-family="Arial, sans-serif" font-size="20">Word study, drills, and</text>
-  <text x="220" y="732" fill="#8F7437" font-family="Arial, sans-serif" font-size="20">memory practice.</text>
+  <rect x="148" y="264" width="222" height="42" rx="21" fill="#EAF2FF"/>
+  <text x="176" y="292" fill="#4166C9" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="15" font-weight="700">PUREON TEACHER HUB</text>
 
-  <rect x="780" y="190" width="280" height="556" rx="28" fill="#F8FAFD" stroke="#E6ECF6" stroke-width="3"/>
-  <text x="818" y="244" fill="#1E3A5F" font-family="Arial, sans-serif" font-size="24" font-weight="700">English Tools</text>
+  <text x="148" y="366" fill="#1E3A5F" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="54" font-weight="700">Teacher Workspace</text>
+  <text x="148" y="418" fill="#637691" font-family="'Trebuchet MS', Arial, sans-serif" font-size="27">Review papers, manage visibility, and open</text>
+  <text x="148" y="454" fill="#637691" font-family="'Trebuchet MS', Arial, sans-serif" font-size="27">every subject tool from one calm dashboard.</text>
 
-  <rect x="818" y="278" width="204" height="82" rx="20" fill="#EEF4FF"/>
-  <circle cx="860" cy="319" r="16" fill="#3C6EF0"/>
-  <path d="M852 315H868M852 323H864" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-  <text x="892" y="314" fill="#1E3A5F" font-family="Arial, sans-serif" font-size="19" font-weight="700">View Test</text>
-  <text x="892" y="339" fill="#61708B" font-family="Arial, sans-serif" font-size="18">History</text>
+  <g filter="url(#workspace-card-shadow)">
+    <rect x="148" y="514" width="282" height="116" rx="28" fill="url(#workspace-blue)"/>
+    <rect x="148" y="514" width="282" height="116" rx="28" stroke="#D4E5FB" stroke-width="3"/>
+  </g>
+  <circle cx="202" cy="572" r="25" fill="#1E3A5F"/>
+  <rect x="191" y="556" width="22" height="32" rx="7" stroke="white" stroke-width="4"/>
+  <line x1="197" y1="566" x2="207" y2="566" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="197" y1="576" x2="207" y2="576" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <text x="246" y="561" fill="#1E3A5F" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="24" font-weight="700">English</text>
+  <text x="246" y="591" fill="#5F7392" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">Papers, reports, and</text>
+  <text x="246" y="615" fill="#5F7392" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">speaking review.</text>
 
-  <rect x="818" y="382" width="204" height="82" rx="20" fill="#FFF5DF"/>
-  <circle cx="860" cy="423" r="16" fill="#D4A84B"/>
-  <path d="M860 415V431M852 423H868" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-  <text x="892" y="418" fill="#7C621D" font-family="Arial, sans-serif" font-size="19" font-weight="700">Paper Intake</text>
-  <text x="892" y="443" fill="#9B8242" font-family="Arial, sans-serif" font-size="18">Create drafts</text>
+  <g filter="url(#workspace-card-shadow)">
+    <rect x="452" y="514" width="282" height="116" rx="28" fill="url(#workspace-green)"/>
+    <rect x="452" y="514" width="282" height="116" rx="28" stroke="#D6EBDD" stroke-width="3"/>
+  </g>
+  <circle cx="506" cy="572" r="25" fill="#3DAA74"/>
+  <path d="M490 584L500 556L510 575L520 566L528 584" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="550" y="561" fill="#1F6A4A" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="24" font-weight="700">Math</text>
+  <text x="550" y="591" fill="#587B69" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">Problem sets, planning,</text>
+  <text x="550" y="615" fill="#587B69" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">and paper building.</text>
 
-  <rect x="818" y="486" width="204" height="82" rx="20" fill="#EEF7F3"/>
-  <circle cx="860" cy="527" r="16" fill="#3BAA73"/>
-  <path d="M852 519H868V535H852V519ZM856 523H864V531H856V523Z" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
-  <text x="892" y="522" fill="#1E6346" font-family="Arial, sans-serif" font-size="19" font-weight="700">Paper Manager</text>
-  <text x="892" y="547" fill="#51806A" font-family="Arial, sans-serif" font-size="18">Edit and publish</text>
+  <g filter="url(#workspace-card-shadow)">
+    <rect x="148" y="648" width="282" height="116" rx="28" fill="url(#workspace-gold)"/>
+    <rect x="148" y="648" width="282" height="116" rx="28" stroke="#EEDCA8" stroke-width="3"/>
+  </g>
+  <circle cx="202" cy="706" r="25" fill="#D4A84B"/>
+  <path d="M190 694H214C218.418 694 222 697.582 222 702V716C222 720.418 218.418 724 214 724H190C185.582 724 182 720.418 182 716V702C182 697.582 185.582 694 190 694Z" stroke="white" stroke-width="4"/>
+  <line x1="192" y1="703" x2="212" y2="703" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="192" y1="711" x2="206" y2="711" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <text x="246" y="695" fill="#805D19" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="24" font-weight="700">Vocabulary</text>
+  <text x="246" y="725" fill="#8E7440" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">Study sets, drills, and</text>
+  <text x="246" y="749" fill="#8E7440" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">memory practice.</text>
 
-  <rect x="818" y="610" width="204" height="96" rx="24" fill="#1E3A5F"/>
-  <text x="850" y="652" fill="#D4A84B" font-family="Arial, sans-serif" font-size="18" font-weight="700">Teacher Flow</text>
-  <text x="850" y="682" fill="#E6EDF7" font-family="Arial, sans-serif" font-size="18">Choose a module</text>
-  <text x="850" y="708" fill="#E6EDF7" font-family="Arial, sans-serif" font-size="18">Open papers</text>
+  <g filter="url(#workspace-card-shadow)">
+    <rect x="452" y="648" width="282" height="116" rx="28" fill="url(#workspace-lilac)"/>
+    <rect x="452" y="648" width="282" height="116" rx="28" stroke="#DCE5F9" stroke-width="3"/>
+  </g>
+  <circle cx="506" cy="706" r="25" fill="#4A73E8"/>
+  <rect x="492" y="692" width="12" height="12" rx="3" fill="white"/>
+  <rect x="508" y="692" width="12" height="12" rx="3" fill="white"/>
+  <rect x="492" y="708" width="12" height="12" rx="3" fill="white"/>
+  <rect x="508" y="708" width="12" height="12" rx="3" fill="white"/>
+  <text x="550" y="695" fill="#2D518F" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="24" font-weight="700">Question Bank</text>
+  <text x="550" y="725" fill="#63759A" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">Search items, tag sets,</text>
+  <text x="550" y="749" fill="#63759A" font-family="'Trebuchet MS', Arial, sans-serif" font-size="18">and preview content.</text>
 
-  <circle cx="1043" cy="656" r="12" fill="#D4A84B"/>
-  <circle cx="1043" cy="688" r="12" fill="#D4A84B" fill-opacity="0.6"/>
-  <path d="M1038 656L1041 659L1048 651" stroke="#1E3A5F" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M1038 688L1041 691L1048 683" stroke="#1E3A5F" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="780" y="182" width="264" height="572" rx="30" fill="#F7FAFF" stroke="#E3EBF6" stroke-width="3"/>
+  <text x="818" y="236" fill="#1E3A5F" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="26" font-weight="700">Teacher Tools</text>
+
+  <rect x="818" y="292" width="204" height="84" rx="22" fill="#EEF4FF"/>
+  <circle cx="854" cy="334" r="16" fill="#4A73E8"/>
+  <path d="M846 330H862M846 338H858" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="884" y="329" fill="#1E3A5F" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="21" font-weight="700">Test History</text>
+  <text x="884" y="353" fill="#697B95" font-family="'Trebuchet MS', Arial, sans-serif" font-size="16">Open reports</text>
+
+  <rect x="818" y="392" width="204" height="84" rx="22" fill="#FFF4DE"/>
+  <circle cx="854" cy="434" r="16" fill="#D4A84B"/>
+  <path d="M854 426V442M846 434H862" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="884" y="429" fill="#7B6120" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="19" font-weight="700">Question Intake</text>
+  <text x="884" y="453" fill="#927843" font-family="'Trebuchet MS', Arial, sans-serif" font-size="16">Build drafts</text>
+
+  <rect x="818" y="492" width="204" height="84" rx="22" fill="#EEF8F3"/>
+  <circle cx="854" cy="534" r="16" fill="#3DAA74"/>
+  <path d="M846 526H862V542H846V526ZM850 530H858V538H850V530Z" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
+  <text x="884" y="529" fill="#1F6A4A" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="21" font-weight="700">Paper Manager</text>
+  <text x="884" y="553" fill="#5B7F6C" font-family="'Trebuchet MS', Arial, sans-serif" font-size="16">Show or hide papers</text>
+
+  <rect x="818" y="592" width="204" height="84" rx="22" fill="#F1F4FF"/>
+  <circle cx="854" cy="634" r="16" fill="#6C78F0"/>
+  <path d="M846 639C846 633.477 850.477 629 856 629H862V645H856C850.477 645 846 640.523 846 635V639Z" fill="white"/>
+  <circle cx="858" cy="625" r="6" fill="white"/>
+  <circle cx="866" cy="628" r="5" fill="white" opacity="0.85"/>
+  <text x="884" y="629" fill="#4454A5" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="21" font-weight="700">User Manager</text>
+  <text x="884" y="653" fill="#6E79AF" font-family="'Trebuchet MS', Arial, sans-serif" font-size="16">Access control</text>
+
+  <rect x="818" y="694" width="204" height="42" rx="21" fill="url(#workspace-navy)"/>
+  <text x="850" y="720" fill="#F2D48A" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="18" font-weight="700">Daily Flow</text>
+  <circle cx="980" cy="715" r="9" fill="#F2D48A"/>
+  <path d="M976 715L979 718L985 712" stroke="#1E3A5F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="826" cy="770" r="12" fill="#DDE8F8"/>
+  <circle cx="912" cy="770" r="12" fill="#DDE8F8"/>
+  <circle cx="998" cy="770" r="12" fill="#DDE8F8"/>
+  <line x1="838" y1="770" x2="900" y2="770" stroke="#DDE8F8" stroke-width="4" stroke-linecap="round"/>
+  <line x1="924" y1="770" x2="986" y2="770" stroke="#DDE8F8" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="826" cy="770" r="9" fill="#4A73E8"/>
+  <circle cx="912" cy="770" r="9" fill="#D4A84B"/>
+  <circle cx="998" cy="770" r="9" fill="#3DAA74"/>
+
+
+  <rect x="902" y="116" width="110" height="34" rx="17" fill="#EFF5FF"/>
+  <text x="928" y="139" fill="#6581B1" font-family="'Trebuchet MS', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="16" font-weight="700">Live Dashboard</text>
 </svg>
