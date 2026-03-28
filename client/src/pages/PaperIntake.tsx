@@ -2490,6 +2490,7 @@ export default function PaperIntake() {
   const [activePreviewSubsectionId, setActivePreviewSubsectionId] = useState<string | null>(null);
   const [uploadingSubsectionAudioId, setUploadingSubsectionAudioId] = useState<string | null>(null);
   const autosavePausedRef = useRef(false);
+  const pendingSubsectionAudioFilesRef = useRef(new Map<string, File>());
   const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const availableSectionTypes = useMemo(() => getAvailableSectionTypesForSubject(paperSubject), [paperSubject]);
   const questionTypeGroups = useMemo(() => getQuestionTypeGroupsForSubject(paperSubject), [paperSubject]);
@@ -2858,6 +2859,28 @@ export default function PaperIntake() {
     return undefined;
   };
 
+  const releasePendingSubsectionAudioUrl = useCallback((value?: string) => {
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized?.startsWith("blob:")) return;
+    pendingSubsectionAudioFilesRef.current.delete(normalized);
+    URL.revokeObjectURL(normalized);
+  }, []);
+
+  const registerPendingSubsectionAudioFile = useCallback((file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    pendingSubsectionAudioFilesRef.current.set(objectUrl, file);
+    return objectUrl;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      pendingSubsectionAudioFilesRef.current.forEach((_, objectUrl) => {
+        URL.revokeObjectURL(objectUrl);
+      });
+      pendingSubsectionAudioFilesRef.current.clear();
+    };
+  }, []);
+
   const uploadAudioAssetBlob = useCallback(async ({
     blob,
     fileName,
@@ -2956,6 +2979,35 @@ export default function PaperIntake() {
     }
 
     if (kind === "audio") {
+      const localBlobUrl = [asset.previewUrl, asset.dataUrl]
+        .map((value) => normalizeAssetUrl(value))
+        .find((value): value is string => Boolean(value?.startsWith("blob:")));
+      if (localBlobUrl) {
+        const pendingFile = pendingSubsectionAudioFilesRef.current.get(localBlobUrl);
+        if (!pendingFile) {
+          throw new Error("This local audio preview is no longer available. Please upload the audio file again before saving.");
+        }
+
+        try {
+          const uploadedUrl = await uploadAudioAssetBlob({
+            blob: pendingFile,
+            fileName: asset.fileName || pendingFile.name,
+            contentType,
+          });
+          releasePendingSubsectionAudioUrl(localBlobUrl);
+          return {
+            ...asset,
+            dataUrl: uploadedUrl,
+            previewUrl: uploadedUrl,
+            mimeType: contentType,
+            size: pendingFile.size || asset.size,
+          };
+        } catch (error) {
+          console.error("[PaperIntake] Failed to upload pending local audio before save:", error);
+          throw new Error("Listening audio upload is still incomplete. Please retry the audio upload once before saving.");
+        }
+      }
+
       const normalizedAudioDataUrl = normalizeAssetUrl(asset.dataUrl);
       if (normalizedAudioDataUrl?.startsWith("data:")) {
         try {
@@ -2975,13 +3027,8 @@ export default function PaperIntake() {
           };
         } catch (error) {
           console.error("[PaperIntake] Failed to finalize embedded audio before save:", error);
+          throw new Error("Listening audio upload is still incomplete. Please retry the audio upload once before saving.");
         }
-        return {
-          ...asset,
-          dataUrl: normalizedAudioDataUrl,
-          previewUrl: undefined,
-          mimeType: contentType,
-        };
       }
     }
 
@@ -3016,7 +3063,7 @@ export default function PaperIntake() {
     };
   };
 
-  /** Persist durable asset URLs when available, otherwise keep embedded data for reliability. */
+  /** Persist durable asset URLs before save; audio must upload cleanly and not remain local-only. */
   const prepareBlueprintForSave = async (bp: ManualPaperBlueprint): Promise<ManualPaperBlueprint> => {
     const stripImage = async (img?: ManualOptionImage) => persistAssetForSave(img, "image");
     const stripAudio = async (audio?: ManualAudioFile) => persistAssetForSave(audio, "audio");
@@ -4556,7 +4603,12 @@ export default function PaperIntake() {
     try {
       setUploadingSubsectionAudioId(subsectionId);
       const contentType = guessAssetContentType("audio", file.name, file.type);
-      let embeddedDataUrl: string | undefined;
+      const previousSubsection = sections
+        .find((section) => section.id === sectionId)
+        ?.subsections.find((subsection) => subsection.id === subsectionId);
+      const previousAudioPreviewUrl = previousSubsection?.audio?.previewUrl;
+      const previousAudioDataUrl = previousSubsection?.audio?.dataUrl;
+      let localPreviewUrl: string | undefined;
       let persistedUrl: string | undefined;
 
       try {
@@ -4570,15 +4622,17 @@ export default function PaperIntake() {
           "[PaperIntake] Listening audio upload failed, falling back to embedded audio:",
           uploadError,
         );
-        const fileBase64 = await fileToBase64(file);
-        embeddedDataUrl = `data:${contentType};base64,${fileBase64}`;
+        localPreviewUrl = registerPendingSubsectionAudioFile(file);
       }
+
+      releasePendingSubsectionAudioUrl(previousAudioPreviewUrl);
+      releasePendingSubsectionAudioUrl(previousAudioDataUrl);
 
       updateSubsection(sectionId, subsectionId, (subsection) => ({
         ...subsection,
         audio: {
-          dataUrl: persistedUrl ?? embeddedDataUrl ?? "",
-          previewUrl: persistedUrl,
+          dataUrl: persistedUrl ?? localPreviewUrl ?? "",
+          previewUrl: persistedUrl ?? localPreviewUrl,
           fileName: file.name,
           mimeType: contentType,
           size: file.size,
@@ -5260,12 +5314,14 @@ export default function PaperIntake() {
                                       variant="ghost"
                                       className="h-auto px-0 text-sm text-slate-500 hover:text-red-500"
                                       disabled={isUploadingAudio}
-                                      onClick={() =>
+                                      onClick={() => {
+                                        releasePendingSubsectionAudioUrl(subsection.audio?.previewUrl);
+                                        releasePendingSubsectionAudioUrl(subsection.audio?.dataUrl);
                                         updateSubsection(section.id, subsection.id, (currentSubsection) => ({
                                           ...currentSubsection,
                                           audio: undefined,
-                                        }))
-                                      }
+                                        }));
+                                      }}
                                     >
                                       Remove Audio
                                     </Button>

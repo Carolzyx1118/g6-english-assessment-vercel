@@ -98,6 +98,25 @@ function localizeStoredText(value: string, locale: ReviewLocale) {
   return matched ? (locale === "cn" ? matched.cn : matched.en) : value;
 }
 
+function cleanReportNarrativeText(value: string, locale: ReviewLocale) {
+  let normalized = value.replace(/\s{2,}/g, " ").trim();
+
+  if (locale === "cn") {
+    normalized = normalized
+      .replace(/\s*([，。！？；：])/g, "$1")
+      .replace(/([（【“‘])\s+/g, "$1")
+      .replace(/\s+([）】”’])/g, "$1")
+      .replace(/[。！？]+(?=[；：，])/g, "")
+      .replace(/([；：，])[；：，]+/g, "$1")
+      .replace(/([。])[。]+/g, "$1")
+      .replace(/([！])[！]+/g, "$1")
+      .replace(/([？])[？]+/g, "$1")
+      .replace(/([；：，])([。！？])/g, "$2");
+  }
+
+  return normalized;
+}
+
 function normalizeSectionInsightSummary(
   summary: string | undefined,
   section: AssessmentReviewModel["sections"][number],
@@ -112,11 +131,13 @@ function normalizeSectionInsightSummary(
 
   if (locale === "cn") {
     const pattern = /^[^。]*部分本次得分为\s*\d+\/\d+(?:\s*\(\d+%\))?。\s*/;
-    return pattern.test(summary) ? `${scorePrefix}${summary.replace(pattern, "")}` : summary;
+    const nextSummary = pattern.test(summary) ? `${scorePrefix}${summary.replace(pattern, "")}` : summary;
+    return cleanReportNarrativeText(nextSummary, locale);
   }
 
   const pattern = /^[^.]* scored \d+\/\d+(?: \(\d+%\))?\.\s*/i;
-  return pattern.test(summary) ? `${scorePrefix}${summary.replace(pattern, "")}` : summary;
+  const nextSummary = pattern.test(summary) ? `${scorePrefix}${summary.replace(pattern, "")}` : summary;
+  return cleanReportNarrativeText(nextSummary, locale);
 }
 
 function getReviewProblemDetails(details: QuestionReviewDetail[]) {
@@ -175,7 +196,7 @@ function normalizeSummaryReportText(
     normalized = normalized.replace(regex, replacement);
   });
 
-  return normalized.replace(/\s{2,}/g, " ").trim();
+  return cleanReportNarrativeText(normalized, locale);
 }
 
 function alignSectionInsightByOccurrence(
@@ -654,11 +675,11 @@ function StepHeading(props: {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{props.step}</p>
-          <h2 className="text-xl font-bold">{props.title}</h2>
+          <h2 className="report-step-title text-xl font-bold">{props.title}</h2>
         </div>
       </div>
       {props.description.trim() ? (
-        <p className="max-w-2xl text-sm leading-6 text-slate-500">
+        <p className="report-step-description max-w-2xl text-sm leading-6 text-slate-500">
           {props.description}
         </p>
       ) : null}
@@ -670,19 +691,6 @@ function getDisplayStudentName(name: string | null | undefined, locale: ReviewLo
   const trimmed = name?.trim();
   if (trimmed) return trimmed;
   return locale === "cn" ? "未命名学生" : "Unnamed Student";
-}
-
-function getStudentMonogram(name: string | null | undefined, locale: ReviewLocale) {
-  const displayName = getDisplayStudentName(name, locale);
-  if (locale === "cn") {
-    return displayName.slice(0, 2);
-  }
-  return displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "ST";
 }
 
 function getGradeDescriptor(grade: string, locale: ReviewLocale) {
@@ -728,7 +736,6 @@ export default function AssessmentReportPanel({
   const abilityItems = (locale === "cn" ? report?.abilitySnapshot_cn : report?.abilitySnapshot_en)
     ?.map((item) => normalizeSummaryText(item) || item);
   const displayStudentName = getDisplayStudentName(record.studentName, locale);
-  const studentMonogram = getStudentMonogram(record.studentName, locale);
   const gradeDescriptor = getGradeDescriptor(model.grade, locale);
   const headerCardClassName = "report-summary-card rounded-[24px] border border-[#1E3A5F]/12 bg-white/78 p-4 shadow-[0_18px_40px_rgba(30,58,95,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm";
   const headerLabelClassName = "text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]/72";
@@ -856,18 +863,13 @@ export default function AssessmentReportPanel({
               <p className={headerLabelClassName}>
                 {isCn ? "学生档案" : "Student Profile"}
               </p>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border border-[#1E3A5F]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(219,232,246,0.92))] text-base font-semibold text-[#1E3A5F] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
-                  {studentMonogram}
-                </div>
-                <div className="min-w-0">
-                  <p className="report-profile-name truncate text-base font-semibold text-slate-900">{displayStudentName}</p>
-                  <p className="mt-1 text-[13px] text-slate-600">
-                    {record.studentGrade
-                      ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
-                      : (isCn ? "未填写年级" : "Grade not provided")}
-                  </p>
-                </div>
+              <div className="mt-3 min-w-0">
+                <p className="report-profile-name truncate text-base font-semibold text-slate-900">{displayStudentName}</p>
+                <p className="mt-1 text-[13px] text-slate-600">
+                  {record.studentGrade
+                    ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
+                    : (isCn ? "未填写年级" : "Grade not provided")}
+                </p>
               </div>
               <p className="mt-3 text-[13px] text-slate-600">{formatDate(record.createdAt, locale)}</p>
             </div>
@@ -877,9 +879,6 @@ export default function AssessmentReportPanel({
                 <p className={headerLabelClassName}>
                   {isCn ? "当前结论" : "Current Signal"}
                 </p>
-                <span className="rounded-full border border-[#1E3A5F]/14 bg-[#1E3A5F]/6 px-2.5 py-0.5 text-[11px] font-semibold text-[#1E3A5F]">
-                  {model.percentage}%
-                </span>
               </div>
               <div className="mt-3 flex items-end gap-2.5">
                 <span className="report-summary-grade text-[44px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
@@ -959,7 +958,7 @@ export default function AssessmentReportPanel({
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                       {(index + 1).toString().padStart(2, "0")}
                     </p>
-                    <p className="mt-2 text-lg font-semibold text-slate-900">
+                    <p className="report-breakdown-title mt-2 text-lg font-semibold text-slate-900">
                       {getSectionDisplayName(section.sectionTitle, section.sectionId, locale)}
                     </p>
                   </div>
@@ -1044,7 +1043,7 @@ export default function AssessmentReportPanel({
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                         {(index + 1).toString().padStart(2, "0")}
                       </span>
-                      <p className="text-lg font-semibold text-slate-900">
+                      <p className="report-detail-title text-lg font-semibold text-slate-900">
                         {getSectionDisplayName(section.sectionTitle, section.sectionId, locale)}
                       </p>
                     </div>

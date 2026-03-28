@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ArrowLeft, ChevronDown, FileSearch, Loader2, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import AssessmentReportPanel from "@/components/AssessmentReportPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PAPER_SUBJECT_LABELS, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { trpc } from "@/lib/trpc";
+
+type HistorySubjectFilter = "all" | PaperSubject;
 
 function formatDate(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -26,6 +29,7 @@ export default function TestHistory() {
   const [, navigate] = useLocation();
   const { isTeacher } = useLocalAuth();
   const [keyword, setKeyword] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState<HistorySubjectFilter>("all");
   const utils = trpc.useUtils();
 
   const selectedId = useMemo(() => {
@@ -61,18 +65,55 @@ export default function TestHistory() {
     },
   });
 
+  const subjectCounts = useMemo(() => {
+    const items = listQuery.data ?? [];
+    return {
+      all: items.length,
+      english: items.filter((item) => item.paperSubject === "english").length,
+      math: items.filter((item) => item.paperSubject === "math").length,
+      vocabulary: items.filter((item) => item.paperSubject === "vocabulary").length,
+    };
+  }, [listQuery.data]);
+
   const filteredHistory = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
-    if (!normalizedKeyword) return listQuery.data ?? [];
+    const subjectFiltered = (listQuery.data ?? []).filter((item) => {
+      if (subjectFilter === "all") return true;
+      return item.paperSubject === subjectFilter;
+    });
 
-    return (listQuery.data ?? []).filter((item) => {
+    if (!normalizedKeyword) return subjectFiltered;
+
+    return subjectFiltered.filter((item) => {
       return (
         item.studentName.toLowerCase().includes(normalizedKeyword)
         || item.paperTitle.toLowerCase().includes(normalizedKeyword)
         || String(item.id).includes(normalizedKeyword)
       );
     });
-  }, [keyword, listQuery.data]);
+  }, [keyword, listQuery.data, subjectFilter]);
+
+  const historyStats = useMemo(() => {
+    const items = listQuery.data ?? [];
+    const subjectPaperSets: Record<PaperSubject, Set<string>> = {
+      english: new Set<string>(),
+      math: new Set<string>(),
+      vocabulary: new Set<string>(),
+    };
+
+    items.forEach((item) => {
+      const subject = item.paperSubject;
+      if (!subject || !(subject in subjectPaperSets)) return;
+      subjectPaperSets[subject as PaperSubject].add(item.paperId || item.paperTitle || String(item.id));
+    });
+
+    return {
+      totalRecords: items.length,
+      englishPapers: subjectPaperSets.english.size,
+      mathPapers: subjectPaperSets.math.size,
+      vocabularyPapers: subjectPaperSets.vocabulary.size,
+    };
+  }, [listQuery.data]);
 
   return (
     <TeacherToolsLayout activeTool="test-history">
@@ -92,12 +133,27 @@ export default function TestHistory() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-slate-900">
-                <FileSearch className="h-5 w-5 text-[#D4A84B]" />
-                <h2 className="text-lg font-semibold">Saved Assessments</h2>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Total History Records</p>
+                <p className="mt-4 text-3xl font-bold tracking-tight text-slate-900">{historyStats.totalRecords}</p>
               </div>
-              <div className="relative mt-4">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.english} Papers</p>
+                <p className="mt-4 text-3xl font-bold tracking-tight text-[#1E3A5F]">{historyStats.englishPapers}</p>
+              </div>
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.math} Papers</p>
+                <p className="mt-4 text-3xl font-bold tracking-tight text-emerald-700">{historyStats.mathPapers}</p>
+              </div>
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">{PAPER_SUBJECT_LABELS.vocabulary} Papers</p>
+                <p className="mt-4 text-3xl font-bold tracking-tight text-amber-700">{historyStats.vocabularyPapers}</p>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={keyword}
@@ -105,6 +161,28 @@ export default function TestHistory() {
                   placeholder="Search by student or paper"
                   className="rounded-2xl border-slate-200 pl-9"
                 />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {([
+                  { key: "all", label: "All Subjects", count: subjectCounts.all },
+                  { key: "english", label: PAPER_SUBJECT_LABELS.english, count: subjectCounts.english },
+                  { key: "math", label: PAPER_SUBJECT_LABELS.math, count: subjectCounts.math },
+                  { key: "vocabulary", label: PAPER_SUBJECT_LABELS.vocabulary, count: subjectCounts.vocabulary },
+                ] as Array<{ key: HistorySubjectFilter; label: string; count: number }>).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSubjectFilter(option.key)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      subjectFilter === option.key
+                        ? "bg-[#1E3A5F] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                    }`}
+                  >
+                    {option.label}
+                    <span className="ml-2 text-xs opacity-70">{option.count}</span>
+                  </button>
+                ))}
               </div>
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
                 {filteredHistory.length} record{filteredHistory.length === 1 ? "" : "s"}
@@ -147,7 +225,7 @@ export default function TestHistory() {
                             onClick={() => navigate(active ? "/test-history" : `/test-history?id=${item.id}`)}
                             className="min-w-0 flex-1 text-left"
                           >
-                            <p className="truncate text-xl font-bold tracking-tight text-[#1E3A5F]">{item.studentName}</p>
+                            <p className="truncate text-lg font-bold tracking-tight text-[#1E3A5F]">{item.studentName}</p>
                             <p className="mt-1 truncate text-sm text-slate-500">{item.paperTitle}</p>
                           </button>
                           <div className="flex items-center gap-2">

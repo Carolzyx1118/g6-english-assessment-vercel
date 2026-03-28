@@ -1,9 +1,9 @@
 import { useQuiz } from '@/contexts/QuizContext';
-import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil, ScrollText } from 'lucide-react';
+import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil, ScrollText, WholeWord } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const sectionIcons: Record<string, React.ReactNode> = {
-  vocabulary: <BookOpen className="w-4 h-4" />,
+  vocabulary: <WholeWord className="w-4 h-4" />,
   grammar: <PenTool className="w-4 h-4" />,
   listening: <Headphones className="w-4 h-4" />,
   reading: <FileText className="w-4 h-4" />,

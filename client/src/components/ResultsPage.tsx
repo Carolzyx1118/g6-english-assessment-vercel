@@ -25,6 +25,16 @@ import {
   sanitizeReportForStorage,
 } from "@/lib/resultStorage";
 import {
+  getPendingAudioBlob,
+  releasePendingAudioBlob,
+} from "@/lib/audioStorage";
+import {
+  getAudioExtension,
+  normalizeAudioContentType,
+  type UploadFileMutationLike,
+  uploadAudioBlob,
+} from "@/lib/audioUpload";
+import {
   readLatestSavedResultId,
   writeLatestSavedResultId,
 } from "@/lib/latestSavedResultId";
@@ -125,6 +135,131 @@ function buildFallbackRecord(
   };
 }
 
+function isSpeakingSection(section: Paper["sections"][number]) {
+  if (
+    section.questions.some(
+      (question) => question.type === "open-ended" && question.responseMode === "audio",
+    )
+  ) {
+    return true;
+  }
+
+  const normalized = `${section.sectionType || ""} ${section.id} ${section.title}`.trim().toLowerCase();
+  return normalized.includes("speaking");
+}
+
+function getSubQuestionLabel(
+  subQuestion: string | { label?: string },
+  index: number,
+) {
+  if (typeof subQuestion === "string") {
+    return subQuestion || String.fromCharCode(97 + index);
+  }
+  return subQuestion.label || String.fromCharCode(97 + index);
+}
+
+function parseAnswerRecord(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+async function finalizeSpeakingAnswers({
+  paper,
+  answers,
+  uploadFileMutation,
+}: {
+  paper: Paper;
+  answers: Record<string, unknown>;
+  uploadFileMutation: UploadFileMutationLike;
+}) {
+  const nextAnswers: Record<string, unknown> = { ...answers };
+
+  for (const section of paper.sections) {
+    if (!isSpeakingSection(section)) continue;
+
+    for (const question of section.questions) {
+      if (question.type !== "open-ended") continue;
+
+      const answerKey = `${section.id}:${question.id}`;
+      const rawAnswer = nextAnswers[answerKey];
+
+      if (question.subQuestions && question.subQuestions.length > 0) {
+        const parsed = parseAnswerRecord(rawAnswer);
+        let changed = false;
+
+        for (let index = 0; index < question.subQuestions.length; index += 1) {
+          const label = getSubQuestionLabel(question.subQuestions[index], index);
+          const localUrl = typeof parsed[label] === "string" ? parsed[label].trim() : "";
+          if (!localUrl.startsWith("blob:")) continue;
+
+          const blob = getPendingAudioBlob(localUrl);
+          if (!blob) {
+            throw new Error(
+              "A speaking recording is only stored locally in this tab. Please return to the test and record it again before submitting.",
+            );
+          }
+
+          const contentType = normalizeAudioContentType(blob.type) || "audio/webm";
+          const extension = getAudioExtension(contentType);
+          const persistedUrl = await uploadAudioBlob({
+            blob,
+            contentType,
+            fileName: `speaking-${section.id}-${question.id * 100 + index}-${Date.now()}.${extension}`,
+            uploadFileMutation,
+          });
+
+          parsed[label] = persistedUrl;
+          releasePendingAudioBlob(localUrl);
+          changed = true;
+        }
+
+        if (changed) {
+          nextAnswers[answerKey] = JSON.stringify(parsed);
+        }
+        continue;
+      }
+
+      const localUrl = typeof rawAnswer === "string" ? rawAnswer.trim() : "";
+      if (!localUrl.startsWith("blob:")) continue;
+
+      const blob = getPendingAudioBlob(localUrl);
+      if (!blob) {
+        throw new Error(
+          "A speaking recording is only stored locally in this tab. Please return to the test and record it again before submitting.",
+        );
+      }
+
+      const contentType = normalizeAudioContentType(blob.type) || "audio/webm";
+      const extension = getAudioExtension(contentType);
+      const persistedUrl = await uploadAudioBlob({
+        blob,
+        contentType,
+        fileName: `speaking-${section.id}-${question.id}-${Date.now()}.${extension}`,
+        uploadFileMutation,
+      });
+
+      nextAnswers[answerKey] = persistedUrl;
+      releasePendingAudioBlob(localUrl);
+    }
+  }
+
+  return nextAnswers;
+}
+
 function getSnapshotTotalTimeSeconds(snapshot: ReturnType<typeof readSubmittedAssessmentSnapshot>) {
   if (!snapshot) return 0;
   if (snapshot.startTime && snapshot.endTime) {
@@ -176,6 +311,7 @@ export default function ResultsPage() {
   const [statusText, setStatusText] = useState("Preparing your submission...");
   const [progressValue, setProgressValue] = useState(10);
   const [fatalError, setFatalError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const saveResultMutation = trpc.results.save.useMutation();
   const updateResultMutation = trpc.results.updateAI.useMutation();
@@ -184,6 +320,7 @@ export default function ResultsPage() {
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
   const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const generateReportMutation = trpc.grading.generateReport.useMutation();
+  const uploadFileMutation = trpc.papers.uploadFile.useMutation();
 
   const saveResultRef = useRef(saveResultMutation);
   saveResultRef.current = saveResultMutation;
@@ -199,6 +336,8 @@ export default function ResultsPage() {
   evaluateSpeakingRef.current = evaluateSpeakingMutation;
   const generateReportRef = useRef(generateReportMutation);
   generateReportRef.current = generateReportMutation;
+  const uploadFileRef = useRef(uploadFileMutation);
+  uploadFileRef.current = uploadFileMutation;
   const utilsRef = useRef(utils);
   utilsRef.current = utils;
 
@@ -279,8 +418,17 @@ export default function ResultsPage() {
     let cancelled = false;
 
     const run = async () => {
-      const answersJson = packStoredAssessmentPayloadForResultStorage(submission.answers, submission.paper);
-      const artifacts = buildSubmissionArtifacts(submission.paper, submission.answers);
+      setStatusTitle("Assessment Completed!");
+      setStatusText("Finalizing speaking recordings...");
+      setProgressValue(16);
+
+      const finalizedAnswers = await finalizeSpeakingAnswers({
+        paper: submission.paper,
+        answers: submission.answers,
+        uploadFileMutation: uploadFileRef.current,
+      });
+      const answersJson = packStoredAssessmentPayloadForResultStorage(finalizedAnswers, submission.paper);
+      const artifacts = buildSubmissionArtifacts(submission.paper, finalizedAnswers);
       const baseRecord = buildFallbackRecord({
         studentName: submission.studentInfo.name,
         studentGrade: submission.studentInfo.grade || null,
@@ -505,6 +653,7 @@ export default function ResultsPage() {
   }, [
     cacheKey,
     record,
+    retryNonce,
     submission,
   ]);
 
@@ -728,6 +877,23 @@ export default function ResultsPage() {
                   <Home className="h-4 w-4" />
                   Return Home
                 </Button>
+
+                {fatalError && !record ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setFatalError(null);
+                      setStatusTitle("Assessment Completed!");
+                      setStatusText("Retrying the upload...");
+                      setProgressValue(12);
+                      setRetryNonce((value) => value + 1);
+                    }}
+                    className="gap-2 rounded-full bg-[#1E3A5F] hover:bg-[#16314F]"
+                  >
+                    <Loader2 className="h-4 w-4" />
+                    Retry Upload
+                  </Button>
+                ) : null}
 
                 {!record && !fatalError ? (
                   <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-500">

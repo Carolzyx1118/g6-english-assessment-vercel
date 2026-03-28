@@ -17,7 +17,6 @@ export default function QuizLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeConfirm, setActiveConfirm] = useState<'exit' | 'submit' | null>(null);
 
-  const isLastSection = state.currentSectionIndex === sections.length - 1;
   const totalAnswered = sections.reduce((sum, section) => sum + getSectionProgress(section.id).answered, 0);
   const totalQuestions = sections.reduce((sum, section) => sum + getSectionProgress(section.id).total, 0);
   const unanswered = totalQuestions - totalAnswered;
@@ -71,15 +70,13 @@ export default function QuizLayout() {
                 Exit Test
               </Button>
 
-              {isLastSection ? (
-                <Button
-                  onClick={() => setActiveConfirm('submit')}
-                  className="h-12 min-w-[190px] gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-base shadow-lg shadow-blue-200 transition-all duration-300 hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl"
-                >
-                  <Send className="h-5 w-5" />
-                  Submit Assessment
-                </Button>
-              ) : null}
+              <Button
+                onClick={() => setActiveConfirm('submit')}
+                className="h-12 min-w-[190px] gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-base shadow-lg shadow-blue-200 transition-all duration-300 hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl"
+              >
+                <Send className="h-5 w-5" />
+                Submit Assessment
+              </Button>
             </div>
 
             {activeConfirm === 'exit' ? (

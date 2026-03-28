@@ -589,8 +589,10 @@ export default function TagManager() {
                             <Layers3 className="h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle className="text-sm text-[#1E3A5F] sm:text-base">{system.label.trim() || `Exam ${index + 1}`}</CardTitle>
-                            <CardDescription className="text-xs sm:text-sm">System ID: {system.id}</CardDescription>
+                            <CardTitle className="font-[family-name:var(--font-sans)] text-sm font-bold tracking-tight text-[#1E3A5F] sm:text-base">
+                              {system.label.trim() || `Exam ${index + 1}`}
+                            </CardTitle>
+                            <CardDescription className="text-xs sm:text-sm">Paper ID: {system.id}</CardDescription>
                           </div>
                         </div>
 

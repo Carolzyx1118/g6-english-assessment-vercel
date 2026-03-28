@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import StudentInfoForm from '@/components/StudentInfoForm';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
-import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator } from 'lucide-react';
+import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, User, Sparkles, Languages, Calculator, WholeWord } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
@@ -83,7 +83,7 @@ function normalizeSummaryText(value?: string) {
 }
 
 const sectionIcons: Record<string, React.ReactNode> = {
-  vocabulary: <BookOpen className="w-6 h-6" />,
+  vocabulary: <WholeWord className="w-6 h-6" />,
   grammar: <PenTool className="w-6 h-6" />,
   listening: <Headphones className="w-6 h-6" />,
   reading: <FileText className="w-6 h-6" />,
@@ -120,7 +120,7 @@ const subjectModuleConfig: Record<PaperSubject, { icon: React.ReactNode; accent:
     summary: 'Problem solving, calculation, reasoning, and future math papers.',
   },
   vocabulary: {
-    icon: <BookOpen className="w-7 h-7" />,
+    icon: <WholeWord className="w-7 h-7" />,
     accent: 'text-amber-700',
     surface: 'from-amber-50 to-orange-50 border-amber-200/70',
     summary: 'Word study, meaning match, memorization, and vocabulary drills.',
@@ -466,7 +466,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                               <span className="leading-none">{paperDisplayIcon.glyph}</span>
                             </div>
                             <div>
-                              <h3 className="font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
+                              <h3 className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
                             </div>
                           </div>
                           <div className="mb-4 flex flex-wrap gap-2">
@@ -656,7 +656,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                         <span className="leading-none">{paperDisplayIcon.glyph}</span>
                       </div>
                       <div>
-                        <h3 className="font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
+                        <h3 className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
                       </div>
                     </div>
                     <div className="mb-4 flex flex-wrap gap-2">
@@ -768,7 +768,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
                   </span>
                 ))}
               </div>
-              <h1 className="font-[family-name:var(--font-sans)] text-4xl sm:text-5xl font-bold tracking-tight leading-tight text-white">
+              <h1 className="font-[family-name:var(--font-body)] text-3xl sm:text-4xl font-bold tracking-normal leading-tight text-white">
                 {paper.title}
                 {hasDistinctSubtitle ? (
                   <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876] text-2xl sm:text-3xl mt-1">

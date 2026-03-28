@@ -1,31 +1,32 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Play, Pause, RotateCcw, Upload, Check, Loader2 } from 'lucide-react';
-import { upload as uploadBlob } from '@vercel/blob/client';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
-import { isPersistedAudioUrl } from '@/lib/audioStorage';
+import {
+  getPendingAudioBlob,
+  isAudioAnswerValue,
+  registerPendingAudioBlob,
+  releasePendingAudioBlob,
+} from '@/lib/audioStorage';
+import {
+  getAudioExtension,
+  normalizeAudioContentType,
+  uploadAudioBlob,
+} from '@/lib/audioUpload';
 
 interface AudioRecorderProps {
   questionId: number;
   sectionId: string;
-  /** Current saved audio URL (if any) */
+  /** Current saved audio URL (durable or local pending blob) */
   savedUrl?: string;
-  /** Called when audio is uploaded and URL is available */
+  /** Called when audio is ready for the answer state */
   onRecorded: (url: string) => void;
 }
 
 const TARGET_SCORING_SAMPLE_RATE = 16000;
 const MAX_GATEWAY_AUDIO_BYTES = 16 * 1024 * 1024;
 const MAX_TRANSCRIPTION_AUDIO_BYTES = 25 * 1024 * 1024;
-const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
-const DIRECT_UPLOAD_TIMEOUT_MS = 60_000;
-const SERVER_UPLOAD_TIMEOUT_MS = 30_000;
-const PREFERRED_SERVER_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 const RECORDING_AUDIO_BITS_PER_SECOND = 64_000;
-
-function normalizeAudioContentType(value: string | null | undefined) {
-  return value?.split(';')[0]?.trim().toLowerCase() || '';
-}
 
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
@@ -112,25 +113,6 @@ function canAttemptAutomaticSpeakingScoring(blob: Blob) {
   return isGatewayCompatible || blob.size <= MAX_TRANSCRIPTION_AUDIO_BYTES;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    return await Promise.race<T>([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          reject(new Error(`${label} timed out. Please try again.`));
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
-  }
-}
-
 export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecorded }: AudioRecorderProps) {
   const [status, setStatus] = useState<'idle' | 'recording' | 'recorded' | 'uploading' | 'uploaded'>('idle');
   const [recordingTime, setRecordingTime] = useState(0);
@@ -147,16 +129,16 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   const autoUploadAttemptedRef = useRef(false);
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
 
-  const isRevokableAudioUrl = useCallback((value: string) => {
-    return value.startsWith('blob:');
-  }, []);
-
   // Initialize with saved URL if available
   useEffect(() => {
-    if (savedUrl && isPersistedAudioUrl(savedUrl)) {
+    if (savedUrl && isAudioAnswerValue(savedUrl)) {
       setStatus('uploaded');
       audioUrlRef.current = savedUrl;
-      setWarning(null);
+      setWarning(
+        savedUrl.startsWith('blob:') && getPendingAudioBlob(savedUrl)
+          ? 'Recording stored in this tab. We will retry the upload when you submit the assessment.'
+          : null,
+      );
     }
   }, [savedUrl]);
 
@@ -164,14 +146,14 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
-        URL.revokeObjectURL(audioUrlRef.current);
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
       }
     };
-  }, [isRevokableAudioUrl]);
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
@@ -203,10 +185,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
-          URL.revokeObjectURL(audioUrlRef.current);
-        }
-        audioUrlRef.current = URL.createObjectURL(blob);
+        audioUrlRef.current = registerPendingAudioBlob(blob, audioUrlRef.current || undefined);
         setStatus('recorded');
         // Stop all tracks
         stream.getTracks().forEach(t => t.stop());
@@ -269,9 +248,7 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     if (audioElementRef.current) {
       audioElementRef.current.pause();
     }
-    if (audioUrlRef.current && isRevokableAudioUrl(audioUrlRef.current)) {
-      URL.revokeObjectURL(audioUrlRef.current);
-    }
+    releasePendingAudioBlob(audioUrlRef.current || undefined);
     audioUrlRef.current = null;
     autoUploadAttemptedRef.current = false;
     setStatus('idle');
@@ -279,40 +256,6 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     setIsPlaying(false);
     setError(null);
     setWarning(null);
-  }, [isRevokableAudioUrl]);
-
-  const blobToDataUrl = useCallback(async (blob: Blob) => {
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Failed to encode recording.'));
-        }
-      };
-      reader.onerror = () => reject(reader.error || new Error('Failed to encode recording.'));
-      reader.readAsDataURL(blob);
-    });
-  }, []);
-
-  const blobToBase64 = useCallback(async (blob: Blob) => {
-    const dataUrl = await blobToDataUrl(blob);
-    const [, base64 = ''] = dataUrl.split(',', 2);
-    if (!base64) {
-      throw new Error('Failed to encode recording.');
-    }
-    return base64;
-  }, [blobToDataUrl]);
-
-  const getAudioExtension = useCallback((mimeType: string) => {
-    const normalizedMimeType = normalizeAudioContentType(mimeType);
-    if (normalizedMimeType.includes('mp4') || normalizedMimeType.includes('m4a')) return 'm4a';
-    if (normalizedMimeType.includes('mpeg') || normalizedMimeType.includes('mp3')) return 'mp3';
-    if (normalizedMimeType.includes('wav')) return 'wav';
-    if (normalizedMimeType.includes('ogg')) return 'ogg';
-    if (normalizedMimeType.includes('aac')) return 'aac';
-    return 'webm';
   }, []);
 
   const convertBlobToWav = useCallback(async (blob: Blob) => {
@@ -361,62 +304,6 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     }
   }, [convertBlobToWav]);
 
-  const uploadAudioBlob = useCallback(async (blob: Blob, contentType: string, extension: string) => {
-    const normalizedContentType = normalizeAudioContentType(contentType) || 'audio/webm';
-    const safeFileName = `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`;
-    const clientPayload = JSON.stringify({
-      contentType: normalizedContentType,
-      fileSize: blob.size,
-    });
-
-    const uploadDirectly = async () => {
-      const uploaded = await withTimeout(
-        uploadBlob(`paper-assets/${safeFileName}`, blob, {
-          access: 'public',
-          contentType: normalizedContentType,
-          handleUploadUrl: '/api/blob/client-token',
-          clientPayload,
-          multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
-        }),
-        DIRECT_UPLOAD_TIMEOUT_MS,
-        'Direct audio upload',
-      );
-      return uploaded.url;
-    };
-
-    const uploadViaServer = async () => {
-      const fileBase64 = await blobToBase64(blob);
-      const uploaded = await withTimeout(
-        uploadFileMutation.mutateAsync({
-          fileName: safeFileName,
-          fileBase64,
-          contentType: normalizedContentType,
-        }),
-        SERVER_UPLOAD_TIMEOUT_MS,
-        'Audio save',
-      );
-      return uploaded.url;
-    };
-
-    const errors: string[] = [];
-    const tryServerFirst = blob.size <= PREFERRED_SERVER_UPLOAD_MAX_BYTES;
-    const strategies = tryServerFirst
-      ? [uploadViaServer, uploadDirectly]
-      : [uploadDirectly, uploadViaServer];
-
-    for (const strategy of strategies) {
-      try {
-        return await strategy();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown upload error.';
-        errors.push(message);
-        console.warn('[AudioRecorder] Upload attempt failed.', error);
-      }
-    }
-
-    throw new Error(errors[errors.length - 1] || 'Failed to save recording.');
-  }, [blobToBase64, questionId, sectionId, uploadFileMutation]);
-
   const uploadAudio = useCallback(async () => {
     if (!chunksRef.current.length) return;
 
@@ -434,8 +321,15 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
         || normalizeAudioContentType(mimeType)
         || 'audio/webm';
       const extension = getAudioExtension(normalizedMimeType);
-      const persistedUrl = await uploadAudioBlob(blobForUpload, normalizedMimeType, extension);
+      const safeFileName = `speaking-${sectionId}-${questionId}-${Date.now()}.${extension}`;
+      const persistedUrl = await uploadAudioBlob({
+        blob: blobForUpload,
+        contentType: normalizedMimeType,
+        fileName: safeFileName,
+        uploadFileMutation,
+      });
 
+      releasePendingAudioBlob(audioUrlRef.current || undefined);
       audioUrlRef.current = persistedUrl;
       setStatus('uploaded');
       setError(null);
@@ -447,14 +341,23 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       onRecorded(persistedUrl);
     } catch (err: any) {
       console.error('Recording save error:', err);
-      setError(
-        typeof err?.message === 'string' && err.message.trim()
-          ? err.message
-          : 'Failed to save recording. Please try again.'
-      );
-      setStatus('recorded');
+      const mimeType = chunksRef.current[0]?.type || 'audio/webm';
+      const fallbackBlob = new Blob(chunksRef.current, { type: mimeType });
+      const localUrl = registerPendingAudioBlob(fallbackBlob, audioUrlRef.current || undefined);
+      audioUrlRef.current = localUrl;
+      setStatus('uploaded');
+      setError(null);
+      setWarning('Recording stored in this tab. We will retry the upload when you submit the assessment.');
+      onRecorded(localUrl);
     }
-  }, [getAudioExtension, normalizeAudioBlobForScoring, onRecorded, uploadAudioBlob]);
+  }, [
+    getAudioExtension,
+    normalizeAudioBlobForScoring,
+    onRecorded,
+    questionId,
+    sectionId,
+    uploadFileMutation,
+  ]);
 
   useEffect(() => {
     if (status !== 'recorded' || autoUploadAttemptedRef.current || chunksRef.current.length === 0) {
@@ -470,6 +373,10 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
+
+  const hasPendingLocalRecording = Boolean(
+    audioUrlRef.current?.startsWith('blob:') && getPendingAudioBlob(audioUrlRef.current),
+  );
 
   return (
     <div className="rounded-xl border-2 border-slate-200 bg-slate-50/50 p-4 space-y-3">
@@ -498,8 +405,10 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
         )}
         {status === 'uploaded' && (
           <div className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-500" />
-            <span className="text-emerald-600 font-medium">Recording saved</span>
+            <Check className={`w-4 h-4 ${hasPendingLocalRecording ? 'text-amber-500' : 'text-emerald-500'}`} />
+            <span className={`${hasPendingLocalRecording ? 'text-amber-600' : 'text-emerald-600'} font-medium`}>
+              {hasPendingLocalRecording ? 'Recording saved locally' : 'Recording saved'}
+            </span>
           </div>
         )}
       </div>

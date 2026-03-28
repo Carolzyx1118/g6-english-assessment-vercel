@@ -814,7 +814,6 @@ export default function QuestionBank() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-base text-[#1E3A5F]">Filters</CardTitle>
-              <CardDescription>Search by keyword, or narrow the list by exam system and question type.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
@@ -895,7 +894,7 @@ export default function QuestionBank() {
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle className="font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-[#1E3A5F]">{paper.title}</CardTitle>
+                            <CardTitle className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F]">{paper.title}</CardTitle>
                             <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
                             <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
                               {itemCountLabel}

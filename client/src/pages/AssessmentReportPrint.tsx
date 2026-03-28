@@ -20,6 +20,7 @@ const PRINT_PAGE_STYLES = `
       background: #ffffff !important;
       margin: 0;
       padding: 0;
+      font-size: 14px !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -86,6 +87,48 @@ const PRINT_PAGE_STYLES = `
     .print-assessment-report .report-material-card,
     .print-assessment-report .report-image-card {
       box-shadow: none !important;
+    }
+
+    .print-assessment-report .report-hero-name {
+      font-size: 20px !important;
+      line-height: 1.08 !important;
+    }
+
+    .print-assessment-report .report-summary-grade {
+      font-size: 38px !important;
+    }
+
+    .print-assessment-report .report-summary-score {
+      font-size: 28px !important;
+    }
+
+    .print-assessment-report .report-summary-time {
+      font-size: 22px !important;
+    }
+
+    .print-assessment-report .report-breakdown-score {
+      font-size: 20px !important;
+    }
+
+    .print-assessment-report .report-step-title {
+      font-size: 18px !important;
+      line-height: 1.2 !important;
+    }
+
+    .print-assessment-report .report-breakdown-title,
+    .print-assessment-report .report-detail-title {
+      font-size: 16px !important;
+      line-height: 1.25 !important;
+    }
+
+    .print-assessment-report .report-step-description,
+    .print-assessment-report .report-breakdown-card p,
+    .print-assessment-report .report-detail-body p,
+    .print-assessment-report .report-list-card p,
+    .print-assessment-report .report-parent-card p,
+    .print-assessment-report .report-overview-card p,
+    .print-assessment-report .report-material-card p {
+      line-height: 1.55 !important;
     }
   }
 `;

@@ -500,9 +500,6 @@ export default function PaperManager() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader>
               <CardTitle>Student Papers</CardTitle>
-              <CardDescription>
-                Toggle visibility, delete obsolete papers, or jump into Paper Generator / Question Intake to edit content.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
@@ -566,22 +563,28 @@ export default function PaperManager() {
                               </>
                             ) : (
                               <>
-                                <span>Paper ID: {paper.systemId}</span>
-                                <span>{paper.totalSections} configured parts</span>
-                                <span>{paper.totalQuestions} configured questions</span>
-                                {paper.generationWarnings.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpandedWarningKey((current) => current === paper.key ? null : paper.key)}
-                                    className="inline-flex items-center gap-1.5 text-amber-600 transition hover:text-amber-700"
-                                  >
-                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                    <span>{paper.generationWarnings.length} 条组卷提醒</span>
-                                    <ChevronDown
-                                      className={`h-3.5 w-3.5 transition ${expandedWarningKey === paper.key ? "rotate-180" : ""}`}
-                                    />
-                                  </button>
-                                )}
+                                <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                                    <span>Paper ID: {paper.systemId}</span>
+                                    <span>{paper.totalSections} configured parts</span>
+                                    <span>{paper.totalQuestions} configured questions</span>
+                                  </div>
+                                  {paper.generationWarnings.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedWarningKey((current) => current === paper.key ? null : paper.key)}
+                                      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-amber-600 transition hover:text-amber-700"
+                                    >
+                                      <AlertTriangle className="h-3.5 w-3.5" />
+                                      <span>
+                                        {paper.generationWarnings.length} generation warning{paper.generationWarnings.length === 1 ? "" : "s"}
+                                      </span>
+                                      <ChevronDown
+                                        className={`h-3.5 w-3.5 transition ${expandedWarningKey === paper.key ? "rotate-180" : ""}`}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
                               </>
                             )}
                           </div>
