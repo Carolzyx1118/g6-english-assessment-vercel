@@ -730,8 +730,8 @@ export default function AssessmentReportPanel({
   const displayStudentName = getDisplayStudentName(record.studentName, locale);
   const studentMonogram = getStudentMonogram(record.studentName, locale);
   const gradeDescriptor = getGradeDescriptor(model.grade, locale);
-  const headerCardClassName = "report-summary-card rounded-[28px] border border-amber-200/80 bg-white/70 p-5 shadow-[0_18px_40px_rgba(120,53,15,0.08),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-sm";
-  const headerLabelClassName = "text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800/80";
+  const headerCardClassName = "report-summary-card rounded-[24px] border border-[#1E3A5F]/12 bg-white/78 p-4 shadow-[0_18px_40px_rgba(30,58,95,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm";
+  const headerLabelClassName = "text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]/72";
 
   const speakingEvaluationsBySection = useMemo(() => {
     const grouped = new Map<string, SpeakingEvaluationItem[]>();
@@ -768,42 +768,42 @@ export default function AssessmentReportPanel({
   return (
     <div className={`space-y-6 ${printMode ? "print-assessment-report" : ""}`}>
       <section className="report-shell-card overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-        <div className="report-hero relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_26%),radial-gradient(circle_at_88%_16%,_rgba(217,119,6,0.16),_transparent_22%),linear-gradient(135deg,#fffaf0_0%,#f8ebcb_50%,#ebcb8d_100%)] px-6 py-7 text-slate-900 sm:px-8 sm:py-8">
+        <div className="report-hero relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(30,58,95,0.16),_transparent_28%),radial-gradient(circle_at_88%_16%,_rgba(59,130,246,0.12),_transparent_24%),linear-gradient(135deg,#f8fbff_0%,#edf4fb_48%,#dbe8f6_100%)] px-5 py-6 text-slate-900 sm:px-7 sm:py-7">
           <div className="pointer-events-none absolute inset-0 opacity-50">
-            <div className="absolute -left-10 top-6 h-44 w-44 rounded-full bg-amber-300/35 blur-3xl" />
-            <div className="absolute right-6 top-0 h-52 w-52 rounded-full bg-yellow-200/35 blur-3xl" />
-            <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-orange-200/30 blur-3xl" />
+            <div className="absolute -left-10 top-6 h-44 w-44 rounded-full bg-[#1E3A5F]/18 blur-3xl" />
+            <div className="absolute right-6 top-0 h-52 w-52 rounded-full bg-blue-300/22 blur-3xl" />
+            <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-sky-200/28 blur-3xl" />
             <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/35 to-transparent" />
             <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
           </div>
 
-          <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1 space-y-5">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-900">
-                <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/80 bg-white/60 px-3 py-1.5 shadow-sm">
-                  <Sparkle className="h-3.5 w-3.5" />
+          <div className="relative flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1E3A5F]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E3A5F]/18 bg-white/72 px-3 py-1 shadow-sm">
+                  <Sparkle className="h-3 w-3 text-[#1E3A5F]" />
                   {isCn ? "测评反馈报告" : "Assessment Report"}
                 </span>
-                <span className="rounded-full border border-amber-300/70 bg-white/55 px-3 py-1.5 text-[11px] tracking-[0.16em] text-slate-700">
+                <span className="rounded-full border border-[#1E3A5F]/16 bg-white/65 px-3 py-1 text-[10px] tracking-[0.14em] text-slate-700">
                   {record.paperTitle}
                 </span>
               </div>
 
               <div className="min-w-0 max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800/80">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]/72">
                   {isCn ? "学生档案" : "Student Profile"}
                 </p>
-                <h1 className="report-hero-name mt-2 text-[28px] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[34px]">
+                <h1 className="report-hero-name mt-2 text-[24px] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[30px]">
                   {displayStudentName}
                 </h1>
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/65 px-3 py-1.5 shadow-sm">
-                    <GraduationCap className="h-4 w-4 text-amber-700" />
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E3A5F]/14 bg-white/70 px-3 py-1.5 shadow-sm">
+                    <GraduationCap className="h-3.5 w-3.5 text-[#1E3A5F]" />
                     {record.studentGrade
                       ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
                       : (isCn ? "未填写年级" : "Grade not provided")}
                   </span>
-                  <span className="rounded-full border border-amber-200 bg-white/65 px-3 py-1.5 shadow-sm">
+                  <span className="rounded-full border border-[#1E3A5F]/14 bg-white/70 px-3 py-1.5 shadow-sm">
                     {formatDate(record.createdAt, locale)}
                   </span>
                 </div>
@@ -811,14 +811,14 @@ export default function AssessmentReportPanel({
             </div>
 
             {hasHeaderControls ? (
-              <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
+              <div className="flex w-full flex-wrap items-center justify-end gap-1.5 xl:w-auto">
                 {!hideLocaleToggle ? (
-                  <div className="inline-flex rounded-full border border-amber-200 bg-white/70 p-1 shadow-sm">
+                  <div className="inline-flex rounded-full border border-[#1E3A5F]/14 bg-white/75 p-1 shadow-sm">
                     <button
                       type="button"
                       onClick={() => setLocale("cn")}
-                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                        isCn ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                      className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition ${
+                        isCn ? "bg-[#1E3A5F] text-white shadow-sm" : "text-slate-600 hover:text-[#1E3A5F]"
                       }`}
                     >
                       中文
@@ -826,8 +826,8 @@ export default function AssessmentReportPanel({
                     <button
                       type="button"
                       onClick={() => setLocale("en")}
-                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                        !isCn ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                      className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition ${
+                        !isCn ? "bg-[#1E3A5F] text-white shadow-sm" : "text-slate-600 hover:text-[#1E3A5F]"
                       }`}
                     >
                       English
@@ -840,9 +840,9 @@ export default function AssessmentReportPanel({
                     variant="secondary"
                     onClick={handleDownload}
                     disabled={downloading}
-                    className="gap-2 rounded-full border-amber-200 bg-white/70 text-slate-900 hover:bg-white"
+                    className="h-10 gap-1.5 rounded-full border-[#1E3A5F]/14 bg-white/75 px-4 text-[13px] text-[#1E3A5F] hover:bg-white"
                   >
-                    <Download className="h-4 w-4" />
+                    <Download className="h-3.5 w-3.5" />
                     {downloading ? (isCn ? "生成中..." : "Generating...") : (isCn ? "下载 PDF" : "Download PDF")}
                   </Button>
                 ) : null}
@@ -851,25 +851,25 @@ export default function AssessmentReportPanel({
             ) : null}
           </div>
 
-          <div className="relative mt-8 grid gap-4 xl:grid-cols-4">
+          <div className="relative mt-6 grid gap-3 xl:grid-cols-4">
             <div className={headerCardClassName}>
               <p className={headerLabelClassName}>
                 {isCn ? "学生档案" : "Student Profile"}
               </p>
-              <div className="mt-4 flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.96),rgba(253,230,138,0.7))] text-lg font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border border-[#1E3A5F]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(219,232,246,0.92))] text-base font-semibold text-[#1E3A5F] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
                   {studentMonogram}
                 </div>
                 <div className="min-w-0">
-                  <p className="report-profile-name truncate text-lg font-semibold text-slate-900">{displayStudentName}</p>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="report-profile-name truncate text-base font-semibold text-slate-900">{displayStudentName}</p>
+                  <p className="mt-1 text-[13px] text-slate-600">
                     {record.studentGrade
                       ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
                       : (isCn ? "未填写年级" : "Grade not provided")}
                   </p>
                 </div>
               </div>
-              <p className="mt-4 text-sm text-slate-600">{formatDate(record.createdAt, locale)}</p>
+              <p className="mt-3 text-[13px] text-slate-600">{formatDate(record.createdAt, locale)}</p>
             </div>
 
             <div className={headerCardClassName}>
@@ -877,17 +877,17 @@ export default function AssessmentReportPanel({
                 <p className={headerLabelClassName}>
                   {isCn ? "当前结论" : "Current Signal"}
                 </p>
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                <span className="rounded-full border border-[#1E3A5F]/14 bg-[#1E3A5F]/6 px-2.5 py-0.5 text-[11px] font-semibold text-[#1E3A5F]">
                   {model.percentage}%
                 </span>
               </div>
-              <div className="mt-4 flex items-end gap-3">
-                <span className="report-summary-grade text-[60px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
-                <span className="mb-1 text-sm font-medium text-slate-500">
+              <div className="mt-3 flex items-end gap-2.5">
+                <span className="report-summary-grade text-[52px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
+                <span className="mb-1 text-[13px] font-medium text-slate-500">
                   {isCn ? "综合表现" : "Overall"}
                 </span>
               </div>
-              <p className="mt-4 text-sm leading-7 text-slate-700">
+              <p className="mt-3 text-[13px] leading-6 text-slate-700">
                 {gradeDescriptor}
               </p>
             </div>
@@ -897,21 +897,21 @@ export default function AssessmentReportPanel({
                 <p className={headerLabelClassName}>
                   {isCn ? "综合得分" : "Total Score"}
                 </p>
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                <span className="rounded-full border border-[#1E3A5F]/14 bg-[#1E3A5F]/6 px-2.5 py-0.5 text-[11px] font-semibold text-[#1E3A5F]">
                   {model.percentage}%
                 </span>
               </div>
-              <p className="report-summary-score mt-4 text-[40px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
+              <p className="report-summary-score mt-3 text-[34px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
                 {model.totalScore}
-                <span className="text-xl font-medium text-slate-500">/{model.totalPossible}</span>
+                <span className="text-lg font-medium text-slate-500">/{model.totalPossible}</span>
               </p>
-              <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-amber-100/80">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#1E3A5F]/8">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#b7791f_0%,#e0b453_52%,#f5d98c_100%)]"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#1E3A5F_0%,#2A4A6F_55%,#6E93BB_100%)]"
                   style={{ width: `${Math.max(6, Math.min(model.percentage, 100))}%` }}
                 />
               </div>
-              <p className="mt-3 text-sm text-slate-600">
+              <p className="mt-2 text-[13px] text-slate-600">
                 {isCn ? "自动评分部分的当前完成情况" : "Current completion across auto-scored parts"}
               </p>
             </div>
@@ -920,11 +920,11 @@ export default function AssessmentReportPanel({
               <p className={headerLabelClassName}>
                 {isCn ? "总用时" : "Total Time"}
               </p>
-              <p className="report-summary-time mt-4 flex items-center gap-3 text-[30px] font-semibold leading-none tracking-[-0.03em] text-slate-900">
-                <Clock3 className="h-7 w-7 text-amber-700" />
+              <p className="report-summary-time mt-3 flex items-center gap-2.5 text-[26px] font-semibold leading-none tracking-[-0.03em] text-slate-900">
+                <Clock3 className="h-6 w-6 text-[#1E3A5F]" />
                 {formatDuration(model.totalTimeSeconds, locale)}
               </p>
-              <p className="mt-4 text-sm leading-7 text-slate-600">
+              <p className="mt-3 text-[13px] leading-6 text-slate-600">
                 {isCn ? "整张测评的累计答题时长" : "Total recorded time across the full assessment"}
               </p>
             </div>
@@ -970,7 +970,7 @@ export default function AssessmentReportPanel({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                       {section.manualReview ? (isCn ? "评估方式" : "Review Mode") : (isCn ? "得分" : "Score")}
                     </p>
-                    <p className="report-breakdown-score mt-1 text-[38px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
+                    <p className="report-breakdown-score mt-1 text-[32px] font-semibold leading-none tracking-[-0.04em] text-slate-900">
                       {section.manualReview
                         ? (isCn ? "AI 评估" : "AI Review")
                         : `${section.correct}/${section.total}`}

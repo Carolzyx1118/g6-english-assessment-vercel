@@ -56,7 +56,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       {/* Header */}
       <div className="p-5 border-b border-slate-100">
         <div className="space-y-3">
-          <h1 className="font-extrabold text-lg text-slate-800 leading-tight">
+          <h1 className="font-[family-name:var(--font-sans)] text-lg font-bold leading-tight tracking-tight text-[#1E3A5F]">
             {selectedPaper?.title || 'English Assessment'}
           </h1>
           {showOverview ? (

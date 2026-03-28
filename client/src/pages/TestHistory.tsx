@@ -94,7 +94,7 @@ export default function TestHistory() {
           <div className="space-y-4">
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2 text-slate-900">
-                <FileSearch className="h-5 w-5 text-blue-600" />
+                <FileSearch className="h-5 w-5 text-[#D4A84B]" />
                 <h2 className="text-lg font-semibold">Saved Assessments</h2>
               </div>
               <div className="relative mt-4">
