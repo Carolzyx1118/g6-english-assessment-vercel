@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { upload as uploadBlob } from "@vercel/blob/client";
 import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mic, Music, PenLine, Plus, SquarePen, Trash2, Volume2 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
+import {
+  uploadAudioBlob,
+} from "@/lib/audioUpload";
 import {
   compressImage,
   createSquareImageDataUrl,
@@ -98,10 +100,6 @@ const DEFAULT_SECTION_TYPE: ManualSectionType = "reading";
 const DEFAULT_QUESTION_TYPE: ManualQuestionType = "mcq";
 const DEFAULT_WORD_BANK_SIZE = 4;
 const PAPER_BUILDER_DRAFT_STORAGE_PREFIX = "pureon_manual_paper_builder_draft_v2";
-const MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
-const DIRECT_UPLOAD_TIMEOUT_MS = 20_000;
-const SERVER_UPLOAD_TIMEOUT_MS = 15_000;
-const PREFERRED_SERVER_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 const ENGLISH_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "speaking", "grammar", "vocabulary"];
 const MATH_SECTION_TYPES: ManualSectionType[] = ["math-multiple-choice", "math-short-answer", "math-application"];
 const ENGLISH_GENERATED_SECTION_TYPES: ManualSectionType[] = ["reading", "listening", "writing", "grammar", "vocabulary"];
@@ -2892,72 +2890,18 @@ export default function PaperIntake() {
   }) => {
     const normalizedContentType = guessAssetContentType("audio", fileName, contentType);
     const safeFileName = buildAssetUploadFileName("audio", fileName, normalizedContentType);
-    const clientPayload = JSON.stringify({
+    const uploadedUrl = normalizeAssetUrl(await uploadAudioBlob({
+      blob,
       contentType: normalizedContentType,
-      fileSize: blob.size,
-    });
+      fileName: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeFileName}`,
+      uploadFileMutation,
+    }));
 
-    const uploadDirectly = async () => {
-      const uploaded = await withTimeout(
-        uploadBlob(
-          `paper-assets/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeFileName}`,
-          blob,
-          {
-            access: "public",
-            contentType: normalizedContentType,
-            handleUploadUrl: "/api/blob/client-token",
-            clientPayload,
-            multipart: blob.size >= MULTIPART_UPLOAD_THRESHOLD_BYTES,
-          },
-        ),
-        DIRECT_UPLOAD_TIMEOUT_MS,
-        "Audio upload",
-      );
-      const uploadedUrl = normalizeAssetUrl(uploaded.url);
-      if (!uploadedUrl) {
-        throw new Error("Audio upload did not return a valid URL.");
-      }
-      return uploadedUrl;
-    };
-
-    const uploadViaServer = async () => {
-      const fileBase64 = await fileToBase64(
-        blob instanceof File
-          ? blob
-          : new File([blob], safeFileName, { type: normalizedContentType }),
-      );
-      const uploaded = await withTimeout(
-        uploadFileMutation.mutateAsync({
-          fileName: safeFileName,
-          contentType: normalizedContentType,
-          fileBase64,
-        }),
-        SERVER_UPLOAD_TIMEOUT_MS,
-        "Audio save",
-      );
-      const uploadedUrl = normalizeAssetUrl(uploaded.url);
-      if (!uploadedUrl) {
-        throw new Error("Audio upload did not return a valid URL.");
-      }
-      return uploadedUrl;
-    };
-
-    const errors: string[] = [];
-    const strategies = blob.size <= PREFERRED_SERVER_UPLOAD_MAX_BYTES
-      ? [uploadViaServer, uploadDirectly]
-      : [uploadDirectly, uploadViaServer];
-
-    for (const strategy of strategies) {
-      try {
-        return await strategy();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown audio upload error.";
-        errors.push(message);
-        console.warn("[PaperIntake] Audio upload attempt failed.", error);
-      }
+    if (!uploadedUrl) {
+      throw new Error("Audio upload did not return a valid URL.");
     }
 
-    throw new Error(errors[errors.length - 1] || "Failed to upload the listening audio.");
+    return uploadedUrl;
   }, [uploadFileMutation]);
 
   const persistAssetForSave = async <T extends ManualOptionImage | ManualAudioFile>(
