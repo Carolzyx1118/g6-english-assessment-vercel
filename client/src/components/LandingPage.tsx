@@ -127,6 +127,24 @@ const subjectModuleConfig: Record<PaperSubject, { icon: React.ReactNode; accent:
   },
 };
 
+const subjectHeroCopy: Record<PaperSubject, { badge: string; highlight: string; description: string }> = {
+  english: {
+    badge: "Teacher Workspace · English",
+    highlight: "English",
+    description: "Review reading, writing, speaking, grammar, and vocabulary papers from one focused English workspace.",
+  },
+  math: {
+    badge: "Teacher Workspace · Math",
+    highlight: "Math",
+    description: "Review problem solving, calculation, reasoning, and future math papers from one focused math workspace.",
+  },
+  vocabulary: {
+    badge: "Teacher Workspace · Vocabulary",
+    highlight: "Vocabulary",
+    description: "Review word study, meaning match, memorization, and vocabulary drills from one focused vocabulary workspace.",
+  },
+};
+
 // ========== PUREON BRAND HEADER ==========
 
 function BrandHeader() {
@@ -164,33 +182,24 @@ function BrandHeader() {
   );
 }
 
-function TeacherWorkspaceTopBar({
-  activeSubject,
-}: {
-  activeSubject: PaperSubject | 'all' | null;
-}) {
+function TeacherWorkspaceTopBar() {
   const { user, isAuthenticated, logout } = useLocalAuth();
-  const workspaceLabel =
-    activeSubject && activeSubject !== 'all'
-      ? `${PAPER_SUBJECT_LABELS[activeSubject]} Workspace`
-      : 'Teacher Workspace';
 
   return (
     <div className="border-b border-slate-200/70 bg-white/92 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <img src={PUREON_LOGO} alt="璞源教育" className="h-9 w-9 object-contain" />
+      <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-2.5 sm:px-6 lg:min-h-[76px] lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm">
+            <img src={PUREON_LOGO} alt="璞源教育" className="h-6.5 w-6.5 object-contain" />
           </div>
-          <div className="min-w-0">
-            <div className="text-lg font-bold text-[#1E3A5F]">璞源教育</div>
-            <div className="text-[11px] uppercase tracking-[0.26em] text-slate-400">PUREON EDUCATION</div>
-            <div className="mt-0.5 text-sm text-slate-500">{workspaceLabel}</div>
+          <div className="min-w-0 space-y-1">
+            <div className="text-base font-bold leading-none text-[#1E3A5F]">璞源教育</div>
+            <div className="text-[10px] uppercase leading-none tracking-[0.24em] text-slate-400">PUREON EDUCATION</div>
           </div>
         </div>
         {isAuthenticated && user ? (
-          <div className="flex items-center gap-4 self-start lg:self-auto">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
+          <div className="flex items-center gap-3 self-start lg:self-auto">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-500">
               <div className="flex h-4 w-4 items-center justify-center text-[#D4A84B]">
                 <User className="h-4 w-4" />
               </div>
@@ -198,7 +207,7 @@ function TeacherWorkspaceTopBar({
             </div>
             <button
               onClick={logout}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:border-slate-300 hover:text-[#1E3A5F]"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-500 transition-colors hover:border-slate-300 hover:text-[#1E3A5F]"
             >
               <LogOut className="h-4 w-4" />
               <span>Sign out</span>
@@ -304,15 +313,31 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
   const currentTeacherSubject = showTeacherSubjectPage && activeSubject
     ? activeSubject
     : null;
+  const compactTeacherWorkspaceHome = showTeacherModules;
+  const compactTeacherWorkspaceSubjects = useMemo(() => {
+    const priority: PaperSubject[] = ['english', 'vocabulary', 'math'];
+    return priority.filter((subject) => visibleSubjectModules.includes(subject));
+  }, [visibleSubjectModules]);
+  const activeSubjectHeroCopy = currentTeacherSubject
+    ? subjectHeroCopy[currentTeacherSubject]
+    : null;
+  const heroBadgeText = activeSubjectHeroCopy?.badge ?? 'Teacher Workspace · English / Math / Vocabulary';
+  const heroHighlightText = activeSubjectHeroCopy?.highlight ?? 'Assessments';
+  const heroTrailingText = activeSubjectHeroCopy ? 'Assessments' : 'by Subject';
+  const heroDescription = activeSubjectHeroCopy?.description
+    ?? 'Open a subject workspace to review papers, update content, manage what students see, and access your intake, question bank, and paper management tools.';
+  const heroTitleFontStyle = { fontFamily: '"Helvetica Neue", Arial, sans-serif' } as const;
+  const subjectHeroMainTitleClass = "font-extrabold tracking-tight leading-[0.98] text-[3rem] sm:text-[3.45rem] lg:text-[4.05rem]";
+  const heroTitleStackClass = "mt-2 space-y-0 sm:mt-3 sm:space-y-1";
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
       {isTeacher ? (
         <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject}>
-          <TeacherWorkspaceTopBar activeSubject={activeSubject} />
-          <div className="bg-[#FAFBFD]">
-            <div className="relative">
-              <div className="relative overflow-hidden">
+          <TeacherWorkspaceTopBar />
+          <div className={`bg-[#FAFBFD] ${compactTeacherWorkspaceHome ? 'lg:flex lg:min-h-[calc(100vh-81px)] lg:flex-col' : ''}`}>
+            <div className={`relative ${compactTeacherWorkspaceHome ? 'lg:flex flex-1' : ''}`}>
+              <div className={`relative overflow-hidden ${compactTeacherWorkspaceHome ? 'lg:flex lg:min-h-full lg:w-full lg:items-center' : ''}`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
                 <div className="absolute inset-0 opacity-5" style={{
                   backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
@@ -321,28 +346,57 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
 
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-20 relative z-10">
-                  <div className="grid lg:grid-cols-2 gap-12 items-center">
+                <div className={`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 relative z-10 ${compactTeacherWorkspaceHome ? 'py-8 lg:py-10' : 'pt-12 pb-20'}`}>
+                  <div className={`grid ${compactTeacherWorkspaceHome ? 'items-center gap-7 lg:grid-cols-[minmax(0,0.9fr)_minmax(460px,0.96fr)]' : 'items-start gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center'}`}>
                     <motion.div
                       initial={{ opacity: 0, x: -30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.6 }}
+                      className={
+                        compactTeacherWorkspaceHome
+                          ? 'flex flex-col justify-center'
+                          : activeSubjectHeroCopy
+                            ? 'lg:flex lg:min-h-full lg:flex-col lg:justify-center lg:pr-6'
+                            : undefined
+                      }
                     >
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A84B]/15 border border-[#D4A84B]/25 mb-6">
+                      <div className={`inline-flex self-start items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5 ${compactTeacherWorkspaceHome ? 'lg:-translate-y-2' : ''}`}>
                         <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
                         <span className="text-xs font-medium text-[#D4A84B]">
-                          Teacher Workspace · English / Math / Vocabulary
+                          {heroBadgeText}
                         </span>
                       </div>
-                      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-                        Manage
-                        <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876]">
-                          Assessments
-                        </span>
-                        <span className="block text-white/90">by Subject</span>
-                      </h1>
-                      <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
-                        Open a subject workspace to review papers, update content, manage what students see, and access your intake, question bank, and paper management tools.
+                      {activeSubjectHeroCopy ? (
+                        <div className={heroTitleStackClass} style={heroTitleFontStyle}>
+                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4">
+                            <span className={`block text-white ${subjectHeroMainTitleClass}`}>
+                              Manage
+                            </span>
+                            <span className={`block text-[#E8C876] ${subjectHeroMainTitleClass}`}>
+                              {heroHighlightText}
+                            </span>
+                          </div>
+                          <h1 className={`${subjectHeroMainTitleClass} text-white/92`}>
+                            {heroTrailingText}
+                          </h1>
+                        </div>
+                      ) : (
+                        <div className={heroTitleStackClass} style={heroTitleFontStyle}>
+                          <h1 className="font-extrabold tracking-tight text-white leading-[0.98] text-[2.8rem] sm:text-[3.2rem] lg:text-[3.8rem]">
+                            Manage
+                          </h1>
+                          <div className="flex max-w-[820px] flex-wrap items-end gap-x-3 gap-y-0.5 sm:gap-x-4 sm:gap-y-1 font-extrabold tracking-tight">
+                            <span className="leading-[0.98] text-[3.35rem] sm:text-[3.9rem] lg:text-[4.55rem] text-[#E8C876]">
+                              {heroHighlightText}
+                            </span>
+                            <span className="leading-[0.98] text-[3rem] sm:text-[3.45rem] lg:text-[4.1rem] text-white/92">
+                              {heroTrailingText}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <p className={`max-w-xl text-white/60 leading-[1.5] ${compactTeacherWorkspaceHome ? 'mt-3 text-base xl:text-lg' : 'mt-5 text-lg'}`}>
+                        {heroDescription}
                       </p>
                       {hasSingleSubjectAccess && (
                         <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
@@ -356,29 +410,80 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                       initial={{ opacity: 0, x: 30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.6, delay: 0.2 }}
-                      className="hidden lg:block"
+                      className={compactTeacherWorkspaceHome ? 'mt-8 lg:mt-0 lg:self-center' : 'hidden lg:flex lg:min-h-full lg:items-center lg:justify-end lg:pl-4'}
                     >
-                      <div className="relative">
-                        <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
-                        <img
-                          src={dashboardHeroImage}
-                          alt={dashboardHeroAlt}
-                          className="relative w-full rounded-2xl opacity-90"
-                        />
-                      </div>
+                      {compactTeacherWorkspaceHome ? (
+                        <div className="flex max-w-[780px] flex-col gap-3 lg:ml-auto">
+                          {compactTeacherWorkspaceSubjects.map((subject, index) => {
+                            const config = subjectModuleConfig[subject];
+
+                            return (
+                              <motion.button
+                                key={subject}
+                                type="button"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.45 + index * 0.1 }}
+                                onClick={() => setSelectedSubject(subject)}
+                                className={`group flex min-h-[116px] w-full flex-col rounded-[22px] border bg-gradient-to-r ${config.surface} px-5 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:flex-row sm:items-center sm:gap-4`}
+                              >
+                                <div className="mb-3 flex items-start justify-between gap-4 sm:mb-0 sm:items-center">
+                                  <div className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-white shadow-sm ${config.accent}`}>
+                                    {config.icon}
+                                  </div>
+                                  <ArrowRight className="h-[18px] w-[18px] shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:hidden" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="text-[1.35rem] font-bold tracking-tight text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</h3>
+                                  <p className="mt-1.5 max-w-[26rem] text-[12px] leading-[1.75] text-slate-600">
+                                    {config.summary}
+                                  </p>
+                                </div>
+                                <div className="mt-4 flex items-center justify-between gap-4 text-[13px] sm:mt-0 sm:min-w-[156px] sm:flex-col sm:items-end sm:justify-center">
+                                  <span className="font-semibold text-[#1E3A5F]">{subjectCounts[subject] || 0} paper(s)</span>
+                                  <div className="flex items-center gap-2 text-slate-400">
+                                    <span>Enter module</span>
+                                    <ArrowRight className="hidden h-[18px] w-[18px] shrink-0 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:block" />
+                                  </div>
+                                </div>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="relative mx-auto max-w-[500px] xl:max-w-[540px]">
+                          <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
+                          <img
+                            src={dashboardHeroImage}
+                            alt={dashboardHeroAlt}
+                            className="relative w-full rounded-2xl opacity-90"
+                          />
+                        </div>
+                      )}
                     </motion.div>
                   </div>
                 </div>
-
-                <div className="absolute bottom-[-1px] left-0 right-0 leading-none">
-                  <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
-                    <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
-                  </svg>
-                </div>
+                {!compactTeacherWorkspaceHome && showTeacherSubjectPage && !hasSingleSubjectAccess ? (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-8 z-20">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSubject(null)}
+                        className="pointer-events-auto inline-flex items-center gap-3 px-1 py-1 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:text-white/90"
+                      >
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/16 text-[#F0C66A] shadow-[0_10px_24px_rgba(10,26,47,0.18)]">
+                          <ArrowLeft className="h-4 w-4" />
+                        </span>
+                        <span className="pr-1">Back to Home</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+            {!compactTeacherWorkspaceHome ? (
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -393,16 +498,6 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   </>
                 ) : showTeacherSubjectPage && activeSubject ? (
                   <>
-                    {!hasSingleSubjectAccess && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSubject(null)}
-                        className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-[#1E3A5F]"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Subject Modules
-                      </button>
-                    )}
                     <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">{PAPER_SUBJECT_LABELS[activeSubject]} Assessments</h2>
                     <p className="text-slate-500 mb-5">
                       Choose a paper inside the {PAPER_SUBJECT_LABELS[activeSubject]} module.
@@ -504,9 +599,10 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   )}
                 </>
               )}
-            </div>
+              </div>
+            ) : null}
 
-            <div className="border-t border-slate-200/60 bg-white/50">
+            <div className="shrink-0 border-t border-slate-200/60 bg-white/50">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <img src={PUREON_LOGO} alt="璞源教育" className="w-6 h-6 object-contain opacity-50" />
@@ -536,7 +632,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.6 }}
                 >
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A84B]/15 border border-[#D4A84B]/25 mb-6">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
                     <span className="text-xs font-medium text-[#D4A84B]">
                       Assessment Library · English / Math / Vocabulary
@@ -544,7 +640,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   </div>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
                     Assessment
-                    <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876]">
+                    <span className="block text-[#E8C876]">
                       Categories
                     </span>
                     <span className="block text-white/90">for Every Subject</span>
@@ -771,7 +867,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <h1 className="font-[family-name:var(--font-body)] text-3xl sm:text-4xl font-bold tracking-normal leading-tight text-white">
                 {paper.title}
                 {hasDistinctSubtitle ? (
-                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#D4A84B] to-[#E8C876] text-2xl sm:text-3xl mt-1">
+                  <span className="mt-1 block text-2xl text-[#E8C876] sm:text-3xl">
                     {paper.subtitle}
                   </span>
                 ) : null}

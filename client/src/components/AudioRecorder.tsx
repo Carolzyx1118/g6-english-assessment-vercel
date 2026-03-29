@@ -9,6 +9,7 @@ import {
   releasePendingAudioBlob,
 } from '@/lib/audioStorage';
 import {
+  getFriendlyAudioUploadErrorMessage,
   getAudioExtension,
   normalizeAudioContentType,
   uploadAudioBlob,
@@ -347,7 +348,12 @@ export default function AudioRecorder({ questionId, sectionId, savedUrl, onRecor
       audioUrlRef.current = localUrl;
       setStatus('uploaded');
       setError(null);
-      setWarning('Recording stored in this tab. We will retry the upload when you submit the assessment.');
+      const friendlyMessage = getFriendlyAudioUploadErrorMessage(err);
+      setWarning(
+        friendlyMessage.includes('missing file storage')
+          ? `${friendlyMessage} This recording is only stored in this tab until storage is configured.`
+          : 'Recording stored in this tab. We will retry the upload when you submit the assessment.',
+      );
       onRecorded(localUrl);
     }
   }, [

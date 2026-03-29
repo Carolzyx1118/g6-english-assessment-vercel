@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Link } from "wouter";
 import {
   CheckCircle2,
-  FileSearch,
   History,
   Home,
   Loader2,
@@ -278,9 +277,9 @@ function buildProgressSteps(progressValue: number, fatalError: string | null, ha
       active: !fatalError && progressValue < 30,
     },
     {
-      key: "ai",
-      label: "AI Scoring",
-      description: "Checking passage open-ended, writing, and speaking.",
+      key: "review",
+      label: "Detailed Review",
+      description: "Checking open-ended answers, writing, and speaking.",
       done: progressValue >= 72 || hasRecord,
       active: !fatalError && progressValue >= 30 && progressValue < 72,
     },
@@ -475,7 +474,7 @@ export default function ResultsPage() {
         setProgressValue(38);
         await utilsRef.current.results.list.invalidate();
 
-        setStatusText("Running AI scoring for open-ended responses, writing, and speaking...");
+        setStatusText("Running scoring checks for open-ended responses, writing, and speaking...");
         setProgressValue(58);
 
         const [readingResultSet, explanationResultSet, writingResultSet, speakingResultSet] = await Promise.allSettled([
@@ -521,7 +520,7 @@ export default function ResultsPage() {
           || writingResultSet.status === "rejected"
           || speakingResultSet.status === "rejected"
         ) {
-          toast.error("Part of the AI analysis failed. The attempt is still saved in test history.");
+          toast.error("Part of the detailed analysis failed. The attempt is still saved in test history.");
         }
 
         setStatusText("Building the final teacher report...");
@@ -736,7 +735,7 @@ export default function ResultsPage() {
           transition={{ duration: 0.45 }}
           className="overflow-hidden rounded-[40px] border border-white/75 bg-white/88 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur"
         >
-          <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.28),_transparent_34%),linear-gradient(135deg,#10213a_0%,#1d4ed8_100%)] px-6 py-10 text-white sm:px-10">
+          <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(143,181,220,0.22),_transparent_34%),linear-gradient(135deg,#16324f_0%,#1E3A5F_46%,#2E587F_100%)] px-6 py-10 text-white sm:px-10">
             <div className="absolute right-8 top-8 opacity-25">
               <WandSparkles className="h-24 w-24" />
             </div>
@@ -746,7 +745,7 @@ export default function ResultsPage() {
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.1, duration: 0.35 }}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/90"
                 >
                   {record ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                   {record ? "Upload Complete" : "Assessment Completed"}
@@ -754,17 +753,17 @@ export default function ResultsPage() {
                 <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">
                   {statusTitle}
                 </h1>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-blue-100 sm:text-lg">
+                <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">
                   {record
-                    ? `Everything for ${displayStudentName}'s assessment has been uploaded. You can return home or open test history to review the full report.`
+                    ? `Everything for ${displayStudentName}'s assessment has been uploaded. You can return home.`
                     : "Your answers are being uploaded and processed. Please keep this page open until the upload bar reaches 100%."}
                 </p>
               </div>
 
-              <div className="min-w-[220px] rounded-[28px] border border-white/15 bg-white/10 px-5 py-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100">Assessment</p>
+              <div className="min-w-[220px] rounded-[28px] border border-white/15 bg-white/8 px-5 py-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Assessment</p>
                 <p className="mt-2 font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-white">{displayPaperTitle}</p>
-                <p className="mt-2 text-sm text-blue-100">
+                <p className="mt-2 text-sm text-white/78">
                   {displayStudentName}
                   {latestSavedResultId ? ` · History #${latestSavedResultId}` : ""}
                 </p>
@@ -843,30 +842,7 @@ export default function ResultsPage() {
             ) : null}
 
             <div className="rounded-[30px] border border-slate-200 bg-white p-6">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-[#E0F2FE] p-3 text-[#0F6CBD]">
-                  <FileSearch className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-slate-900">What happens next</h2>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">
-                    This page handles the upload and AI processing only. The detailed analysis, every part score,
-                    question-by-question review, passage open-ended grading, writing evaluation, speaking evaluation,
-                    and PDF download all live in <span className="font-semibold text-slate-900">Teacher Tools → Test History</span>.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                {isTeacher && latestSavedResultId ? (
-                  <Link href={`/test-history?id=${latestSavedResultId}`}>
-                    <Button type="button" className="gap-2 rounded-full bg-[#1E3A5F] hover:bg-[#16314F]">
-                      <History className="h-4 w-4" />
-                      Open Test History
-                    </Button>
-                  </Link>
-                ) : null}
-
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -877,38 +853,13 @@ export default function ResultsPage() {
                   <Home className="h-4 w-4" />
                   Return Home
                 </Button>
-
-                {fatalError && !record ? (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setFatalError(null);
-                      setStatusTitle("Assessment Completed!");
-                      setStatusText("Retrying the upload...");
-                      setProgressValue(12);
-                      setRetryNonce((value) => value + 1);
-                    }}
-                    className="gap-2 rounded-full bg-[#1E3A5F] hover:bg-[#16314F]"
-                  >
-                    <Loader2 className="h-4 w-4" />
-                    Retry Upload
-                  </Button>
-                ) : null}
-
-                {!record && !fatalError ? (
-                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Waiting for upload to finish
+                {record ? (
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Upload finished. You can safely leave this page.
                   </div>
                 ) : null}
               </div>
-
-              {record ? (
-                <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Upload finished. You can safely leave this page.
-                </div>
-              ) : null}
             </div>
           </div>
         </motion.section>

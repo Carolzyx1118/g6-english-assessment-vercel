@@ -209,11 +209,7 @@ export default function EnglishQuestionTagEditor({
               <p className="text-xs text-amber-600">
                 No exam parts are configured for this system yet. Update Paper Generator first.
               </p>
-            ) : (
-              <p className="text-xs text-slate-500">
-                Choose the exam part first. The Question Type options below will update to match it.
-              </p>
-            )}
+            ) : null}
           </div>
         ) : (
           <>

@@ -189,7 +189,7 @@ export default function TeacherToolsLayout({
         }`}
       >
         <div className="flex h-full flex-col">
-          <div className={`flex items-center border-b border-slate-200 px-4 py-4 ${collapsed ? "justify-center" : "justify-between"}`}>
+          <div className={`flex min-h-[76px] items-center border-b border-slate-200 px-4 py-2.5 ${collapsed ? "justify-center" : "justify-between"}`}>
             {!collapsed ? (
               <div>
                 <p className="text-lg font-bold tracking-tight text-[#1E3A5F]">Workspace Navigation</p>

@@ -4799,18 +4799,28 @@ export default function PaperIntake() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <select
-                  value={paperSubject}
-                  disabled={isEditing}
-                  onChange={(event) => handleSubjectSelection(event.target.value as PaperSubject)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  {PAPER_SUBJECT_ORDER.map((subject) => (
-                    <option key={subject} value={subject}>
-                      {PAPER_SUBJECT_LABELS[subject]}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  {PAPER_SUBJECT_ORDER.map((subject) => {
+                    const isActive = paperSubject === subject;
+
+                    return (
+                      <button
+                        key={subject}
+                        type="button"
+                        disabled={isEditing}
+                        aria-pressed={isActive}
+                        onClick={() => handleSubjectSelection(subject)}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                          isActive
+                            ? "bg-[#1E3A5F] text-white shadow-sm"
+                            : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                        } ${isEditing ? "cursor-not-allowed opacity-70" : ""}`}
+                      >
+                        {PAPER_SUBJECT_LABELS[subject]}
+                      </button>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
 
@@ -4820,43 +4830,51 @@ export default function PaperIntake() {
                 <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Mode</Label>
-                  <div className={`grid gap-3 ${buildMode === "generated" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                    <label className={`rounded-2xl border p-4 text-sm ${isQuestionBankMode ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                <div className="flex flex-wrap gap-2">
+                  <label
+                    className={`inline-flex cursor-pointer items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      isQuestionBankMode
+                        ? "bg-[#1E3A5F] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      checked={isQuestionBankMode}
+                      onChange={activateQuestionBankMode}
+                    />
+                    Random
+                  </label>
+                  <label
+                    className={`inline-flex cursor-pointer items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      buildMode === "fixed" && visibilityMode === "student"
+                        ? "bg-[#1E3A5F] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      checked={buildMode === "fixed" && visibilityMode === "student"}
+                      onChange={activateFixedMode}
+                    />
+                    Fix
+                  </label>
+                  {buildMode === "generated" ? (
+                    <label className="inline-flex cursor-pointer items-center rounded-full bg-[#1E3A5F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors">
                       <input
                         type="radio"
-                        className="mr-2"
-                        checked={isQuestionBankMode}
-                        onChange={activateQuestionBankMode}
+                        className="sr-only"
+                        checked
+                        onChange={() => {
+                          setBuildMode("generated");
+                          setVisibilityMode("student");
+                        }}
                       />
-                      <span className="font-medium text-slate-900">Random</span>
+                      随机组卷模板
                     </label>
-                    <label className={`rounded-2xl border p-4 text-sm ${buildMode === "fixed" && visibilityMode === "student" ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                      <input
-                        type="radio"
-                        className="mr-2"
-                        checked={buildMode === "fixed" && visibilityMode === "student"}
-                        onChange={activateFixedMode}
-                      />
-                      <span className="font-medium text-slate-900">Fix</span>
-                    </label>
-                    {buildMode === "generated" ? (
-                      <label className="rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm">
-                        <input
-                          type="radio"
-                          className="mr-2"
-                          checked
-                          onChange={() => {
-                            setBuildMode("generated");
-                            setVisibilityMode("student");
-                          }}
-                        />
-                        <span className="font-medium text-slate-900">随机组卷模板</span>
-                        <span className="mt-1 block text-xs text-slate-500">按考试体系和标签规则组合 Part，再从题库里随机抽题生成一张新卷。</span>
-                      </label>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
 
                 {isLegacyGeneratedMode ? (
@@ -4916,7 +4934,7 @@ export default function PaperIntake() {
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-3">
                         <CardTitle>{isQuestionBankMode ? `Question ${sectionIndex + 1}` : `Part ${sectionIndex + 1}`}</CardTitle>
                         {isQuestionBankMode ? (
                           <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
@@ -4924,7 +4942,7 @@ export default function PaperIntake() {
                           </span>
                         ) : null}
                       </div>
-                      <CardDescription>
+                      <CardDescription className="mt-3">
                         {isQuestionBankMode
                           ? "Record one shared question block at a time for the random question bank. Add questions inside the block to share the same instructions and image."
                           : isMathPaper
@@ -5532,7 +5550,7 @@ export default function PaperIntake() {
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Question type: Multiple Choice</p>
+                                      <p className="text-xs text-slate-500">Multiple Choice</p>
                                     </div>
                                     <Button
                                       type="button"
@@ -5723,7 +5741,7 @@ export default function PaperIntake() {
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold text-slate-800">{`Blank ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Question type: Word Bank Fill Blank</p>
+                                      <p className="text-xs text-slate-500">Word Bank Fill Blank</p>
                                     </div>
                                     <Button
                                       type="button"
@@ -5800,7 +5818,7 @@ export default function PaperIntake() {
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Question type: Fill in Blank</p>
+                                      <p className="text-xs text-slate-500">Fill in Blank</p>
                                     </div>
                                     <Button
                                       type="button"
@@ -5876,7 +5894,7 @@ export default function PaperIntake() {
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Question type: Picture Spelling</p>
+                                      <p className="text-xs text-slate-500">Picture Spelling</p>
                                     </div>
                                     <Button
                                       type="button"
@@ -5982,7 +6000,7 @@ export default function PaperIntake() {
                                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold text-slate-800">{`Question ${questionIndex + 1}`}</p>
-                                      <p className="text-xs text-slate-500">Question type: Word Completion</p>
+                                      <p className="text-xs text-slate-500">Word Completion</p>
                                     </div>
                                     <Button
                                       type="button"
