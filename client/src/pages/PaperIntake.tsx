@@ -1067,6 +1067,17 @@ function normalizeAssetUrl(value?: string) {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
+
+  try {
+    const parsed = new URL(trimmed, "https://paper-assets.local");
+    const legacyPathname = parsed.searchParams.get("pathname")?.trim().replace(/^\/+/, "");
+    if (/\/blob\/?$/.test(parsed.pathname) && legacyPathname?.startsWith("paper-assets/")) {
+      return `/api/blob?key=${encodeURIComponent(legacyPathname)}`;
+    }
+  } catch {
+    // Keep the original string when it is not URL-like.
+  }
+
   if (
     trimmed.startsWith("data:")
     || trimmed.startsWith("blob:")
@@ -4791,7 +4802,7 @@ export default function PaperIntake() {
           <div className="space-y-6">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader>
-                <CardTitle>Subject</CardTitle>
+                <CardTitle className="font-bold text-[#1E3A5F]">Subject</CardTitle>
                 <CardDescription>
                   {isEditing
                     ? "The subject is locked while you edit an existing paper."
@@ -4826,7 +4837,7 @@ export default function PaperIntake() {
 
             <Card className="border-slate-200 shadow-sm">
               <CardHeader>
-                <CardTitle>Paper Mode</CardTitle>
+                <CardTitle className="font-bold text-[#1E3A5F]">Paper Mode</CardTitle>
                 <CardDescription>Choose the mode first, then the editor will show the matching input flow.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -5020,7 +5031,7 @@ export default function PaperIntake() {
                         {!isQuestionBankMode ? (
                           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-slate-800">{`Question ${subsectionIndex + 1}`}</p>
+                              <p className="text-sm font-bold text-[#1E3A5F]">{`Question ${subsectionIndex + 1}`}</p>
                               <p className="text-xs text-slate-500">
                                 Add the instructions and the questions in this block.
                               </p>

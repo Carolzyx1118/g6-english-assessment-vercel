@@ -30,17 +30,32 @@ import type {
 } from '@/data/papers';
 
 function normalizeUrlish(value: unknown): string | undefined {
+  const normalizeLegacyPaperAssetUrl = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return undefined;
+
+    try {
+      const parsed = new URL(trimmed, 'https://paper-assets.local');
+      const legacyPathname = parsed.searchParams.get('pathname')?.trim().replace(/^\/+/, '');
+      if (/\/blob\/?$/.test(parsed.pathname) && legacyPathname?.startsWith('paper-assets/')) {
+        return `/api/blob?key=${encodeURIComponent(legacyPathname)}`;
+      }
+    } catch {
+      // Keep the original string when it is not URL-like.
+    }
+
+    return trimmed;
+  };
+
   if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || undefined;
+    return normalizeLegacyPaperAssetUrl(value);
   }
 
   if (value && typeof value === 'object') {
     const candidate = (value as { url?: unknown; imageUrl?: unknown }).url
       ?? (value as { imageUrl?: unknown }).imageUrl;
     if (typeof candidate === 'string') {
-      const trimmed = candidate.trim();
-      return trimmed || undefined;
+      return normalizeLegacyPaperAssetUrl(candidate);
     }
   }
 

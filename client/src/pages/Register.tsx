@@ -105,8 +105,8 @@ export default function Register() {
             </div>
           </div>
 
-          <Card className="shadow-xl border border-slate-200/60 bg-white">
-            <CardHeader className="space-y-1 pb-4">
+          <Card className="gap-3 shadow-xl border border-slate-200/60 bg-white">
+            <CardHeader className="space-y-1 pb-0">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">注册账号</CardTitle>
             </CardHeader>
             <form onSubmit={handleSubmit}>

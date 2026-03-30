@@ -315,7 +315,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     : null;
   const compactTeacherWorkspaceHome = showTeacherModules;
   const compactTeacherWorkspaceSubjects = useMemo(() => {
-    const priority: PaperSubject[] = ['english', 'vocabulary', 'math'];
+    const priority: PaperSubject[] = ['vocabulary', 'english', 'math'];
     return priority.filter((subject) => visibleSubjectModules.includes(subject));
   }, [visibleSubjectModules]);
   const activeSubjectHeroCopy = currentTeacherSubject
@@ -328,7 +328,39 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ?? 'Open a subject workspace to review papers, update content, manage what students see, and access your intake, question bank, and paper management tools.';
   const heroTitleFontStyle = { fontFamily: '"Helvetica Neue", Arial, sans-serif' } as const;
   const subjectHeroMainTitleClass = "font-extrabold tracking-tight leading-[0.98] text-[3rem] sm:text-[3.45rem] lg:text-[4.05rem]";
+  const vocabularyHeroMainTitleClass = "font-extrabold tracking-[-0.015em] leading-[0.98] text-[3rem] sm:text-[3.45rem] lg:text-[3.82rem] xl:text-[3.95rem]";
   const heroTitleStackClass = "mt-2 space-y-0 sm:mt-3 sm:space-y-1";
+  const isVocabularySubjectHero = currentTeacherSubject === 'vocabulary';
+  const shouldCenterSubjectHero = showTeacherSubjectPage && !compactTeacherWorkspaceHome;
+  const heroShellClass = compactTeacherWorkspaceHome
+    ? 'lg:flex lg:min-h-full lg:w-full lg:items-center'
+    : shouldCenterSubjectHero
+      ? 'lg:flex lg:min-h-[560px] lg:items-center'
+      : '';
+  const heroBodySpacingClass = compactTeacherWorkspaceHome
+    ? 'py-8 lg:py-10'
+    : shouldCenterSubjectHero
+      ? 'py-12 lg:py-16'
+      : 'pt-12 pb-20';
+  const heroGridOffsetClass = shouldCenterSubjectHero ? '-translate-y-5 sm:-translate-y-6 lg:-translate-y-7' : '';
+  const heroImageOffsetClass = shouldCenterSubjectHero ? 'lg:translate-y-5' : '';
+  const subjectHeroGridClass = compactTeacherWorkspaceHome
+    ? 'items-center gap-7 lg:grid-cols-[minmax(0,0.9fr)_minmax(460px,0.96fr)]'
+    : isVocabularySubjectHero
+      ? 'items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:items-center'
+      : 'items-start gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center';
+  const subjectHeroTextClass = compactTeacherWorkspaceHome
+    ? 'flex flex-col justify-center'
+    : activeSubjectHeroCopy
+      ? `lg:flex lg:min-h-full lg:flex-col lg:justify-center ${isVocabularySubjectHero ? 'lg:pl-4 lg:pr-4 xl:pl-6 xl:pr-6' : 'lg:pl-6 lg:pr-4 xl:pl-8'}`
+      : undefined;
+  const subjectHeroImageClass = compactTeacherWorkspaceHome
+    ? 'mt-8 lg:mt-0 lg:self-center'
+    : `hidden lg:flex lg:min-h-full lg:items-center lg:justify-end ${isVocabularySubjectHero ? 'lg:pl-1' : 'lg:pl-4'}`;
+  const subjectHeroResolvedMainTitleClass = isVocabularySubjectHero ? vocabularyHeroMainTitleClass : subjectHeroMainTitleClass;
+  const subjectHeroFirstLineClass = isVocabularySubjectHero
+    ? 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4 lg:flex-nowrap'
+    : 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4';
 
   return (
     <div className="min-h-screen bg-[#FAFBFD]">
@@ -337,7 +369,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
           <TeacherWorkspaceTopBar />
           <div className={`bg-[#FAFBFD] ${compactTeacherWorkspaceHome ? 'lg:flex lg:min-h-[calc(100vh-81px)] lg:flex-col' : ''}`}>
             <div className={`relative ${compactTeacherWorkspaceHome ? 'lg:flex flex-1' : ''}`}>
-              <div className={`relative overflow-hidden ${compactTeacherWorkspaceHome ? 'lg:flex lg:min-h-full lg:w-full lg:items-center' : ''}`}>
+              <div className={`relative overflow-hidden ${heroShellClass}`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
                 <div className="absolute inset-0 opacity-5" style={{
                   backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
@@ -346,19 +378,13 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
 
-                <div className={`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 relative z-10 ${compactTeacherWorkspaceHome ? 'py-8 lg:py-10' : 'pt-12 pb-20'}`}>
-                  <div className={`grid ${compactTeacherWorkspaceHome ? 'items-center gap-7 lg:grid-cols-[minmax(0,0.9fr)_minmax(460px,0.96fr)]' : 'items-start gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center'}`}>
+                <div className={`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 relative z-10 ${heroBodySpacingClass}`}>
+                  <div className={`grid ${subjectHeroGridClass} ${heroGridOffsetClass}`}>
                     <motion.div
                       initial={{ opacity: 0, x: -30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.6 }}
-                      className={
-                        compactTeacherWorkspaceHome
-                          ? 'flex flex-col justify-center'
-                          : activeSubjectHeroCopy
-                            ? 'lg:flex lg:min-h-full lg:flex-col lg:justify-center lg:pr-6'
-                            : undefined
-                      }
+                      className={subjectHeroTextClass}
                     >
                       <div className={`inline-flex self-start items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5 ${compactTeacherWorkspaceHome ? 'lg:-translate-y-2' : ''}`}>
                         <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
@@ -368,15 +394,15 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                       </div>
                       {activeSubjectHeroCopy ? (
                         <div className={heroTitleStackClass} style={heroTitleFontStyle}>
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4">
-                            <span className={`block text-white ${subjectHeroMainTitleClass}`}>
+                          <div className={subjectHeroFirstLineClass}>
+                            <span className={`block text-white ${subjectHeroResolvedMainTitleClass}`}>
                               Manage
                             </span>
-                            <span className={`block text-[#E8C876] ${subjectHeroMainTitleClass}`}>
+                            <span className={`block text-[#E8C876] ${subjectHeroResolvedMainTitleClass}`}>
                               {heroHighlightText}
                             </span>
                           </div>
-                          <h1 className={`${subjectHeroMainTitleClass} text-white/92`}>
+                          <h1 className={`${subjectHeroResolvedMainTitleClass} text-white/92`}>
                             {heroTrailingText}
                           </h1>
                         </div>
@@ -410,10 +436,10 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                       initial={{ opacity: 0, x: 30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.6, delay: 0.2 }}
-                      className={compactTeacherWorkspaceHome ? 'mt-8 lg:mt-0 lg:self-center' : 'hidden lg:flex lg:min-h-full lg:items-center lg:justify-end lg:pl-4'}
+                      className={`${subjectHeroImageClass} ${heroImageOffsetClass}`}
                     >
                       {compactTeacherWorkspaceHome ? (
-                        <div className="flex max-w-[780px] flex-col gap-3 lg:ml-auto">
+                        <div className="flex max-w-[780px] flex-col gap-2.5 lg:gap-3 lg:ml-auto">
                           {compactTeacherWorkspaceSubjects.map((subject, index) => {
                             const config = subjectModuleConfig[subject];
 
@@ -464,15 +490,15 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   </div>
                 </div>
                 {!compactTeacherWorkspaceHome && showTeacherSubjectPage && !hasSingleSubjectAccess ? (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-8 z-20">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="pointer-events-none absolute inset-x-0 bottom-20 lg:bottom-24 z-20">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 lg:pl-14 xl:pl-16">
                       <button
                         type="button"
                         onClick={() => setSelectedSubject(null)}
-                        className="pointer-events-auto inline-flex items-center gap-3 px-1 py-1 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:text-white/90"
+                        className="pointer-events-auto inline-flex items-center gap-3.5 px-1 py-1 text-[15px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:text-white/90 lg:text-base"
                       >
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/16 text-[#F0C66A] shadow-[0_10px_24px_rgba(10,26,47,0.18)]">
-                          <ArrowLeft className="h-4 w-4" />
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/16 text-[#F0C66A] shadow-[0_10px_24px_rgba(10,26,47,0.18)]">
+                          <ArrowLeft className="h-[18px] w-[18px]" />
                         </span>
                         <span className="pr-1">Back to Home</span>
                       </button>

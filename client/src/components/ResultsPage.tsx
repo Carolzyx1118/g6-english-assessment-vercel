@@ -293,6 +293,8 @@ function buildProgressSteps(progressValue: number, fatalError: string | null, ha
   ];
 }
 
+const AUTO_RETURN_HOME_DELAY_SECONDS = 10;
+
 export default function ResultsPage() {
   const utils = trpc.useUtils();
   const { isTeacher } = useLocalAuth();
@@ -311,6 +313,7 @@ export default function ResultsPage() {
   const [progressValue, setProgressValue] = useState(10);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [autoReturnSecondsLeft, setAutoReturnSecondsLeft] = useState<number | null>(null);
 
   const saveResultMutation = trpc.results.save.useMutation();
   const updateResultMutation = trpc.results.updateAI.useMutation();
@@ -339,6 +342,8 @@ export default function ResultsPage() {
   uploadFileRef.current = uploadFileMutation;
   const utilsRef = useRef(utils);
   utilsRef.current = utils;
+  const resetQuizRef = useRef(resetQuiz);
+  resetQuizRef.current = resetQuiz;
 
   const submittedSnapshot = useMemo(
     () => readSubmittedAssessmentSnapshot(),
@@ -656,6 +661,31 @@ export default function ResultsPage() {
     submission,
   ]);
 
+  useEffect(() => {
+    if (!record || fatalError) {
+      setAutoReturnSecondsLeft(null);
+      return;
+    }
+
+    setAutoReturnSecondsLeft(AUTO_RETURN_HOME_DELAY_SECONDS);
+
+    const countdownTimer = window.setInterval(() => {
+      setAutoReturnSecondsLeft((current) => {
+        if (current === null) return null;
+        return current > 0 ? current - 1 : 0;
+      });
+    }, 1000);
+
+    const returnHomeTimer = window.setTimeout(() => {
+      resetQuizRef.current();
+    }, AUTO_RETURN_HOME_DELAY_SECONDS * 1000);
+
+    return () => {
+      window.clearInterval(countdownTimer);
+      window.clearTimeout(returnHomeTimer);
+    };
+  }, [fatalError, record]);
+
   const displayStudentName = record?.studentName || submission?.studentInfo.name || "Student";
   const displayPaperTitle = record?.paperTitle || submission?.paper.title || "Assessment";
   const displayProgress = hasNumber(progressValue) ? clampProgress(progressValue) : 0;
@@ -755,7 +785,7 @@ export default function ResultsPage() {
                 </h1>
                 <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">
                   {record
-                    ? `Everything for ${displayStudentName}'s assessment has been uploaded. You can return home.`
+                    ? `Everything for ${displayStudentName}'s assessment has been uploaded.${autoReturnSecondsLeft !== null ? ` Returning home automatically in ${autoReturnSecondsLeft}s.` : " You can return home."}`
                     : "Your answers are being uploaded and processed. Please keep this page open until the upload bar reaches 100%."}
                 </p>
               </div>
@@ -856,7 +886,9 @@ export default function ResultsPage() {
                 {record ? (
                   <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
                     <CheckCircle2 className="h-4 w-4" />
-                    Upload finished. You can safely leave this page.
+                    {autoReturnSecondsLeft !== null
+                      ? `Upload finished. Returning home in ${autoReturnSecondsLeft}s.`
+                      : "Upload finished. You can safely leave this page."}
                   </div>
                 ) : null}
               </div>

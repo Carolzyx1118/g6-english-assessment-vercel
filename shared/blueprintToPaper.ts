@@ -97,8 +97,25 @@ export interface ConvertedQuestion {
   passageText?: string;
 }
 
+function normalizeLegacyPaperAssetUrl(value?: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = new URL(trimmed, "https://paper-assets.local");
+    const legacyPathname = parsed.searchParams.get("pathname")?.trim().replace(/^\/+/, "");
+    if (/\/blob\/?$/.test(parsed.pathname) && legacyPathname?.startsWith("paper-assets/")) {
+      return `/api/blob?key=${encodeURIComponent(legacyPathname)}`;
+    }
+  } catch {
+    // Leave non-URL values untouched.
+  }
+
+  return trimmed;
+}
+
 function getAssetUrl(asset?: { previewUrl?: string; dataUrl: string }) {
-  return asset?.previewUrl || asset?.dataUrl;
+  return normalizeLegacyPaperAssetUrl(asset?.previewUrl || asset?.dataUrl);
 }
 
 function buildClozePassage(
@@ -609,12 +626,12 @@ export function blueprintToPaper(blueprint: ManualPaperBlueprint, options?: {
 
       // Add audio
       if (subsection.audio) {
-        convertedBlock.audioUrl = subsection.audio.previewUrl || subsection.audio.dataUrl;
+        convertedBlock.audioUrl = getAssetUrl(subsection.audio);
       }
 
       // Add scene image
       if (subsection.sceneImage) {
-        convertedBlock.sceneImageUrl = subsection.sceneImage.previewUrl || subsection.sceneImage.dataUrl;
+        convertedBlock.sceneImageUrl = getAssetUrl(subsection.sceneImage);
       }
 
       // Add matching descriptions

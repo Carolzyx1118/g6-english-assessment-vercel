@@ -66,4 +66,54 @@ describe("blueprintToPaper", () => {
     expect(paper.sections[0]?.questions[0]?.question).toBe("Part 13 original question");
     expect(paper.sections[1]?.questions[0]?.question).toBe("Part 15 later question");
   });
+
+  it("rewrites legacy blob pathname audio urls to the app blob proxy", () => {
+    const blueprint: ManualPaperBlueprint = {
+      id: "legacy-listening-audio",
+      title: "Legacy Listening Audio",
+      description: "Ensures older blob pathname urls still play in listening sections.",
+      buildMode: "fixed",
+      visibilityMode: "student",
+      generationConfig: { sections: [] },
+      createdAt: "2026-03-30T00:00:00.000Z",
+      sections: [
+        {
+          id: "listening-part",
+          partLabel: "Part 1",
+          sectionType: "listening",
+          subsections: [
+            {
+              id: "sub-1",
+              title: "",
+              instructions: "Listen and answer.",
+              questionType: "mcq",
+              questions: [
+                {
+                  id: "q-1",
+                  type: "mcq",
+                  prompt: "What did the speaker say?",
+                  options: [
+                    { label: "A", text: "Hello" },
+                    { label: "B", text: "Goodbye" },
+                  ],
+                  correctAnswer: "A",
+                },
+              ],
+              audio: {
+                fileName: "legacy-listening.mp3",
+                dataUrl: "",
+                previewUrl: "/blob/?pathname=paper-assets%2Flegacy-listening.mp3",
+                mimeType: "audio/mpeg",
+                size: 1,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const paper = blueprintToPaper(blueprint);
+
+    expect(paper.sections[0]?.audioUrl).toBe("/api/blob?key=paper-assets%2Flegacy-listening.mp3");
+  });
 });

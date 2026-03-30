@@ -76,8 +76,8 @@ export default function Login() {
             </div>
           </div>
 
-          <Card className="shadow-xl border border-slate-200/60 bg-white">
-            <CardHeader className="space-y-1 pb-4">
+          <Card className="gap-3 shadow-xl border border-slate-200/60 bg-white">
+            <CardHeader className="space-y-1 pb-0">
               <CardTitle className="text-xl text-center text-[#1E3A5F]">登录</CardTitle>
             </CardHeader>
             <form onSubmit={handleSubmit}>
@@ -123,7 +123,7 @@ export default function Login() {
                 </div>
               </CardContent>
 
-              <CardFooter className="flex flex-col gap-3 pt-2">
+              <CardFooter className="flex flex-col gap-3 pt-6">
                 <Button
                   type="submit"
                   className="w-full bg-[#1E3A5F] hover:bg-[#2A4A6F] text-white"
