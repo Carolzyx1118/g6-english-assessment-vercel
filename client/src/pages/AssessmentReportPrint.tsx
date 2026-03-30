@@ -21,7 +21,7 @@ const PRINT_PAGE_STYLES = `
       background: #ffffff !important;
       margin: 0;
       padding: 0;
-      font-size: 12.5px !important;
+      font-size: 11.5px !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -43,7 +43,18 @@ const PRINT_PAGE_STYLES = `
     }
 
     .print-assessment-report {
-      font-size: 12.5px !important;
+      font-size: 11.5px !important;
+    }
+
+    .print-assessment-report h1,
+    .print-assessment-report h2,
+    .print-assessment-report h3,
+    .print-assessment-report p,
+    .print-assessment-report span {
+      word-break: keep-all !important;
+      overflow-wrap: normal !important;
+      hyphens: manual !important;
+      line-break: strict;
     }
 
     .print-assessment-report .report-summary-card,
@@ -90,15 +101,15 @@ const PRINT_PAGE_STYLES = `
     }
 
     .print-assessment-report .report-hero {
-      padding: 18px 20px !important;
+      padding: 16px 18px !important;
     }
 
     .print-assessment-report .report-shell-card:not(:first-child) {
-      padding: 16px !important;
+      padding: 14px !important;
     }
 
     .print-assessment-report .report-summary-card {
-      padding: 12px !important;
+      padding: 10px !important;
     }
 
     .print-assessment-report .report-breakdown-card,
@@ -108,57 +119,57 @@ const PRINT_PAGE_STYLES = `
     .print-assessment-report .report-parent-card,
     .print-assessment-report .report-study-stage,
     .print-assessment-report .report-material-card {
-      padding: 14px !important;
-      border-radius: 20px !important;
+      padding: 12px !important;
+      border-radius: 18px !important;
     }
 
     .print-assessment-report .report-detail-summary {
-      padding: 14px 16px !important;
-    }
-
-    .print-assessment-report .report-detail-body {
       padding: 12px 14px !important;
     }
 
-    .print-assessment-report .report-list-item {
+    .print-assessment-report .report-detail-body {
       padding: 10px 12px !important;
-      gap: 10px !important;
+    }
+
+    .print-assessment-report .report-list-item {
+      padding: 9px 10px !important;
+      gap: 8px !important;
     }
 
     .print-assessment-report .report-hero-name {
-      font-size: 18px !important;
+      font-size: 16px !important;
       line-height: 1.08 !important;
     }
 
     .print-assessment-report .report-summary-grade {
-      font-size: 30px !important;
+      font-size: 26px !important;
     }
 
     .print-assessment-report .report-summary-score {
-      font-size: 24px !important;
+      font-size: 21px !important;
     }
 
     .print-assessment-report .report-summary-time {
-      font-size: 18px !important;
+      font-size: 15px !important;
     }
 
     .print-assessment-report .report-breakdown-score {
-      font-size: 18px !important;
+      font-size: 16px !important;
     }
 
     .print-assessment-report .report-step-title {
-      font-size: 16px !important;
+      font-size: 14px !important;
       line-height: 1.2 !important;
     }
 
     .print-assessment-report .report-breakdown-title,
     .print-assessment-report .report-detail-title {
-      font-size: 14px !important;
+      font-size: 13px !important;
       line-height: 1.25 !important;
     }
 
     .print-assessment-report .report-profile-name {
-      font-size: 14px !important;
+      font-size: 13px !important;
     }
 
     .print-assessment-report .report-step-description,
@@ -168,8 +179,8 @@ const PRINT_PAGE_STYLES = `
     .print-assessment-report .report-parent-card p,
     .print-assessment-report .report-overview-card p,
     .print-assessment-report .report-material-card p {
-      font-size: 12px !important;
-      line-height: 1.45 !important;
+      font-size: 10.75px !important;
+      line-height: 1.35 !important;
       orphans: 3;
       widows: 3;
     }
@@ -244,7 +255,9 @@ export default function AssessmentReportPrint() {
 
       <div className="report-print-toolbar mx-auto mb-5 flex max-w-[1180px] flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Printable Assessment Report</h1>
+          <h1 className="text-lg font-semibold text-slate-900">
+            {locale === "cn" ? "可打印测评报告" : "Printable Assessment Report"}
+          </h1>
           <p className="text-sm text-slate-500">
             {locale === "cn"
               ? (contentView === "review"
@@ -301,11 +314,11 @@ export default function AssessmentReportPrint() {
 
           <Button type="button" variant="outline" className="gap-2 rounded-full" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
-            Print / Save PDF
+            {locale === "cn" ? "打印 / 保存 PDF" : "Print / Save PDF"}
           </Button>
           <Button type="button" variant="outline" className="gap-2 rounded-full" onClick={() => window.close()}>
             <X className="h-4 w-4" />
-            Close
+            {locale === "cn" ? "关闭" : "Close"}
           </Button>
         </div>
       </div>
@@ -314,7 +327,9 @@ export default function AssessmentReportPrint() {
         <div className="report-print-shell mx-auto max-w-[1180px] rounded-[32px] border border-rose-200 bg-white px-6 py-8 shadow-sm">
           <div className="flex items-center gap-3 text-rose-700">
             <Globe className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">Unable to load report</h2>
+            <h2 className="text-lg font-semibold">
+              {locale === "cn" ? "无法加载报告" : "Unable to load report"}
+            </h2>
           </div>
           <p className="mt-3 text-sm leading-7 text-slate-600">{error}</p>
         </div>
@@ -331,7 +346,9 @@ export default function AssessmentReportPrint() {
         </div>
       ) : (
         <div className="report-print-shell mx-auto max-w-[1180px] rounded-[32px] border border-slate-200 bg-white px-6 py-8 shadow-sm">
-          <p className="text-sm text-slate-500">Loading report...</p>
+          <p className="text-sm text-slate-500">
+            {locale === "cn" ? "正在加载报告..." : "Loading report..."}
+          </p>
         </div>
       )}
     </div>

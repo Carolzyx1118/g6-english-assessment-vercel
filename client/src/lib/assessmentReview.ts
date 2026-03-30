@@ -262,11 +262,11 @@ export function createPendingSpeakingEvaluation(
     grade: "Manual Review",
     overallFeedback_en:
       responses.length > 0
-        ? "Student recordings were saved successfully. Teacher speaking review is pending in Test History."
+        ? ""
         : "No speaking responses were submitted.",
     overallFeedback_cn:
       responses.length > 0
-        ? "学生录音已成功保存，等待老师在 Test History 中完成口语评分。"
+        ? ""
         : "未提交口语作答。",
     evaluations: responses.map(buildPendingSpeakingQuestionEvaluation),
     reviewMode: "manual",

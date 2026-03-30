@@ -296,6 +296,8 @@ describe("assessmentReview", () => {
     expect(pending.evaluations[0]?.maxScore).toBe(5);
     expect(pending.evaluations[0]?.taskCompletionScore).toBe(0);
     expect(pending.evaluations[0]?.fluencyScore).toBe(0);
+    expect(pending.overallFeedback_en).toBe("");
+    expect(pending.overallFeedback_cn).toBe("");
     expect(pending.evaluations[0]?.feedback_cn).toContain("等待老师");
   });
 

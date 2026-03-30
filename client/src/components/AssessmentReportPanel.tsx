@@ -1154,7 +1154,7 @@ export default function AssessmentReportPanel({
                 </p>
               </div>
               <div className="mt-3 flex items-end gap-2.5">
-                <span className="report-summary-grade text-[44px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
+                <span className="report-summary-grade text-[40px] font-semibold leading-none tracking-[-0.03em] text-slate-900">{model.grade}</span>
                 <span className="mb-1 text-[13px] font-medium text-slate-500">
                   {isCn ? "综合表现" : "Overall"}
                 </span>
@@ -1208,7 +1208,7 @@ export default function AssessmentReportPanel({
       <section className="report-shell-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <StepHeading
           step={breakdownStep}
-          title={isCn ? "Part Breakdown" : "Part Breakdown"}
+          title={isCn ? "分项概览" : "Part Breakdown"}
           description={isCn
             ? "先按试卷顺序快速看完每个 Part 的得分、用时和核心判断，再进入逐题回顾。"
             : "Scan each part in paper order first, then move into the detailed review section."}
