@@ -76,7 +76,32 @@ export type UploadFileMutationLike = {
 };
 
 export function normalizeAudioContentType(value: string | null | undefined) {
-  return value?.split(";")[0]?.trim().toLowerCase() || "";
+  const normalized = value?.split(";")[0]?.trim().toLowerCase() || "";
+
+  if (
+    normalized === "audio/mp3"
+    || normalized === "audio/mpg"
+    || normalized === "audio/x-mp3"
+    || normalized === "audio/x-mpeg"
+    || normalized === "audio/mpeg3"
+    || normalized === "audio/x-mpeg-3"
+  ) {
+    return "audio/mpeg";
+  }
+
+  if (normalized === "audio/x-wav" || normalized === "audio/wave") {
+    return "audio/wav";
+  }
+
+  if (normalized === "audio/x-m4a") {
+    return "audio/m4a";
+  }
+
+  if (normalized === "audio/x-aac") {
+    return "audio/aac";
+  }
+
+  return normalized;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {

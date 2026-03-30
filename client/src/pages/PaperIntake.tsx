@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, FilePlus2, ImagePlus, Link2, Loader2, Mi
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type FillBlankQuestion, type PaperSubject } from "@/data/papers";
 import DragDropFillBlank from "@/components/DragDropFillBlank";
 import {
+  normalizeAudioContentType,
   uploadAudioBlob,
 } from "@/lib/audioUpload";
 import {
@@ -1137,10 +1138,17 @@ function guessAssetContentType(
   fileName?: string,
   fallback?: string,
 ) {
-  if (fallback?.trim()) return fallback.trim();
   const lowerName = fileName?.toLowerCase() ?? "";
 
   if (kind === "audio") {
+    const normalizedFallback = normalizeAudioContentType(fallback);
+    if (
+      normalizedFallback
+      && normalizedFallback.startsWith("audio/")
+    ) {
+      return normalizedFallback;
+    }
+
     if (lowerName.endsWith(".mp3")) return "audio/mpeg";
     if (lowerName.endsWith(".wav")) return "audio/wav";
     if (lowerName.endsWith(".ogg")) return "audio/ogg";
@@ -1151,6 +1159,8 @@ function guessAssetContentType(
     return "audio/mpeg";
   }
 
+  if (fallback?.trim()) return fallback.trim();
+
   if (lowerName.endsWith(".png")) return "image/png";
   if (lowerName.endsWith(".webp")) return "image/webp";
   if (lowerName.endsWith(".gif")) return "image/gif";
@@ -1158,7 +1168,9 @@ function guessAssetContentType(
 }
 
 function guessAssetExtension(contentType: string, kind: "image" | "audio") {
-  const normalizedType = contentType.toLowerCase();
+  const normalizedType = kind === "audio"
+    ? normalizeAudioContentType(contentType)
+    : contentType.toLowerCase();
 
   if (kind === "audio") {
     if (normalizedType.includes("mpeg") || normalizedType.includes("mp3")) return "mp3";

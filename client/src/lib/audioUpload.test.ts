@@ -9,7 +9,7 @@ vi.mock("@vercel/blob/client", () => ({
   upload: uploadMock,
 }));
 
-import { uploadAudioBlob } from "./audioUpload";
+import { normalizeAudioContentType, uploadAudioBlob } from "./audioUpload";
 
 class MockFileReader {
   result: string | ArrayBuffer | null = null;
@@ -117,5 +117,45 @@ describe("uploadAudioBlob", () => {
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(uploadFileMutation.mutateAsync).not.toHaveBeenCalled();
     expect(result).toBe("https://blob.vercel-storage.com/paper-assets/large-listening.mp3");
+  });
+
+  it("normalizes legacy MP3 content types before uploading", async () => {
+    vi.stubGlobal("window", {
+      location: {
+        hostname: "app.example.com",
+      },
+    });
+
+    const uploadFileMutation = {
+      mutateAsync: vi.fn().mockResolvedValue({
+        url: "/api/blob?key=paper-assets%2Ffrom-server.mp3",
+      }),
+    };
+
+    await uploadAudioBlob({
+      blob: new Blob(["hello"], { type: "audio/x-mp3" }),
+      contentType: "audio/x-mp3",
+      fileName: "listening.mp3",
+      uploadFileMutation,
+    });
+
+    expect(uploadFileMutation.mutateAsync).toHaveBeenCalledWith({
+      fileName: "listening.mp3",
+      fileBase64: Buffer.from("hello").toString("base64"),
+      contentType: "audio/mpeg",
+    });
+  });
+});
+
+describe("normalizeAudioContentType", () => {
+  it("maps common MP3 aliases to audio/mpeg", () => {
+    expect(normalizeAudioContentType("audio/x-mp3")).toBe("audio/mpeg");
+    expect(normalizeAudioContentType("audio/mpg")).toBe("audio/mpeg");
+    expect(normalizeAudioContentType("audio/mpeg")).toBe("audio/mpeg");
+  });
+
+  it("maps common WAV aliases to audio/wav", () => {
+    expect(normalizeAudioContentType("audio/x-wav")).toBe("audio/wav");
+    expect(normalizeAudioContentType("audio/wave")).toBe("audio/wav");
   });
 });
