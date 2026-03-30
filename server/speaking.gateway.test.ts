@@ -9,7 +9,9 @@ function createPublicContext(): TrpcContext {
   };
 }
 
-async function loadRouterWithGatewayEnv(overrides?: {
+async function loadRouterWithAudioScoringEnv(overrides?: {
+  useForge?: boolean;
+  useGateway?: boolean;
   openaiApiKey?: string;
 }) {
   vi.resetModules();
@@ -30,7 +32,7 @@ async function loadRouterWithGatewayEnv(overrides?: {
       ...actual,
       ENV: {
         ...actual.ENV,
-        aiGatewayApiKey: "gateway-key",
+        aiGatewayApiKey: overrides?.useGateway ? "gateway-key" : "",
         aiGatewayBaseUrl: "",
         aiGatewayModel: "openai/gpt-4o-mini",
         aiGatewaySpeakingModel: "gpt-audio",
@@ -38,8 +40,8 @@ async function loadRouterWithGatewayEnv(overrides?: {
         openaiApiKey: overrides?.openaiApiKey ?? "",
         openaiChatModel: "",
         openaiTranscriptionModel: "",
-        forgeApiUrl: "",
-        forgeApiKey: "",
+        forgeApiUrl: overrides?.useForge ? "https://forge.manus.im" : "",
+        forgeApiKey: overrides?.useForge ? "forge-key" : "",
         blobReadWriteToken: "",
       },
     };
@@ -61,7 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
+describe("grading.evaluateSpeaking with direct audio input", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -80,7 +82,9 @@ describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
-      await loadRouterWithGatewayEnv();
+      await loadRouterWithAudioScoringEnv({
+        useGateway: true,
+      });
 
     mockInvokeLLM
       .mockResolvedValueOnce({
@@ -148,6 +152,77 @@ describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
     expect(result.evaluations[0].transcript).toContain("my family cooks it");
   });
 
+  it("scores speaking directly from audio through Forge when the speech transcription endpoint is unavailable", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      arrayBuffer: async () => new Uint8Array([5, 6, 7, 8]).buffer,
+      headers: {
+        get: (header: string) =>
+          header.toLowerCase() === "content-type" ? "audio/wav" : null,
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
+      await loadRouterWithAudioScoringEnv({
+        useForge: true,
+      });
+
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              transcript: "Hello teacher.",
+              score: 4,
+              feedback_en: "The response is short but clear.",
+              feedback_cn: "回答较短，但比较清楚。",
+              taskCompletion_en: "The prompt was answered directly.",
+              taskCompletion_cn: "能够直接回应题目。",
+              fluency_en: "The response is fluent.",
+              fluency_cn: "表达比较流畅。",
+              vocabulary_en: "Vocabulary is simple and accurate.",
+              vocabulary_cn: "词汇简单且准确。",
+              grammar_en: "Grammar is controlled well.",
+              grammar_cn: "语法控制较好。",
+              pronunciation_en: "Speech is generally clear.",
+              pronunciation_cn: "发音整体较清晰。",
+              suggestions_en: ["Add one more sentence."],
+              suggestions_cn: ["可以再补充一句。"],
+            }),
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-4",
+          sectionTitle: "Speaking Part 4",
+          questionId: 105,
+          prompt: "Say hello to your teacher.",
+          audioUrl: "/api/blob?key=forge-speaking.wav",
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAudio).not.toHaveBeenCalled();
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(mockInvokeLLM.mock.calls[0]?.[0]).toMatchObject({
+      model: "openai/gpt-audio",
+      modalities: ["text"],
+    });
+    expect(result.totalScore).toBe(4);
+    expect(result.totalPossible).toBe(5);
+    expect(result.reviewMode).toBe("ai");
+    expect(result.evaluations[0].transcript).toContain("Hello teacher");
+  });
+
   it("falls back to transcription-based scoring when the saved audio format is not Gateway-compatible", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -162,7 +237,8 @@ describe("grading.evaluateSpeaking with AI Gateway audio input", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
-      await loadRouterWithGatewayEnv({
+      await loadRouterWithAudioScoringEnv({
+        useGateway: true,
         openaiApiKey: "openai-key",
       });
 

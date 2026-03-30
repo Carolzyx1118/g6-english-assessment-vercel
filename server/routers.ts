@@ -641,6 +641,12 @@ function normalizeGatewayModelId(value: string, fallback: string) {
   return trimmed.includes("/") ? trimmed : `openai/${trimmed}`;
 }
 
+function canAttemptDirectAudioSpeakingEvaluation() {
+  // Forge and the Vercel AI Gateway both accept the OpenAI-compatible
+  // chat-completions payload we build for direct audio scoring.
+  return Boolean(ENV.aiGatewayApiKey || ENV.forgeApiKey);
+}
+
 function normalizeOptionalString(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
@@ -1570,12 +1576,12 @@ async function evaluateSpeakingWithAI(
 ): Promise<SpeakingEvaluationResult> {
   const evaluations = await Promise.all(
     responses.map(async (response) => {
-      if (ENV.aiGatewayApiKey) {
+      if (canAttemptDirectAudioSpeakingEvaluation()) {
         try {
           return await evaluateSpeakingResponseWithGatewayAudio(req, response);
         } catch (error) {
           console.error(
-            `[grading.evaluateSpeaking] Gateway audio scoring failed for ${response.sectionId}#${response.questionId}, trying transcription fallback:`,
+            `[grading.evaluateSpeaking] Direct audio scoring failed for ${response.sectionId}#${response.questionId}, trying transcription fallback:`,
             error,
           );
         }
