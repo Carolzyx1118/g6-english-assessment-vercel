@@ -1461,47 +1461,7 @@ export default function AssessmentReportPanel({
 
                 {isSpeakingSection ? (
                   <div className="space-y-4">
-                    {canManuallyScoreSpeaking ? (
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {isEditingSpeaking ? (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={handleCancelSpeakingEdit}
-                              disabled={savingSpeaking}
-                              className="rounded-full bg-white"
-                            >
-                              {isCn ? "取消" : "Cancel"}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={handleSaveSpeakingReview}
-                              disabled={savingSpeaking}
-                              className="rounded-full"
-                            >
-                              {savingSpeaking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                              {isCn ? "保存口语评分" : "Save Speaking Review"}
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setIsEditingSpeaking(true)}
-                            className="rounded-full bg-white"
-                          >
-                            <PencilLine className="mr-2 h-4 w-4" />
-                            {isCn ? "老师评分" : "Edit Speaking Score"}
-                          </Button>
-                        )}
-                      </div>
-                    ) : null}
-
-                    {editableSpeakingItems.map((item) => (
+                    {editableSpeakingItems.map((item, itemIndex) => (
                       <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
@@ -1568,24 +1528,64 @@ export default function AssessmentReportPanel({
                               </div>
                           ))}
                           </div>
+
+                          {itemIndex === editableSpeakingItems.length - 1 && isEditingSpeaking && canManuallyScoreSpeaking ? (
+                            <div className="mt-4 rounded-[24px] border border-orange-200 bg-orange-50 px-4 py-4">
+                              <div className="flex items-center gap-2 text-orange-950">
+                                <Mic className="h-5 w-5 text-orange-600" />
+                                <p className="text-sm font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
+                              </div>
+                              <Textarea
+                                value={speakingDraft?.overallFeedback_cn || ""}
+                                onChange={(event) => updateSpeakingOverallFeedback(event.target.value)}
+                                placeholder={isCn ? "输入老师对本次口语整体表现的评语" : "Add an overall teacher comment for this speaking section"}
+                                className="mt-3 min-h-[110px] bg-white"
+                              />
+                            </div>
+                          ) : null}
+
+                          {itemIndex === editableSpeakingItems.length - 1 && canManuallyScoreSpeaking ? (
+                            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                              {isEditingSpeaking ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCancelSpeakingEdit}
+                                    disabled={savingSpeaking}
+                                    className="rounded-full bg-white"
+                                  >
+                                    {isCn ? "取消" : "Cancel"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSaveSpeakingReview}
+                                    disabled={savingSpeaking}
+                                    className="rounded-full"
+                                  >
+                                    {savingSpeaking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                    {isCn ? "保存口语评分" : "Save Speaking Review"}
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setIsEditingSpeaking(true)}
+                                  className="rounded-full bg-white"
+                                >
+                                  <PencilLine className="mr-2 h-4 w-4" />
+                                  {isCn ? "老师评分" : "Edit Speaking Score"}
+                                </Button>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ))}
-
-                    {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                      <div className="rounded-[24px] border border-orange-200 bg-orange-50 px-5 py-4 text-sm leading-7 text-orange-950">
-                        <div className="flex items-center gap-2">
-                          <Mic className="h-5 w-5 text-orange-600" />
-                          <p className="text-base font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
-                        </div>
-                        <Textarea
-                          value={speakingDraft?.overallFeedback_cn || ""}
-                          onChange={(event) => updateSpeakingOverallFeedback(event.target.value)}
-                          placeholder={isCn ? "输入老师对本次口语整体表现的评语" : "Add an overall teacher comment for this speaking section"}
-                          className="mt-3 min-h-[110px] bg-white"
-                        />
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
 

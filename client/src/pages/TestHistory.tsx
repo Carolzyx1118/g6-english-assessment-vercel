@@ -101,7 +101,6 @@ export default function TestHistory() {
       totalRecords: items.length,
       completedReports: items.filter((item) => item.reportStatus === "completed").length,
       pendingReports: items.filter((item) => item.reportStatus === "pending-review").length,
-      rawRecords: items.filter((item) => item.reportStatus === "raw").length,
     };
   }, [listQuery.data]);
 
@@ -123,7 +122,7 @@ export default function TestHistory() {
           </div>
 
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardDescription>Total History Records</CardDescription>
@@ -140,12 +139,6 @@ export default function TestHistory() {
                 <CardHeader className="pb-2">
                   <CardDescription>Pending Teacher Review</CardDescription>
                   <CardTitle className="text-2xl text-emerald-700">{historyStats.pendingReports}</CardTitle>
-                </CardHeader>
-              </Card>
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardDescription>Raw Records</CardDescription>
-                  <CardTitle className="text-2xl text-amber-700">{historyStats.rawRecords}</CardTitle>
                 </CardHeader>
               </Card>
             </div>
