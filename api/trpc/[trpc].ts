@@ -1,6 +1,3 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import runHandler from "../_runHandler";
+import handler from "../_generated/rpc-handler.js";
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
-  return runHandler(req, res);
-}
+export default handler;

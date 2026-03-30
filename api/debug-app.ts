@@ -5,15 +5,14 @@ export default async function handler(
   res: ServerResponse
 ) {
   try {
-    const { createApp } = await import("../server/_core/app");
-    const app = await createApp();
+    const { default: bundledHandler } = await import("./_generated/rpc-handler.js");
 
     res.statusCode = 200;
     res.setHeader("content-type", "application/json; charset=utf-8");
     res.end(
       JSON.stringify({
         ok: true,
-        appType: typeof app,
+        handlerType: typeof bundledHandler,
       })
     );
   } catch (error) {
