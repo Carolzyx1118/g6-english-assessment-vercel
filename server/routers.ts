@@ -8,7 +8,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { z } from "zod";
 import { saveTestResult, getAllTestResults, getTestResultById, updateTestResultAI, deleteTestResult } from "./db";
 import { paperRouter } from "./paperRouter";
-import { localAuthRouter } from "./localAuthRouter";
+import { localAuthRouter, resolveLocalAuthUser } from "./localAuthRouter";
 import { buildTemplateAssessmentReport } from "./reportTemplateBuilder";
 import type {
   AssessmentReportResult,
@@ -74,6 +74,10 @@ function getGeneratedPaperSubjectFromPaperId(paperId: string | null | undefined)
   return isPaperSubjectValue(subject) ? subject : null;
 }
 
+function normalizeIdentityText(value: string | null | undefined) {
+  return value?.trim().toLowerCase() || "";
+}
+
 function extractStoredPaperSnapshot(raw: string | null | undefined) {
   if (!raw) {
     return {
@@ -120,6 +124,78 @@ function extractStoredPaperSnapshot(raw: string | null | undefined) {
       paperSubject: null as ResultPaperSubject | null,
     };
   }
+}
+
+function extractStoredAssessmentOwner(raw: string | null | undefined) {
+  if (!raw) {
+    return {
+      username: null as string | null,
+      displayName: null as string | null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        username: null as string | null,
+        displayName: null as string | null,
+      };
+    }
+
+    const payload = parsed as { __format?: string; owner?: unknown };
+    if (payload.__format !== "assessment_payload_v2" || !payload.owner || typeof payload.owner !== "object") {
+      return {
+        username: null as string | null,
+        displayName: null as string | null,
+      };
+    }
+
+    const owner = payload.owner as {
+      username?: unknown;
+      displayName?: unknown;
+    };
+
+    return {
+      username: typeof owner.username === "string" && owner.username.trim().length > 0 ? owner.username.trim() : null,
+      displayName: typeof owner.displayName === "string" && owner.displayName.trim().length > 0 ? owner.displayName.trim() : null,
+    };
+  } catch {
+    return {
+      username: null as string | null,
+      displayName: null as string | null,
+    };
+  }
+}
+
+function resultBelongsToLocalUser(
+  result: {
+    studentName: string | null | undefined;
+    answersJson: string | null | undefined;
+  },
+  user: {
+    username: string;
+    displayName: string;
+  },
+) {
+  const owner = extractStoredAssessmentOwner(result.answersJson);
+  const normalizedUsername = normalizeIdentityText(user.username);
+  const normalizedDisplayName = normalizeIdentityText(user.displayName);
+  const normalizedStudentName = normalizeIdentityText(result.studentName);
+
+  if (owner.username && normalizeIdentityText(owner.username) === normalizedUsername) {
+    return true;
+  }
+
+  if (owner.displayName && normalizeIdentityText(owner.displayName) === normalizedDisplayName) {
+    return true;
+  }
+
+  if (!owner.username && !owner.displayName) {
+    return normalizedStudentName === normalizedUsername || normalizedStudentName === normalizedDisplayName;
+  }
+
+  return false;
 }
 
 function getResultReportStatus(raw: string | null | undefined): "raw" | "pending-review" | "completed" {
@@ -2112,6 +2188,20 @@ Respond in JSON format:
           hasWritingResult: !!r.writingResultJson,
         };
       });
+    }),
+
+    listMine: publicProcedure.query(async ({ ctx }) => {
+      const currentUser = await resolveLocalAuthUser(ctx.req);
+      if (!currentUser) {
+        return [];
+      }
+
+      const results = await getAllTestResults();
+      return results
+        .filter((result) => resultBelongsToLocalUser(result, currentUser))
+        .sort((left, right) => (
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        ));
     }),
 
     getById: publicProcedure

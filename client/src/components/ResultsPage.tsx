@@ -298,7 +298,7 @@ const AUTO_RETURN_HOME_DELAY_SECONDS = 10;
 
 export default function ResultsPage() {
   const utils = trpc.useUtils();
-  const { isTeacher } = useLocalAuth();
+  const { isTeacher, user } = useLocalAuth();
   const {
     selectedPaper,
     studentInfo,
@@ -429,7 +429,16 @@ export default function ResultsPage() {
         answers: submission.answers,
         uploadFileMutation: uploadFileRef.current,
       });
-      const answersJson = packStoredAssessmentPayloadForResultStorage(finalizedAnswers, submission.paper);
+      const answersJson = packStoredAssessmentPayloadForResultStorage(
+        finalizedAnswers,
+        submission.paper,
+        user
+          ? {
+              username: user.username,
+              displayName: user.displayName,
+            }
+          : undefined,
+      );
       const artifacts = buildSubmissionArtifacts(submission.paper, finalizedAnswers);
       const baseRecord = buildFallbackRecord({
         studentName: submission.studentInfo.name,
@@ -475,7 +484,10 @@ export default function ResultsPage() {
         setSavedResultId(persistedId);
         writeLatestSavedResultId(persistedId);
         setProgressValue(38);
-        await utilsRef.current.results.list.invalidate();
+        await Promise.all([
+          utilsRef.current.results.list.invalidate(),
+          utilsRef.current.results.listMine.invalidate(),
+        ]);
 
         setStatusText("Running scoring checks and preparing teacher review materials...");
         setProgressValue(58);
@@ -633,6 +645,7 @@ export default function ResultsPage() {
 
         await Promise.all([
           utilsRef.current.results.list.invalidate(),
+          utilsRef.current.results.listMine.invalidate(),
           utilsRef.current.results.getById.invalidate({ id: persistedId }),
         ]);
       } catch (error) {
@@ -658,6 +671,7 @@ export default function ResultsPage() {
     record,
     retryNonce,
     submission,
+    user,
   ]);
 
   useEffect(() => {
@@ -738,7 +752,7 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(125,211,252,0.18),_transparent_35%),linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] px-4 py-10 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(30,58,95,0.12),_transparent_30%),radial-gradient(circle_at_92%_12%,_rgba(59,130,246,0.15),_transparent_24%),linear-gradient(135deg,#f8fbff_0%,#eef4fb_48%,#dce9f8_100%)] px-4 py-10 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0">
         <motion.div
           className="absolute left-[6%] top-12 h-48 w-48 rounded-full bg-[#C9F1FF]/60 blur-3xl"
@@ -764,8 +778,15 @@ export default function ResultsPage() {
           transition={{ duration: 0.45 }}
           className="overflow-hidden rounded-[40px] border border-white/75 bg-white/88 shadow-[0_30px_90px_rgba(15,23,42,0.12)] backdrop-blur"
         >
-          <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(143,181,220,0.22),_transparent_34%),linear-gradient(135deg,#16324f_0%,#1E3A5F_46%,#2E587F_100%)] px-6 py-10 text-white sm:px-10">
-            <div className="absolute right-8 top-8 opacity-25">
+          <div className="report-hero relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(30,58,95,0.16),_transparent_28%),radial-gradient(circle_at_88%_16%,_rgba(59,130,246,0.12),_transparent_24%),linear-gradient(135deg,#f8fbff_0%,#edf4fb_48%,#dbe8f6_100%)] px-6 py-10 text-slate-900 sm:px-10">
+            <div className="pointer-events-none absolute inset-0 opacity-50">
+              <div className="absolute -left-10 top-6 h-44 w-44 rounded-full bg-[#1E3A5F]/18 blur-3xl" />
+              <div className="absolute right-6 top-0 h-52 w-52 rounded-full bg-blue-300/22 blur-3xl" />
+              <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-sky-200/28 blur-3xl" />
+              <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/35 to-transparent" />
+              <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+            </div>
+            <div className="absolute right-8 top-8 opacity-15 text-[#1E3A5F]">
               <WandSparkles className="h-24 w-24" />
             </div>
             <div className="relative flex flex-wrap items-start justify-between gap-6">
@@ -774,7 +795,7 @@ export default function ResultsPage() {
                   initial={{ scale: 0.92, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.1, duration: 0.35 }}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/90"
+                  className="inline-flex items-center gap-2 rounded-full border border-[#1E3A5F]/14 bg-white/72 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]"
                 >
                   {record ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                   {record ? "Upload Complete" : "Assessment Completed"}
@@ -782,17 +803,17 @@ export default function ResultsPage() {
                 <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">
                   {statusTitle}
                 </h1>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">
+                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
                   {record
                     ? `Everything for ${displayStudentName}'s assessment has been uploaded.${autoReturnSecondsLeft !== null ? ` Returning home automatically in ${autoReturnSecondsLeft}s.` : " You can return home."}`
                     : "Your answers are being uploaded and processed. Please keep this page open until the upload bar reaches 100%."}
                 </p>
               </div>
 
-              <div className="min-w-[220px] rounded-[28px] border border-white/15 bg-white/8 px-5 py-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Assessment</p>
-                <p className="mt-2 font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-white">{displayPaperTitle}</p>
-                <p className="mt-2 text-sm text-white/78">
+              <div className="min-w-[220px] rounded-[28px] border border-[#1E3A5F]/12 bg-white/78 px-5 py-5 shadow-[0_18px_40px_rgba(30,58,95,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1E3A5F]/72">Assessment</p>
+                <p className="mt-2 font-[family-name:var(--font-sans)] text-xl font-bold tracking-tight text-slate-900">{displayPaperTitle}</p>
+                <p className="mt-2 text-sm text-slate-600">
                   {displayStudentName}
                   {latestSavedResultId ? ` · History #${latestSavedResultId}` : ""}
                 </p>
@@ -874,12 +895,16 @@ export default function ResultsPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant={record || fatalError ? "default" : "outline"}
                   onClick={resetQuiz}
                   disabled={!record && !fatalError}
-                  className="gap-2 rounded-full"
+                  className={`gap-2 rounded-full ${
+                    record || fatalError
+                      ? "h-11 border border-[#1E3A5F] bg-[#1E3A5F] px-5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(30,58,95,0.18)] hover:border-[#16314F] hover:bg-[#16314F]"
+                      : "h-11 border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-white disabled:text-slate-400 disabled:opacity-100"
+                  }`}
                 >
-                  <Home className="h-4 w-4" />
+                  <Home className="h-[18px] w-[18px]" />
                   Return Home
                 </Button>
                 {record ? (

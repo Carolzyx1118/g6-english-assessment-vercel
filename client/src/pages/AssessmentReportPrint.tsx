@@ -5,6 +5,7 @@ import AssessmentReportPanel from "@/components/AssessmentReportPanel";
 import { Button } from "@/components/ui/button";
 import type { AssessmentReviewRecord, ReviewLocale } from "@/lib/assessmentReview";
 import {
+  type PDFContentView,
   readPrintableAssessmentReport,
   removePrintableAssessmentReport,
 } from "@/lib/generatePDF";
@@ -139,6 +140,7 @@ export default function AssessmentReportPrint() {
   const printKey = params.get("key")?.trim() || "";
   const [record, setRecord] = useState<AssessmentReviewRecord | null>(null);
   const [locale, setLocale] = useState<ReviewLocale>("cn");
+  const [contentView, setContentView] = useState<PDFContentView>("overview");
   const [error, setError] = useState<string | null>(null);
   const hasTriggeredPrintRef = useRef(false);
 
@@ -158,6 +160,7 @@ export default function AssessmentReportPrint() {
 
     setRecord(payload.record as AssessmentReviewRecord);
     setLocale(payload.locale);
+    setContentView(payload.contentView);
     setError(null);
   }, [printKey]);
 
@@ -201,7 +204,9 @@ export default function AssessmentReportPrint() {
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Printable Assessment Report</h1>
           <p className="text-sm text-slate-500">
-            This page uses the same long-report component as the teacher view. Use your browser&apos;s PDF print dialog to save it.
+            {contentView === "review"
+              ? "This printable view includes question review only."
+              : "This printable view includes the overview report content only."}
           </p>
         </div>
 
@@ -253,6 +258,7 @@ export default function AssessmentReportPrint() {
             initialLocale={locale}
             hideLocaleToggle
             printMode
+            forcedContentView={contentView}
             showDownload={false}
           />
         </div>

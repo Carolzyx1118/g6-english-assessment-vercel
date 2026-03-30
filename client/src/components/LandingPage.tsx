@@ -145,6 +145,24 @@ const subjectHeroCopy: Record<PaperSubject, { badge: string; highlight: string; 
   },
 };
 
+const studentSubjectHeroCopy: Record<PaperSubject, { badge: string; highlight: string; description: string }> = {
+  english: {
+    badge: "Student Workspace · English",
+    highlight: "English",
+    description: "Browse reading, writing, speaking, grammar, and vocabulary assessments from one focused English workspace.",
+  },
+  math: {
+    badge: "Student Workspace · Math",
+    highlight: "Math",
+    description: "Browse problem solving, calculation, reasoning, and future math papers from one focused math workspace.",
+  },
+  vocabulary: {
+    badge: "Student Workspace · Vocabulary",
+    highlight: "Vocabulary",
+    description: "Browse word study, meaning match, memorization, and vocabulary drills from one focused vocabulary workspace.",
+  },
+};
+
 // ========== PUREON BRAND HEADER ==========
 
 function BrandHeader() {
@@ -183,7 +201,8 @@ function BrandHeader() {
 }
 
 function TeacherWorkspaceTopBar() {
-  const { user, isAuthenticated, logout } = useLocalAuth();
+  const { user, isAuthenticated, isTeacher, logout } = useLocalAuth();
+  const [location] = useLocation();
 
   return (
     <div className="border-b border-slate-200/70 bg-white/92 backdrop-blur">
@@ -199,6 +218,19 @@ function TeacherWorkspaceTopBar() {
         </div>
         {isAuthenticated && user ? (
           <div className="flex items-center gap-3 self-start lg:self-auto">
+            {!isTeacher ? (
+              <Link
+                href="/mistake-book"
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  location === "/mistake-book"
+                    ? "border-[#1E3A5F] bg-[#1E3A5F] text-white"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-[#1E3A5F]"
+                }`}
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Mistake Book</span>
+              </Link>
+            ) : null}
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-500">
               <div className="flex h-4 w-4 items-center justify-center text-[#D4A84B]">
                 <User className="h-4 w-4" />
@@ -225,7 +257,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
   const { papers } = useQuiz();
   const { user, isTeacher } = useLocalAuth();
   const [, navigate] = useLocation();
-  const [selectedSubject, setSelectedSubject] = useState<PaperSubject | 'all' | null>('all');
+  const [selectedSubject, setSelectedSubject] = useState<PaperSubject | null>(null);
   const visiblePapers = useMemo(
     () => papers.filter((paper) => !paper.hiddenFromStudentSelection),
     [papers],
@@ -239,30 +271,15 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
   }, [user?.allowedSubjects]);
   const hasSingleSubjectAccess = allowedSubjects.length === 1;
   const showTeacherModules = isTeacher && !hasSingleSubjectAccess && selectedSubject === null;
-  const activeSubject = hasSingleSubjectAccess
-    ? allowedSubjects[0]
+  const showStudentModules = !isTeacher && !hasSingleSubjectAccess && selectedSubject === null;
+  const activeSubject = hasSingleSubjectAccess ? allowedSubjects[0] : selectedSubject;
+  const showTeacherSubjectPage = isTeacher && activeSubject !== null;
+  const dashboardHeroImage = activeSubject ? getPaperHeroImage(activeSubject) : DASHBOARD_HERO_IMAGE;
+  const dashboardHeroAlt = activeSubject
+    ? `${PAPER_SUBJECT_LABELS[activeSubject]} workspace overview`
     : isTeacher
-      ? selectedSubject
-      : selectedSubject ?? 'all';
-  const showTeacherSubjectPage = isTeacher && activeSubject !== null && activeSubject !== 'all';
-  const dashboardHeroImage = isTeacher
-    ? activeSubject === 'english'
-      ? ENGLISH_DASHBOARD_HERO_IMAGE
-      : activeSubject === 'math'
-        ? MATH_DASHBOARD_HERO_IMAGE
-        : activeSubject === 'vocabulary'
-          ? VOCABULARY_DASHBOARD_HERO_IMAGE
-          : DASHBOARD_HERO_IMAGE
-    : DASHBOARD_HERO_IMAGE;
-  const dashboardHeroAlt = isTeacher
-    ? activeSubject === 'english'
-      ? 'English workspace overview'
-      : activeSubject === 'math'
-        ? 'Math workspace overview'
-        : activeSubject === 'vocabulary'
-          ? 'Vocabulary workspace overview'
-          : 'Teacher workspace overview'
-    : 'Teacher workspace overview';
+      ? 'Teacher workspace overview'
+      : 'Student workspace overview';
   const visibleSubjectModules = useMemo(
     () => PAPER_SUBJECT_ORDER.filter((subject) => allowedSubjects.includes(subject)),
     [allowedSubjects],
@@ -271,9 +288,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     () => (
       activeSubject === null
         ? []
-        : activeSubject === 'all'
-          ? visiblePapers
-          : visiblePapers.filter((paper) => paper.subject === activeSubject)
+        : visiblePapers.filter((paper) => paper.subject === activeSubject)
     ),
     [visiblePapers, activeSubject],
   );
@@ -290,23 +305,14 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     }
 
     if (isTeacher) {
-      if (selectedSubject === 'all') {
-        setSelectedSubject(null);
-        return;
-      }
       if (selectedSubject && !allowedSubjects.includes(selectedSubject)) {
         setSelectedSubject(null);
       }
       return;
     }
 
-    if (selectedSubject === null) {
-      setSelectedSubject('all');
-      return;
-    }
-
-    if (selectedSubject !== 'all' && !allowedSubjects.includes(selectedSubject)) {
-      setSelectedSubject('all');
+    if (selectedSubject && !allowedSubjects.includes(selectedSubject)) {
+      setSelectedSubject(null);
     }
   }, [allowedSubjects, hasSingleSubjectAccess, isTeacher, selectedSubject]);
 
@@ -314,12 +320,20 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ? activeSubject
     : null;
   const compactTeacherWorkspaceHome = showTeacherModules;
-  const compactTeacherWorkspaceSubjects = useMemo(() => {
+  const heroWorkspaceSubjects = useMemo(() => {
     const priority: PaperSubject[] = ['vocabulary', 'english', 'math'];
     return priority.filter((subject) => visibleSubjectModules.includes(subject));
   }, [visibleSubjectModules]);
   const activeSubjectHeroCopy = currentTeacherSubject
     ? subjectHeroCopy[currentTeacherSubject]
+    : null;
+  const compactStudentWorkspaceHome = showStudentModules;
+  const showStudentSubjectPage = !isTeacher && activeSubject !== null && !showStudentModules;
+  const currentStudentSubject = showStudentSubjectPage && activeSubject
+    ? activeSubject
+    : null;
+  const activeStudentSubjectHeroCopy = currentStudentSubject
+    ? studentSubjectHeroCopy[currentStudentSubject]
     : null;
   const heroBadgeText = activeSubjectHeroCopy?.badge ?? 'Teacher Workspace · English / Math / Vocabulary';
   const heroHighlightText = activeSubjectHeroCopy?.highlight ?? 'Assessments';
@@ -359,6 +373,37 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     : `hidden lg:flex lg:min-h-full lg:items-center lg:justify-end ${isVocabularySubjectHero ? 'lg:pl-1' : 'lg:pl-4'}`;
   const subjectHeroResolvedMainTitleClass = isVocabularySubjectHero ? vocabularyHeroMainTitleClass : subjectHeroMainTitleClass;
   const subjectHeroFirstLineClass = isVocabularySubjectHero
+    ? 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4 lg:flex-nowrap'
+    : 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4';
+  const studentHeroShellClass = compactStudentWorkspaceHome
+    ? 'lg:flex lg:min-h-[calc(100vh-160px)] lg:w-full lg:items-center'
+    : showStudentSubjectPage
+      ? 'lg:flex lg:min-h-[560px] lg:items-center'
+      : '';
+  const studentHeroBodySpacingClass = compactStudentWorkspaceHome
+    ? 'py-8 lg:py-10'
+    : showStudentSubjectPage
+      ? 'py-12 lg:py-16'
+      : 'pt-12 pb-20';
+  const studentHeroGridClass = compactStudentWorkspaceHome
+    ? 'items-center gap-7 lg:grid-cols-[minmax(0,0.9fr)_minmax(460px,0.96fr)]'
+    : showStudentSubjectPage
+      ? currentStudentSubject === 'vocabulary'
+        ? 'items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:items-center'
+        : 'items-start gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center'
+      : 'items-center gap-12 lg:grid-cols-2';
+  const studentHeroGridOffsetClass = showStudentSubjectPage ? '-translate-y-5 sm:-translate-y-6 lg:-translate-y-7' : '';
+  const studentHeroTextClass = compactStudentWorkspaceHome
+    ? 'flex flex-col justify-center'
+    : showStudentSubjectPage
+      ? `lg:flex lg:min-h-full lg:flex-col lg:justify-center ${currentStudentSubject === 'vocabulary' ? 'lg:pl-4 lg:pr-4 xl:pl-6 xl:pr-6' : 'lg:pl-6 lg:pr-4 xl:pl-8'}`
+      : '';
+  const studentHeroImageClass = compactStudentWorkspaceHome
+    ? 'lg:self-center'
+    : `hidden lg:flex lg:min-h-full lg:items-center lg:justify-end ${currentStudentSubject === 'vocabulary' ? 'lg:pl-1' : 'lg:pl-4'}`;
+  const studentHeroImageOffsetClass = showStudentSubjectPage ? 'lg:translate-y-5' : '';
+  const studentSubjectHeroResolvedMainTitleClass = currentStudentSubject === 'vocabulary' ? vocabularyHeroMainTitleClass : subjectHeroMainTitleClass;
+  const studentSubjectHeroFirstLineClass = currentStudentSubject === 'vocabulary'
     ? 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4 lg:flex-nowrap'
     : 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4';
 
@@ -440,7 +485,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     >
                       {compactTeacherWorkspaceHome ? (
                         <div className="flex max-w-[780px] flex-col gap-2.5 lg:gap-3 lg:ml-auto">
-                          {compactTeacherWorkspaceSubjects.map((subject, index) => {
+                          {heroWorkspaceSubjects.map((subject, index) => {
                             const config = subjectModuleConfig[subject];
 
                             return (
@@ -640,178 +685,226 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
           </div>
         </TeacherToolsLayout>
       ) : (
-        <>
-          <BrandHeader />
-          <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
-            <div className="absolute inset-0 opacity-5" style={{
-              backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
-              backgroundSize: '40px 40px'
-            }} />
-            <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
+        <div className={`bg-[#FAFBFD] ${compactStudentWorkspaceHome ? 'lg:flex lg:min-h-[calc(100vh-81px)] lg:flex-col' : ''}`}>
+          <TeacherWorkspaceTopBar />
+          <div className={`relative ${compactStudentWorkspaceHome ? 'lg:flex flex-1' : ''}`}>
+            <div className={`relative overflow-hidden ${studentHeroShellClass}`}>
+              <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
+              <div className="absolute inset-0 opacity-5" style={{
+                backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
+                backgroundSize: '40px 40px'
+              }} />
+              <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-20 relative z-10">
-              <div className="grid lg:grid-cols-2 gap-12 items-center">
-                <motion.div
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6 }}
-                >
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
-                    <span className="text-xs font-medium text-[#D4A84B]">
-                      Assessment Library · English / Math / Vocabulary
-                    </span>
-                  </div>
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-                    Assessment
-                    <span className="block text-[#E8C876]">
-                      Categories
-                    </span>
-                    <span className="block text-white/90">for Every Subject</span>
-                  </h1>
-                  <p className="mt-6 text-lg text-white/60 leading-relaxed max-w-xl">
-                    Browse available assessments by subject, then open the paper you want to complete.
-                  </p>
-                  {hasSingleSubjectAccess && (
-                    <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
-                      <span className="text-[#D4A84B]">Access</span>
-                      <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
-                    </div>
-                  )}
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  className="hidden lg:block"
-                >
-                  <div className="relative">
-                    <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
-                    <img
-                      src={dashboardHeroImage}
-                      alt={dashboardHeroAlt}
-                      className="relative w-full rounded-2xl opacity-90"
-                    />
-                  </div>
-                </motion.div>
-              </div>
-            </div>
-
-            <div className="absolute bottom-[-1px] left-0 right-0 leading-none">
-              <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
-                <path d="M0 60L1440 60L1440 0C1440 0 1080 50 720 50C360 50 0 0 0 0L0 60Z" fill="#FAFBFD"/>
-              </svg>
-            </div>
-          </div>
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">Choose Your Assessment</h2>
-              <p className="text-slate-500 mb-5">
-                {hasSingleSubjectAccess
-                  ? `This account can enter the ${PAPER_SUBJECT_LABELS[allowedSubjects[0]]} subject page only.`
-                  : 'Filter by subject, then select a paper to view its details and start the assessment.'}
-              </p>
-              {!hasSingleSubjectAccess && (
-                <div className="flex flex-wrap gap-3 mb-8">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSubject('all')}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                      selectedSubject === 'all'
-                        ? 'bg-[#1E3A5F] text-white shadow-lg shadow-[#1E3A5F]/15'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
-                    }`}
+              <div className={`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 relative z-10 ${studentHeroBodySpacingClass}`}>
+                <div className={`grid ${studentHeroGridClass} ${studentHeroGridOffsetClass}`}>
+                  <motion.div
+                    initial={{ opacity: 0, x: -30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.6 }}
+                    className={studentHeroTextClass}
                   >
-                    All Subjects
-                    <span className="ml-2 text-xs opacity-70">{papers.length}</span>
-                  </button>
-                  {allowedSubjects.map((subject) => {
-                    const count = papers.filter((paper) => paper.subject === subject).length;
-                    return (
-                      <button
-                        key={subject}
-                        type="button"
-                        onClick={() => setSelectedSubject(subject)}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                          selectedSubject === subject
-                            ? 'bg-[#D4A84B] text-white shadow-lg shadow-[#D4A84B]/20'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:border-[#D4A84B]/40 hover:text-[#1E3A5F]'
-                        }`}
-                      >
-                        {PAPER_SUBJECT_LABELS[subject]}
-                        <span className="ml-2 text-xs opacity-70">{count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-
-            <div className="grid sm:grid-cols-2 gap-6">
-              {filteredPapers.map((paper: Paper, i: number) => {
-                const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
-                const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
-                const paperDisplayIcon = getPaperDisplayIcon(paper);
-
-                return (
-                  <motion.button
-                    key={paper.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
-                    onClick={() => onSelectPaper(paper.id)}
-                    className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
-                  >
-                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
-                    </div>
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl ${paperDisplayIcon.surface}`}>
-                        <span className="leading-none">{paperDisplayIcon.glyph}</span>
-                      </div>
-                      <div>
-                        <h3 className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
-                      </div>
-                    </div>
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {PAPER_SUBJECT_LABELS[paper.subject]}
+                    <div className={`inline-flex self-start items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5 ${compactStudentWorkspaceHome ? 'lg:-translate-y-2' : ''}`}>
+                      <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
+                      <span className="text-xs font-medium text-[#D4A84B]">
+                        {activeStudentSubjectHeroCopy?.badge ?? 'Student Workspace · English / Math / Vocabulary'}
                       </span>
-                      <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
-                        {PAPER_CATEGORY_LABELS[paper.category]}
-                      </span>
-                      {paper.tags?.slice(0, 2).map((tag) => (
-                        <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
-                          {tag}
+                    </div>
+                    {activeStudentSubjectHeroCopy ? (
+                        <div className={heroTitleStackClass} style={heroTitleFontStyle}>
+                          <div className={studentSubjectHeroFirstLineClass}>
+                            <span className={`block text-[#E8C876] ${studentSubjectHeroResolvedMainTitleClass}`}>
+                              {activeStudentSubjectHeroCopy.highlight}
+                            </span>
+                          </div>
+                          <h1 className={`${studentSubjectHeroResolvedMainTitleClass} text-white/92`}>
+                            Assessments
+                        </h1>
+                      </div>
+                    ) : (
+                      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                        Choose
+                        <span className="block text-white/90">
+                          Your Assessment
                         </span>
-                      ))}
-                    </div>
-                    <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
-                    <div className="flex flex-wrap gap-3">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
-                        <BookOpen className="w-3.5 h-3.5" />
-                        {displaySectionsCount} Sections
+                        <span className="block text-[#E8C876]">
+                          by Subject
+                        </span>
+                      </h1>
+                    )}
+                    <p className={`max-w-xl text-white/60 ${activeStudentSubjectHeroCopy ? 'leading-[1.5] mt-5 text-lg' : `leading-relaxed ${compactStudentWorkspaceHome ? 'mt-3 text-base xl:text-lg' : 'mt-6 text-lg'}`}`}>
+                      {activeStudentSubjectHeroCopy?.description ?? 'Open the subject available to your account, select a paper, and complete each assessment in one clear flow.'}
+                    </p>
+                    {hasSingleSubjectAccess && (
+                      <div className="mt-5 inline-flex self-start items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
+                        <span className="text-[#D4A84B]">Access</span>
+                        <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
+                      </div>
+                    )}
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                    className={`${studentHeroImageClass} ${studentHeroImageOffsetClass}`}
+                  >
+                    {compactStudentWorkspaceHome ? (
+                      <div className="flex max-w-[780px] flex-col gap-2.5 lg:ml-auto lg:gap-3">
+                        {heroWorkspaceSubjects.map((subject, index) => {
+                          const config = subjectModuleConfig[subject];
+                          const isSelected = activeSubject === subject || (hasSingleSubjectAccess && allowedSubjects[0] === subject);
+
+                          return (
+                            <motion.button
+                              key={`student-hero-${subject}`}
+                              type="button"
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.4, delay: 0.45 + index * 0.1 }}
+                              onClick={() => setSelectedSubject(subject)}
+                              className={`group flex min-h-[116px] w-full flex-col rounded-[22px] border bg-gradient-to-r ${config.surface} px-5 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:flex-row sm:items-center sm:gap-4 ${
+                                isSelected ? 'ring-2 ring-white/45 shadow-xl' : ''
+                              }`}
+                            >
+                              <div className="mb-3 flex items-start justify-between gap-4 sm:mb-0 sm:items-center">
+                                <div className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-white shadow-sm ${config.accent}`}>
+                                  {config.icon}
+                                </div>
+                                <ArrowRight className="h-[18px] w-[18px] shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:hidden" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="text-[1.35rem] font-bold tracking-tight text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</h3>
+                                <p className="mt-1.5 max-w-[26rem] text-[12px] leading-[1.75] text-slate-600">
+                                  {config.summary}
+                                </p>
+                              </div>
+                              <div className="mt-4 flex items-center justify-between gap-4 text-[13px] sm:mt-0 sm:min-w-[156px] sm:flex-col sm:items-end sm:justify-center">
+                                <span className="font-semibold text-[#1E3A5F]">{subjectCounts[subject] || 0} paper(s)</span>
+                                <div className="flex items-center gap-2 text-slate-400">
+                                  <span>{isSelected ? 'Viewing papers' : 'View papers'}</span>
+                                  <ArrowRight className="hidden h-[18px] w-[18px] shrink-0 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:block" />
+                                </div>
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="relative mx-auto max-w-[500px] xl:max-w-[540px]">
+                        <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
+                        <img
+                          src={dashboardHeroImage}
+                          alt={dashboardHeroAlt}
+                          className="relative w-full rounded-2xl opacity-90"
+                        />
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              </div>
+
+              {!showStudentModules && activeSubject && !hasSingleSubjectAccess ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-20 lg:bottom-24 z-20">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 lg:pl-14 xl:pl-16">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubject(null)}
+                      className="pointer-events-auto inline-flex items-center gap-3.5 px-1 py-1 text-[15px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:text-white/90 lg:text-base"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/16 text-[#F0C66A] shadow-[0_10px_24px_rgba(10,26,47,0.18)]">
+                        <ArrowLeft className="h-[18px] w-[18px]" />
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
-                        <GraduationCap className="w-3.5 h-3.5" />
-                        {displayQuestionsCount} Questions
-                      </span>
-                    </div>
-                  </motion.button>
-                );
-              })}
+                      <span className="pr-1">Back to Home</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <div className="border-t border-slate-200/60 bg-white/50">
+          {!showStudentModules ? (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                {activeSubject ? (
+                  <>
+                    <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">{PAPER_SUBJECT_LABELS[activeSubject]} Assessments</h2>
+                    <p className="text-slate-500 mb-5">
+                      Choose a paper inside the {PAPER_SUBJECT_LABELS[activeSubject]} subject page.
+                    </p>
+                  </>
+                ) : null}
+              </motion.div>
+
+              <div className="grid sm:grid-cols-2 gap-6">
+                {filteredPapers.map((paper: Paper, i: number) => {
+                  const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                  const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                  const paperDisplayIcon = getPaperDisplayIcon(paper);
+
+                  return (
+                    <motion.button
+                      key={paper.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
+                      onClick={() => onSelectPaper(paper.id)}
+                      className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
+                    >
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
+                      </div>
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl ${paperDisplayIcon.surface}`}>
+                          <span className="leading-none">{paperDisplayIcon.glyph}</span>
+                        </div>
+                        <div>
+                          <h3 className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
+                        </div>
+                      </div>
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                          {PAPER_SUBJECT_LABELS[paper.subject]}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
+                          {PAPER_CATEGORY_LABELS[paper.category]}
+                        </span>
+                        {paper.tags?.slice(0, 2).map((tag) => (
+                          <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
+                      <div className="flex flex-wrap gap-3">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
+                          <BookOpen className="w-3.5 h-3.5" />
+                          {displaySectionsCount} Sections
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          {displayQuestionsCount} Questions
+                        </span>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              {activeSubject && filteredPapers.length === 0 ? (
+                <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
+                  No papers in this subject yet. Add one later and it will appear here automatically.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="shrink-0 border-t border-slate-200/60 bg-white/50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <img src={PUREON_LOGO} alt="璞源教育" className="w-6 h-6 object-contain opacity-50" />
@@ -820,7 +913,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <span className="text-xs text-slate-400">Focused on Singapore International Education</span>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

@@ -39,6 +39,23 @@ describe('resultStorage', () => {
     expect(parsed.paperSnapshot).toBeUndefined();
   });
 
+  it('preserves owner metadata for student-scoped history queries', () => {
+    const packed = packStoredAssessmentPayloadForResultStorage(
+      { 'reading:1': 'B' },
+      undefined,
+      {
+        username: 'student_a',
+        displayName: 'Student A',
+      },
+    );
+
+    const parsed = parseStoredAssessmentPayload(packed);
+    expect(parsed.owner).toEqual({
+      username: 'student_a',
+      displayName: 'Student A',
+    });
+  });
+
   it('removes embedded speaking audio URLs from report storage payloads', () => {
     const sanitized = sanitizeReportForStorage({
       summary_en: 'Good progress',

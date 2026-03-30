@@ -869,6 +869,7 @@ export default function QuestionBank() {
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                     placeholder="Search ID, prompt, title..."
+                    className="rounded-2xl border-slate-200 shadow-sm"
                   />
                 </div>
                 <div className="space-y-2">
@@ -927,7 +928,6 @@ export default function QuestionBank() {
                     }`}
                   >
                     {option.label}
-                    <span className="ml-2 text-xs opacity-70">{option.count}</span>
                   </button>
                 ))}
               </div>

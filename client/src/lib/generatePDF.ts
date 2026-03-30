@@ -19,10 +19,12 @@ export interface PDFData {
 }
 
 export type PDFLocale = "en" | "cn";
+export type PDFContentView = "overview" | "review";
 
 interface StoredPrintableAssessmentReport {
   createdAt: number;
   locale: PDFLocale;
+  contentView: PDFContentView;
   record: PDFData;
 }
 
@@ -90,6 +92,7 @@ export function readPrintableAssessmentReport(key: string): StoredPrintableAsses
     return {
       createdAt: parsed.createdAt,
       locale: parsed.locale === "en" ? "en" : "cn",
+      contentView: parsed.contentView === "review" ? "review" : "overview",
       record: parsed.record as PDFData,
     };
   } catch {
@@ -102,7 +105,11 @@ export function removePrintableAssessmentReport(key: string) {
   window.localStorage.removeItem(getStorageKey(key));
 }
 
-export async function generateReportPDF(data: PDFData, locale: PDFLocale = "cn"): Promise<void> {
+export async function generateReportPDF(
+  data: PDFData,
+  locale: PDFLocale = "cn",
+  contentView: PDFContentView = "overview",
+): Promise<void> {
   if (typeof window === "undefined") return;
 
   cleanupExpiredPrintableAssessmentReports();
@@ -111,6 +118,7 @@ export async function generateReportPDF(data: PDFData, locale: PDFLocale = "cn")
   const payload: StoredPrintableAssessmentReport = {
     createdAt: Date.now(),
     locale,
+    contentView,
     record: data,
   };
 

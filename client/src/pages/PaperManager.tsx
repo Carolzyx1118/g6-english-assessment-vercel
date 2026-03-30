@@ -553,7 +553,6 @@ export default function PaperManager() {
                   }`}
                 >
                   {option.label}
-                  <span className="ml-2 text-xs opacity-70">{option.count}</span>
                 </button>
               ))}
             </div>

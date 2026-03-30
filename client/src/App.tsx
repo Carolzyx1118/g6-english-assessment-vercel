@@ -10,6 +10,7 @@ import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import AssessmentReportPrint from "./pages/AssessmentReportPrint";
+import MistakeBook from "./pages/MistakeBook";
 import PaperIntake from "./pages/PaperIntake";
 import PaperManager from "./pages/PaperManager";
 import QuestionBank from "./pages/QuestionBank";
@@ -27,6 +28,11 @@ function Router() {
       <Route path={"/assessment-report/print"} component={AssessmentReportPrint} />
 
       {/* Protected routes - require local auth */}
+      <Route path={"/mistake-book"}>
+        <AuthGuard>
+          <MistakeBook />
+        </AuthGuard>
+      </Route>
       <Route path={"/"}>
         <AuthGuard>
           <Home />

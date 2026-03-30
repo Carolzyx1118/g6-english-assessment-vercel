@@ -3,6 +3,7 @@ import { getPaperById, type ManualQuestionBlock, type Paper, type Question, type
 import {
   packStoredAssessmentPayload,
   parseStoredAssessmentPayload,
+  type StoredAssessmentOwner,
 } from './storedAssessmentPayload';
 
 const EMBEDDED_DATA_URL_PREFIX = 'data:';
@@ -259,10 +260,12 @@ function compactPaperSnapshotForResultStorage(paperSnapshot?: unknown) {
 export function packStoredAssessmentPayloadForResultStorage(
   answers: Record<string, unknown>,
   paperSnapshot?: unknown,
+  owner?: StoredAssessmentOwner,
 ) {
   return packStoredAssessmentPayload(
     sanitizeValueForStorage(answers) as Record<string, unknown>,
     compactPaperSnapshotForResultStorage(paperSnapshot),
+    owner,
   );
 }
 
@@ -271,6 +274,7 @@ export function sanitizeStoredAssessmentPayloadJsonForResultStorage(raw: string)
   return packStoredAssessmentPayloadForResultStorage(
     parsed.answers,
     parsed.paperSnapshot,
+    parsed.owner,
   );
 }
 

@@ -628,7 +628,16 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       totalCorrect: artifacts.objectiveTotals.correct,
       totalQuestions: artifacts.objectiveTotals.total,
       totalTimeSeconds: state.startTime ? Math.max(0, Math.round((now - state.startTime) / 1000)) : undefined,
-      answersJson: packStoredAssessmentPayloadForResultStorage(answersSnapshot, selectedPaper),
+      answersJson: packStoredAssessmentPayloadForResultStorage(
+        answersSnapshot,
+        selectedPaper,
+        user
+          ? {
+              username: user.username,
+              displayName: user.displayName,
+            }
+          : undefined,
+      ),
       scoreBySectionJson: JSON.stringify(artifacts.objectiveBySection),
       sectionTimingsJson: JSON.stringify(normalizedSectionTimings),
     });

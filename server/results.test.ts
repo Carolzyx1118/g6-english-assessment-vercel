@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-function createPublicContext(): TrpcContext {
+function createPublicContext(
+  headers: Record<string, string> = {},
+): TrpcContext {
   return {
     user: null,
     req: {
       protocol: "https",
-      headers: {},
+      headers,
     } as TrpcContext["req"],
     res: {
       clearCookie: () => {},
@@ -21,6 +23,8 @@ describe("results CRUD", () => {
   let savedId: number | null = null;
   let generatedSavedId: number | null = null;
   let dedupedSavedId: number | null = null;
+  let mineSavedId: number | null = null;
+  let otherSavedId: number | null = null;
 
   it("saves a test result and returns an id", async () => {
     const result = await caller.results.save({
@@ -169,6 +173,67 @@ describe("results CRUD", () => {
     expect(secondSave.id).toBe(firstSave.id);
   });
 
+  it("lists only the current student's owned results", async () => {
+    const username = `mistake_student_${Date.now()}`;
+    const password = "test123456";
+
+    await caller.localAuth.register({
+      username,
+      password,
+      inviteCode: "ENGVOC2026",
+    });
+
+    const login = await caller.localAuth.login({
+      username,
+      password,
+    });
+    const authCtx = createPublicContext({
+      authorization: `Bearer ${login.token}`,
+    });
+    const authCaller = appRouter.createCaller(authCtx);
+
+    mineSavedId = (
+      await caller.results.save({
+        studentName: username,
+        paperId: "mine-paper",
+        paperTitle: "Mine Paper",
+        totalCorrect: 1,
+        totalQuestions: 2,
+        answersJson: JSON.stringify({
+          __format: "assessment_payload_v2",
+          answers: { q1: "A" },
+          owner: {
+            username,
+            displayName: username,
+          },
+        }),
+      })
+    ).id!;
+
+    otherSavedId = (
+      await caller.results.save({
+        studentName: "Someone Else",
+        paperId: "other-paper",
+        paperTitle: "Other Paper",
+        totalCorrect: 0,
+        totalQuestions: 2,
+        answersJson: JSON.stringify({
+          __format: "assessment_payload_v2",
+          answers: { q1: "B" },
+          owner: {
+            username: "different_user",
+            displayName: "Different User",
+          },
+        }),
+      })
+    ).id!;
+
+    const mine = await authCaller.results.listMine();
+
+    expect(mine.map((item) => item.id)).toContain(mineSavedId);
+    expect(mine.map((item) => item.id)).not.toContain(otherSavedId);
+  });
+
   it("deletes a result", async () => {
     const deleteResult = await caller.results.delete({ id: savedId! });
     expect(deleteResult).toEqual({ success: true });
@@ -186,5 +251,13 @@ describe("results CRUD", () => {
   it("deletes the deduped retry fixture", async () => {
     const deleteResult = await caller.results.delete({ id: dedupedSavedId! });
     expect(deleteResult).toEqual({ success: true });
+  });
+
+  it("deletes the listMine fixtures", async () => {
+    const firstDelete = await caller.results.delete({ id: mineSavedId! });
+    const secondDelete = await caller.results.delete({ id: otherSavedId! });
+
+    expect(firstDelete).toEqual({ success: true });
+    expect(secondDelete).toEqual({ success: true });
   });
 });

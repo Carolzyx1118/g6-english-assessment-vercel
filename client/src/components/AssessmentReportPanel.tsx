@@ -45,6 +45,7 @@ interface AssessmentReportPanelProps {
   initialLocale?: ReviewLocale;
   hideLocaleToggle?: boolean;
   printMode?: boolean;
+  forcedContentView?: "overview" | "review";
   allowSpeakingManualScoring?: boolean;
 }
 
@@ -185,7 +186,7 @@ function normalizeSectionInsightSummary(
 }
 
 function getReviewProblemDetails(details: QuestionReviewDetail[]) {
-  return details.filter((detail) => !detail.isAnswered || !detail.isCorrect);
+  return details;
 }
 
 function getSummarySkillLabel(
@@ -758,9 +759,11 @@ export default function AssessmentReportPanel({
   initialLocale = "cn",
   hideLocaleToggle = false,
   printMode = false,
+  forcedContentView,
   allowSpeakingManualScoring = false,
 }: AssessmentReportPanelProps) {
   const [locale, setLocale] = useState<ReviewLocale>(initialLocale);
+  const [contentView, setContentView] = useState<"overview" | "review">("overview");
   const [downloading, setDownloading] = useState(false);
   const [localRecord, setLocalRecord] = useState<AssessmentReviewRecord | null>(null);
   const [isEditingSpeaking, setIsEditingSpeaking] = useState(false);
@@ -819,7 +822,14 @@ export default function AssessmentReportPanel({
     const hasSpeaking = section.kind === "speaking" && (speakingEvaluationsBySection.get(section.sectionId) || []).length > 0;
     return hasWriting || hasSpeaking || getReviewProblemDetails(section.details).length > 0;
   });
-  const hasHeaderControls = !hideLocaleToggle || showDownload || Boolean(extraHeaderActions);
+  const activeContentView = forcedContentView ?? contentView;
+  const showContentToggle = !printMode;
+  const showOverviewContent = forcedContentView ? forcedContentView === "overview" : (printMode || activeContentView === "overview");
+  const showReviewContent = forcedContentView ? forcedContentView === "review" : (printMode || activeContentView === "review");
+  const breakdownStep = "01";
+  const reviewStep = showOverviewContent ? "02" : "01";
+  const summaryStep = showReviewContent ? "03" : "02";
+  const hasHeaderControls = showContentToggle || !hideLocaleToggle || showDownload || Boolean(extraHeaderActions);
   const [speakingDraft, setSpeakingDraft] = useState<SpeakingEvaluationResult | null>(speakingSeed);
   const canManuallyScoreSpeaking =
     allowSpeakingManualScoring
@@ -834,7 +844,8 @@ export default function AssessmentReportPanel({
   useEffect(() => {
     setLocalRecord(null);
     setIsEditingSpeaking(false);
-  }, [record]);
+    setContentView(forcedContentView ?? "overview");
+  }, [forcedContentView, record]);
 
   useEffect(() => {
     setSpeakingDraft(speakingSeed);
@@ -843,7 +854,7 @@ export default function AssessmentReportPanel({
   const handleDownload = async () => {
     try {
       setDownloading(true);
-      await generateReportPDF(activeRecord, locale);
+      await generateReportPDF(activeRecord, locale, activeContentView);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "PDF download failed.");
     } finally {
@@ -1059,6 +1070,28 @@ export default function AssessmentReportPanel({
 
             {hasHeaderControls ? (
               <div className="flex w-full flex-wrap items-center justify-end gap-1.5 xl:w-auto">
+                {showContentToggle ? (
+                  <div className="inline-flex rounded-full border border-[#1E3A5F]/14 bg-white/75 p-1 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setContentView("review")}
+                      className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition ${
+                        contentView === "review" ? "bg-[#1E3A5F] text-white shadow-sm" : "text-slate-600 hover:text-[#1E3A5F]"
+                      }`}
+                    >
+                      {isCn ? "题目回顾" : "Question Review"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContentView("overview")}
+                      className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition ${
+                        contentView === "overview" ? "bg-[#1E3A5F] text-white shadow-sm" : "text-slate-600 hover:text-[#1E3A5F]"
+                      }`}
+                    >
+                      {isCn ? "报告总览" : "Overview"}
+                    </button>
+                  </div>
+                ) : null}
                 {!hideLocaleToggle ? (
                   <div className="inline-flex rounded-full border border-[#1E3A5F]/14 bg-white/75 p-1 shadow-sm">
                     <button
@@ -1171,9 +1204,10 @@ export default function AssessmentReportPanel({
         </div>
       </section>
 
+      {showOverviewContent ? (
       <section className="report-shell-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <StepHeading
-          step="01"
+          step={breakdownStep}
           title={isCn ? "Part Breakdown" : "Part Breakdown"}
           description={isCn
             ? "先按试卷顺序快速看完每个 Part 的得分、用时和核心判断，再进入逐题回顾。"
@@ -1244,14 +1278,16 @@ export default function AssessmentReportPanel({
           })}
         </div>
       </section>
+      ) : null}
 
+      {showReviewContent ? (
       <section className="space-y-4">
         <StepHeading
-          step="02"
-          title={isCn ? "按 Part 顺序回顾" : "Part-by-Part Review"}
+          step={reviewStep}
+          title={isCn ? "题目回顾" : "Question Review"}
           description={isCn
-            ? "下面按照试卷原始顺序，只展开错题、未作答题，以及写作和口语评估内容。"
-            : "Review only wrong items, unanswered items, and writing or speaking evaluation in the original paper order."}
+            ? "下面按照试卷原始顺序展示全部题目，包括正确题、错题、未作答题，以及写作和口语评估内容。"
+            : "Review every question in paper order, including correct answers, wrong answers, unanswered items, and writing or speaking evaluation."}
           icon={<FileText className="h-5 w-5" />}
           iconClassName="bg-slate-100 text-slate-600"
         />
@@ -1266,7 +1302,7 @@ export default function AssessmentReportPanel({
 
         {!hasOrderedReviewSections ? (
           <div className="rounded-[32px] border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-sm text-slate-500 shadow-sm">
-            {isCn ? "当前没有可展开的逐题回顾内容。" : "No detailed part review is available for this record yet."}
+            {isCn ? "当前没有可展开的题目回顾内容。" : "No question review is available for this record yet."}
           </div>
         ) : null}
 
@@ -1403,7 +1439,7 @@ export default function AssessmentReportPanel({
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">
                           {hasWritingSubmission ? (isCn ? "评分结果" : "Score") : (isCn ? "作答状态" : "Submission")}
                         </p>
-                        <p className={`mt-2 font-bold text-rose-900 ${hasWritingSubmission ? "text-2xl" : "text-[32px] leading-none"}`}>
+                        <p className={`mt-2 font-bold text-rose-900 ${hasWritingSubmission ? "text-2xl" : "text-[24px] leading-tight sm:text-[26px]"}`}>
                           {!hasWritingSubmission
                             ? (isCn ? "未作答" : "No Submission")
                             : model.writing.manualReview
@@ -1522,7 +1558,7 @@ export default function AssessmentReportPanel({
                                     </p>
                                   </div>
                                 ) : (
-                                  <p className="mt-4 text-center text-3xl font-semibold tracking-[-0.03em] text-slate-900">
+                                  <p className="mt-4 text-center text-[28px] font-semibold tracking-[-0.03em] text-slate-900 sm:text-[30px]">
                                     {Boolean(item.manualReviewRequired)
                                       ? (isCn ? "待评" : "Pending")
                                       : formatScoreDisplay(typeof item[criterion.field] === "number" ? item[criterion.field] : null)}
@@ -1536,8 +1572,8 @@ export default function AssessmentReportPanel({
                           </div>
 
                           {itemIndex === editableSpeakingItems.length - 1 && isEditingSpeaking && canManuallyScoreSpeaking ? (
-                            <div className="mt-4 rounded-[24px] border border-orange-200 bg-orange-50 px-4 py-4">
-                              <div className="flex items-center gap-2 text-orange-950">
+                            <div className="mt-4">
+                              <div className="flex items-center gap-2 text-slate-900">
                                 <Mic className="h-5 w-5 text-orange-600" />
                                 <p className="text-sm font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
                               </div>
@@ -1697,11 +1733,12 @@ export default function AssessmentReportPanel({
           );
         })}
       </section>
+      ) : null}
 
-      {report ? (
+      {report && showOverviewContent ? (
         <section className="report-shell-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <StepHeading
-            step="03"
+            step={summaryStep}
             title={isCn ? "总结与提升建议" : "Summary & Next Steps"}
             description=""
             icon={<Sparkles className="h-5 w-5" />}

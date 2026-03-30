@@ -1,14 +1,29 @@
+export interface StoredAssessmentOwner {
+  username?: string;
+  displayName?: string;
+}
+
 export interface StoredAssessmentPayloadV2 {
   __format: "assessment_payload_v2";
   answers: Record<string, unknown>;
   paperSnapshot?: unknown;
+  owner?: StoredAssessmentOwner;
 }
 
 export function packStoredAssessmentPayload(
   answers: Record<string, unknown>,
   paperSnapshot?: unknown,
+  owner?: StoredAssessmentOwner,
 ) {
-  if (!paperSnapshot) {
+  const normalizedOwner = owner && typeof owner === "object"
+    ? {
+        username: typeof owner.username === "string" ? owner.username.trim() : "",
+        displayName: typeof owner.displayName === "string" ? owner.displayName.trim() : "",
+      }
+    : null;
+  const hasOwner = Boolean(normalizedOwner?.username || normalizedOwner?.displayName);
+
+  if (!paperSnapshot && !hasOwner) {
     return JSON.stringify(answers);
   }
 
@@ -16,6 +31,12 @@ export function packStoredAssessmentPayload(
     __format: "assessment_payload_v2",
     answers,
     paperSnapshot,
+    owner: hasOwner
+      ? {
+          username: normalizedOwner?.username || undefined,
+          displayName: normalizedOwner?.displayName || undefined,
+        }
+      : undefined,
   };
   return JSON.stringify(payload);
 }
@@ -25,6 +46,7 @@ export function parseStoredAssessmentPayload(raw: string | null | undefined) {
     return {
       answers: {} as Record<string, unknown>,
       paperSnapshot: undefined as unknown,
+      owner: undefined as StoredAssessmentOwner | undefined,
     };
   }
 
@@ -39,6 +61,7 @@ export function parseStoredAssessmentPayload(raw: string | null | undefined) {
       return {
         answers: payload.answers ?? {},
         paperSnapshot: payload.paperSnapshot,
+        owner: payload.owner,
       };
     }
 
@@ -46,6 +69,7 @@ export function parseStoredAssessmentPayload(raw: string | null | undefined) {
       return {
         answers: parsed as Record<string, unknown>,
         paperSnapshot: undefined as unknown,
+        owner: undefined as StoredAssessmentOwner | undefined,
       };
     }
   } catch {
@@ -55,5 +79,6 @@ export function parseStoredAssessmentPayload(raw: string | null | undefined) {
   return {
     answers: {} as Record<string, unknown>,
     paperSnapshot: undefined as unknown,
+    owner: undefined as StoredAssessmentOwner | undefined,
   };
 }

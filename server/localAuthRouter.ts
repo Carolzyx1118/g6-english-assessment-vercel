@@ -139,6 +139,24 @@ function buildAuthUserPayload(user: {
   };
 }
 
+export type ResolvedLocalAuthUser = ReturnType<typeof buildAuthUserPayload>;
+
+export async function resolveLocalAuthUser(req: any): Promise<ResolvedLocalAuthUser | null> {
+  const token = getLocalToken(req);
+  const session = await verifyLocalSession(token);
+
+  if (!session) {
+    return null;
+  }
+
+  const user = await getLocalUserById(session.userId);
+  if (!user || !isUserActive(user.inviteCode)) {
+    return null;
+  }
+
+  return buildAuthUserPayload(user);
+}
+
 async function requireTeacherLocalUser(req: any) {
   const token = getLocalToken(req);
   const session = await verifyLocalSession(token);
