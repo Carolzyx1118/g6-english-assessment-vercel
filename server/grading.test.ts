@@ -281,7 +281,7 @@ describe("grading.generateReport", () => {
     expect(result.speakingEvaluation).toBeNull();
   });
 
-  it("marks writing and speaking as awaiting refreshed AI evaluation in the template report", async () => {
+  it("marks writing and speaking as pending follow-up review in the template report", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const result = await caller.grading.generateReport({
       paperTitle: "G6 English Assessment",
@@ -307,8 +307,8 @@ describe("grading.generateReport", () => {
         totalScore: 0,
         totalPossible: 0,
         grade: "Manual Review",
-        overallFeedback_en: "Awaiting AI evaluation.",
-        overallFeedback_cn: "等待 AI 评估结果。",
+        overallFeedback_en: "Awaiting teacher review.",
+        overallFeedback_cn: "等待老师评分。",
         reviewMode: "manual",
         manualReviewRequired: true,
         evaluations: [],
@@ -317,10 +317,10 @@ describe("grading.generateReport", () => {
 
     expect(mockInvokeLLM).not.toHaveBeenCalled();
     expect(result.reportTitle_en).toBe("Assessment Feedback Report");
-    expect(result.abilitySnapshot_en.some((item) => item.includes("refreshed AI evaluation"))).toBe(true);
-    expect(result.overallSummary_en).toContain("waiting for refreshed AI evaluation");
-    expect(result.sectionInsights.find((item) => item.sectionId === "writing")?.summary_en).toContain("waiting for refreshed AI evaluation");
-    expect(result.sectionInsights.find((item) => item.sectionId === "speaking-part-1")?.summary_en).toContain("waiting for refreshed AI evaluation");
+    expect(result.abilitySnapshot_en.some((item) => item.includes("pending review feedback"))).toBe(true);
+    expect(result.overallSummary_en).toContain("waiting for follow-up review");
+    expect(result.sectionInsights.find((item) => item.sectionId === "writing")?.summary_en).toContain("waiting for follow-up review");
+    expect(result.sectionInsights.find((item) => item.sectionId === "speaking-part-1")?.summary_en).toContain("waiting for teacher review");
     expect(result.studyPlan).toHaveLength(3);
     expect(result.speakingEvaluation?.reviewMode).toBe("manual");
   });
@@ -420,6 +420,8 @@ describe("grading.generateReport", () => {
 
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(mockInvokeLLM.mock.calls[0][0])).toContain("true-false");
+    expect(JSON.stringify(mockInvokeLLM.mock.calls[0][0])).toContain("personalizationContext");
+    expect(JSON.stringify(mockInvokeLLM.mock.calls[0][0])).toContain("Sound like a teacher who has actually reviewed this student's current paper");
     expect(result.overallSummary_en).toContain("workable foundation");
     expect(result.timeAnalysis_cn).toContain("30 分钟");
     expect(result.sectionInsights).toHaveLength(2);

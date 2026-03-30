@@ -484,7 +484,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                       className={`${subjectHeroImageClass} ${heroImageOffsetClass}`}
                     >
                       {compactTeacherWorkspaceHome ? (
-                        <div className="flex max-w-[780px] flex-col gap-2.5 lg:gap-3 lg:ml-auto">
+                        <div className="flex max-w-[780px] flex-col gap-3.5 lg:gap-4 lg:ml-auto">
                           {heroWorkspaceSubjects.map((subject, index) => {
                             const config = subjectModuleConfig[subject];
 
@@ -751,7 +751,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     className={`${studentHeroImageClass} ${studentHeroImageOffsetClass}`}
                   >
                     {compactStudentWorkspaceHome ? (
-                      <div className="flex max-w-[780px] flex-col gap-2.5 lg:ml-auto lg:gap-3">
+                      <div className="flex max-w-[780px] flex-col gap-3.5 lg:ml-auto lg:gap-4">
                         {heroWorkspaceSubjects.map((subject, index) => {
                           const config = subjectModuleConfig[subject];
                           const isSelected = activeSubject === subject || (hasSingleSubjectAccess && allowedSubjects[0] === subject);

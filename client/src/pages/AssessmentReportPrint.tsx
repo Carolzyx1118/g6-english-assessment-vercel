@@ -21,7 +21,7 @@ const PRINT_PAGE_STYLES = `
       background: #ffffff !important;
       margin: 0;
       padding: 0;
-      font-size: 14px !important;
+      font-size: 12.5px !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -42,12 +42,18 @@ const PRINT_PAGE_STYLES = `
       padding: 0 !important;
     }
 
+    .print-assessment-report {
+      font-size: 12.5px !important;
+    }
+
     .print-assessment-report .report-summary-card,
     .print-assessment-report .report-question-card,
     .print-assessment-report .report-list-item,
     .print-assessment-report .report-study-stage,
     .print-assessment-report .report-overview-card,
     .print-assessment-report .report-parent-card,
+    .print-assessment-report .report-breakdown-card,
+    .print-assessment-report .report-section-heading,
     .print-assessment-report .report-material-card,
     .print-assessment-report .report-image-card {
       break-inside: avoid-page;
@@ -56,23 +62,16 @@ const PRINT_PAGE_STYLES = `
 
     .print-assessment-report .report-shell-card,
     .print-assessment-report .report-detail-card,
-    .print-assessment-report .report-list-card,
-    .print-assessment-report .report-overview-card,
-    .print-assessment-report .report-parent-card {
+    .print-assessment-report .report-detail-body {
       break-inside: auto !important;
       page-break-inside: auto !important;
     }
 
-    .print-assessment-report details[open] > summary {
+    .print-assessment-report details[open] > summary,
+    .print-assessment-report .report-section-heading,
+    .print-assessment-report .report-detail-summary {
       break-after: avoid-page;
       page-break-after: avoid;
-    }
-
-    .print-assessment-report .report-detail-body,
-    .print-assessment-report .report-breakdown-card,
-    .print-assessment-report .report-list-card {
-      break-inside: auto !important;
-      page-break-inside: auto !important;
     }
 
     .print-assessment-report .report-shell-card,
@@ -90,36 +89,76 @@ const PRINT_PAGE_STYLES = `
       box-shadow: none !important;
     }
 
+    .print-assessment-report .report-hero {
+      padding: 18px 20px !important;
+    }
+
+    .print-assessment-report .report-shell-card:not(:first-child) {
+      padding: 16px !important;
+    }
+
+    .print-assessment-report .report-summary-card {
+      padding: 12px !important;
+    }
+
+    .print-assessment-report .report-breakdown-card,
+    .print-assessment-report .report-question-card,
+    .print-assessment-report .report-list-card,
+    .print-assessment-report .report-overview-card,
+    .print-assessment-report .report-parent-card,
+    .print-assessment-report .report-study-stage,
+    .print-assessment-report .report-material-card {
+      padding: 14px !important;
+      border-radius: 20px !important;
+    }
+
+    .print-assessment-report .report-detail-summary {
+      padding: 14px 16px !important;
+    }
+
+    .print-assessment-report .report-detail-body {
+      padding: 12px 14px !important;
+    }
+
+    .print-assessment-report .report-list-item {
+      padding: 10px 12px !important;
+      gap: 10px !important;
+    }
+
     .print-assessment-report .report-hero-name {
-      font-size: 20px !important;
+      font-size: 18px !important;
       line-height: 1.08 !important;
     }
 
     .print-assessment-report .report-summary-grade {
-      font-size: 38px !important;
+      font-size: 30px !important;
     }
 
     .print-assessment-report .report-summary-score {
-      font-size: 28px !important;
+      font-size: 24px !important;
     }
 
     .print-assessment-report .report-summary-time {
-      font-size: 22px !important;
+      font-size: 18px !important;
     }
 
     .print-assessment-report .report-breakdown-score {
-      font-size: 20px !important;
+      font-size: 18px !important;
     }
 
     .print-assessment-report .report-step-title {
-      font-size: 18px !important;
+      font-size: 16px !important;
       line-height: 1.2 !important;
     }
 
     .print-assessment-report .report-breakdown-title,
     .print-assessment-report .report-detail-title {
-      font-size: 16px !important;
+      font-size: 14px !important;
       line-height: 1.25 !important;
+    }
+
+    .print-assessment-report .report-profile-name {
+      font-size: 14px !important;
     }
 
     .print-assessment-report .report-step-description,
@@ -129,7 +168,10 @@ const PRINT_PAGE_STYLES = `
     .print-assessment-report .report-parent-card p,
     .print-assessment-report .report-overview-card p,
     .print-assessment-report .report-material-card p {
-      line-height: 1.55 !important;
+      font-size: 12px !important;
+      line-height: 1.45 !important;
+      orphans: 3;
+      widows: 3;
     }
   }
 `;
@@ -204,13 +246,38 @@ export default function AssessmentReportPrint() {
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Printable Assessment Report</h1>
           <p className="text-sm text-slate-500">
-            {contentView === "review"
-              ? "This printable view includes question review only."
-              : "This printable view includes the overview report content only."}
+            {locale === "cn"
+              ? (contentView === "review"
+                  ? "当前打印预览仅包含题目回顾内容。"
+                  : "当前打印预览仅包含报告总览内容。")
+              : (contentView === "review"
+                  ? "This printable view includes question review only."
+                  : "This printable view includes the overview report content only.")}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setContentView("review")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                contentView === "review" ? "bg-slate-900 text-white" : "text-slate-600"
+              }`}
+            >
+              {locale === "cn" ? "题目回顾" : "Question Review"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setContentView("overview")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                contentView === "overview" ? "bg-slate-900 text-white" : "text-slate-600"
+              }`}
+            >
+              {locale === "cn" ? "报告总览" : "Overview"}
+            </button>
+          </div>
+
           <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
             <button
               type="button"

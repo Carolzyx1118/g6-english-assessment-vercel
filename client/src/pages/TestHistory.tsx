@@ -4,6 +4,16 @@ import { ArrowLeft, ChevronDown, Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import AssessmentReportPanel from "@/components/AssessmentReportPanel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +22,11 @@ import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { trpc } from "@/lib/trpc";
 
 type HistorySubjectFilter = "all" | PaperSubject;
+type DeleteTarget = {
+  id: number;
+  studentName: string;
+  paperTitle: string;
+};
 
 function formatDate(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -31,6 +46,7 @@ export default function TestHistory() {
   const { isTeacher } = useLocalAuth();
   const [keyword, setKeyword] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<HistorySubjectFilter>("all");
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const utils = trpc.useUtils();
 
   const selectedId = useMemo(() => {
@@ -59,12 +75,18 @@ export default function TestHistory() {
       if (selectedId === variables.id) {
         navigate("/test-history");
       }
+      setDeleteTarget(null);
       toast.success("Test history deleted.");
     },
     onError: (error) => {
       toast.error(error.message || "Failed to delete test history.");
     },
   });
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate({ id: deleteTarget.id });
+  };
 
   const subjectCounts = useMemo(() => {
     const items = listQuery.data ?? [];
@@ -252,9 +274,11 @@ export default function TestHistory() {
                               variant="ghost"
                               disabled={deleting}
                               onClick={() => {
-                                const confirmed = window.confirm("Delete this test history entry? This cannot be undone.");
-                                if (!confirmed) return;
-                                deleteMutation.mutate({ id: item.id });
+                                setDeleteTarget({
+                                  id: item.id,
+                                  studentName: item.studentName,
+                                  paperTitle: item.paperTitle,
+                                });
                               }}
                               className="h-9 rounded-2xl border border-rose-200 bg-white px-3 text-rose-600 shadow-sm hover:bg-rose-50 hover:text-rose-700"
                             >
@@ -310,6 +334,35 @@ export default function TestHistory() {
           </div>
         </div>
       </div>
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this test history entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `This will permanently delete the saved record for "${deleteTarget.paperTitle}" (${deleteTarget.studentName}). This action cannot be undone.`
+                : "This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TeacherToolsLayout>
   );
 }

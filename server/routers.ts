@@ -917,8 +917,129 @@ function mergeAIReportDraft(
   };
 }
 
+function buildAssessmentReportContext(input: Parameters<typeof buildTemplateAssessmentReport>[0]) {
+  const normalizeTaskMechanics = (taskTypes: string[] | undefined) => {
+    const mechanics = new Set<string>();
+    (taskTypes || []).forEach((item) => {
+      const normalized = item.trim().toLowerCase();
+      if (!normalized) return;
+
+      if ([
+        "picture-mcq",
+        "listening-mcq",
+        "option-images",
+        "question-image",
+        "scene-image",
+      ].includes(normalized)) {
+        mechanics.add("image or audio cue matching");
+      }
+      if (["true-false", "reference", "open-ended", "open-ended-sub"].includes(normalized)) {
+        mechanics.add("evidence checking and short text-supported answers");
+      }
+      if ([
+        "fill-blank",
+        "wordbank-fill",
+        "story-fill",
+        "inline-word-choice",
+        "passage-inline-word-choice",
+        "word-completion",
+        "picture-spelling",
+        "word-bank",
+      ].includes(normalized)) {
+        mechanics.add("context, collocation, and sentence-form control");
+      }
+      if (["mcq", "checkbox"].includes(normalized)) {
+        mechanics.add("distractor elimination");
+      }
+      if (["sentence-reorder", "order", "phrase", "table", "matching"].includes(normalized)) {
+        mechanics.add("sequencing, matching, and sentence rebuilding");
+      }
+    });
+    return Array.from(mechanics);
+  };
+
+  const getSectionKind = (sectionId: string, sectionTitle: string) => {
+    const value = `${sectionId} ${sectionTitle}`.toLowerCase();
+    if (value.includes("vocab")) return "vocabulary";
+    if (value.includes("grammar")) return "grammar";
+    if (value.includes("reading")) return "reading";
+    if (value.includes("listening")) return "listening";
+    if (value.includes("writing")) return "writing";
+    if (value.includes("speaking")) return "speaking";
+    return "general";
+  };
+
+  const sectionContexts = input.sectionResults.map((section) => {
+    const kind = getSectionKind(section.sectionId, section.sectionTitle);
+    const manualReviewRequired =
+      (kind === "writing" && Boolean(input.writingSummary?.manualReviewRequired)) ||
+      (kind === "speaking" && Boolean(input.speakingSummary?.manualReviewRequired));
+    const percentage = !manualReviewRequired && section.total > 0
+      ? Math.round((section.correct / section.total) * 100)
+      : null;
+    const status = manualReviewRequired
+      ? "manual-review-pending"
+      : section.total <= 0
+      ? "no-scorable-response"
+      : percentage !== null && percentage >= 75
+      ? "relative-strength"
+      : percentage !== null && percentage >= 50
+      ? "developing-but-uneven"
+      : "priority-weakness";
+
+    return {
+      sectionId: section.sectionId,
+      sectionTitle: section.sectionTitle,
+      kind,
+      correct: section.correct,
+      total: section.total,
+      percentage,
+      timeSeconds: section.timeSeconds,
+      status,
+      taskTypes: section.taskTypes || [],
+      taskMechanics: normalizeTaskMechanics(section.taskTypes),
+    };
+  });
+
+  const scoredSections = sectionContexts
+    .filter((section) => section.percentage !== null)
+    .sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
+  const strongestSection = scoredSections[0] || null;
+  const weakestSection = scoredSections[scoredSections.length - 1] || null;
+  const manualReviewSections = sectionContexts.filter((section) => section.status === "manual-review-pending");
+  const noScoreSections = sectionContexts.filter((section) => section.status === "no-scorable-response");
+  const prioritySections = sectionContexts.filter((section) => section.status === "priority-weakness");
+
+  const notableSignals = [
+    strongestSection
+      ? `Current strongest scored area: ${strongestSection.sectionTitle} (${strongestSection.correct}/${strongestSection.total}, ${strongestSection.percentage}%).`
+      : "",
+    weakestSection
+      ? `Current weakest scored area: ${weakestSection.sectionTitle} (${weakestSection.correct}/${weakestSection.total}, ${weakestSection.percentage}%).`
+      : "",
+    prioritySections.length > 0
+      ? `Immediate pressure points: ${prioritySections.map((section) => section.sectionTitle).join(", ")}.`
+      : "",
+    manualReviewSections.length > 0
+      ? `Manual review is still pending for: ${manualReviewSections.map((section) => section.sectionTitle).join(", ")}.`
+      : "",
+    noScoreSections.length > 0
+      ? `No scorable response is currently available for: ${noScoreSections.map((section) => section.sectionTitle).join(", ")}.`
+      : "",
+  ].filter(Boolean);
+
+  return {
+    strongestSectionTitle: strongestSection?.sectionTitle || null,
+    weakestSectionTitle: weakestSection?.sectionTitle || null,
+    manualReviewSectionTitles: manualReviewSections.map((section) => section.sectionTitle),
+    sectionContexts,
+    notableSignals,
+  };
+}
+
 async function buildAssessmentReport(input: Parameters<typeof buildTemplateAssessmentReport>[0]) {
   const fallbackReport = buildTemplateAssessmentReport(input);
+  const reportContext = buildAssessmentReportContext(input);
 
   if (!ENV.aiGatewayApiKey && !ENV.openaiApiKey && !ENV.forgeApiKey) {
     return fallbackReport;
@@ -930,7 +1051,7 @@ async function buildAssessmentReport(input: Parameters<typeof buildTemplateAsses
         {
           role: "system",
           content:
-            "You write concise, high-signal bilingual assessment reports for K-12 English learners. Return valid JSON only. Do not invent scores, section names, or teacher-reviewed results.",
+            "You write detailed, student-specific bilingual assessment reports for K-12 English learners. Sound like a teacher who has actually reviewed this student's current paper. Return valid JSON only. Do not invent scores, section names, or teacher-reviewed results.",
         },
         {
           role: "user",
@@ -943,12 +1064,21 @@ Requirements:
 - Keep the report practical, specific, and easy for parents and teachers to read.
 - Keep bilingual alignment: English and Chinese should say the same thing.
 - Preserve the exact section order from the input.
+- Treat fallbackReport as a factual safety net for structure and truth, not as wording to copy.
+- Make the final wording feel individualized to this specific student, this specific paper, and this exact distribution of section results.
 - Do not write generic advice that could fit any student. Tie comments to the current skill areas and task mechanics whenever the input provides them.
 - In high-level sections such as overallSummary, timeAnalysis, abilitySnapshot, strengths, weaknesses, recommendations, studyPlan, and parentFeedback, refer to skills like vocabulary, grammar, reading, listening, writing, and speaking instead of raw labels like "Part 1" or "Part 11".
+- In summary, overallSummary, and parentFeedback, mention the current strongest area, weakest area, or the clearest contrast in the profile whenever the data supports it.
 - Avoid repeating the same sentence frame across strengths, weaknesses, recommendations, and section insights.
 - When taskTypes are available, use them to mention concrete mechanics such as distractor control, evidence checking, collocation, sentence transformation, image-based recognition, short open-ended support, matching, or sequencing.
 - Every recommendation should name what to practise, not just say "improve" or "keep practising".
 - If a section has total=0, explicitly say whether there was no response or automatic scoring is currently unavailable. Do not invent a score.
+- Mention sections the student handled relatively well as well as weaker sections. Do not make the report read like an error list only.
+- Use the student name naturally at least once in overallSummary and parentFeedback when a name is provided.
+- Make the narrative richer than the fallback:
+  - summary: 2-3 sentences
+  - overallSummary / timeAnalysis / parentFeedback: 3-5 sentences each
+  - each sectionInsight: usually 2-4 sentences, explaining what held up, what broke down, and what to practise next
 - Keep each list concise:
   - strengths / weaknesses / recommendations / abilitySnapshot: 2-4 items
   - studyPlan: exactly 3 stages
@@ -965,6 +1095,7 @@ ${JSON.stringify({
   grade: input.grade,
   totalTimeSeconds: input.totalTimeSeconds,
   sectionResults: input.sectionResults,
+  personalizationContext: reportContext,
   writingSummary: input.writingSummary || null,
   speakingSummary: input.speakingSummary
     ? {

@@ -1439,7 +1439,7 @@ export default function AssessmentReportPanel({
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">
                           {hasWritingSubmission ? (isCn ? "评分结果" : "Score") : (isCn ? "作答状态" : "Submission")}
                         </p>
-                        <p className={`mt-2 font-bold text-rose-900 ${hasWritingSubmission ? "text-2xl" : "text-[24px] leading-tight sm:text-[26px]"}`}>
+                        <p className={`mt-2 font-bold text-rose-900 ${hasWritingSubmission ? "text-2xl" : "text-[20px] leading-tight sm:text-[22px]"}`}>
                           {!hasWritingSubmission
                             ? (isCn ? "未作答" : "No Submission")
                             : model.writing.manualReview
@@ -1558,7 +1558,9 @@ export default function AssessmentReportPanel({
                                     </p>
                                   </div>
                                 ) : (
-                                  <p className="mt-4 text-center text-[28px] font-semibold tracking-[-0.03em] text-slate-900 sm:text-[30px]">
+                                  <p className={`mt-4 text-center font-semibold tracking-[-0.03em] text-slate-900 ${
+                                    item.manualReviewRequired ? "text-[22px] sm:text-[24px]" : "text-[28px] sm:text-[30px]"
+                                  }`}>
                                     {Boolean(item.manualReviewRequired)
                                       ? (isCn ? "待评" : "Pending")
                                       : formatScoreDisplay(typeof item[criterion.field] === "number" ? item[criterion.field] : null)}

@@ -1216,12 +1216,61 @@ function buildTimeAnalysis(totalTimeSeconds: number, sections: SectionDescriptor
   };
 }
 
+function buildPersonalizedSummary(
+  input: TemplateReportInput,
+  grade: string,
+  sections: SectionDescriptor[],
+  strongest: SectionDescriptor | undefined,
+  weakest: SectionDescriptor | undefined,
+) {
+  const studentEn = input.studentName?.trim() || "The student";
+  const studentCn = input.studentName?.trim() || "学生";
+  const manualSections = sections.filter((section) => section.performance === "manual");
+  const manualTitlesEn = getUniqueSectionLabels(manualSections, "en");
+  const manualTitlesCn = getUniqueSectionLabels(manualSections, "cn");
+
+  const summaryEn = [
+    `${studentEn} completed ${input.paperTitle} with ${input.totalScore}/${input.totalPossible} (${input.percentage}%), placing the current paper at grade ${grade}.`,
+    GRADE_TEMPLATES[grade].summary_en,
+    strongest && weakest && strongest.sectionId !== weakest.sectionId
+      ? `${getSectionLabelForSection(strongest, "en")} is currently giving the clearest support, while ${getSectionLabelForSection(weakest, "en")} is still limiting how far the total score can rise.`
+      : strongest
+      ? `${getSectionLabelForSection(strongest, "en")} is the clearest current support area in this paper.`
+      : "",
+    manualTitlesEn.length > 0
+      ? `${formatSectionList(manualTitlesEn, "en")} should still be read as provisional because follow-up review is pending there.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const summaryCn = [
+    `${studentCn}已完成 ${input.paperTitle}，本次得分为 ${input.totalScore}/${input.totalPossible}（${input.percentage}%），综合等级为 ${grade}。`,
+    GRADE_TEMPLATES[grade].summary_cn,
+    strongest && weakest && strongest.sectionId !== weakest.sectionId
+      ? `从这张卷子的结构来看，${getSectionLabelForSection(strongest, "cn")}是目前最能支撑成绩的部分，而 ${getSectionLabelForSection(weakest, "cn")} 仍在明显限制整体上升。`
+      : strongest
+      ? `${getSectionLabelForSection(strongest, "cn")} 是这次测评中相对更稳定的支撑板块。`
+      : "",
+    manualTitlesCn.length > 0
+      ? `${formatSectionList(manualTitlesCn, "cn")} 仍在等待后续评阅，因此目前应先把相关结论理解为阶段性画像。`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return {
+    en: summaryEn,
+    cn: summaryCn,
+  };
+}
+
 export function buildTemplateAssessmentReport(input: TemplateReportInput): AssessmentReportResult {
   const grade = normalizeGrade(input.grade);
   const template = GRADE_TEMPLATES[grade];
   const sections = buildSectionDescriptors(input);
   const abilitySnapshot = buildAbilitySnapshot(grade, sections);
-  const { strongest, weakest } = pickStrongWeakSections(sections);
+  const { strongest, weakest, weakSections } = pickStrongWeakSections(sections);
   const sectionInsights = sections.map((section) => {
     const summary = describeSectionPerformance(section);
     return {
@@ -1235,6 +1284,31 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
   const recommendations = buildRecommendations(grade, sections);
   const timeAnalysis = buildTimeAnalysis(input.totalTimeSeconds, sections);
   const parentFeedback = buildParentFeedback(grade, sections);
+  const personalizedSummary = buildPersonalizedSummary(input, grade, sections, strongest, weakest);
+  const weakSectionLabelsEn = getUniqueSectionLabels(weakSections.slice(0, 2), "en");
+  const weakSectionLabelsCn = getUniqueSectionLabels(weakSections.slice(0, 2), "cn");
+  const parentFeedbackEn = [
+    input.studentName?.trim()
+      ? `For ${input.studentName.trim()}, this paper suggests that progress will depend on focused follow-up rather than simply doing more mixed questions.`
+      : "",
+    parentFeedback.en,
+    weakSectionLabelsEn.length > 0
+      ? `The most productive home follow-up now is to keep correction especially tight around ${formatSectionList(weakSectionLabelsEn, "en")} so the student sees the same weak pattern enough times to change it.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const parentFeedbackCn = [
+    input.studentName?.trim()
+      ? `对 ${input.studentName.trim()} 来说，这张卷子说明后续提升更依赖聚焦补弱，而不是单纯继续多做混合题。`
+      : "",
+    parentFeedback.cn,
+    weakSectionLabelsCn.length > 0
+      ? `家庭配合时，最值得持续盯住的是 ${formatSectionList(weakSectionLabelsCn, "cn")}，要让孩子反复看到同一类失分模式并逐步改掉。`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
 
   const overallSummaryEn = [
     `${input.paperTitle} has been completed for ${input.studentName || "the student"}${input.studentGrade ? ` (${input.studentGrade})` : ""}.`,
@@ -1243,6 +1317,9 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     template.overview_en,
     strongest ? `At the moment, ${getSectionLabelForSection(strongest, "en")} is functioning as the clearest relative strength in the paper.` : "",
     weakest ? `${getSectionLabelForSection(weakest, "en")} is currently the area that needs the earliest and most focused correction.` : "",
+    strongest && weakest && strongest.sectionId !== weakest.sectionId
+      ? `This creates a visible gap between the sections the student can already manage with some control and the sections that still lose marks once the task becomes more integrated or less familiar.`
+      : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "Writing and speaking are still waiting for follow-up review, so the current total should be read as a partial academic profile rather than the final full-skill judgment."
       : "",
@@ -1257,6 +1334,9 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     template.overview_cn,
     strongest ? `从分项结果看，${getSectionLabelForSection(strongest, "cn")}是目前相对更能支撑成绩的板块。` : "",
     weakest ? `${getSectionLabelForSection(weakest, "cn")}则是接下来最需要优先处理的薄弱点。` : "",
+    strongest && weakest && strongest.sectionId !== weakest.sectionId
+      ? "这也说明当前卷面中，孩子在“相对能稳住的部分”和“一旦要求更综合就容易掉分的部分”之间仍有比较明显的落差。"
+      : "",
     input.writingSummary?.manualReviewRequired || input.speakingSummary?.manualReviewRequired
       ? "由于写作和口语仍在等待后续评阅，当前总分应理解为阶段性学业画像，而不是最终完整能力结论。"
       : "",
@@ -1265,8 +1345,8 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     .join("");
 
   return {
-    summary_en: template.summary_en,
-    summary_cn: template.summary_cn,
+    summary_en: personalizedSummary.en,
+    summary_cn: personalizedSummary.cn,
     ...strengthsWeaknesses,
     ...recommendations,
     timeAnalysis_en: timeAnalysis.en,
@@ -1279,8 +1359,8 @@ export function buildTemplateAssessmentReport(input: TemplateReportInput): Asses
     abilitySnapshot_cn: abilitySnapshot.cn,
     sectionInsights,
     studyPlan: buildStudyPlan(grade, sections),
-    parentFeedback_en: parentFeedback.en,
-    parentFeedback_cn: parentFeedback.cn,
+    parentFeedback_en: parentFeedbackEn,
+    parentFeedback_cn: parentFeedbackCn,
     speakingEvaluation: input.speakingSummary ?? null,
   };
 }
