@@ -217,10 +217,10 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
     expect(mockTranscribeAudio).not.toHaveBeenCalled();
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(mockInvokeLLM.mock.calls[0]?.[0]).toMatchObject({
-      modalities: ["text"],
-      model: undefined,
+      model: "gemini-3-flash-preview",
     });
-    const firstUserContent = mockInvokeLLM.mock.calls[0]?.[0].messages[1]?.content as any[];
+    expect(mockInvokeLLM.mock.calls[0]?.[0].response_format).toEqual({ type: "json_object" });
+    const firstUserContent = mockInvokeLLM.mock.calls[0]?.[0].messages[0]?.content as any[];
     expect(firstUserContent[1]).toEqual({
       type: "input_audio",
       input_audio: {
@@ -283,6 +283,7 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mockTranscribeAudio).not.toHaveBeenCalled();
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(mockInvokeLLM.mock.calls[0]?.[0].messages).toHaveLength(1);
     expect(result.totalScore).toBe(3);
     expect(result.evaluations[0].transcript).toBe("It starts as an egg.");
   });

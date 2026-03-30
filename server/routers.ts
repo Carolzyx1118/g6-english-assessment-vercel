@@ -729,6 +729,10 @@ function getDirectAudioSpeakingModel() {
     );
   }
 
+  if (ENV.forgeApiKey) {
+    return "gemini-3-flash-preview";
+  }
+
   return undefined;
 }
 
@@ -1256,75 +1260,120 @@ Scoring rules:
     },
   ];
 
-  const response = await invokeLLM({
-    model,
-    modalities: ["text"],
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are an English speaking examiner for school assessments. Listen to the audio directly and return valid JSON only.",
-      },
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "speaking_audio_evaluation",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            transcript: { type: "string" },
-            score: { type: "integer", minimum: 0, maximum: AI_SPEAKING_MAX_SCORE },
-            feedback_en: { type: "string" },
-            feedback_cn: { type: "string" },
-            taskCompletion_en: { type: "string" },
-            taskCompletion_cn: { type: "string" },
-            fluency_en: { type: "string" },
-            fluency_cn: { type: "string" },
-            vocabulary_en: { type: "string" },
-            vocabulary_cn: { type: "string" },
-            grammar_en: { type: "string" },
-            grammar_cn: { type: "string" },
-            pronunciation_en: { type: "string" },
-            pronunciation_cn: { type: "string" },
-            suggestions_en: {
-              type: "array",
-              items: { type: "string" },
-            },
-            suggestions_cn: {
-              type: "array",
-              items: { type: "string" },
+  const response =
+    ENV.aiGatewayApiKey
+      ? await invokeLLM({
+        model,
+        modalities: ["text"],
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an English speaking examiner for school assessments. Listen to the audio directly and return valid JSON only.",
+          },
+          {
+            role: "user",
+            content: userContent,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "speaking_audio_evaluation",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                transcript: { type: "string" },
+                score: { type: "integer", minimum: 0, maximum: AI_SPEAKING_MAX_SCORE },
+                feedback_en: { type: "string" },
+                feedback_cn: { type: "string" },
+                taskCompletion_en: { type: "string" },
+                taskCompletion_cn: { type: "string" },
+                fluency_en: { type: "string" },
+                fluency_cn: { type: "string" },
+                vocabulary_en: { type: "string" },
+                vocabulary_cn: { type: "string" },
+                grammar_en: { type: "string" },
+                grammar_cn: { type: "string" },
+                pronunciation_en: { type: "string" },
+                pronunciation_cn: { type: "string" },
+                suggestions_en: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+                suggestions_cn: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+              },
+              required: [
+                "transcript",
+                "score",
+                "feedback_en",
+                "feedback_cn",
+                "taskCompletion_en",
+                "taskCompletion_cn",
+                "fluency_en",
+                "fluency_cn",
+                "vocabulary_en",
+                "vocabulary_cn",
+                "grammar_en",
+                "grammar_cn",
+                "pronunciation_en",
+                "pronunciation_cn",
+                "suggestions_en",
+                "suggestions_cn",
+              ],
+              additionalProperties: false,
             },
           },
-          required: [
-            "transcript",
-            "score",
-            "feedback_en",
-            "feedback_cn",
-            "taskCompletion_en",
-            "taskCompletion_cn",
-            "fluency_en",
-            "fluency_cn",
-            "vocabulary_en",
-            "vocabulary_cn",
-            "grammar_en",
-            "grammar_cn",
-            "pronunciation_en",
-            "pronunciation_cn",
-            "suggestions_en",
-            "suggestions_cn",
-          ],
-          additionalProperties: false,
         },
-      },
-    },
-    max_tokens: 1800,
-  });
+        max_tokens: 1800,
+      })
+      : await invokeLLM({
+        model,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `${prompt}
+
+Return JSON only with these keys:
+- transcript
+- score
+- feedback_en
+- feedback_cn
+- taskCompletion_en
+- taskCompletion_cn
+- fluency_en
+- fluency_cn
+- vocabulary_en
+- vocabulary_cn
+- grammar_en
+- grammar_cn
+- pronunciation_en
+- pronunciation_cn
+- suggestions_en
+- suggestions_cn`,
+              },
+              {
+                type: "input_audio",
+                input_audio: {
+                  data: audioInput.base64Data,
+                  format: audioInput.format,
+                },
+              },
+            ],
+          },
+        ],
+        response_format: {
+          type: "json_object",
+        },
+        max_tokens: 1800,
+      });
 
   const parsed = parseJsonMessage<{
     transcript: string;
