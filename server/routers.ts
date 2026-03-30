@@ -626,13 +626,87 @@ function toNonEmptyStringArray(value: unknown, fallback: string[] = []) {
   return normalized.length > 0 ? normalized : fallback;
 }
 
-function parseJsonMessage<T>(content: unknown): T | null {
-  if (typeof content !== "string") return null;
-  try {
-    return JSON.parse(content) as T;
-  } catch {
-    return null;
+function extractMessageTextContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content.trim();
   }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") {
+          return part.trim();
+        }
+
+        if (
+          part
+          && typeof part === "object"
+          && "type" in part
+          && part.type === "text"
+          && "text" in part
+          && typeof part.text === "string"
+        ) {
+          return part.text.trim();
+        }
+
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (
+    content
+    && typeof content === "object"
+    && "type" in content
+    && content.type === "text"
+    && "text" in content
+    && typeof content.text === "string"
+  ) {
+    return content.text.trim();
+  }
+
+  return "";
+}
+
+function extractJsonObjectCandidate(raw: string): string {
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]?.trim()) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return raw.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return raw.trim();
+}
+
+function parseJsonMessage<T>(content: unknown): T | null {
+  const rawText = extractMessageTextContent(content);
+  if (!rawText) return null;
+
+  const candidates = [
+    rawText,
+    extractJsonObjectCandidate(rawText),
+  ].filter((candidate, index, items) => candidate && items.indexOf(candidate) === index);
+
+  try {
+    for (const candidate of candidates) {
+      try {
+        return JSON.parse(candidate) as T;
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    // Fall through to null below.
+  }
+
+  return null;
 }
 
 function normalizeGatewayModelId(value: string, fallback: string) {
@@ -642,8 +716,8 @@ function normalizeGatewayModelId(value: string, fallback: string) {
 }
 
 function canAttemptDirectAudioSpeakingEvaluation() {
-  // Forge and the Vercel AI Gateway both accept the OpenAI-compatible
-  // chat-completions payload we build for direct audio scoring.
+  // Forge and the Vercel AI Gateway both accept OpenAI-compatible
+  // chat-completions requests with inline input_audio content.
   return Boolean(ENV.aiGatewayApiKey || ENV.forgeApiKey);
 }
 
@@ -656,21 +730,6 @@ function getDirectAudioSpeakingModel() {
   }
 
   return undefined;
-}
-
-function getDirectAudioFileMimeType(
-  audioUrl: string,
-): "audio/wav" | "audio/mpeg" | "audio/mp4" | "audio/webm" | "audio/ogg" | "audio/aac" | null {
-  const inferred = inferAudioMimeTypeFromUrl(audioUrl);
-
-  if (!inferred) return null;
-  if (inferred === "audio/wav") return "audio/wav";
-  if (inferred === "audio/mpeg") return "audio/mpeg";
-  if (inferred === "audio/mp4") return "audio/mp4";
-  if (inferred === "audio/webm") return "audio/webm";
-  if (inferred === "audio/ogg") return "audio/ogg";
-  if (inferred === "audio/aac") return "audio/aac";
-  return null;
 }
 
 function normalizeOptionalString(value: unknown, fallback: string) {
@@ -1170,8 +1229,8 @@ async function evaluateSpeakingResponseWithGatewayAudio(
     audioUrl: string;
   },
 ): Promise<SpeakingQuestionEvaluation> {
-  const resolvedAudioUrl = resolveAssetUrl(req, responseInput.audioUrl);
   const model = getDirectAudioSpeakingModel();
+  const audioInput = await fetchGatewayAudioInput(req, responseInput.audioUrl);
 
   const prompt = `Listen to this student's English speaking assessment response and score it.
 
@@ -1186,36 +1245,16 @@ Scoring rules:
   Section title: ${responseInput.sectionTitle}
   Question id: ${responseInput.questionId}`;
 
-  const userContent =
-    ENV.aiGatewayApiKey
-      ? await (async () => {
-        const audioInput = await fetchGatewayAudioInput(req, responseInput.audioUrl);
-        return [
-          { type: "text" as const, text: prompt },
-          {
-            type: "input_audio" as const,
-            input_audio: {
-              data: audioInput.base64Data,
-              format: audioInput.format,
-            },
-          },
-        ];
-      })()
-      : (() => {
-        const mimeType =
-          getDirectAudioFileMimeType(resolvedAudioUrl)
-          || "audio/wav";
-        return [
-          { type: "text" as const, text: prompt },
-          {
-            type: "file_url" as const,
-            file_url: {
-              url: resolvedAudioUrl,
-              mime_type: mimeType,
-            },
-          },
-        ];
-      })();
+  const userContent = [
+    { type: "text" as const, text: prompt },
+    {
+      type: "input_audio" as const,
+      input_audio: {
+        data: audioInput.base64Data,
+        format: audioInput.format,
+      },
+    },
+  ];
 
   const response = await invokeLLM({
     model,
@@ -1621,10 +1660,13 @@ async function evaluateSpeakingWithAI(
 ): Promise<SpeakingEvaluationResult> {
   const evaluations = await Promise.all(
     responses.map(async (response) => {
+      let directAudioErrorMessage: string | null = null;
       if (canAttemptDirectAudioSpeakingEvaluation()) {
         try {
           return await evaluateSpeakingResponseWithGatewayAudio(req, response);
         } catch (error) {
+          directAudioErrorMessage =
+            error instanceof Error ? error.message : "Unknown direct audio scoring error.";
           console.error(
             `[grading.evaluateSpeaking] Direct audio scoring failed for ${response.sectionId}#${response.questionId}, trying transcription fallback:`,
             error,
@@ -1635,13 +1677,19 @@ async function evaluateSpeakingWithAI(
       try {
         return await evaluateSpeakingResponseWithTranscriptAI(req, response);
       } catch (error) {
+        const transcriptErrorMessage =
+          error instanceof Error ? error.message : "Unknown automatic scoring error.";
+        const combinedReason =
+          directAudioErrorMessage
+            ? `Direct audio scoring failed: ${directAudioErrorMessage} Transcription fallback failed: ${transcriptErrorMessage}`
+            : transcriptErrorMessage;
         console.error(
           `[grading.evaluateSpeaking] Automatic speaking scoring failed for ${response.sectionId}#${response.questionId}:`,
           error,
         );
         return buildAutomaticSpeakingFallbackQuestionEvaluation(
           response,
-          error instanceof Error ? error.message : "Unknown automatic scoring error.",
+          combinedReason,
         );
       }
     }),

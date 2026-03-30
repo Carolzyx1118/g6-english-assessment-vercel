@@ -153,7 +153,16 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
   });
 
   it("scores speaking directly from audio through Forge when the speech transcription endpoint is unavailable", async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      arrayBuffer: async () => new Uint8Array([5, 6, 7, 8]).buffer,
+      headers: {
+        get: (header: string) =>
+          header.toLowerCase() === "content-type" ? "audio/wav" : null,
+      },
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
@@ -201,7 +210,10 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
       ],
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/api/blob?key=forge-speaking.wav",
+    );
     expect(mockTranscribeAudio).not.toHaveBeenCalled();
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(mockInvokeLLM.mock.calls[0]?.[0]).toMatchObject({
@@ -210,16 +222,69 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
     });
     const firstUserContent = mockInvokeLLM.mock.calls[0]?.[0].messages[1]?.content as any[];
     expect(firstUserContent[1]).toEqual({
-      type: "file_url",
-      file_url: {
-        url: "https://example.com/api/blob?key=forge-speaking.wav",
-        mime_type: "audio/wav",
+      type: "input_audio",
+      input_audio: {
+        data: "BQYHCA==",
+        format: "wav",
       },
     });
     expect(result.totalScore).toBe(4);
     expect(result.totalPossible).toBe(5);
     expect(result.reviewMode).toBe("ai");
     expect(result.evaluations[0].transcript).toContain("Hello teacher");
+  });
+
+  it("parses Forge direct-audio JSON when the model returns text content parts wrapped in a code fence", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      arrayBuffer: async () => new Uint8Array([10, 11, 12, 13]).buffer,
+      headers: {
+        get: (header: string) =>
+          header.toLowerCase() === "content-type" ? "audio/wav" : null,
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
+      await loadRouterWithAudioScoringEnv({
+        useForge: true,
+      });
+
+    mockInvokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: [
+              {
+                type: "text",
+                text: "```json\n{\"transcript\":\"It starts as an egg.\",\"score\":3,\"feedback_en\":\"The response is relevant.\",\"feedback_cn\":\"回答比较切题。\",\"taskCompletion_en\":\"The main idea was covered.\",\"taskCompletion_cn\":\"回答覆盖了主要内容。\",\"fluency_en\":\"The pace is steady.\",\"fluency_cn\":\"表达节奏比较稳定。\",\"vocabulary_en\":\"Vocabulary is simple.\",\"vocabulary_cn\":\"词汇较简单。\",\"grammar_en\":\"Grammar is mostly controlled.\",\"grammar_cn\":\"语法整体较稳定。\",\"pronunciation_en\":\"Speech is understandable.\",\"pronunciation_cn\":\"表达基本清晰。\",\"suggestions_en\":[\"Add one more detail.\"],\"suggestions_cn\":[\"可以再补充一个细节。\"]}\n```",
+              },
+            ],
+          },
+        },
+      ],
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-5",
+          sectionTitle: "Speaking Part 5",
+          questionId: 201,
+          prompt: "Describe one stage in the frog's life cycle.",
+          audioUrl: "/api/blob?key=forge-speaking-fenced.wav",
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAudio).not.toHaveBeenCalled();
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(result.totalScore).toBe(3);
+    expect(result.evaluations[0].transcript).toBe("It starts as an egg.");
   });
 
   it("falls back to transcription-based scoring when the saved audio format is not Gateway-compatible", async () => {
@@ -298,5 +363,52 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
     expect(result.totalScore).toBe(4);
     expect(result.reviewMode).toBe("ai");
     expect(result.evaluations[0].transcript).toContain("healthy and delicious");
+  });
+
+  it("preserves both direct-audio and transcription errors when both speaking paths fail", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+      headers: {
+        get: (header: string) =>
+          header.toLowerCase() === "content-type" ? "audio/wav" : null,
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
+      await loadRouterWithAudioScoringEnv({
+        useForge: true,
+      });
+
+    mockInvokeLLM.mockRejectedValueOnce(new Error("LLM invoke failed: 400 unsupported direct audio input"));
+    mockTranscribeAudio.mockResolvedValueOnce({
+      error: "Voice transcription failed",
+      code: "SERVICE_ERROR",
+      details: "fetch failed",
+    } as any);
+
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.grading.evaluateSpeaking({
+      responses: [
+        {
+          sectionId: "speaking-part-5",
+          sectionTitle: "Speaking Part 5",
+          questionId: 202,
+          prompt: "Describe one stage in the frog's life cycle.",
+          audioUrl: "/api/blob?key=forge-speaking-error.wav",
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAudio).toHaveBeenCalledTimes(1);
+    expect(result.totalScore).toBe(0);
+    expect(result.totalPossible).toBe(0);
+    expect(result.evaluations[0].feedback_en).toContain("Direct audio scoring failed: LLM invoke failed: 400 unsupported direct audio input");
+    expect(result.evaluations[0].feedback_en).toContain("Transcription fallback failed: Voice transcription failed: fetch failed");
   });
 });
