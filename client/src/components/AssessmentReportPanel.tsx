@@ -7,6 +7,9 @@ import {
   FileText,
   GraduationCap,
   Languages,
+  Loader2,
+  PencilLine,
+  Save,
   Sparkle,
   Mic,
   PenSquare,
@@ -14,16 +17,25 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { generateReportPDF } from "@/lib/generatePDF";
 import {
   buildAssessmentReviewModel,
+  buildSubmissionArtifacts,
+  createPendingSpeakingEvaluation,
+  finalizeManualSpeakingEvaluation,
   formatDuration,
   getSectionDisplayName,
+  getLetterGrade,
   type AssessmentReviewModel,
   type AssessmentReviewRecord,
   type QuestionReviewDetail,
   type ReviewLocale,
 } from "@/lib/assessmentReview";
+import { sanitizeReportForStorage } from "@/lib/resultStorage";
+import { trpc } from "@/lib/trpc";
+import type { SpeakingEvaluationResult } from "@shared/assessmentReport";
 
 interface AssessmentReportPanelProps {
   record: AssessmentReviewRecord;
@@ -32,6 +44,7 @@ interface AssessmentReportPanelProps {
   initialLocale?: ReviewLocale;
   hideLocaleToggle?: boolean;
   printMode?: boolean;
+  allowSpeakingManualScoring?: boolean;
 }
 
 type SpeakingEvaluationItem =
@@ -89,9 +102,9 @@ function localizeStoredText(value: string, locale: ReviewLocale) {
   const localizedMap: Record<string, { cn: string; en: string }> = {
     "Not Answered": { cn: "未作答", en: "Not Answered" },
     "Audio response submitted": { cn: "已提交录音作答", en: "Audio response submitted" },
-    "Teacher review required": { cn: "等待 AI 评估结果", en: "Awaiting AI evaluation" },
+    "Teacher review required": { cn: "等待老师评分", en: "Awaiting teacher review" },
     "AI reference answer unavailable": { cn: "AI 参考答案暂不可用", en: "AI reference answer unavailable" },
-    "Manual Review": { cn: "AI 评估", en: "AI Review" },
+    "Manual Review": { cn: "老师评分", en: "Teacher Review" },
   };
 
   const matched = localizedMap[value];
@@ -115,6 +128,24 @@ function cleanReportNarrativeText(value: string, locale: ReviewLocale) {
   }
 
   return normalized;
+}
+
+function summarizeManualSpeakingFeedback(
+  locale: ReviewLocale,
+  evaluations: SpeakingEvaluationItem[],
+) {
+  const feedbackItems = evaluations
+    .map((item) => locale === "cn" ? item.feedback_cn : item.feedback_en)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (feedbackItems.length === 0) {
+    return locale === "cn"
+      ? "老师已完成口语评分。"
+      : "Teacher speaking review has been saved.";
+  }
+
+  return feedbackItems.slice(0, 3).join(locale === "cn" ? " " : " ");
 }
 
 function normalizeSectionInsightSummary(
@@ -714,10 +745,18 @@ export default function AssessmentReportPanel({
   initialLocale = "cn",
   hideLocaleToggle = false,
   printMode = false,
+  allowSpeakingManualScoring = false,
 }: AssessmentReportPanelProps) {
   const [locale, setLocale] = useState<ReviewLocale>(initialLocale);
   const [downloading, setDownloading] = useState(false);
-  const model = useMemo(() => buildAssessmentReviewModel(record), [record]);
+  const [localRecord, setLocalRecord] = useState<AssessmentReviewRecord | null>(null);
+  const [isEditingSpeaking, setIsEditingSpeaking] = useState(false);
+  const [savingSpeaking, setSavingSpeaking] = useState(false);
+  const activeRecord = localRecord ?? record;
+  const utils = trpc.useUtils();
+  const updateResultMutation = trpc.results.updateAI.useMutation();
+  const generateReportMutation = trpc.grading.generateReport.useMutation();
+  const model = useMemo(() => buildAssessmentReviewModel(activeRecord), [activeRecord]);
   const orderedSections = model.sections;
   const report = model.report;
   const alignedSectionInsights = useMemo(
@@ -735,20 +774,30 @@ export default function AssessmentReportPanel({
     ?.map((item) => normalizeSummaryText(item) || item);
   const abilityItems = (locale === "cn" ? report?.abilitySnapshot_cn : report?.abilitySnapshot_en)
     ?.map((item) => normalizeSummaryText(item) || item);
-  const displayStudentName = getDisplayStudentName(record.studentName, locale);
+  const displayStudentName = getDisplayStudentName(activeRecord.studentName, locale);
   const gradeDescriptor = getGradeDescriptor(model.grade, locale);
   const headerCardClassName = "report-summary-card rounded-[24px] border border-[#1E3A5F]/12 bg-white/78 p-4 shadow-[0_18px_40px_rgba(30,58,95,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm";
   const headerLabelClassName = "text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]/72";
 
+  const speakingSeed = useMemo(() => {
+    if (model.speaking.evaluation) {
+      return JSON.parse(JSON.stringify(model.speaking.evaluation)) as SpeakingEvaluationResult;
+    }
+
+    if (!model.paper) return null;
+    const artifacts = buildSubmissionArtifacts(model.paper, model.answers);
+    if (artifacts.speakingResponses.length === 0) return null;
+    return createPendingSpeakingEvaluation(artifacts.speakingResponses);
+  }, [model.answers, model.paper, model.speaking.evaluation]);
   const speakingEvaluationsBySection = useMemo(() => {
     const grouped = new Map<string, SpeakingEvaluationItem[]>();
-    (model.speaking.evaluation?.evaluations || []).forEach((item) => {
+    (model.speaking.evaluation?.evaluations || speakingSeed?.evaluations || []).forEach((item) => {
       const current = grouped.get(item.sectionId) || [];
-      current.push(item);
+      current.push(item as SpeakingEvaluationItem);
       grouped.set(item.sectionId, current);
     });
     return grouped;
-  }, [model.speaking.evaluation]);
+  }, [model.speaking.evaluation, speakingSeed]);
 
   const hasOrderedReviewSections = orderedSections.some((section) => {
     const hasWriting = section.kind === "writing" && model.writing?.sectionId === section.sectionId;
@@ -756,19 +805,199 @@ export default function AssessmentReportPanel({
     return hasWriting || hasSpeaking || getReviewProblemDetails(section.details).length > 0;
   });
   const hasHeaderControls = !hideLocaleToggle || showDownload || Boolean(extraHeaderActions);
+  const [speakingDraft, setSpeakingDraft] = useState<SpeakingEvaluationResult | null>(speakingSeed);
+  const canManuallyScoreSpeaking =
+    allowSpeakingManualScoring
+    && !printMode
+    && Boolean(activeRecord.id)
+    && Boolean(speakingDraft?.evaluations.length);
 
   useEffect(() => {
     setLocale(initialLocale);
   }, [initialLocale]);
 
+  useEffect(() => {
+    setLocalRecord(null);
+    setIsEditingSpeaking(false);
+  }, [record]);
+
+  useEffect(() => {
+    setSpeakingDraft(speakingSeed);
+  }, [speakingSeed]);
+
   const handleDownload = async () => {
     try {
       setDownloading(true);
-      await generateReportPDF(record, locale);
+      await generateReportPDF(activeRecord, locale);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "PDF download failed.");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const updateSpeakingOverallFeedback = (value: string) => {
+    setSpeakingDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        overallFeedback_cn: value,
+      };
+    });
+  };
+
+  const updateSpeakingItemField = (
+    sectionId: string,
+    questionId: number,
+    field: "score" | "transcript" | "feedback_cn",
+    value: string,
+  ) => {
+    setSpeakingDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        evaluations: current.evaluations.map((item) => {
+          if (item.sectionId !== sectionId || item.questionId !== questionId) return item;
+
+          if (field === "score") {
+            const nextScore = Number(value);
+            return {
+              ...item,
+              score: Number.isFinite(nextScore) ? nextScore : 0,
+            };
+          }
+
+          return {
+            ...item,
+            [field]: value,
+          };
+        }),
+      };
+    });
+  };
+
+  const handleCancelSpeakingEdit = () => {
+    setSpeakingDraft(
+      speakingSeed ? JSON.parse(JSON.stringify(speakingSeed)) as SpeakingEvaluationResult : null,
+    );
+    setIsEditingSpeaking(false);
+  };
+
+  const handleSaveSpeakingReview = async () => {
+    if (!activeRecord.id || !speakingDraft) return;
+
+    const normalizedEvaluations = speakingDraft.evaluations.map((item) => {
+      const feedbackCn = item.feedback_cn.trim();
+      const transcript = item.transcript.trim();
+      return {
+        ...item,
+        score: Number.isFinite(item.score) ? item.score : 0,
+        transcript,
+        feedback_cn:
+          feedbackCn || "老师已完成该题口语评分。",
+        feedback_en:
+          feedbackCn || item.feedback_en.trim() || "Teacher manual speaking review completed.",
+        taskCompletion_cn: "",
+        taskCompletion_en: "",
+        fluency_cn: "",
+        fluency_en: "",
+        vocabulary_cn: "",
+        vocabulary_en: "",
+        grammar_cn: "",
+        grammar_en: "",
+        pronunciation_cn: "",
+        pronunciation_en: "",
+        suggestions_cn: [],
+        suggestions_en: [],
+      };
+    });
+
+    const nextSpeaking = finalizeManualSpeakingEvaluation({
+      evaluations: normalizedEvaluations,
+      overallFeedback_cn: speakingDraft.overallFeedback_cn,
+      overallFeedback_en:
+        speakingDraft.overallFeedback_en
+        || speakingDraft.overallFeedback_cn
+        || "Teacher speaking review has been saved.",
+    });
+
+    const sectionResults = orderedSections.map((section) => {
+      if (section.kind === "speaking") {
+        const matches = nextSpeaking.evaluations.filter((item) => item.sectionId === section.sectionId);
+        return {
+          sectionId: section.sectionId,
+          sectionTitle: section.sectionTitle,
+          correct: matches.reduce((sum, item) => sum + item.score, 0),
+          total: matches.reduce((sum, item) => sum + item.maxScore, 0),
+          timeSeconds: section.timeSeconds,
+        };
+      }
+
+      return {
+        sectionId: section.sectionId,
+        sectionTitle: section.sectionTitle,
+        correct: section.correct,
+        total: section.total,
+        timeSeconds: section.timeSeconds,
+      };
+    });
+
+    const totalScore = sectionResults.reduce((sum, section) => sum + section.correct, 0);
+    const totalPossible = sectionResults.reduce((sum, section) => sum + section.total, 0);
+    const percentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+
+    try {
+      setSavingSpeaking(true);
+
+      const nextReport = await generateReportMutation.mutateAsync({
+        paperTitle: activeRecord.paperTitle,
+        studentName: activeRecord.studentName,
+        studentGrade: activeRecord.studentGrade || undefined,
+        totalScore,
+        totalPossible,
+        percentage,
+        grade: getLetterGrade(totalScore, totalPossible),
+        totalTimeSeconds: model.totalTimeSeconds,
+        sectionResults,
+        writingSummary: model.writing?.evaluation
+          ? {
+              score: model.writing.evaluation.score,
+              maxScore: model.writing.evaluation.maxScore,
+              grade: model.writing.evaluation.grade,
+              overallFeedback_en: model.writing.evaluation.overallFeedback_en,
+              overallFeedback_cn: model.writing.evaluation.overallFeedback_cn,
+              suggestions_en: model.writing.evaluation.suggestions_en,
+              suggestions_cn: model.writing.evaluation.suggestions_cn,
+              manualReviewRequired: model.writing.evaluation.manualReviewRequired,
+            }
+          : undefined,
+        speakingSummary: nextSpeaking,
+      });
+
+      const sanitizedReport = sanitizeReportForStorage(nextReport);
+      const nextRecord: AssessmentReviewRecord = {
+        ...activeRecord,
+        reportJson: JSON.stringify(sanitizedReport),
+      };
+
+      await updateResultMutation.mutateAsync({
+        id: activeRecord.id,
+        reportJson: nextRecord.reportJson || undefined,
+      });
+
+      setLocalRecord(nextRecord);
+      setSpeakingDraft(JSON.parse(JSON.stringify(nextSpeaking)) as SpeakingEvaluationResult);
+      setIsEditingSpeaking(false);
+      toast.success(isCn ? "口语评分已保存。" : "Speaking review saved.");
+
+      await Promise.all([
+        utils.results.list.invalidate(),
+        utils.results.getById.invalidate({ id: activeRecord.id }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save speaking review.");
+    } finally {
+      setSavingSpeaking(false);
     }
   };
 
@@ -792,7 +1021,7 @@ export default function AssessmentReportPanel({
                   {isCn ? "测评反馈报告" : "Assessment Report"}
                 </span>
                 <span className="rounded-full border border-[#1E3A5F]/16 bg-white/65 px-3 py-1 font-[family-name:var(--font-sans)] text-[10px] font-bold tracking-tight text-slate-700">
-                  {record.paperTitle}
+                  {activeRecord.paperTitle}
                 </span>
               </div>
 
@@ -806,12 +1035,12 @@ export default function AssessmentReportPanel({
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-slate-600">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E3A5F]/14 bg-white/70 px-3 py-1.5 shadow-sm">
                     <GraduationCap className="h-3.5 w-3.5 text-[#1E3A5F]" />
-                    {record.studentGrade
-                      ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
+                    {activeRecord.studentGrade
+                      ? (isCn ? `年级 ${activeRecord.studentGrade}` : `Grade ${activeRecord.studentGrade}`)
                       : (isCn ? "未填写年级" : "Grade not provided")}
                   </span>
                   <span className="rounded-full border border-[#1E3A5F]/14 bg-white/70 px-3 py-1.5 shadow-sm">
-                    {formatDate(record.createdAt, locale)}
+                    {formatDate(activeRecord.createdAt, locale)}
                   </span>
                 </div>
               </div>
@@ -866,12 +1095,12 @@ export default function AssessmentReportPanel({
               <div className="mt-3 min-w-0">
                 <p className="report-profile-name truncate text-base font-semibold text-slate-900">{displayStudentName}</p>
                 <p className="mt-1 text-[13px] text-slate-600">
-                  {record.studentGrade
-                    ? (isCn ? `年级 ${record.studentGrade}` : `Grade ${record.studentGrade}`)
+                  {activeRecord.studentGrade
+                    ? (isCn ? `年级 ${activeRecord.studentGrade}` : `Grade ${activeRecord.studentGrade}`)
                     : (isCn ? "未填写年级" : "Grade not provided")}
                 </p>
               </div>
-              <p className="mt-3 text-[13px] text-slate-600">{formatDate(record.createdAt, locale)}</p>
+              <p className="mt-3 text-[13px] text-slate-600">{formatDate(activeRecord.createdAt, locale)}</p>
             </div>
 
             <div className={headerCardClassName}>
@@ -971,7 +1200,7 @@ export default function AssessmentReportPanel({
                     </p>
                     <p className="report-breakdown-score mt-1 font-[family-name:var(--font-sans)] text-[24px] font-bold leading-none tracking-tight text-slate-900">
                       {section.manualReview
-                        ? (isCn ? "AI 评估" : "AI Review")
+                        ? (isCn ? "老师评分" : "Teacher Review")
                         : `${section.correct}/${section.total}`}
                     </p>
                   </div>
@@ -1023,9 +1252,12 @@ export default function AssessmentReportPanel({
             ? normalizeSectionInsightSummary(isCn ? insight.summary_cn : insight.summary_en, section, locale)
             : null;
           const speakingItems = speakingEvaluationsBySection.get(section.sectionId) || [];
+          const editableSpeakingItems = isEditingSpeaking
+            ? (speakingDraft?.evaluations.filter((item) => item.sectionId === section.sectionId) || speakingItems)
+            : speakingItems;
           const reviewDetails = getReviewProblemDetails(section.details);
           const isWritingSection = section.kind === "writing" && model.writing?.sectionId === section.sectionId;
-          const isSpeakingSection = section.kind === "speaking" && speakingItems.length > 0;
+          const isSpeakingSection = section.kind === "speaking" && editableSpeakingItems.length > 0;
           const shouldRenderSection = isWritingSection || isSpeakingSection || reviewDetails.length > 0;
 
           if (!shouldRenderSection) return null;
@@ -1050,7 +1282,7 @@ export default function AssessmentReportPanel({
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-base font-semibold text-amber-900">
                         {section.manualReview
-                          ? (isCn ? "AI 评估" : "AI Review")
+                          ? (isCn ? "老师评分" : "Teacher Review")
                           : `${isCn ? "得分 " : "Score "}${section.correct}/${section.total}`}
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
@@ -1120,7 +1352,7 @@ export default function AssessmentReportPanel({
                         </p>
                         <p className="mt-2 text-2xl font-bold text-rose-900">
                           {model.writing.manualReview
-                            ? (isCn ? "AI 评估" : "AI Review")
+                            ? (isCn ? "老师评分" : "Teacher Review")
                             : model.writing.evaluation
                               ? `${model.writing.evaluation.score}/${model.writing.evaluation.maxScore}`
                               : "-"}
@@ -1171,19 +1403,73 @@ export default function AssessmentReportPanel({
 
                 {isSpeakingSection ? (
                   <div className="space-y-4">
-                    {(model.speaking.evaluation?.overallFeedback_cn || model.speaking.evaluation?.overallFeedback_en) ? (
+                    {((isEditingSpeaking ? speakingDraft?.overallFeedback_cn : model.speaking.evaluation?.overallFeedback_cn)
+                      || (isEditingSpeaking ? speakingDraft?.overallFeedback_en : model.speaking.evaluation?.overallFeedback_en)
+                      || canManuallyScoreSpeaking) ? (
                       <div className="rounded-[24px] bg-orange-50 px-5 py-4 text-sm leading-7 text-orange-950">
-                        <div className="flex items-center gap-2">
-                          <Mic className="h-5 w-5 text-orange-600" />
-                          <p className="text-base font-semibold">{isCn ? "口语总体反馈" : "Speaking Overview"}</p>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Mic className="h-5 w-5 text-orange-600" />
+                            <p className="text-base font-semibold">{isCn ? "口语总体反馈" : "Speaking Overview"}</p>
+                          </div>
+                          {canManuallyScoreSpeaking ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {isEditingSpeaking ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCancelSpeakingEdit}
+                                    disabled={savingSpeaking}
+                                    className="rounded-full bg-white"
+                                  >
+                                    {isCn ? "取消" : "Cancel"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSaveSpeakingReview}
+                                    disabled={savingSpeaking}
+                                    className="rounded-full"
+                                  >
+                                    {savingSpeaking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                    {isCn ? "保存口语评分" : "Save Speaking Review"}
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setIsEditingSpeaking(true)}
+                                  className="rounded-full bg-white"
+                                >
+                                  <PencilLine className="mr-2 h-4 w-4" />
+                                  {isCn ? "老师评分" : "Edit Speaking Score"}
+                                </Button>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
-                        <p className="mt-3">
-                          {isCn ? model.speaking.evaluation?.overallFeedback_cn : model.speaking.evaluation?.overallFeedback_en}
-                        </p>
+                        {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                          <Textarea
+                            value={speakingDraft?.overallFeedback_cn || ""}
+                            onChange={(event) => updateSpeakingOverallFeedback(event.target.value)}
+                            placeholder={isCn ? "输入老师对本次口语整体表现的评语" : "Add an overall teacher comment for this speaking section"}
+                            className="mt-3 min-h-[110px] bg-white"
+                          />
+                        ) : (
+                          <p className="mt-3">
+                            {isCn
+                              ? (model.speaking.evaluation?.overallFeedback_cn || summarizeManualSpeakingFeedback("cn", editableSpeakingItems))
+                              : (model.speaking.evaluation?.overallFeedback_en || summarizeManualSpeakingFeedback("en", editableSpeakingItems))}
+                          </p>
+                        )}
                       </div>
                     ) : null}
 
-                    {speakingItems.map((item) => (
+                    {editableSpeakingItems.map((item) => (
                       <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
@@ -1191,8 +1477,21 @@ export default function AssessmentReportPanel({
                             <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
                           </div>
                           <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
-                            {model.speaking.manualReview
-                              ? (isCn ? "AI 评估" : "AI Review")
+                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={item.maxScore}
+                                  step={1}
+                                  value={String(item.score)}
+                                  onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "score", event.target.value)}
+                                  className="h-9 w-20 bg-white text-right"
+                                />
+                                <span>/ {item.maxScore}</span>
+                              </div>
+                            ) : model.speaking.manualReview
+                              ? (isCn ? "老师评分" : "Teacher Review")
                               : `${item.score}/${item.maxScore}`}
                           </div>
                         </div>
@@ -1206,34 +1505,62 @@ export default function AssessmentReportPanel({
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                               {isCn ? "转写内容" : "Transcript"}
                             </p>
-                            <p className="mt-2 whitespace-pre-wrap">
-                              {item.transcript || (isCn ? "暂无转写内容。" : "No transcript available.")}
-                            </p>
+                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                              <Textarea
+                                value={item.transcript}
+                                onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "transcript", event.target.value)}
+                                placeholder={isCn ? "可选：补充老师听写的转写内容" : "Optional: add a teacher transcript"}
+                                className="mt-2 min-h-[120px] bg-white"
+                              />
+                            ) : (
+                              <p className="mt-2 whitespace-pre-wrap">
+                                {item.transcript || (isCn ? "暂无转写内容。" : "No transcript available.")}
+                              </p>
+                            )}
                           </div>
                           <div className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                               {isCn ? "总体反馈" : "Overall Feedback"}
                             </p>
-                            <p className="mt-2">{isCn ? item.feedback_cn : item.feedback_en}</p>
+                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                              <Textarea
+                                value={item.feedback_cn}
+                                onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "feedback_cn", event.target.value)}
+                                placeholder={isCn ? "输入老师对这道口语题的评语" : "Add a teacher comment for this response"}
+                                className="mt-2 min-h-[120px] bg-white"
+                              />
+                            ) : (
+                              <p className="mt-2">{isCn ? item.feedback_cn : item.feedback_en}</p>
+                            )}
                           </div>
                         </div>
 
-                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {[
-                            { labelCn: "任务完成", labelEn: "Task Completion", value: isCn ? item.taskCompletion_cn : item.taskCompletion_en },
-                            { labelCn: "流利度", labelEn: "Fluency", value: isCn ? item.fluency_cn : item.fluency_en },
-                            { labelCn: "词汇", labelEn: "Vocabulary", value: isCn ? item.vocabulary_cn : item.vocabulary_en },
-                            { labelCn: "语法", labelEn: "Grammar", value: isCn ? item.grammar_cn : item.grammar_en },
-                            { labelCn: "发音", labelEn: "Pronunciation", value: isCn ? item.pronunciation_cn : item.pronunciation_en },
-                          ].map((criterion) => (
-                            <div key={criterion.labelEn} className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                {isCn ? criterion.labelCn : criterion.labelEn}
-                              </p>
-                              <p className="mt-2">{criterion.value}</p>
-                            </div>
-                          ))}
-                        </div>
+                        {[
+                          { labelCn: "任务完成", labelEn: "Task Completion", value: isCn ? item.taskCompletion_cn : item.taskCompletion_en },
+                          { labelCn: "流利度", labelEn: "Fluency", value: isCn ? item.fluency_cn : item.fluency_en },
+                          { labelCn: "词汇", labelEn: "Vocabulary", value: isCn ? item.vocabulary_cn : item.vocabulary_en },
+                          { labelCn: "语法", labelEn: "Grammar", value: isCn ? item.grammar_cn : item.grammar_en },
+                          { labelCn: "发音", labelEn: "Pronunciation", value: isCn ? item.pronunciation_cn : item.pronunciation_en },
+                        ].some((criterion) => criterion.value.trim()) ? (
+                          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {[
+                              { labelCn: "任务完成", labelEn: "Task Completion", value: isCn ? item.taskCompletion_cn : item.taskCompletion_en },
+                              { labelCn: "流利度", labelEn: "Fluency", value: isCn ? item.fluency_cn : item.fluency_en },
+                              { labelCn: "词汇", labelEn: "Vocabulary", value: isCn ? item.vocabulary_cn : item.vocabulary_en },
+                              { labelCn: "语法", labelEn: "Grammar", value: isCn ? item.grammar_cn : item.grammar_en },
+                              { labelCn: "发音", labelEn: "Pronunciation", value: isCn ? item.pronunciation_cn : item.pronunciation_en },
+                            ]
+                              .filter((criterion) => criterion.value.trim())
+                              .map((criterion) => (
+                                <div key={criterion.labelEn} className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                    {isCn ? criterion.labelCn : criterion.labelEn}
+                                  </p>
+                                  <p className="mt-2">{criterion.value}</p>
+                                </div>
+                              ))}
+                          </div>
+                        ) : null}
 
                         {((isCn ? item.suggestions_cn : item.suggestions_en) || []).length > 0 ? (
                           <div className="mt-4 rounded-3xl bg-slate-50 px-4 py-4">

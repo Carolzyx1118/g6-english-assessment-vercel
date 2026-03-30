@@ -11,7 +11,10 @@ import { parseStoredAssessmentPayload } from "@/lib/storedAssessmentPayload";
 import type {
   AssessmentReportResult,
   SpeakingEvaluationResult,
+  SpeakingQuestionEvaluation,
 } from "@shared/assessmentReport";
+
+export const DEFAULT_MANUAL_SPEAKING_MAX_SCORE = 5;
 
 export type ReviewLocale = "cn" | "en";
 export type ReviewSectionKind =
@@ -63,6 +66,7 @@ export type ExplanationResult = {
 };
 
 export interface AssessmentReviewRecord {
+  id?: number;
   studentName: string;
   studentGrade: string | null;
   paperId: string;
@@ -197,6 +201,92 @@ export interface SpeakingResponseCandidate {
   questionId: number;
   prompt: string;
   audioUrl: string;
+}
+
+function buildPendingSpeakingQuestionEvaluation(
+  response: SpeakingResponseCandidate,
+): SpeakingQuestionEvaluation {
+  return {
+    sectionId: response.sectionId,
+    sectionTitle: response.sectionTitle,
+    questionId: response.questionId,
+    prompt: response.prompt,
+    audioUrl: response.audioUrl,
+    transcript: "",
+    score: 0,
+    maxScore: DEFAULT_MANUAL_SPEAKING_MAX_SCORE,
+    grade: "Manual Review",
+    feedback_en: "The recording was saved successfully. Teacher speaking review is pending.",
+    feedback_cn: "录音已保存，等待老师完成口语评分。",
+    taskCompletion_en: "",
+    taskCompletion_cn: "",
+    fluency_en: "",
+    fluency_cn: "",
+    vocabulary_en: "",
+    vocabulary_cn: "",
+    grammar_en: "",
+    grammar_cn: "",
+    pronunciation_en: "",
+    pronunciation_cn: "",
+    suggestions_en: [],
+    suggestions_cn: [],
+    reviewMode: "manual",
+    manualReviewRequired: true,
+  };
+}
+
+export function createPendingSpeakingEvaluation(
+  responses: SpeakingResponseCandidate[],
+): SpeakingEvaluationResult {
+  return {
+    totalScore: 0,
+    totalPossible: 0,
+    grade: "Manual Review",
+    overallFeedback_en:
+      responses.length > 0
+        ? "Student recordings were saved successfully. Teacher speaking review is pending in Test History."
+        : "No speaking responses were submitted.",
+    overallFeedback_cn:
+      responses.length > 0
+        ? "学生录音已成功保存，等待老师在 Test History 中完成口语评分。"
+        : "未提交口语作答。",
+    evaluations: responses.map(buildPendingSpeakingQuestionEvaluation),
+    reviewMode: "manual",
+    manualReviewRequired: true,
+  };
+}
+
+export function finalizeManualSpeakingEvaluation(input: {
+  evaluations: SpeakingQuestionEvaluation[];
+  overallFeedback_en?: string;
+  overallFeedback_cn?: string;
+}): SpeakingEvaluationResult {
+  const evaluations = input.evaluations.map((item) => {
+    const maxScore = item.maxScore > 0 ? item.maxScore : DEFAULT_MANUAL_SPEAKING_MAX_SCORE;
+    const score = Math.max(0, Math.min(maxScore, Number.isFinite(item.score) ? item.score : 0));
+    return {
+      ...item,
+      score,
+      maxScore,
+      grade: getLetterGrade(score, maxScore),
+      reviewMode: "manual" as const,
+      manualReviewRequired: false,
+    };
+  });
+
+  const totalScore = evaluations.reduce((sum, item) => sum + item.score, 0);
+  const totalPossible = evaluations.reduce((sum, item) => sum + item.maxScore, 0);
+
+  return {
+    totalScore,
+    totalPossible,
+    grade: totalPossible > 0 ? getLetterGrade(totalScore, totalPossible) : "Manual Review",
+    overallFeedback_en: input.overallFeedback_en?.trim() || "Teacher speaking review has been saved.",
+    overallFeedback_cn: input.overallFeedback_cn?.trim() || "老师口语评分已保存。",
+    evaluations,
+    reviewMode: "manual",
+    manualReviewRequired: false,
+  };
 }
 
 export interface SubmissionArtifacts {

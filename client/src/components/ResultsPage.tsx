@@ -16,6 +16,7 @@ import { useQuiz } from "@/contexts/QuizContext";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import {
   buildSubmissionArtifacts,
+  createPendingSpeakingEvaluation,
   getLetterGrade,
   type AssessmentReviewRecord,
 } from "@/lib/assessmentReview";
@@ -320,7 +321,6 @@ export default function ResultsPage() {
   const checkReadingMutation = trpc.grading.checkReadingAnswers.useMutation();
   const explainWrongAnswersMutation = trpc.grading.explainWrongAnswers.useMutation();
   const evaluateWritingMutation = trpc.grading.evaluateWriting.useMutation();
-  const evaluateSpeakingMutation = trpc.grading.evaluateSpeaking.useMutation();
   const generateReportMutation = trpc.grading.generateReport.useMutation();
   const uploadFileMutation = trpc.papers.uploadFile.useMutation();
 
@@ -334,8 +334,6 @@ export default function ResultsPage() {
   explainWrongRef.current = explainWrongAnswersMutation;
   const evaluateWritingRef = useRef(evaluateWritingMutation);
   evaluateWritingRef.current = evaluateWritingMutation;
-  const evaluateSpeakingRef = useRef(evaluateSpeakingMutation);
-  evaluateSpeakingRef.current = evaluateSpeakingMutation;
   const generateReportRef = useRef(generateReportMutation);
   generateReportRef.current = generateReportMutation;
   const uploadFileRef = useRef(uploadFileMutation);
@@ -479,7 +477,7 @@ export default function ResultsPage() {
         setProgressValue(38);
         await utilsRef.current.results.list.invalidate();
 
-        setStatusText("Running scoring checks for open-ended responses, writing, and speaking...");
+        setStatusText("Running scoring checks and preparing teacher review materials...");
         setProgressValue(58);
 
         const [readingResultSet, explanationResultSet, writingResultSet, speakingResultSet] = await Promise.allSettled([
@@ -508,9 +506,7 @@ export default function ResultsPage() {
               })
             : Promise.resolve(null),
           artifacts.speakingResponses.length > 0
-            ? evaluateSpeakingRef.current.mutateAsync({
-                responses: artifacts.speakingResponses,
-              })
+            ? Promise.resolve(createPendingSpeakingEvaluation(artifacts.speakingResponses))
             : Promise.resolve(null),
         ]);
 
@@ -608,6 +604,7 @@ export default function ResultsPage() {
 
         const sanitizedReport = sanitizeReportForStorage(reportResult);
         const nextRecord: AssessmentReviewRecord = {
+          id: persistedId,
           ...baseRecord,
           readingResultsJson: readingResults.length > 0 ? JSON.stringify(readingResults) : null,
           writingResultJson: writingResult ? JSON.stringify(writingResult) : null,

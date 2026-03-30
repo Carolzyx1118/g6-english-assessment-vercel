@@ -290,7 +290,11 @@ export default function TestHistory() {
                             </p>
                           </div>
                         ) : detailQuery.data?.id === item.id ? (
-                          <AssessmentReportPanel record={detailQuery.data} showDownload />
+                          <AssessmentReportPanel
+                            record={detailQuery.data}
+                            showDownload
+                            allowSpeakingManualScoring
+                          />
                         ) : (
                           <div className="rounded-[28px] border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-900 shadow-sm">
                             This assessment record is not available anymore.

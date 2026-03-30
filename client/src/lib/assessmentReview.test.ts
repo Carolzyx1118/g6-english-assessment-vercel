@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/data/papers";
-import { buildAssessmentReviewModel, type AssessmentReviewRecord } from "./assessmentReview";
+import {
+  buildAssessmentReviewModel,
+  createPendingSpeakingEvaluation,
+  finalizeManualSpeakingEvaluation,
+  type AssessmentReviewRecord,
+} from "./assessmentReview";
 import { packStoredAssessmentPayloadForResultStorage } from "./resultStorage";
 
 describe("assessmentReview", () => {
@@ -272,5 +277,65 @@ describe("assessmentReview", () => {
     expect(firstDetail?.questionImageUrl).toBe("https://example.com/question.png");
     expect(firstDetail?.taskDescription).toBe("Answer both sub-questions.");
     expect(secondDetail?.correctAnswer).toBe("A blue whale.");
+  });
+
+  it("creates a pending manual speaking evaluation from saved recordings", () => {
+    const pending = createPendingSpeakingEvaluation([
+      {
+        sectionId: "speaking-part-5",
+        sectionTitle: "Part 5 Speaking",
+        questionId: 6,
+        prompt: "Describe one stage in the frog's life cycle.",
+        audioUrl: "/api/blob?key=speaking.wav",
+      },
+    ]);
+
+    expect(pending.reviewMode).toBe("manual");
+    expect(pending.manualReviewRequired).toBe(true);
+    expect(pending.totalPossible).toBe(0);
+    expect(pending.evaluations[0]?.maxScore).toBe(5);
+    expect(pending.evaluations[0]?.feedback_cn).toContain("等待老师");
+  });
+
+  it("finalizes teacher speaking scores into a scored manual review", () => {
+    const finalized = finalizeManualSpeakingEvaluation({
+      overallFeedback_cn: "老师已完成本次口语评分。",
+      evaluations: [
+        {
+          sectionId: "speaking-part-5",
+          sectionTitle: "Part 5 Speaking",
+          questionId: 6,
+          prompt: "Describe one stage in the frog's life cycle.",
+          audioUrl: "/api/blob?key=speaking.wav",
+          transcript: "It starts as an egg.",
+          score: 4,
+          maxScore: 5,
+          grade: "Manual Review",
+          feedback_en: "",
+          feedback_cn: "内容比较完整。",
+          taskCompletion_en: "",
+          taskCompletion_cn: "",
+          fluency_en: "",
+          fluency_cn: "",
+          vocabulary_en: "",
+          vocabulary_cn: "",
+          grammar_en: "",
+          grammar_cn: "",
+          pronunciation_en: "",
+          pronunciation_cn: "",
+          suggestions_en: [],
+          suggestions_cn: [],
+          reviewMode: "manual",
+          manualReviewRequired: false,
+        },
+      ],
+    });
+
+    expect(finalized.reviewMode).toBe("manual");
+    expect(finalized.manualReviewRequired).toBe(false);
+    expect(finalized.totalScore).toBe(4);
+    expect(finalized.totalPossible).toBe(5);
+    expect(finalized.grade).toBe("B");
+    expect(finalized.evaluations[0]?.grade).toBe("B");
   });
 });
