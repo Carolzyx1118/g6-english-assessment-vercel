@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateImageFile, formatFileSize } from "./imageUtils";
+import { validateAudioFile, validateImageFile, formatFileSize } from "./imageUtils";
 
 // Note: compressImage and fileToBase64 use browser APIs (Image, canvas, URL.createObjectURL)
 // which are not available in Node.js test environment. We test the pure utility functions here.
@@ -70,5 +70,42 @@ describe("formatFileSize", () => {
 
   it("formats zero bytes", () => {
     expect(formatFileSize(0)).toBe("0 B");
+  });
+});
+
+describe("validateAudioFile", () => {
+  function makeFile(name: string, type: string, size: number): File {
+    const buffer = new ArrayBuffer(size);
+    return new File([buffer], name, { type });
+  }
+
+  it("accepts standard MP3 files", () => {
+    const file = makeFile("listening.mp3", "audio/mpeg", 1024);
+    expect(validateAudioFile(file)).toBeNull();
+  });
+
+  it("accepts MP3 files reported with Safari-style or legacy audio MIME types", () => {
+    const safariFile = makeFile("listening.mp3", "audio/mpg", 1024);
+    const legacyFile = makeFile("listening.mp3", "audio/x-mp3", 1024);
+
+    expect(validateAudioFile(safariFile)).toBeNull();
+    expect(validateAudioFile(legacyFile)).toBeNull();
+  });
+
+  it("accepts MP3 files when the browser only provides a generic MIME type", () => {
+    const file = makeFile("listening.mp3", "application/octet-stream", 1024);
+    expect(validateAudioFile(file)).toBeNull();
+  });
+
+  it("rejects non-audio files even when they have a generic MIME type", () => {
+    const file = makeFile("notes.pdf", "application/octet-stream", 1024);
+    expect(validateAudioFile(file)).toBe(
+      "Please select an audio file (MP3, WAV, OGG, M4A, AAC, WebM)"
+    );
+  });
+
+  it("rejects files over 100MB", () => {
+    const file = makeFile("listening.mp3", "audio/mpeg", 101 * 1024 * 1024);
+    expect(validateAudioFile(file)).toBe("Audio file size must be under 100MB");
   });
 });

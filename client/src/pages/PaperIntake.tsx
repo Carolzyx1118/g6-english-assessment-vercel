@@ -5267,7 +5267,7 @@ export default function PaperIntake() {
                                           : "Upload Audio"}
                                       <input
                                         type="file"
-                                        accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
+                                        accept=".mp3,.wav,.ogg,.webm,.mp4,.m4a,.aac,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/m4a,audio/x-m4a,audio/aac"
                                         className="hidden"
                                         disabled={isUploadingAudio}
                                         onClick={(event) => {

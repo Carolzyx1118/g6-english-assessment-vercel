@@ -9,6 +9,27 @@ const MAX_DIMENSION = 1200;
 const MAX_OPTION_DIMENSION = 600;
 /** JPEG quality for compression (0-1) */
 const COMPRESSION_QUALITY = 0.85;
+const AUDIO_FILE_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'webm', 'mp4', 'm4a', 'aac']);
+const AUDIO_MIME_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mpg',
+  'audio/x-mp3',
+  'audio/x-mpeg',
+  'audio/mpeg3',
+  'audio/x-mpeg-3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/ogg',
+  'audio/webm',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/x-aac',
+]);
+const GENERIC_FILE_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream']);
 
 export type ImageSize = 'full' | 'option' | 'scene';
 
@@ -133,8 +154,15 @@ export function validateImageFile(file: File): string | null {
  * Validate that a file is an acceptable audio file.
  */
 export function validateAudioFile(file: File): string | null {
-  const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac'];
-  if (!validTypes.includes(file.type)) {
+  const normalizedType = file.type.split(';')[0]?.trim().toLowerCase() || '';
+  const extension = file.name.split('.').pop()?.trim().toLowerCase() || '';
+  const hasKnownAudioExtension = AUDIO_FILE_EXTENSIONS.has(extension);
+  const isKnownAudioMimeType = AUDIO_MIME_TYPES.has(normalizedType);
+  const isExtensionFallbackMatch =
+    hasKnownAudioExtension
+    && (GENERIC_FILE_MIME_TYPES.has(normalizedType) || normalizedType.startsWith('audio/'));
+
+  if (!isKnownAudioMimeType && !isExtensionFallbackMatch) {
     return 'Please select an audio file (MP3, WAV, OGG, M4A, AAC, WebM)';
   }
   if (file.size > 100 * 1024 * 1024) {
