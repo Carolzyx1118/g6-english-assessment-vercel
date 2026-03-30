@@ -37,7 +37,6 @@ function isServerUploadBodyLimitError(message: string) {
 function getDirectUploadAttempts(blobSize: number) {
   const multipart = blobSize >= MULTIPART_UPLOAD_THRESHOLD_BYTES;
   return [
-    { access: "private" as const, multipart },
     { access: "public" as const, multipart },
   ];
 }
@@ -201,7 +200,7 @@ export async function uploadAudioBlob({
   const tryServerFirst = blob.size <= PREFERRED_SERVER_UPLOAD_MAX_BYTES;
   const strategies = preferDirectUpload
     ? canUseServerFallback
-      ? [uploadDirectly, uploadViaServer]
+      ? [uploadViaServer, uploadDirectly]
       : [uploadDirectly]
     : tryServerFirst
       ? [uploadViaServer, uploadDirectly]
