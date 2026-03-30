@@ -806,6 +806,8 @@ export default function AssessmentReportPanel({
   const gradeDescriptor = getGradeDescriptor(model.grade, locale);
   const headerCardClassName = "report-summary-card rounded-[24px] border border-[#1E3A5F]/12 bg-white/78 p-4 shadow-[0_18px_40px_rgba(30,58,95,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm";
   const headerLabelClassName = "text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1E3A5F]/72";
+  const hasWritingSubmission = Boolean(model.writing?.essay.trim());
+  const visibleWritingEvaluation = hasWritingSubmission ? model.writing?.evaluation || null : null;
 
   const speakingSeed = useMemo(() => {
     if (model.speaking.evaluation) {
@@ -983,16 +985,16 @@ export default function AssessmentReportPanel({
         grade: getLetterGrade(totalScore, totalPossible),
         totalTimeSeconds: model.totalTimeSeconds,
         sectionResults,
-        writingSummary: model.writing?.evaluation
+        writingSummary: visibleWritingEvaluation
           ? {
-              score: model.writing.evaluation.score,
-              maxScore: model.writing.evaluation.maxScore,
-              grade: model.writing.evaluation.grade,
-              overallFeedback_en: model.writing.evaluation.overallFeedback_en,
-              overallFeedback_cn: model.writing.evaluation.overallFeedback_cn,
-              suggestions_en: model.writing.evaluation.suggestions_en,
-              suggestions_cn: model.writing.evaluation.suggestions_cn,
-              manualReviewRequired: model.writing.evaluation.manualReviewRequired,
+              score: visibleWritingEvaluation.score,
+              maxScore: visibleWritingEvaluation.maxScore,
+              grade: visibleWritingEvaluation.grade,
+              overallFeedback_en: visibleWritingEvaluation.overallFeedback_en,
+              overallFeedback_cn: visibleWritingEvaluation.overallFeedback_cn,
+              suggestions_en: visibleWritingEvaluation.suggestions_en,
+              suggestions_cn: visibleWritingEvaluation.suggestions_cn,
+              manualReviewRequired: visibleWritingEvaluation.manualReviewRequired,
             }
           : undefined,
         speakingSummary: nextSpeaking,
@@ -1201,6 +1203,19 @@ export default function AssessmentReportPanel({
             const insightSummary = insight
               ? normalizeSectionInsightSummary(isCn ? insight.summary_cn : insight.summary_en, section, locale)
               : null;
+            const isWritingWithoutSubmission =
+              section.kind === "writing"
+              && model.writing?.sectionId === section.sectionId
+              && !hasWritingSubmission;
+            const breakdownSummary = isWritingWithoutSubmission
+              ? (isCn
+                  ? "本次未提交作文作答，因此这部分不显示写作评分、修改建议或写作提示。"
+                  : "No writing response was submitted, so this section does not show a writing score, corrections, or suggestions.")
+              : insightSummary
+                ? insightSummary
+                : (report
+                    ? (isCn ? "该部分已纳入整体分析，目前没有单独摘要。" : "This part is already covered in the overall analysis.")
+                    : (isCn ? "这份测评暂时还没有生成摘要。" : "A summary is not available for this part yet."));
             return (
               <div
                 key={`breakdown-${section.sectionId}-${index}`}
@@ -1220,25 +1235,25 @@ export default function AssessmentReportPanel({
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      {section.manualReview ? (isCn ? "评估方式" : "Review Mode") : (isCn ? "得分" : "Score")}
+                      {isWritingWithoutSubmission
+                        ? (isCn ? "作答状态" : "Submission")
+                        : section.manualReview
+                          ? (isCn ? "评估方式" : "Review Mode")
+                          : (isCn ? "得分" : "Score")}
                     </p>
                     <p className="report-breakdown-score mt-1 font-[family-name:var(--font-sans)] text-[24px] font-bold leading-none tracking-tight text-slate-900">
-                      {section.manualReview
-                        ? (isCn ? "老师评分" : "Teacher Review")
-                        : `${section.correct}/${section.total}`}
+                      {isWritingWithoutSubmission
+                        ? (isCn ? "未作答" : "No Submission")
+                        : section.manualReview
+                          ? (isCn ? "老师评分" : "Teacher Review")
+                          : `${section.correct}/${section.total}`}
                     </p>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">
                     {section.timeSeconds > 0 ? formatDuration(section.timeSeconds, locale) : (isCn ? "未记录用时" : "No timing")}
                   </span>
                 </div>
-                <p className="mt-3 text-sm leading-7 text-slate-700">
-                  {insightSummary
-                    ? insightSummary
-                    : (report
-                        ? (isCn ? "该部分已纳入整体分析，目前没有单独摘要。" : "This part is already covered in the overall analysis.")
-                        : (isCn ? "这份测评暂时还没有生成摘要。" : "A summary is not available for this part yet."))}
-                </p>
+                <p className="mt-3 text-sm leading-7 text-slate-700">{breakdownSummary}</p>
               </div>
             );
           })}
@@ -1281,6 +1296,7 @@ export default function AssessmentReportPanel({
             : speakingItems;
           const reviewDetails = getReviewProblemDetails(section.details);
           const isWritingSection = section.kind === "writing" && model.writing?.sectionId === section.sectionId;
+          const isWritingWithoutSubmission = isWritingSection && !hasWritingSubmission;
           const isSpeakingSection = section.kind === "speaking" && editableSpeakingItems.length > 0;
           const shouldRenderSection = isWritingSection || isSpeakingSection || reviewDetails.length > 0;
 
@@ -1305,9 +1321,11 @@ export default function AssessmentReportPanel({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-base font-semibold text-amber-900">
-                        {section.manualReview
-                          ? (isCn ? "老师评分" : "Teacher Review")
-                          : `${isCn ? "得分 " : "Score "}${section.correct}/${section.total}`}
+                        {isWritingWithoutSubmission
+                          ? (isCn ? "未作答" : "No Submission")
+                          : section.manualReview
+                            ? (isCn ? "老师评分" : "Teacher Review")
+                            : `${isCn ? "得分 " : "Score "}${section.correct}/${section.total}`}
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
                         {section.timeSeconds > 0 ? formatDuration(section.timeSeconds, locale) : (isCn ? "未记录用时" : "No timing recorded")}
@@ -1321,12 +1339,18 @@ export default function AssessmentReportPanel({
               </summary>
 
               <div className="report-detail-body space-y-4 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:px-6">
-                {insight ? (
+                {insight || isWritingWithoutSubmission ? (
                   <div className="rounded-[24px] bg-indigo-50 px-5 py-4 text-sm leading-7 text-indigo-950">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">
                       {isCn ? "Part 摘要" : "Part Summary"}
                     </p>
-                    <p className="mt-2">{insightSummary}</p>
+                    <p className="mt-2">
+                      {isWritingWithoutSubmission
+                        ? (isCn
+                            ? "本次未提交作文作答，因此这部分不显示写作评分、修改建议或写作提示。"
+                            : "No writing response was submitted, so this section does not show a writing score, corrections, or suggestions.")
+                        : insightSummary}
+                    </p>
                   </div>
                 ) : null}
 
@@ -1366,7 +1390,7 @@ export default function AssessmentReportPanel({
                         </div>
                       </div>
 
-                      {model.writing.evaluation?.correctedEssay ? (
+                      {visibleWritingEvaluation?.correctedEssay ? (
                         <div className="report-question-card rounded-[24px] border border-emerald-100 bg-white p-5">
                           <div className="flex items-center gap-2 text-emerald-900">
                             <Sparkles className="h-5 w-5 text-emerald-600" />
@@ -1376,7 +1400,7 @@ export default function AssessmentReportPanel({
                           </div>
                           <div className="mt-4 rounded-[24px] bg-emerald-50 px-5 py-4">
                             <p className="whitespace-pre-wrap text-[15px] leading-8 text-emerald-950">
-                              {model.writing.evaluation.correctedEssay}
+                              {visibleWritingEvaluation.correctedEssay}
                             </p>
                           </div>
                         </div>
@@ -1386,29 +1410,37 @@ export default function AssessmentReportPanel({
                     <div className="space-y-4 xl:sticky xl:top-6">
                       <div className="rounded-[24px] border border-rose-100 bg-rose-50 p-5">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">
-                          {isCn ? "评分结果" : "Score"}
+                          {hasWritingSubmission ? (isCn ? "评分结果" : "Score") : (isCn ? "作答状态" : "Submission")}
                         </p>
                         <p className="mt-2 text-2xl font-bold text-rose-900">
-                          {model.writing.manualReview
-                            ? (isCn ? "老师评分" : "Teacher Review")
-                            : model.writing.evaluation
-                              ? `${model.writing.evaluation.score}/${model.writing.evaluation.maxScore}`
-                              : "-"}
+                          {!hasWritingSubmission
+                            ? (isCn ? "未作答" : "No Submission")
+                            : model.writing.manualReview
+                              ? (isCn ? "老师评分" : "Teacher Review")
+                              : visibleWritingEvaluation
+                                ? `${visibleWritingEvaluation.score}/${visibleWritingEvaluation.maxScore}`
+                                : "-"}
                         </p>
-                        {model.writing.evaluation ? (
+                        {!hasWritingSubmission ? (
                           <p className="mt-2 text-sm leading-7 text-rose-900">
-                            {isCn ? model.writing.evaluation.overallFeedback_cn : model.writing.evaluation.overallFeedback_en}
+                            {isCn
+                              ? "本次没有提交作文内容，因此这里不会显示写作评分、语法修改或写作提示。"
+                              : "No writing response was submitted, so this area does not show a writing score, corrections, or suggestions."}
+                          </p>
+                        ) : visibleWritingEvaluation ? (
+                          <p className="mt-2 text-sm leading-7 text-rose-900">
+                            {isCn ? visibleWritingEvaluation.overallFeedback_cn : visibleWritingEvaluation.overallFeedback_en}
                           </p>
                         ) : null}
                       </div>
 
-                      {model.writing.evaluation?.grammarErrors?.length ? (
+                      {visibleWritingEvaluation?.grammarErrors?.length ? (
                         <div className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                             {isCn ? "重点语法修改" : "Grammar Corrections"}
                           </p>
                           <div className="mt-3 space-y-3">
-                            {model.writing.evaluation.grammarErrors.map((item, grammarIndex) => (
+                            {visibleWritingEvaluation.grammarErrors.map((item, grammarIndex) => (
                               <div key={`grammar-error-${grammarIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <p className="font-semibold text-slate-800">{item.original}</p>
@@ -1424,13 +1456,13 @@ export default function AssessmentReportPanel({
                         </div>
                       ) : null}
 
-                      {((isCn ? model.writing.evaluation?.suggestions_cn : model.writing.evaluation?.suggestions_en) || []).length > 0 ? (
+                      {((isCn ? visibleWritingEvaluation?.suggestions_cn : visibleWritingEvaluation?.suggestions_en) || []).length > 0 ? (
                         <div className="rounded-[24px] border border-slate-200 bg-white p-5">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                             {isCn ? "本 Part 提示" : "Part Suggestions"}
                           </p>
                           <div className="mt-3 space-y-2">
-                            {((isCn ? model.writing.evaluation?.suggestions_cn : model.writing.evaluation?.suggestions_en) || []).map((item, suggestionIndex) => (
+                            {((isCn ? visibleWritingEvaluation?.suggestions_cn : visibleWritingEvaluation?.suggestions_en) || []).map((item, suggestionIndex) => (
                               <div key={`writing-suggestion-${suggestionIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
                                 {item}
                               </div>
@@ -1444,54 +1476,134 @@ export default function AssessmentReportPanel({
 
                 {isSpeakingSection ? (
                   <div className="space-y-4">
+                    {canManuallyScoreSpeaking ? (
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {isEditingSpeaking ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelSpeakingEdit}
+                              disabled={savingSpeaking}
+                              className="rounded-full bg-white"
+                            >
+                              {isCn ? "取消" : "Cancel"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleSaveSpeakingReview}
+                              disabled={savingSpeaking}
+                              className="rounded-full"
+                            >
+                              {savingSpeaking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                              {isCn ? "保存口语评分" : "Save Speaking Review"}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setIsEditingSpeaking(true)}
+                            className="rounded-full bg-white"
+                          >
+                            <PencilLine className="mr-2 h-4 w-4" />
+                            {isCn ? "老师评分" : "Edit Speaking Score"}
+                          </Button>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {editableSpeakingItems.map((item) => (
+                      <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
+                          </div>
+                          <div className="min-w-[142px] rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                              {isCn ? "本题得分" : "Response Score"}
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-slate-900">
+                              {Boolean(item.manualReviewRequired) && !isEditingSpeaking
+                                ? (isCn ? "待评分" : "Pending")
+                                : `${formatScoreDisplay(item.score)}/${item.maxScore}`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {item.audioUrl ? (
+                          <audio controls className="mt-4 w-full" src={item.audioUrl} preload="none" />
+                        ) : null}
+
+                        <div className="mt-4 rounded-[28px] border border-slate-200 bg-slate-50/80 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                {isCn ? "评分维度" : "Scoring Criteria"}
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-slate-600">
+                                {isCn
+                                  ? "按 5 个维度分别评分，系统会自动换算本题总分。"
+                                  : "Score the five criteria below and the response score is calculated automatically."}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                              {isCn ? "共 5 项" : "5 criteria"}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                          {MANUAL_SPEAKING_CRITERIA.map((criterion) => (
+                              <div
+                                key={`${item.sectionId}-${item.questionId}-${criterion.field}`}
+                                className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                              >
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                  {isCn ? criterion.labelCn : criterion.labelEn}
+                                </p>
+                                {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                                  <div className="mt-3 space-y-2">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={DEFAULT_MANUAL_SPEAKING_MAX_SCORE}
+                                      step={1}
+                                      value={String(item[criterion.field] ?? 0)}
+                                      onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, criterion.field, event.target.value)}
+                                      className="h-12 bg-slate-50 text-center text-xl font-semibold"
+                                    />
+                                    <p className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                      {isCn ? `满分 ${DEFAULT_MANUAL_SPEAKING_MAX_SCORE}` : `Max ${DEFAULT_MANUAL_SPEAKING_MAX_SCORE}`}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="mt-4 text-center text-3xl font-semibold tracking-[-0.03em] text-slate-900">
+                                    {Boolean(item.manualReviewRequired)
+                                      ? (isCn ? "待评" : "Pending")
+                                      : formatScoreDisplay(typeof item[criterion.field] === "number" ? item[criterion.field] : null)}
+                                    {!item.manualReviewRequired ? (
+                                      <span className="ml-1 text-sm font-medium text-slate-500">/ {DEFAULT_MANUAL_SPEAKING_MAX_SCORE}</span>
+                                    ) : null}
+                                  </p>
+                                )}
+                              </div>
+                          ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
                     {((isEditingSpeaking ? speakingDraft?.overallFeedback_cn : model.speaking.evaluation?.overallFeedback_cn)
                       || (isEditingSpeaking ? speakingDraft?.overallFeedback_en : model.speaking.evaluation?.overallFeedback_en)
                       || canManuallyScoreSpeaking) ? (
                       <div className="rounded-[24px] bg-orange-50 px-5 py-4 text-sm leading-7 text-orange-950">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <Mic className="h-5 w-5 text-orange-600" />
-                            <p className="text-base font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
-                          </div>
-                          {canManuallyScoreSpeaking ? (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {isEditingSpeaking ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleCancelSpeakingEdit}
-                                    disabled={savingSpeaking}
-                                    className="rounded-full bg-white"
-                                  >
-                                    {isCn ? "取消" : "Cancel"}
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={handleSaveSpeakingReview}
-                                    disabled={savingSpeaking}
-                                    className="rounded-full"
-                                  >
-                                    {savingSpeaking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    {isCn ? "保存口语评分" : "Save Speaking Review"}
-                                  </Button>
-                                </>
-                              ) : (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setIsEditingSpeaking(true)}
-                                  className="rounded-full bg-white"
-                                >
-                                  <PencilLine className="mr-2 h-4 w-4" />
-                                  {isCn ? "老师评分" : "Edit Speaking Score"}
-                                </Button>
-                              )}
-                            </div>
-                          ) : null}
+                        <div className="flex items-center gap-2">
+                          <Mic className="h-5 w-5 text-orange-600" />
+                          <p className="text-base font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
                         </div>
                         {isEditingSpeaking && canManuallyScoreSpeaking ? (
                           <Textarea
@@ -1509,79 +1621,6 @@ export default function AssessmentReportPanel({
                         )}
                       </div>
                     ) : null}
-
-                    {editableSpeakingItems.map((item) => (
-                      <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
-                        {(() => {
-                          const isPendingManualScore = Boolean(item.manualReviewRequired);
-                          return (
-                            <>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
-                          </div>
-                          <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "本题得分" : "Response Score"}
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-slate-900">
-                              {isPendingManualScore && !isEditingSpeaking
-                                ? (isCn ? "待评分" : "Pending")
-                                : `${formatScoreDisplay(item.score)}/${item.maxScore}`}
-                            </p>
-                          </div>
-                        </div>
-
-                        {item.audioUrl ? (
-                          <audio controls className="mt-4 w-full" src={item.audioUrl} preload="none" />
-                        ) : null}
-
-                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                          {MANUAL_SPEAKING_CRITERIA.map((criterion) => (
-                            <div key={`${item.sectionId}-${item.questionId}-${criterion.field}`} className="rounded-3xl bg-slate-50 px-4 py-4">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                {isCn ? criterion.labelCn : criterion.labelEn}
-                              </p>
-                              {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                                <div className="mt-3 flex items-center gap-2">
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={DEFAULT_MANUAL_SPEAKING_MAX_SCORE}
-                                    step={1}
-                                    value={String(item[criterion.field] ?? 0)}
-                                    onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, criterion.field, event.target.value)}
-                                    className="h-10 bg-white text-right"
-                                  />
-                                  <span className="text-sm font-semibold text-slate-500">/ {DEFAULT_MANUAL_SPEAKING_MAX_SCORE}</span>
-                                </div>
-                              ) : (
-                                <p className="mt-3 text-2xl font-semibold text-slate-900">
-                                  {isPendingManualScore
-                                    ? (isCn ? "待评分" : "Pending")
-                                    : formatScoreDisplay(typeof item[criterion.field] === "number" ? item[criterion.field] : null)}
-                                  {!isPendingManualScore ? (
-                                    <span className="ml-1 text-sm font-medium text-slate-500">/ {DEFAULT_MANUAL_SPEAKING_MAX_SCORE}</span>
-                                  ) : null}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                          <p className="mt-4 text-xs leading-6 text-slate-500">
-                            {isCn
-                              ? "本题总分会根据以上 5 项评分自动换算。"
-                              : "The response score is calculated automatically from the five criteria above."}
-                          </p>
-                        ) : null}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ))}
                   </div>
                 ) : null}
 

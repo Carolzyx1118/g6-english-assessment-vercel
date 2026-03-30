@@ -480,6 +480,8 @@ export default function ResultsPage() {
         setStatusText("Running scoring checks and preparing teacher review materials...");
         setProgressValue(58);
 
+        const hasSubmittedWriting = Boolean(artifacts.writingTask?.essay.trim());
+
         const [readingResultSet, explanationResultSet, writingResultSet, speakingResultSet] = await Promise.allSettled([
           artifacts.readingInputs.length > 0
             ? checkReadingRef.current.mutateAsync({
@@ -498,7 +500,7 @@ export default function ResultsPage() {
                 wrongAnswers: artifacts.wrongObjectiveAnswers,
               })
             : Promise.resolve([]),
-          artifacts.writingTask
+          artifacts.writingTask && hasSubmittedWriting
             ? evaluateWritingRef.current.mutateAsync({
                 essay: artifacts.writingTask.essay,
                 topic: artifacts.writingTask.question.topic || artifacts.writingTask.question.instructions,
@@ -531,7 +533,7 @@ export default function ResultsPage() {
           const objectiveScore = artifacts.objectiveBySection[section.id];
           const readingMatches = readingResults.filter((item) => item.questionId.startsWith(`${section.id}::`));
           const speakingMatches = speakingResult?.evaluations.filter((item) => item.sectionId === section.id) || [];
-          const hasWriting = artifacts.writingTask?.sectionId === section.id;
+          const hasWriting = artifacts.writingTask?.sectionId === section.id && hasSubmittedWriting;
 
           const correct = objectiveScore
             ? objectiveScore.correct

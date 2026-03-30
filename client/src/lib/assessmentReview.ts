@@ -212,6 +212,10 @@ export interface SpeakingResponseCandidate {
   audioUrl: string;
 }
 
+function hasSubmittedWritingResponse(essay: string) {
+  return essay.trim().length > 0;
+}
+
 function buildPendingSpeakingQuestionEvaluation(
   response: SpeakingResponseCandidate,
 ): SpeakingQuestionEvaluation {
@@ -1519,12 +1523,14 @@ export function buildSubmissionArtifacts(
       if (writingQuestion) {
         const essayKey = `${section.id}:${writingQuestion.id}`;
         const essay = typeof answers[essayKey] === "string" ? String(answers[essayKey]) : "";
-        writingTask = {
-          sectionId: section.id,
-          sectionTitle: section.title,
-          question: writingQuestion,
-          essay,
-        };
+        if (hasSubmittedWritingResponse(essay)) {
+          writingTask = {
+            sectionId: section.id,
+            sectionTitle: section.title,
+            question: writingQuestion,
+            essay,
+          };
+        }
       }
       continue;
     }
@@ -1642,13 +1648,14 @@ export function buildAssessmentReviewModel(
         if (writingQuestion) {
           const essayKey = `${section.id}:${writingQuestion.id}`;
           const essay = typeof answers[essayKey] === "string" ? String(answers[essayKey]) : "";
+          const hasEssay = hasSubmittedWritingResponse(essay);
           writing = {
             sectionId: section.id,
             sectionTitle: section.title,
             question: writingQuestion,
             essay,
-            evaluation: writingResult,
-            manualReview: isManualWritingReview(writingResult),
+            evaluation: hasEssay ? writingResult : null,
+            manualReview: hasEssay ? isManualWritingReview(writingResult) : false,
           };
         }
       }
@@ -1662,10 +1669,12 @@ export function buildAssessmentReviewModel(
       let manualReview = false;
 
       if (kind === "writing") {
-        const isManual = isManualWritingReview(writingResult);
+        const hasEssay = Boolean(writing?.sectionId === section.id && hasSubmittedWritingResponse(writing.essay));
+        const effectiveWritingResult = hasEssay ? writingResult : null;
+        const isManual = isManualWritingReview(effectiveWritingResult);
         manualReview = isManual;
-        correct = writingResult && !isManual ? writingResult.score : 0;
-        total = writingResult && !isManual ? writingResult.maxScore : 0;
+        correct = effectiveWritingResult && !isManual ? effectiveWritingResult.score : 0;
+        total = effectiveWritingResult && !isManual ? effectiveWritingResult.maxScore : 0;
       } else if (kind === "speaking") {
         const matchingEvaluations = speakingEvaluation?.evaluations.filter((item) => item.sectionId === section.id) || [];
         const isManual = isManualSpeakingReview(speakingEvaluation);

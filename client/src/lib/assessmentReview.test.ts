@@ -299,6 +299,88 @@ describe("assessmentReview", () => {
     expect(pending.evaluations[0]?.feedback_cn).toContain("等待老师");
   });
 
+  it("ignores stale writing scores when no essay was submitted", () => {
+    const generatedPaper: Paper = {
+      id: "tag-system-english-empty-writing",
+      title: "Generated Empty Writing Assessment",
+      subtitle: "Custom generated paper",
+      description: "A generated assessment.",
+      icon: "🧪",
+      color: "#1d4ed8",
+      subject: "english",
+      category: "assessment",
+      isGeneratedPaper: true,
+      totalQuestions: 1,
+      hasListening: false,
+      hasWriting: true,
+      sections: [
+        {
+          id: "generated-writing",
+          title: "Generated Writing",
+          subtitle: "AI generated section",
+          icon: "✍️",
+          color: "text-rose-700",
+          bgColor: "bg-rose-50",
+          description: "Generated writing practice",
+          sectionType: "writing",
+          questions: [
+            {
+              id: 1,
+              type: "writing",
+              topic: "Write about your favorite teacher.",
+              instructions: "Use at least 60 words.",
+              minWords: 60,
+              maxWords: 100,
+            },
+          ],
+        },
+      ],
+    };
+
+    const record: AssessmentReviewRecord = {
+      studentName: "Generated Student",
+      studentGrade: "G6",
+      paperId: "unknown",
+      paperTitle: "Assessment",
+      totalCorrect: 0,
+      totalQuestions: 1,
+      totalTimeSeconds: 95,
+      answersJson: packStoredAssessmentPayloadForResultStorage(
+        { "generated-writing:1": "" },
+        generatedPaper,
+      ),
+      scoreBySectionJson: JSON.stringify({
+        "generated-writing": { correct: 12, total: 15 },
+      }),
+      sectionTimingsJson: JSON.stringify({
+        "generated-writing": 95,
+      }),
+      readingResultsJson: null,
+      writingResultJson: JSON.stringify({
+        score: 12,
+        maxScore: 15,
+        grade: "B",
+        overallFeedback_en: "Stale score",
+        overallFeedback_cn: "旧分数",
+        grammarErrors: [{ original: "visit", correction: "visits", explanation_en: "Agreement", explanation_cn: "主谓一致" }],
+        correctedEssay: "Corrected text",
+        annotatedEssay: "Annotated text",
+        suggestions_en: ["Add details"],
+        suggestions_cn: ["补充细节"],
+      }),
+      explanationsJson: null,
+      reportJson: null,
+      createdAt: new Date("2026-03-30T12:00:00.000Z"),
+    };
+
+    const model = buildAssessmentReviewModel(record);
+
+    expect(model.writing?.essay).toBe("");
+    expect(model.writing?.evaluation).toBeNull();
+    expect(model.sections[0]?.correct).toBe(0);
+    expect(model.sections[0]?.total).toBe(0);
+  });
+
   it("finalizes teacher speaking scores into a scored manual review", () => {
     const finalized = finalizeManualSpeakingEvaluation({
       overallFeedback_cn: "老师已完成本次口语评分。",
