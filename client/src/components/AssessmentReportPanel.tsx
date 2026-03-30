@@ -24,6 +24,7 @@ import {
   buildAssessmentReviewModel,
   buildSubmissionArtifacts,
   createPendingSpeakingEvaluation,
+  DEFAULT_MANUAL_SPEAKING_MAX_SCORE,
   finalizeManualSpeakingEvaluation,
   formatDuration,
   getSectionDisplayName,
@@ -49,6 +50,25 @@ interface AssessmentReportPanelProps {
 
 type SpeakingEvaluationItem =
   NonNullable<NonNullable<AssessmentReviewModel["speaking"]["evaluation"]>["evaluations"]>[number];
+
+type ManualSpeakingCriterionField =
+  | "taskCompletionScore"
+  | "fluencyScore"
+  | "vocabularyScore"
+  | "grammarScore"
+  | "pronunciationScore";
+
+const MANUAL_SPEAKING_CRITERIA: Array<{
+  field: ManualSpeakingCriterionField;
+  labelCn: string;
+  labelEn: string;
+}> = [
+  { field: "taskCompletionScore", labelCn: "任务完成", labelEn: "Task Completion" },
+  { field: "fluencyScore", labelCn: "流利度", labelEn: "Fluency" },
+  { field: "vocabularyScore", labelCn: "词汇", labelEn: "Vocabulary" },
+  { field: "grammarScore", labelCn: "语法", labelEn: "Grammar" },
+  { field: "pronunciationScore", labelCn: "发音", labelEn: "Pronunciation" },
+];
 
 const REPORT_SECTION_LABELS = {
   vocabulary: { cn: "词汇", en: "Vocabulary" },
@@ -134,18 +154,26 @@ function summarizeManualSpeakingFeedback(
   locale: ReviewLocale,
   evaluations: SpeakingEvaluationItem[],
 ) {
-  const feedbackItems = evaluations
-    .map((item) => locale === "cn" ? item.feedback_cn : item.feedback_en)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  if (feedbackItems.length === 0) {
+  if (evaluations.length === 0) {
     return locale === "cn"
-      ? "老师已完成口语评分。"
-      : "Teacher speaking review has been saved.";
+      ? "暂时还没有口语评分内容。"
+      : "No speaking review is available yet.";
   }
 
-  return feedbackItems.slice(0, 3).join(locale === "cn" ? " " : " ");
+  return locale === "cn"
+    ? "老师已根据任务完成、流利度、词汇、语法和发音完成口语评分。"
+    : "Teacher speaking review has been completed using task completion, fluency, vocabulary, grammar, and pronunciation.";
+}
+
+function formatScoreDisplay(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "--";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function normalizeManualSpeakingCriterionValue(rawValue: string | number) {
+  const parsed = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(DEFAULT_MANUAL_SPEAKING_MAX_SCORE, Math.round(parsed * 10) / 10));
 }
 
 function normalizeSectionInsightSummary(
@@ -849,7 +877,7 @@ export default function AssessmentReportPanel({
   const updateSpeakingItemField = (
     sectionId: string,
     questionId: number,
-    field: "score" | "transcript" | "feedback_cn",
+    field: ManualSpeakingCriterionField,
     value: string,
   ) => {
     setSpeakingDraft((current) => {
@@ -859,17 +887,9 @@ export default function AssessmentReportPanel({
         evaluations: current.evaluations.map((item) => {
           if (item.sectionId !== sectionId || item.questionId !== questionId) return item;
 
-          if (field === "score") {
-            const nextScore = Number(value);
-            return {
-              ...item,
-              score: Number.isFinite(nextScore) ? nextScore : 0,
-            };
-          }
-
           return {
             ...item,
-            [field]: value,
+            [field]: normalizeManualSpeakingCriterionValue(value),
           };
         }),
       };
@@ -887,16 +907,20 @@ export default function AssessmentReportPanel({
     if (!activeRecord.id || !speakingDraft) return;
 
     const normalizedEvaluations = speakingDraft.evaluations.map((item) => {
-      const feedbackCn = item.feedback_cn.trim();
-      const transcript = item.transcript.trim();
+      const normalizedCriteria = Object.fromEntries(
+        MANUAL_SPEAKING_CRITERIA.map((criterion) => [
+          criterion.field,
+          normalizeManualSpeakingCriterionValue(item[criterion.field] ?? 0),
+        ]),
+      ) as Record<ManualSpeakingCriterionField, number>;
+
       return {
         ...item,
+        ...normalizedCriteria,
         score: Number.isFinite(item.score) ? item.score : 0,
-        transcript,
-        feedback_cn:
-          feedbackCn || "老师已完成该题口语评分。",
-        feedback_en:
-          feedbackCn || item.feedback_en.trim() || "Teacher manual speaking review completed.",
+        transcript: "",
+        feedback_cn: "",
+        feedback_en: "",
         taskCompletion_cn: "",
         taskCompletion_en: "",
         fluency_cn: "",
@@ -1213,7 +1237,7 @@ export default function AssessmentReportPanel({
                     ? insightSummary
                     : (report
                         ? (isCn ? "该部分已纳入整体分析，目前没有单独摘要。" : "This part is already covered in the overall analysis.")
-                        : (isCn ? "这份测评暂时还没有生成 AI 摘要。" : "AI summary is not available for this part yet."))}
+                        : (isCn ? "这份测评暂时还没有生成摘要。" : "A summary is not available for this part yet."))}
                 </p>
               </div>
             );
@@ -1235,8 +1259,8 @@ export default function AssessmentReportPanel({
         {!report ? (
           <div className="rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-5 text-sm text-amber-900 shadow-sm">
             {isCn
-              ? "这份测评还没有生成 AI 报告，当前先展示原始得分与逐题记录。"
-              : "This assessment does not have an AI report yet. Raw scores and question review are shown below."}
+              ? "这份测评还没有生成完整报告，当前先展示原始得分与逐题记录。"
+              : "This assessment does not have a full report yet. Raw scores and question review are shown below."}
           </div>
         ) : null}
 
@@ -1307,45 +1331,59 @@ export default function AssessmentReportPanel({
                 ) : null}
 
                 {isWritingSection && model.writing ? (
-                  <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)] xl:items-start">
                     <div className="space-y-4">
                       <div className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
                         <div className="flex items-center gap-2 text-slate-900">
                           <PenSquare className="h-5 w-5 text-rose-600" />
                           <p className="text-base font-semibold">{isCn ? "写作任务" : "Writing Task"}</p>
                         </div>
-                        <div className="mt-4 space-y-4">
-                          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "题目要求" : "Prompt"}
-                            </p>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                              {model.writing.question.topic || model.writing.question.instructions}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "学生原文" : "Student Response"}
-                            </p>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                              {model.writing.essay || (isCn ? "未提交写作内容。" : "No writing submission.")}
-                            </p>
-                          </div>
-                          {model.writing.evaluation?.correctedEssay ? (
-                            <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
-                                {isCn ? "AI 修改示例" : "AI Corrected Version"}
-                              </p>
-                              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-emerald-950">
-                                {model.writing.evaluation.correctedEssay}
-                              </p>
-                            </div>
-                          ) : null}
+                        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            {isCn ? "题目要求" : "Prompt"}
+                          </p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                            {model.writing.question.topic || model.writing.question.instructions}
+                          </p>
                         </div>
                       </div>
+
+                      <div className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-base font-semibold text-slate-900">
+                            {isCn ? "学生原文" : "Student Response"}
+                          </p>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                            {model.writing.essay.trim()
+                              ? (isCn ? `${model.writing.essay.trim().split(/\s+/).length} 词` : `${model.writing.essay.trim().split(/\s+/).length} words`)
+                              : (isCn ? "未作答" : "No response")}
+                          </span>
+                        </div>
+                        <div className="mt-4 rounded-[24px] border border-emerald-100 bg-emerald-50/80 px-5 py-4">
+                          <p className="whitespace-pre-wrap text-[15px] leading-8 text-emerald-950">
+                            {model.writing.essay || (isCn ? "未提交写作内容。" : "No writing submission.")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {model.writing.evaluation?.correctedEssay ? (
+                        <div className="report-question-card rounded-[24px] border border-emerald-100 bg-white p-5">
+                          <div className="flex items-center gap-2 text-emerald-900">
+                            <Sparkles className="h-5 w-5 text-emerald-600" />
+                            <p className="text-base font-semibold">
+                              {isCn ? "AI 修改示例" : "AI Corrected Version"}
+                            </p>
+                          </div>
+                          <div className="mt-4 rounded-[24px] bg-emerald-50 px-5 py-4">
+                            <p className="whitespace-pre-wrap text-[15px] leading-8 text-emerald-950">
+                              {model.writing.evaluation.correctedEssay}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 xl:sticky xl:top-6">
                       <div className="rounded-[24px] border border-rose-100 bg-rose-50 p-5">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">
                           {isCn ? "评分结果" : "Score"}
@@ -1371,9 +1409,12 @@ export default function AssessmentReportPanel({
                           </p>
                           <div className="mt-3 space-y-3">
                             {model.writing.evaluation.grammarErrors.map((item, grammarIndex) => (
-                              <div key={`grammar-error-${grammarIndex}`} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                                <p className="font-semibold text-slate-800">{item.original}</p>
-                                <p className="mt-1 text-emerald-700">{item.correction}</p>
+                              <div key={`grammar-error-${grammarIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold text-slate-800">{item.original}</p>
+                                  <span className="text-slate-300">→</span>
+                                  <p className="font-semibold text-emerald-700">{item.correction}</p>
+                                </div>
                                 <p className="mt-2 text-slate-600">
                                   {isCn ? item.explanation_cn : item.explanation_en}
                                 </p>
@@ -1390,7 +1431,7 @@ export default function AssessmentReportPanel({
                           </p>
                           <div className="mt-3 space-y-2">
                             {((isCn ? model.writing.evaluation?.suggestions_cn : model.writing.evaluation?.suggestions_en) || []).map((item, suggestionIndex) => (
-                              <div key={`writing-suggestion-${suggestionIndex}`} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                              <div key={`writing-suggestion-${suggestionIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
                                 {item}
                               </div>
                             ))}
@@ -1410,7 +1451,7 @@ export default function AssessmentReportPanel({
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
                             <Mic className="h-5 w-5 text-orange-600" />
-                            <p className="text-base font-semibold">{isCn ? "口语总体反馈" : "Speaking Overview"}</p>
+                            <p className="text-base font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
                           </div>
                           {canManuallyScoreSpeaking ? (
                             <div className="flex flex-wrap items-center gap-2">
@@ -1471,28 +1512,24 @@ export default function AssessmentReportPanel({
 
                     {editableSpeakingItems.map((item) => (
                       <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
+                        {(() => {
+                          const isPendingManualScore = Boolean(item.manualReviewRequired);
+                          return (
+                            <>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
                             <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
                           </div>
                           <div className="rounded-2xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
-                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={item.maxScore}
-                                  step={1}
-                                  value={String(item.score)}
-                                  onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "score", event.target.value)}
-                                  className="h-9 w-20 bg-white text-right"
-                                />
-                                <span>/ {item.maxScore}</span>
-                              </div>
-                            ) : model.speaking.manualReview
-                              ? (isCn ? "老师评分" : "Teacher Review")
-                              : `${item.score}/${item.maxScore}`}
+                            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                              {isCn ? "本题得分" : "Response Score"}
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-slate-900">
+                              {isPendingManualScore && !isEditingSpeaking
+                                ? (isCn ? "待评分" : "Pending")
+                                : `${formatScoreDisplay(item.score)}/${item.maxScore}`}
+                            </p>
                           </div>
                         </div>
 
@@ -1500,82 +1537,49 @@ export default function AssessmentReportPanel({
                           <audio controls className="mt-4 w-full" src={item.audioUrl} preload="none" />
                         ) : null}
 
-                        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                          <div className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "转写内容" : "Transcript"}
-                            </p>
-                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                              <Textarea
-                                value={item.transcript}
-                                onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "transcript", event.target.value)}
-                                placeholder={isCn ? "可选：补充老师听写的转写内容" : "Optional: add a teacher transcript"}
-                                className="mt-2 min-h-[120px] bg-white"
-                              />
-                            ) : (
-                              <p className="mt-2 whitespace-pre-wrap">
-                                {item.transcript || (isCn ? "暂无转写内容。" : "No transcript available.")}
+                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                          {MANUAL_SPEAKING_CRITERIA.map((criterion) => (
+                            <div key={`${item.sectionId}-${item.questionId}-${criterion.field}`} className="rounded-3xl bg-slate-50 px-4 py-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                {isCn ? criterion.labelCn : criterion.labelEn}
                               </p>
-                            )}
-                          </div>
-                          <div className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "总体反馈" : "Overall Feedback"}
-                            </p>
-                            {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                              <Textarea
-                                value={item.feedback_cn}
-                                onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, "feedback_cn", event.target.value)}
-                                placeholder={isCn ? "输入老师对这道口语题的评语" : "Add a teacher comment for this response"}
-                                className="mt-2 min-h-[120px] bg-white"
-                              />
-                            ) : (
-                              <p className="mt-2">{isCn ? item.feedback_cn : item.feedback_en}</p>
-                            )}
-                          </div>
+                              {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                                <div className="mt-3 flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={DEFAULT_MANUAL_SPEAKING_MAX_SCORE}
+                                    step={1}
+                                    value={String(item[criterion.field] ?? 0)}
+                                    onChange={(event) => updateSpeakingItemField(item.sectionId, item.questionId, criterion.field, event.target.value)}
+                                    className="h-10 bg-white text-right"
+                                  />
+                                  <span className="text-sm font-semibold text-slate-500">/ {DEFAULT_MANUAL_SPEAKING_MAX_SCORE}</span>
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-2xl font-semibold text-slate-900">
+                                  {isPendingManualScore
+                                    ? (isCn ? "待评分" : "Pending")
+                                    : formatScoreDisplay(typeof item[criterion.field] === "number" ? item[criterion.field] : null)}
+                                  {!isPendingManualScore ? (
+                                    <span className="ml-1 text-sm font-medium text-slate-500">/ {DEFAULT_MANUAL_SPEAKING_MAX_SCORE}</span>
+                                  ) : null}
+                                </p>
+                              )}
+                            </div>
+                          ))}
                         </div>
 
-                        {[
-                          { labelCn: "任务完成", labelEn: "Task Completion", value: isCn ? item.taskCompletion_cn : item.taskCompletion_en },
-                          { labelCn: "流利度", labelEn: "Fluency", value: isCn ? item.fluency_cn : item.fluency_en },
-                          { labelCn: "词汇", labelEn: "Vocabulary", value: isCn ? item.vocabulary_cn : item.vocabulary_en },
-                          { labelCn: "语法", labelEn: "Grammar", value: isCn ? item.grammar_cn : item.grammar_en },
-                          { labelCn: "发音", labelEn: "Pronunciation", value: isCn ? item.pronunciation_cn : item.pronunciation_en },
-                        ].some((criterion) => criterion.value.trim()) ? (
-                          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {[
-                              { labelCn: "任务完成", labelEn: "Task Completion", value: isCn ? item.taskCompletion_cn : item.taskCompletion_en },
-                              { labelCn: "流利度", labelEn: "Fluency", value: isCn ? item.fluency_cn : item.fluency_en },
-                              { labelCn: "词汇", labelEn: "Vocabulary", value: isCn ? item.vocabulary_cn : item.vocabulary_en },
-                              { labelCn: "语法", labelEn: "Grammar", value: isCn ? item.grammar_cn : item.grammar_en },
-                              { labelCn: "发音", labelEn: "Pronunciation", value: isCn ? item.pronunciation_cn : item.pronunciation_en },
-                            ]
-                              .filter((criterion) => criterion.value.trim())
-                              .map((criterion) => (
-                                <div key={criterion.labelEn} className="rounded-3xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
-                                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                    {isCn ? criterion.labelCn : criterion.labelEn}
-                                  </p>
-                                  <p className="mt-2">{criterion.value}</p>
-                                </div>
-                              ))}
-                          </div>
+                        {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                          <p className="mt-4 text-xs leading-6 text-slate-500">
+                            {isCn
+                              ? "本题总分会根据以上 5 项评分自动换算。"
+                              : "The response score is calculated automatically from the five criteria above."}
+                          </p>
                         ) : null}
-
-                        {((isCn ? item.suggestions_cn : item.suggestions_en) || []).length > 0 ? (
-                          <div className="mt-4 rounded-3xl bg-slate-50 px-4 py-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "本 Part 提示" : "Part Suggestions"}
-                            </p>
-                            <div className="mt-3 space-y-2">
-                              {(isCn ? item.suggestions_cn : item.suggestions_en).map((suggestion, suggestionIndex) => (
-                                <div key={`speaking-suggestion-${item.questionId}-${suggestionIndex}`} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
-                                  {suggestion}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>

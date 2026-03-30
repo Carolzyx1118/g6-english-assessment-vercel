@@ -294,6 +294,8 @@ describe("assessmentReview", () => {
     expect(pending.manualReviewRequired).toBe(true);
     expect(pending.totalPossible).toBe(0);
     expect(pending.evaluations[0]?.maxScore).toBe(5);
+    expect(pending.evaluations[0]?.taskCompletionScore).toBe(0);
+    expect(pending.evaluations[0]?.fluencyScore).toBe(0);
     expect(pending.evaluations[0]?.feedback_cn).toContain("等待老师");
   });
 
@@ -307,12 +309,17 @@ describe("assessmentReview", () => {
           questionId: 6,
           prompt: "Describe one stage in the frog's life cycle.",
           audioUrl: "/api/blob?key=speaking.wav",
-          transcript: "It starts as an egg.",
-          score: 4,
+          transcript: "",
+          taskCompletionScore: 4,
+          fluencyScore: 4,
+          vocabularyScore: 4,
+          grammarScore: 4,
+          pronunciationScore: 4,
+          score: 0,
           maxScore: 5,
           grade: "Manual Review",
           feedback_en: "",
-          feedback_cn: "内容比较完整。",
+          feedback_cn: "",
           taskCompletion_en: "",
           taskCompletion_cn: "",
           fluency_en: "",

@@ -5,6 +5,11 @@ export interface SpeakingQuestionEvaluation {
   prompt: string;
   audioUrl: string;
   transcript: string;
+  taskCompletionScore?: number;
+  fluencyScore?: number;
+  vocabularyScore?: number;
+  grammarScore?: number;
+  pronunciationScore?: number;
   score: number;
   maxScore: number;
   grade: string;

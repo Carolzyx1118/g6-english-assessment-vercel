@@ -15,6 +15,15 @@ import type {
 } from "@shared/assessmentReport";
 
 export const DEFAULT_MANUAL_SPEAKING_MAX_SCORE = 5;
+export const MANUAL_SPEAKING_CRITERION_FIELDS = [
+  "taskCompletionScore",
+  "fluencyScore",
+  "vocabularyScore",
+  "grammarScore",
+  "pronunciationScore",
+] as const;
+
+type ManualSpeakingCriterionField = (typeof MANUAL_SPEAKING_CRITERION_FIELDS)[number];
 
 export type ReviewLocale = "cn" | "en";
 export type ReviewSectionKind =
@@ -213,6 +222,11 @@ function buildPendingSpeakingQuestionEvaluation(
     prompt: response.prompt,
     audioUrl: response.audioUrl,
     transcript: "",
+    taskCompletionScore: 0,
+    fluencyScore: 0,
+    vocabularyScore: 0,
+    grammarScore: 0,
+    pronunciationScore: 0,
     score: 0,
     maxScore: DEFAULT_MANUAL_SPEAKING_MAX_SCORE,
     grade: "Manual Review",
@@ -263,7 +277,7 @@ export function finalizeManualSpeakingEvaluation(input: {
 }): SpeakingEvaluationResult {
   const evaluations = input.evaluations.map((item) => {
     const maxScore = item.maxScore > 0 ? item.maxScore : DEFAULT_MANUAL_SPEAKING_MAX_SCORE;
-    const score = Math.max(0, Math.min(maxScore, Number.isFinite(item.score) ? item.score : 0));
+    const score = computeManualSpeakingQuestionScore(item, maxScore);
     return {
       ...item,
       score,
@@ -287,6 +301,31 @@ export function finalizeManualSpeakingEvaluation(input: {
     reviewMode: "manual",
     manualReviewRequired: false,
   };
+}
+
+function normalizeManualSpeakingCriterionScore(
+  value: number | undefined,
+  maxScore = DEFAULT_MANUAL_SPEAKING_MAX_SCORE,
+) {
+  if (!Number.isFinite(value)) return undefined;
+  const normalized = Math.max(0, Math.min(maxScore, value as number));
+  return Math.round(normalized * 10) / 10;
+}
+
+function computeManualSpeakingQuestionScore(
+  item: SpeakingQuestionEvaluation,
+  maxScore = DEFAULT_MANUAL_SPEAKING_MAX_SCORE,
+) {
+  const criteriaScores = MANUAL_SPEAKING_CRITERION_FIELDS
+    .map((field) => normalizeManualSpeakingCriterionScore(item[field as ManualSpeakingCriterionField], maxScore))
+    .filter((value): value is number => typeof value === "number");
+
+  if (criteriaScores.length === 0) {
+    return Math.max(0, Math.min(maxScore, Number.isFinite(item.score) ? item.score : 0));
+  }
+
+  const averageScore = criteriaScores.reduce((sum, value) => sum + value, 0) / criteriaScores.length;
+  return Math.round(averageScore * 10) / 10;
 }
 
 export interface SubmissionArtifacts {
