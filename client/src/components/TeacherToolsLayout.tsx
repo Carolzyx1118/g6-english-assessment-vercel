@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
+import { trpc } from "@/lib/trpc";
 
 type TeacherToolKey =
   | "home"
@@ -44,13 +45,18 @@ function PrimaryLink({
   label,
   active,
   collapsed,
+  badgeCount = 0,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
   active?: boolean;
   collapsed: boolean;
+  badgeCount?: number;
 }) {
+  const showBadge = badgeCount > 0;
+  const badgeLabel = badgeCount > 99 ? "99+" : String(badgeCount);
+
   return (
     <Link href={href}>
       <button
@@ -62,8 +68,24 @@ function PrimaryLink({
             : "text-slate-600 hover:bg-slate-100 hover:text-[#1E3A5F]"
         } ${collapsed ? "justify-center px-2" : ""}`}
       >
-        <span className="flex h-6 w-6 items-center justify-center">{icon}</span>
-        {!collapsed ? <span>{label}</span> : null}
+        <span className="relative flex h-6 w-6 items-center justify-center">
+          {icon}
+          {collapsed && showBadge ? (
+            <span className="absolute -right-2 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+              {badgeLabel}
+            </span>
+          ) : null}
+        </span>
+        {!collapsed ? <span className="min-w-0 flex-1">{label}</span> : null}
+        {!collapsed && showBadge ? (
+          <span
+            className={`ml-auto inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-2 text-[11px] font-bold leading-none ${
+              active ? "bg-white/18 text-white" : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
       </button>
     </Link>
   );
@@ -153,12 +175,17 @@ export default function TeacherToolsLayout({
   currentSubject = null,
   children,
 }: TeacherToolsLayoutProps) {
-  const { user } = useLocalAuth();
+  const { user, isTeacher } = useLocalAuth();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
   });
   const [tagManagerExpanded, setTagManagerExpanded] = useState(activeTool === "tag-manager");
+  const pendingTeacherReviewQuery = trpc.results.list.useQuery(undefined, {
+    enabled: isTeacher,
+    staleTime: 30_000,
+    select: (items) => items.filter((item) => item.reportStatus === "pending-review").length,
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -180,6 +207,7 @@ export default function TeacherToolsLayout({
   }, [user?.allowedSubjects]);
 
   const defaultSubject = allowedSubjects[0] ?? "english";
+  const pendingTeacherReviewCount = pendingTeacherReviewQuery.data ?? 0;
 
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
@@ -306,6 +334,7 @@ export default function TeacherToolsLayout({
                 label="Test History"
                 active={activeTool === "test-history"}
                 collapsed={collapsed}
+                badgeCount={pendingTeacherReviewCount}
               />
             ) : (
               <NavItemRow
@@ -317,6 +346,7 @@ export default function TeacherToolsLayout({
                     label="Test History"
                     active={activeTool === "test-history"}
                     collapsed={false}
+                    badgeCount={pendingTeacherReviewCount}
                   />
                 }
               />

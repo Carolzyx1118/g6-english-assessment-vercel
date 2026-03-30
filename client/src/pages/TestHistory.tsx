@@ -107,7 +107,7 @@ export default function TestHistory() {
   return (
     <TeacherToolsLayout activeTool="test-history">
       <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1500px] space-y-6">
+        <div className="mx-auto max-w-6xl space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">

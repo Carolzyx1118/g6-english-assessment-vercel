@@ -1393,11 +1393,17 @@ export default function AssessmentReportPanel({
                     </div>
 
                     <div className="space-y-4 xl:sticky xl:top-6">
-                      <div className="rounded-[24px] border border-rose-100 bg-rose-50 p-5">
+                      <div
+                        className={`border border-rose-100 bg-rose-50 ${
+                          hasWritingSubmission
+                            ? "rounded-[24px] p-5"
+                            : "w-full rounded-[20px] p-4 sm:max-w-[420px]"
+                        }`}
+                      >
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">
                           {hasWritingSubmission ? (isCn ? "评分结果" : "Score") : (isCn ? "作答状态" : "Submission")}
                         </p>
-                        <p className="mt-2 text-2xl font-bold text-rose-900">
+                        <p className={`mt-2 font-bold text-rose-900 ${hasWritingSubmission ? "text-2xl" : "text-[32px] leading-none"}`}>
                           {!hasWritingSubmission
                             ? (isCn ? "未作答" : "No Submission")
                             : model.writing.manualReview
@@ -1407,7 +1413,7 @@ export default function AssessmentReportPanel({
                                 : "-"}
                         </p>
                         {!hasWritingSubmission ? (
-                          <p className="mt-2 text-sm leading-7 text-rose-900">
+                          <p className="mt-3 text-sm leading-6 text-rose-900">
                             {isCn
                               ? "本次没有提交作文内容，因此这里不会显示写作评分、语法修改或写作提示。"
                               : "No writing response was submitted, so this area does not show a writing score, corrections, or suggestions."}
