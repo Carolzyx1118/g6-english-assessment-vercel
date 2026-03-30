@@ -150,21 +150,6 @@ function cleanReportNarrativeText(value: string, locale: ReviewLocale) {
   return normalized;
 }
 
-function summarizeManualSpeakingFeedback(
-  locale: ReviewLocale,
-  evaluations: SpeakingEvaluationItem[],
-) {
-  if (evaluations.length === 0) {
-    return locale === "cn"
-      ? "暂时还没有口语评分内容。"
-      : "No speaking review is available yet.";
-  }
-
-  return locale === "cn"
-    ? "老师已根据任务完成、流利度、词汇、语法和发音完成口语评分。"
-    : "Teacher speaking review has been completed using task completion, fluency, vocabulary, grammar, and pronunciation.";
-}
-
 function formatScoreDisplay(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "--";
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
@@ -1518,21 +1503,9 @@ export default function AssessmentReportPanel({
 
                     {editableSpeakingItems.map((item) => (
                       <div key={`${item.sectionId}-${item.questionId}`} className="report-question-card rounded-[24px] border border-slate-200 bg-white p-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
-                          </div>
-                          <div className="min-w-[142px] rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                              {isCn ? "本题得分" : "Response Score"}
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-slate-900">
-                              {Boolean(item.manualReviewRequired) && !isEditingSpeaking
-                                ? (isCn ? "待评分" : "Pending")
-                                : `${formatScoreDisplay(item.score)}/${item.maxScore}`}
-                            </p>
-                          </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Q{item.questionId}</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-600">{item.prompt}</p>
                         </div>
 
                         {item.audioUrl ? (
@@ -1547,13 +1520,15 @@ export default function AssessmentReportPanel({
                               </p>
                               <p className="mt-1 text-sm font-medium text-slate-600">
                                 {isCn
-                                  ? "按 5 个维度分别评分，系统会自动换算本题总分。"
-                                  : "Score the five criteria below and the response score is calculated automatically."}
+                                  ? "按 5 个维度分别评分。"
+                                  : "Score the five criteria below."}
                               </p>
                             </div>
-                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
-                              {isCn ? "共 5 项" : "5 criteria"}
-                            </span>
+                            {isEditingSpeaking ? (
+                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                                {isCn ? "共 5 项" : "5 criteria"}
+                              </span>
+                            ) : null}
                           </div>
 
                           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -1597,28 +1572,18 @@ export default function AssessmentReportPanel({
                       </div>
                     ))}
 
-                    {((isEditingSpeaking ? speakingDraft?.overallFeedback_cn : model.speaking.evaluation?.overallFeedback_cn)
-                      || (isEditingSpeaking ? speakingDraft?.overallFeedback_en : model.speaking.evaluation?.overallFeedback_en)
-                      || canManuallyScoreSpeaking) ? (
-                      <div className="rounded-[24px] bg-orange-50 px-5 py-4 text-sm leading-7 text-orange-950">
+                    {isEditingSpeaking && canManuallyScoreSpeaking ? (
+                      <div className="rounded-[24px] border border-orange-200 bg-orange-50 px-5 py-4 text-sm leading-7 text-orange-950">
                         <div className="flex items-center gap-2">
                           <Mic className="h-5 w-5 text-orange-600" />
                           <p className="text-base font-semibold">{isCn ? "口语总反馈" : "Speaking Overview"}</p>
                         </div>
-                        {isEditingSpeaking && canManuallyScoreSpeaking ? (
-                          <Textarea
-                            value={speakingDraft?.overallFeedback_cn || ""}
-                            onChange={(event) => updateSpeakingOverallFeedback(event.target.value)}
-                            placeholder={isCn ? "输入老师对本次口语整体表现的评语" : "Add an overall teacher comment for this speaking section"}
-                            className="mt-3 min-h-[110px] bg-white"
-                          />
-                        ) : (
-                          <p className="mt-3">
-                            {isCn
-                              ? (model.speaking.evaluation?.overallFeedback_cn || summarizeManualSpeakingFeedback("cn", editableSpeakingItems))
-                              : (model.speaking.evaluation?.overallFeedback_en || summarizeManualSpeakingFeedback("en", editableSpeakingItems))}
-                          </p>
-                        )}
+                        <Textarea
+                          value={speakingDraft?.overallFeedback_cn || ""}
+                          onChange={(event) => updateSpeakingOverallFeedback(event.target.value)}
+                          placeholder={isCn ? "输入老师对本次口语整体表现的评语" : "Add an overall teacher comment for this speaking section"}
+                          className="mt-3 min-h-[110px] bg-white"
+                        />
                       </div>
                     ) : null}
                   </div>

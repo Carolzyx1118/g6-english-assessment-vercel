@@ -96,23 +96,12 @@ export default function TestHistory() {
 
   const historyStats = useMemo(() => {
     const items = listQuery.data ?? [];
-    const subjectPaperSets: Record<PaperSubject, Set<string>> = {
-      english: new Set<string>(),
-      math: new Set<string>(),
-      vocabulary: new Set<string>(),
-    };
-
-    items.forEach((item) => {
-      const subject = item.paperSubject;
-      if (!subject || !(subject in subjectPaperSets)) return;
-      subjectPaperSets[subject as PaperSubject].add(item.paperId || item.paperTitle || String(item.id));
-    });
 
     return {
       totalRecords: items.length,
-      englishPapers: subjectPaperSets.english.size,
-      mathPapers: subjectPaperSets.math.size,
-      vocabularyPapers: subjectPaperSets.vocabulary.size,
+      completedReports: items.filter((item) => item.reportStatus === "completed").length,
+      pendingReports: items.filter((item) => item.reportStatus === "pending-review").length,
+      rawRecords: items.filter((item) => item.reportStatus === "raw").length,
     };
   }, [listQuery.data]);
 
@@ -143,20 +132,20 @@ export default function TestHistory() {
               </Card>
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardDescription>{PAPER_SUBJECT_LABELS.english} Papers</CardDescription>
-                  <CardTitle className="text-2xl text-[#1E3A5F]">{historyStats.englishPapers}</CardTitle>
+                  <CardDescription>Completed Scoring Reports</CardDescription>
+                  <CardTitle className="text-2xl text-[#1E3A5F]">{historyStats.completedReports}</CardTitle>
                 </CardHeader>
               </Card>
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardDescription>{PAPER_SUBJECT_LABELS.math} Papers</CardDescription>
-                  <CardTitle className="text-2xl text-emerald-700">{historyStats.mathPapers}</CardTitle>
+                  <CardDescription>Pending Teacher Review</CardDescription>
+                  <CardTitle className="text-2xl text-emerald-700">{historyStats.pendingReports}</CardTitle>
                 </CardHeader>
               </Card>
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardDescription>{PAPER_SUBJECT_LABELS.vocabulary} Papers</CardDescription>
-                  <CardTitle className="text-2xl text-amber-700">{historyStats.vocabularyPapers}</CardTitle>
+                  <CardDescription>Raw Records</CardDescription>
+                  <CardTitle className="text-2xl text-amber-700">{historyStats.rawRecords}</CardTitle>
                 </CardHeader>
               </Card>
             </div>
@@ -221,6 +210,23 @@ export default function TestHistory() {
                   const deleting = deleteMutation.variables?.id === item.id && deleteMutation.isPending;
                   return (
                     <div key={item.id} className="space-y-3">
+                      {(() => {
+                        const statusMeta = item.reportStatus === "completed"
+                          ? {
+                              label: "Completed Scoring Report",
+                              className: "bg-emerald-50 text-emerald-700",
+                            }
+                          : item.reportStatus === "pending-review"
+                            ? {
+                                label: "Pending Teacher Review",
+                                className: "bg-amber-50 text-amber-700",
+                              }
+                            : {
+                                label: "Raw Record",
+                                className: "bg-slate-100 text-slate-500",
+                              };
+
+                        return (
                       <div
                         className={`w-full rounded-[28px] border px-5 py-4 text-left shadow-sm transition ${
                           active
@@ -270,11 +276,13 @@ export default function TestHistory() {
                           className="mt-3 flex w-full flex-wrap items-center gap-2 text-left text-xs text-slate-500"
                         >
                           <span>{formatDate(item.createdAt)}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-500">
-                            {item.hasReport ? "AI Report" : "Raw Score"}
+                          <span className={`rounded-full px-3 py-1 font-semibold ${statusMeta.className}`}>
+                            {statusMeta.label}
                           </span>
                         </button>
                       </div>
+                        );
+                      })()}
 
                       {active ? (
                         detailQuery.isLoading ? (

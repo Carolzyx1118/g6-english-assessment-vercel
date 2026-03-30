@@ -122,6 +122,23 @@ function extractStoredPaperSnapshot(raw: string | null | undefined) {
   }
 }
 
+function getResultReportStatus(raw: string | null | undefined): "raw" | "pending-review" | "completed" {
+  if (!raw) return "raw";
+
+  try {
+    const parsed = JSON.parse(raw) as AssessmentReportResult | null;
+    const speakingEvaluation = parsed?.speakingEvaluation;
+    const speakingPending = Boolean(
+      speakingEvaluation?.manualReviewRequired
+      || speakingEvaluation?.evaluations?.some((item) => item.manualReviewRequired),
+    );
+
+    return speakingPending ? "pending-review" : "completed";
+  } catch {
+    return "completed";
+  }
+}
+
 function sanitizeValueForResultStorage(value: unknown): unknown {
   if (typeof value === "string") {
     return value.trim().toLowerCase().startsWith(EMBEDDED_DATA_URL_PREFIX) ? "" : value;
@@ -2076,6 +2093,7 @@ Respond in JSON format:
           ? snapshot.paperTitle
           : r.paperTitle;
         const paperSubject = snapshot.paperSubject ?? getGeneratedPaperSubjectFromPaperId(normalizedPaperId);
+        const reportStatus = getResultReportStatus(r.reportJson);
 
         return {
           id: r.id,
@@ -2089,6 +2107,7 @@ Respond in JSON format:
           totalTimeSeconds: r.totalTimeSeconds,
           createdAt: r.createdAt,
           hasReport: !!r.reportJson,
+          reportStatus,
           hasReadingResults: !!r.readingResultsJson,
           hasWritingResult: !!r.writingResultJson,
         };

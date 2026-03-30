@@ -54,6 +54,7 @@ describe("results CRUD", () => {
     expect(found!.paperTitle).toBe("Test Paper");
     expect(found!.totalCorrect).toBe(15);
     expect(found!.totalQuestions).toBe(20);
+    expect(found!.reportStatus).toBe("raw");
   });
 
   it("retrieves a result by id with full details", async () => {
@@ -102,6 +103,9 @@ describe("results CRUD", () => {
         ],
       },
     }));
+
+    const list = await caller.results.list();
+    expect(list.find((r) => r.id === savedId)?.reportStatus).toBe("completed");
   });
 
   it("recovers generated paper metadata from stored assessment payload", async () => {
