@@ -37,6 +37,7 @@ function isServerUploadBodyLimitError(message: string) {
 function getDirectUploadAttempts(blobSize: number) {
   const multipart = blobSize >= MULTIPART_UPLOAD_THRESHOLD_BYTES;
   return [
+    { access: "private" as const, multipart },
     { access: "public" as const, multipart },
   ];
 }

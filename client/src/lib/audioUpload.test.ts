@@ -90,7 +90,14 @@ describe("uploadAudioBlob", () => {
 
     expect(uploadFileMutation.mutateAsync).toHaveBeenCalledTimes(1);
     expect(uploadMock).toHaveBeenCalledTimes(1);
-    expect(result).toBe("https://blob.vercel-storage.com/paper-assets/listening.mp3");
+    expect(result).toBe("/api/blob?key=paper-assets%2Flistening.mp3");
+    expect(uploadMock).toHaveBeenCalledWith(
+      "paper-assets/listening.mp3",
+      expect.any(Blob),
+      expect.objectContaining({
+        access: "private",
+      }),
+    );
   });
 
   it("uses direct upload first for hosted large audio files", async () => {
@@ -116,7 +123,14 @@ describe("uploadAudioBlob", () => {
 
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(uploadFileMutation.mutateAsync).not.toHaveBeenCalled();
-    expect(result).toBe("https://blob.vercel-storage.com/paper-assets/large-listening.mp3");
+    expect(result).toBe("/api/blob?key=paper-assets%2Flarge-listening.mp3");
+    expect(uploadMock).toHaveBeenCalledWith(
+      "paper-assets/large-listening.mp3",
+      expect.any(Blob),
+      expect.objectContaining({
+        access: "private",
+      }),
+    );
   });
 
   it("normalizes legacy MP3 content types before uploading", async () => {
@@ -157,5 +171,47 @@ describe("normalizeAudioContentType", () => {
   it("maps common WAV aliases to audio/wav", () => {
     expect(normalizeAudioContentType("audio/x-wav")).toBe("audio/wav");
     expect(normalizeAudioContentType("audio/wave")).toBe("audio/wav");
+  });
+});
+
+describe("uploadAudioBlob direct access fallback", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("FileReader", MockFileReader);
+    vi.stubGlobal("window", {
+      location: {
+        hostname: "app.example.com",
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to public direct upload when private access is rejected", async () => {
+    const uploadFileMutation = {
+      mutateAsync: vi.fn(),
+    };
+
+    uploadMock
+      .mockRejectedValueOnce(new Error("Cannot use private access on a public store"))
+      .mockResolvedValueOnce({
+        url: "https://blob.vercel-storage.com/paper-assets/public-large-listening.mp3",
+      });
+
+    const result = await uploadAudioBlob({
+      blob: new Blob([new Uint8Array(4 * 1024 * 1024 + 1)], { type: "audio/mpeg" }),
+      contentType: "audio/mpeg",
+      fileName: "public-large-listening.mp3",
+      uploadFileMutation,
+    });
+
+    expect(uploadMock).toHaveBeenCalledTimes(2);
+    expect(uploadMock.mock.calls[0]?.[2]).toMatchObject({ access: "private" });
+    expect(uploadMock.mock.calls[1]?.[2]).toMatchObject({ access: "public" });
+    expect(result).toBe("https://blob.vercel-storage.com/paper-assets/public-large-listening.mp3");
   });
 });
