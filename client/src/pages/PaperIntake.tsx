@@ -2457,8 +2457,10 @@ function PassageInlineWordChoiceSubsectionPreview({ subsection }: { subsection: 
                           ))}
                         </span>
                       ) : partIndex < parts.length - 1 ? (
-                        <span className="mx-1 inline-flex rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-400">
-                          ___
+                        <span className="mx-1 inline-flex min-w-[3rem] justify-center rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-400">
+                          <span aria-hidden="true" className="inline-block w-6">
+                            &nbsp;
+                          </span>
                         </span>
                       ) : null}
                     </span>

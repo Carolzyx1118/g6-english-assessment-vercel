@@ -177,7 +177,9 @@ function PassageModeFillBlank({
             </button>
           </span>
         ) : (
-          <span className="text-xs">___</span>
+          <span aria-hidden="true" className="inline-block w-6 text-xs">
+            &nbsp;
+          </span>
         )}
       </span>
     );
@@ -392,7 +394,9 @@ function SentenceModeFillBlank({
             </button>
           </span>
         ) : (
-          <span className="text-xs">___</span>
+          <span aria-hidden="true" className="inline-block w-6 text-xs">
+            &nbsp;
+          </span>
         )}
       </span>
     );

@@ -153,16 +153,7 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
   });
 
   it("scores speaking directly from audio through Forge when the speech transcription endpoint is unavailable", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      arrayBuffer: async () => new Uint8Array([5, 6, 7, 8]).buffer,
-      headers: {
-        get: (header: string) =>
-          header.toLowerCase() === "content-type" ? "audio/wav" : null,
-      },
-    });
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const { appRouter, mockInvokeLLM, mockTranscribeAudio } =
@@ -210,12 +201,20 @@ describe("grading.evaluateSpeaking with direct audio input", () => {
       ],
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(mockTranscribeAudio).not.toHaveBeenCalled();
     expect(mockInvokeLLM).toHaveBeenCalledTimes(1);
     expect(mockInvokeLLM.mock.calls[0]?.[0]).toMatchObject({
-      model: "openai/gpt-audio",
       modalities: ["text"],
+      model: undefined,
+    });
+    const firstUserContent = mockInvokeLLM.mock.calls[0]?.[0].messages[1]?.content as any[];
+    expect(firstUserContent[1]).toEqual({
+      type: "file_url",
+      file_url: {
+        url: "https://example.com/api/blob?key=forge-speaking.wav",
+        mime_type: "audio/wav",
+      },
     });
     expect(result.totalScore).toBe(4);
     expect(result.totalPossible).toBe(5);

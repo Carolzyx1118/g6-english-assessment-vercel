@@ -125,7 +125,9 @@ function BlankSlot({
               {selectedAnswer}. {selectedOption.text}
             </span>
           ) : (
-            <span className="text-amber-600">___</span>
+            <span aria-hidden="true" className="inline-block w-6 text-amber-600">
+              &nbsp;
+            </span>
           )}
         </button>
       </PopoverTrigger>

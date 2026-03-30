@@ -647,6 +647,32 @@ function canAttemptDirectAudioSpeakingEvaluation() {
   return Boolean(ENV.aiGatewayApiKey || ENV.forgeApiKey);
 }
 
+function getDirectAudioSpeakingModel() {
+  if (ENV.aiGatewayApiKey) {
+    return normalizeGatewayModelId(
+      ENV.aiGatewaySpeakingModel,
+      "openai/gpt-audio",
+    );
+  }
+
+  return undefined;
+}
+
+function getDirectAudioFileMimeType(
+  audioUrl: string,
+): "audio/wav" | "audio/mpeg" | "audio/mp4" | "audio/webm" | "audio/ogg" | "audio/aac" | null {
+  const inferred = inferAudioMimeTypeFromUrl(audioUrl);
+
+  if (!inferred) return null;
+  if (inferred === "audio/wav") return "audio/wav";
+  if (inferred === "audio/mpeg") return "audio/mpeg";
+  if (inferred === "audio/mp4") return "audio/mp4";
+  if (inferred === "audio/webm") return "audio/webm";
+  if (inferred === "audio/ogg") return "audio/ogg";
+  if (inferred === "audio/aac") return "audio/aac";
+  return null;
+}
+
 function normalizeOptionalString(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
@@ -1144,11 +1170,8 @@ async function evaluateSpeakingResponseWithGatewayAudio(
     audioUrl: string;
   },
 ): Promise<SpeakingQuestionEvaluation> {
-  const audioInput = await fetchGatewayAudioInput(req, responseInput.audioUrl);
-  const model = normalizeGatewayModelId(
-    ENV.aiGatewaySpeakingModel,
-    "openai/gpt-audio",
-  );
+  const resolvedAudioUrl = resolveAssetUrl(req, responseInput.audioUrl);
+  const model = getDirectAudioSpeakingModel();
 
   const prompt = `Listen to this student's English speaking assessment response and score it.
 
@@ -1159,9 +1182,40 @@ Scoring rules:
 - Keep feedback concise, specific, and useful for a learner.
 - Suggestions must be practical next steps.
 
-Question prompt: ${responseInput.prompt}
-Section title: ${responseInput.sectionTitle}
-Question id: ${responseInput.questionId}`;
+  Question prompt: ${responseInput.prompt}
+  Section title: ${responseInput.sectionTitle}
+  Question id: ${responseInput.questionId}`;
+
+  const userContent =
+    ENV.aiGatewayApiKey
+      ? await (async () => {
+        const audioInput = await fetchGatewayAudioInput(req, responseInput.audioUrl);
+        return [
+          { type: "text" as const, text: prompt },
+          {
+            type: "input_audio" as const,
+            input_audio: {
+              data: audioInput.base64Data,
+              format: audioInput.format,
+            },
+          },
+        ];
+      })()
+      : (() => {
+        const mimeType =
+          getDirectAudioFileMimeType(resolvedAudioUrl)
+          || "audio/wav";
+        return [
+          { type: "text" as const, text: prompt },
+          {
+            type: "file_url" as const,
+            file_url: {
+              url: resolvedAudioUrl,
+              mime_type: mimeType,
+            },
+          },
+        ];
+      })();
 
   const response = await invokeLLM({
     model,
@@ -1174,16 +1228,7 @@ Question id: ${responseInput.questionId}`;
       },
       {
         role: "user",
-        content: [
-          { type: "text", text: prompt },
-          {
-            type: "input_audio",
-            input_audio: {
-              data: audioInput.base64Data,
-              format: audioInput.format,
-            },
-          },
-        ],
+        content: userContent,
       },
     ],
     response_format: {
