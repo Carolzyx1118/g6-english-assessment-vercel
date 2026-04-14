@@ -1,16 +1,13 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
-import { saveAuthToken } from "@/hooks/useLocalAuth";
+import { PureonBrand } from "@/components/PureonBrand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_BRAND_SUBTITLE, APP_BRAND_TITLE } from "@/lib/branding";
+import { saveAuthToken } from "@/hooks/useLocalAuth";
+import { trpc } from "@/lib/trpc";
+import { Eye, EyeOff, KeyRound, UserPlus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, UserPlus, KeyRound } from "lucide-react";
-
-const PUREON_LOGO = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663325188422/bJDnAegOAPWmMppj.png';
+import { useLocation } from "wouter";
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -29,7 +26,7 @@ export default function Register() {
         id: data.user.id,
         username: data.user.username,
         displayName: data.user.displayName,
-        role: data.user.role as 'user' | 'admin',
+        role: data.user.role as "user" | "admin",
         allowedSubjects: data.user.allowedSubjects,
         isActive: data.user.isActive,
       });
@@ -77,168 +74,160 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Navy top bar */}
-      <div className="bg-[#1E3A5F] py-4">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-3">
-          <img src={PUREON_LOGO} alt="璞源教育" className="w-10 h-10 object-contain" />
-          <div className="leading-tight text-center">
-            <div className="text-sm font-bold text-white tracking-wide">璞源教育</div>
-            <div className="text-[10px] text-white/50 tracking-widest">PUREON EDUCATION</div>
+    <div className="pureon-page-shell flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+      <div className="pureon-panel grid w-full max-w-6xl overflow-hidden md:grid-cols-[1.02fr_0.98fr]">
+        <div className="relative overflow-hidden bg-[var(--pureon-teal)] px-8 py-10 text-[var(--pureon-paper)] sm:px-10 md:px-12 md:py-14">
+          <div className="absolute right-[-4rem] top-[-4rem] h-64 w-64 rounded-full bg-[rgba(201,164,97,0.12)] blur-3xl" />
+          <div className="absolute bottom-[-5rem] left-[-4rem] h-72 w-72 rounded-full bg-[rgba(43,88,118,0.22)] blur-3xl" />
+          <PureonBrand inverse className="relative z-10 mb-10" />
+          <div className="relative z-10 max-w-md">
+            <h1 className="font-[family-name:var(--font-body)] text-[2.2rem] font-semibold tracking-[0.24em] sm:text-[2.6rem]">
+              创建学习账户
+            </h1>
+            <p className="mt-3 font-[family-name:var(--font-display)] text-sm italic tracking-[0.22em] text-[var(--pureon-gold-soft)]">
+              Invitation-based access for students and teachers
+            </p>
+            <div className="mt-10 border-l-2 border-[var(--pureon-gold)] pl-5 text-sm leading-8 text-[rgba(245,239,224,0.74)]">
+              为学而教，为练而精。
+              <br />
+              Create a focused account for practice, testing, and long-term progress tracking.
+            </div>
+            <div className="mt-12 max-w-sm space-y-3 text-[13px] leading-7 text-[rgba(245,239,224,0.7)]">
+              <p>邀请码决定你的身份权限与可见科目，请向老师或管理员获取。</p>
+              <p className="font-[family-name:var(--font-display)] tracking-[0.18em] text-[var(--pureon-gold-soft)]">
+                One code. One workspace. One consistent learning record.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-[#F5F7FA] via-white to-[#FBF8F3] px-4 py-8">
-        <div className="w-full max-w-md">
-          {/* Brand heading */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-[#1E3A5F]">
-              {APP_BRAND_TITLE}
-            </h1>
-            <p className="text-slate-500 mt-1 text-sm">{APP_BRAND_SUBTITLE}</p>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <div className="h-px w-12 bg-[#D4A84B]/30" />
-              <span className="text-[10px] text-[#D4A84B] font-medium tracking-widest">AEIS · KET · PET</span>
-              <div className="h-px w-12 bg-[#D4A84B]/30" />
+        <div className="bg-[rgba(245,239,224,0.88)] px-8 py-10 sm:px-10 md:px-12 md:py-14">
+          <div className="pureon-section-eyebrow">Create Account</div>
+          <h2 className="mt-3 text-[2rem] font-semibold tracking-[0.1em] text-[var(--pureon-teal)]">
+            注册你的账户
+          </h2>
+          <p className="mt-2 text-sm text-[var(--pureon-muted)]">
+            Register with your invite code and start learning
+          </p>
+
+          <div className="mt-8 grid grid-cols-2 border border-[var(--pureon-rule)] text-center font-[family-name:var(--font-body)] text-sm">
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="px-4 py-3 text-[var(--pureon-muted)] transition-colors hover:bg-[rgba(201,164,97,0.08)] hover:text-[var(--pureon-teal)]"
+            >
+              登录 / Login
+            </button>
+            <div className="border-l border-[var(--pureon-rule)] bg-[var(--pureon-teal)] px-4 py-3 text-[var(--pureon-paper)]">
+              注册 / Register
             </div>
           </div>
 
-          <Card className="gap-3 shadow-xl border border-slate-200/60 bg-white">
-            <CardHeader className="space-y-1 pb-0">
-              <CardTitle className="text-xl text-center text-[#1E3A5F]">注册账号</CardTitle>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">用户名</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="请输入用户名（至少3个字符）"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="username"
-                    autoFocus
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    支持字母、数字、下划线和中文
-                  </p>
-                </div>
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="username">用户名 / Username</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="请输入用户名（至少 3 个字符）"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                autoFocus
+                className="h-12 rounded-none border-x-0 border-t-0 px-0 text-[15px] shadow-none"
+              />
+              <p className="text-xs text-[var(--pureon-muted)]">支持字母、数字、下划线和中文。</p>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password">密码</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="请输入密码（至少6个字符）"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="new-password"
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">确认密码</Label>
-                  <div className="relative">
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder="请再次输入密码"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      autoComplete="new-password"
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  {confirmPassword && password !== confirmPassword && (
-                    <p className="text-xs text-destructive">两次输入的密码不一致</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="inviteCode" className="flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-[#D4A84B]" />
-                    邀请码
-                  </Label>
-                  <Input
-                    id="inviteCode"
-                    type="text"
-                    placeholder="请输入邀请码"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    className="tracking-wider"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    请联系管理员获取邀请码。
-                  </p>
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex flex-col gap-3 pt-2">
-                <Button
-                  type="submit"
-                  className="w-full bg-[#1E3A5F] hover:bg-[#2A4A6F] text-white"
-                  disabled={registerMutation.isPending}
+            <div className="space-y-2">
+              <Label htmlFor="password">密码 / Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="请输入密码（至少 6 个字符）"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className="h-12 rounded-none border-x-0 border-t-0 px-0 pr-10 text-[15px] shadow-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-[var(--pureon-muted)] transition-colors hover:text-[var(--pureon-teal)]"
+                  tabIndex={-1}
                 >
-                  {registerMutation.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      注册中...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4" />
-                      注册
-                    </span>
-                  )}
-                </Button>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
 
-                <p className="text-sm text-muted-foreground text-center">
-                  已有账号？{" "}
-                  <button
-                    type="button"
-                    onClick={() => navigate("/login")}
-                    className="text-[#D4A84B] hover:text-[#C49A3F] hover:underline font-medium"
-                  >
-                    立即登录
-                  </button>
-                </p>
-              </CardFooter>
-            </form>
-          </Card>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">确认密码 / Confirm</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="请再次输入密码"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className="h-12 rounded-none border-x-0 border-t-0 px-0 pr-10 text-[15px] shadow-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-[var(--pureon-muted)] transition-colors hover:text-[var(--pureon-teal)]"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {confirmPassword && password !== confirmPassword ? (
+                <p className="text-xs text-[var(--pureon-red)]">两次输入的密码不一致</p>
+              ) : null}
+            </div>
 
-          {/* Footer */}
-          <div className="mt-6 text-center">
-            <p className="text-xs text-slate-400">© 2026 璞源教育 Pureon Education</p>
+            <div className="space-y-2">
+              <Label htmlFor="inviteCode" className="flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-[var(--pureon-gold)]" />
+                邀请码 / Invite Code
+              </Label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="请输入邀请码"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                className="h-12 rounded-none border-x-0 border-t-0 px-0 text-[15px] tracking-[0.18em] shadow-none"
+              />
+              <p className="text-xs text-[var(--pureon-muted)]">请联系管理员获取邀请码。</p>
+            </div>
+
+            <Button
+              type="submit"
+              className="h-12 w-full bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
+              disabled={registerMutation.isPending}
+            >
+              {registerMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  注册中...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  注册 Register
+                </span>
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-8">
+            <div className="pureon-brand-divider" />
+            <p className="mt-4 text-center text-[11px] tracking-[0.24em] text-[var(--pureon-muted)]">
+              INVITE ONLY · LOCAL ACCESS · FOCUSED WORKSPACE
+            </p>
           </div>
         </div>
       </div>

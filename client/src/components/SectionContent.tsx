@@ -24,11 +24,11 @@ import {
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 type SelectableAnswer = number | number[] | undefined;
-const PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-base text-slate-700 leading-relaxed';
-const PROMPT_HEADING_CLASS = 'whitespace-pre-wrap break-words text-base font-medium text-slate-700 leading-relaxed';
-const SPEAKING_WRITING_PROMPT_LABEL_CLASS = 'mb-2 text-[15px] font-bold uppercase tracking-[0.12em]';
-const SPEAKING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[0.98rem] leading-[1.85] text-slate-700';
-const WRITING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words text-[1rem] leading-[1.85] text-slate-700';
+const PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words font-[family-name:var(--font-body)] text-[1rem] leading-[1.9] text-[var(--pureon-ink)]';
+const PROMPT_HEADING_CLASS = 'whitespace-pre-wrap break-words font-[family-name:var(--font-body)] text-[1rem] font-semibold leading-[1.9] text-[var(--pureon-ink)]';
+const SPEAKING_WRITING_PROMPT_LABEL_CLASS = 'mb-2 font-[family-name:var(--font-display)] text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--pureon-muted)]';
+const SPEAKING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words font-[family-name:var(--font-body)] text-[0.98rem] leading-[1.85] text-[var(--pureon-ink)]';
+const WRITING_PROMPT_TEXT_CLASS = 'whitespace-pre-wrap break-words font-[family-name:var(--font-body)] text-[1rem] leading-[1.95] text-[var(--pureon-ink)]';
 
 function getCorrectIndexes(question: MCQQuestion | PictureMCQ | ListeningMCQ) {
   if (question.correctAnswers && question.correctAnswers.length > 0) {
@@ -211,9 +211,9 @@ function PictureMCQCard({ q, answer, onAnswer, displayNumber }: { q: PictureMCQ;
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
-        <span className="font-semibold text-slate-800">"{q.question}"</span>
-        {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
+        <span className="mr-2 font-[family-name:var(--font-display)] font-semibold text-[var(--pureon-gold)]">Q{displayNumber}.</span>
+        <span className="font-semibold text-[var(--pureon-ink)]">"{q.question}"</span>
+        {multiSelect ? <span className="ml-2 text-xs text-[var(--pureon-muted)]">(Select {selectionLimit})</span> : null}
       </p>
       <div className="grid grid-cols-3 gap-3">
         {q.options.map((opt, i) => {
@@ -223,22 +223,25 @@ function PictureMCQCard({ q, answer, onAnswer, displayNumber }: { q: PictureMCQ;
               key={i}
               onClick={() => onAnswer(toggleSelectableAnswer(answer, i, selectionLimit, multiSelect))}
               className={`
-                flex flex-col items-stretch p-3 rounded-xl border-2 transition-all duration-200
+                flex flex-col items-stretch border p-3 transition-all duration-200
                 ${isSelected
-                  ? 'border-blue-400 bg-blue-50 shadow-md ring-2 ring-blue-200'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm'
+                  ? 'border-[var(--pureon-teal)] bg-[rgba(45,74,62,0.05)] shadow-sm'
+                  : 'border-[var(--border)] bg-[var(--pureon-paper)] hover:border-[var(--pureon-teal)] hover:bg-[var(--pureon-paper-2)]'
                 }
               `}
             >
               <div className="mb-2 flex items-start gap-2">
                 <span className={`
-                  flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold
-                  ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-500'}
+                  flex h-7 w-7 shrink-0 items-center justify-center border text-xs font-semibold
+                  ${isSelected
+                    ? 'border-[var(--pureon-teal)] bg-[var(--pureon-teal)] text-[var(--pureon-paper)]'
+                    : 'border-[var(--border)] bg-[var(--pureon-paper)] text-[var(--pureon-teal)]'
+                  }
                 `}>
                   {opt.label}
                 </span>
                 {opt.text ? (
-                  <span className={`flex-1 pt-0.5 text-left text-xs leading-snug sm:text-sm ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-500'}`}>
+                  <span className={`flex-1 pt-0.5 text-left text-xs leading-snug sm:text-sm ${isSelected ? 'font-medium text-[var(--pureon-teal)]' : 'text-[var(--pureon-muted)]'}`}>
                     {opt.text}
                   </span>
                 ) : null}
@@ -284,9 +287,9 @@ function MCQQuestionCard({ q, answer, onAnswer, displayNumber }: { q: MCQQuestio
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
+        <span className="mr-2 font-[family-name:var(--font-display)] font-semibold text-[var(--pureon-gold)]">Q{displayNumber}.</span>
         {renderQuestion()}
-        {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
+        {multiSelect ? <span className="ml-2 text-xs text-[var(--pureon-muted)]">(Select {selectionLimit})</span> : null}
       </p>
       {q.imageUrl && (
         <div className="flex justify-center">
@@ -308,21 +311,24 @@ function MCQQuestionCard({ q, answer, onAnswer, displayNumber }: { q: MCQQuestio
               key={i}
               onClick={() => onAnswer(toggleSelectableAnswer(answer, i, selectionLimit, multiSelect))}
               className={`
-                w-full text-left p-3.5 rounded-xl border-2 transition-all duration-200
+                w-full border p-3.5 text-left transition-all duration-200
                 flex items-center gap-3
                 ${isSelected
-                  ? 'border-blue-400 bg-blue-50 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  ? 'border-[var(--pureon-teal)] bg-[rgba(45,74,62,0.05)] shadow-sm'
+                  : 'border-[var(--border)] bg-[var(--pureon-paper)] hover:border-[var(--pureon-teal)] hover:bg-[var(--pureon-paper-2)]'
                 }
               `}
             >
               <span className={`
-                w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0
-                ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-500'}
+                flex h-8 w-8 shrink-0 items-center justify-center border text-sm font-semibold
+                ${isSelected
+                  ? 'border-[var(--pureon-teal)] bg-[var(--pureon-teal)] text-[var(--pureon-paper)]'
+                  : 'border-[var(--border)] bg-[var(--pureon-paper)] text-[var(--pureon-teal)]'
+                }
               `}>
                 {letter}
               </span>
-              <span className={`text-base ${isSelected ? 'text-blue-700 font-medium' : 'text-slate-600'}`}>
+              <span className={`text-base ${isSelected ? 'font-medium text-[var(--pureon-teal)]' : 'text-[var(--pureon-ink)]'}`}>
                 {displayText}
               </span>
             </button>
@@ -343,9 +349,9 @@ function ListeningMCQCard({ q, answer, onAnswer, displayNumber }: { q: Listening
   return (
     <div className="space-y-4">
       <p className={PROMPT_TEXT_CLASS}>
-        <span className="font-bold text-slate-500 mr-2">Q{displayNumber}.</span>
-        <span className="font-semibold text-slate-800">{q.question}</span>
-        {multiSelect ? <span className="ml-2 text-xs text-slate-400">(Select {selectionLimit})</span> : null}
+        <span className="mr-2 font-[family-name:var(--font-display)] font-semibold text-[var(--pureon-gold)]">Q{displayNumber}.</span>
+        <span className="font-semibold text-[var(--pureon-ink)]">{q.question}</span>
+        {multiSelect ? <span className="ml-2 text-xs text-[var(--pureon-muted)]">(Select {selectionLimit})</span> : null}
       </p>
       <div className="grid grid-cols-3 gap-3">
         {q.options.map((opt, i) => {
@@ -355,22 +361,25 @@ function ListeningMCQCard({ q, answer, onAnswer, displayNumber }: { q: Listening
               key={i}
               onClick={() => onAnswer(toggleSelectableAnswer(answer, i, selectionLimit, multiSelect))}
               className={`
-                flex flex-col items-stretch p-3 rounded-xl border-2 transition-all duration-200
+                flex flex-col items-stretch border p-3 transition-all duration-200
                 ${isSelected
-                  ? 'border-purple-400 bg-purple-50 shadow-md ring-2 ring-purple-200'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm'
+                  ? 'border-[var(--pureon-teal)] bg-[rgba(45,74,62,0.05)] shadow-sm'
+                  : 'border-[var(--border)] bg-[var(--pureon-paper)] hover:border-[var(--pureon-teal)] hover:bg-[var(--pureon-paper-2)]'
                 }
               `}
             >
               <div className="mb-2 flex items-start gap-2">
                 <span className={`
-                  flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold
-                  ${isSelected ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-500'}
+                  flex h-7 w-7 shrink-0 items-center justify-center border text-xs font-semibold
+                  ${isSelected
+                    ? 'border-[var(--pureon-teal)] bg-[var(--pureon-teal)] text-[var(--pureon-paper)]'
+                    : 'border-[var(--border)] bg-[var(--pureon-paper)] text-[var(--pureon-teal)]'
+                  }
                 `}>
                   {opt.label}
                 </span>
                 {opt.text ? (
-                  <span className={`flex-1 pt-0.5 text-left text-xs leading-snug sm:text-sm ${isSelected ? 'text-purple-700 font-medium' : 'text-slate-500'}`}>
+                  <span className={`flex-1 pt-0.5 text-left text-xs leading-snug sm:text-sm ${isSelected ? 'font-medium text-[var(--pureon-teal)]' : 'text-[var(--pureon-muted)]'}`}>
                     {opt.text}
                   </span>
                 ) : null}
@@ -416,7 +425,7 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
   };
 
   return (
-    <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200">
+    <div className="mb-6 border border-[var(--border)] bg-[rgba(201,164,97,0.08)] p-4">
       <audio
         ref={audioRef}
         src={audioUrl}
@@ -427,24 +436,24 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
       <div className="flex items-center gap-4">
         <button
           onClick={togglePlay}
-          className="w-12 h-12 rounded-full bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center shadow-lg transition-all"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--pureon-teal)] text-[var(--pureon-paper)] transition-all hover:bg-[var(--pureon-ink)]"
         >
           {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Volume2 className="w-4 h-4 text-purple-500" />
-            <span className="text-sm font-medium text-purple-700">Listening Audio</span>
+            <Volume2 className="w-4 h-4 text-[var(--pureon-teal)]" />
+            <span className="text-sm font-medium text-[var(--pureon-teal)]">Listening Audio</span>
           </div>
-          <div className="relative h-2 bg-purple-200 rounded-full overflow-hidden">
+          <div className="relative h-2 overflow-hidden rounded-full bg-[rgba(200,189,160,0.7)]">
             <div
-              className="absolute h-full bg-purple-500 rounded-full transition-all"
+              className="absolute h-full rounded-full bg-[var(--pureon-gold)] transition-all"
               style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
             />
           </div>
           <div className="flex justify-between mt-1">
-            <span className="text-xs text-purple-500">{formatTime(currentTime)}</span>
-            <span className="text-xs text-purple-500">{formatTime(duration)}</span>
+            <span className="text-xs text-[var(--pureon-muted)]">{formatTime(currentTime)}</span>
+            <span className="text-xs text-[var(--pureon-muted)]">{formatTime(duration)}</span>
           </div>
         </div>
       </div>
@@ -2198,31 +2207,31 @@ export default function SectionContent() {
         {/* Section Header */}
         <div className="mb-8">
           {section.imageUrl && (
-            <div className="relative h-40 sm:h-48 rounded-2xl overflow-hidden mb-6">
+            <div className="relative mb-6 overflow-hidden border border-[var(--border)]">
               <img
                 src={section.imageUrl}
                 alt={section.title}
-                className="w-full h-full object-cover"
+                className="h-40 w-full object-cover sm:h-48"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-4 left-5">
-                <span className="text-3xl mr-3">{section.icon}</span>
-                <span className="text-white font-bold text-xl drop-shadow-lg">{section.title}</span>
+                <span className="mr-3 text-3xl">{section.icon}</span>
+                <span className="font-[family-name:var(--font-body)] text-xl font-semibold text-white drop-shadow-lg">{section.title}</span>
               </div>
             </div>
           )}
           {!section.imageUrl && (
-            <div className={`p-5 rounded-2xl ${section.bgColor} mb-6`}>
+            <div className="mb-6 border border-[var(--border)] bg-[rgba(237,229,208,0.52)] p-5">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{section.icon}</span>
+                <span className="text-3xl text-[var(--pureon-gold)]">{section.icon}</span>
                 <div>
-                  <h2 className={`text-xl font-bold ${section.color}`}>{section.title}</h2>
-                  {section.subtitle && <p className="text-sm text-slate-500">{section.subtitle}</p>}
+                  <h2 className="font-[family-name:var(--font-body)] text-xl font-semibold text-[var(--pureon-teal)]">{section.title}</h2>
+                  {section.subtitle && <p className="text-sm text-[var(--pureon-muted)]">{section.subtitle}</p>}
                 </div>
               </div>
             </div>
           )}
-          <p className="text-sm text-slate-500 leading-relaxed">{section.description}</p>
+          <p className="text-sm leading-relaxed text-[var(--pureon-muted)]">{section.description}</p>
         </div>
 
         {manualBlocks.length > 0 ? (
@@ -2249,22 +2258,22 @@ export default function SectionContent() {
               };
 
               return (
-                <div key={block.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 shadow-sm">
+                <div key={block.id} className="border border-[var(--border)] bg-[rgba(245,239,224,0.72)] p-5">
                   <div className="mb-5 flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-base font-bold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--border)] bg-[var(--pureon-paper)] font-[family-name:var(--font-display)] text-base font-semibold text-[var(--pureon-teal)]">
                       {block.displayNumber}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-bold text-slate-800">{`Question ${block.displayNumber}`}</h3>
+                        <h3 className="font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">{`Question ${block.displayNumber}`}</h3>
                         {block.questionType ? (
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span className="inline-flex items-center border border-[var(--border)] bg-[var(--pureon-paper)] px-2.5 py-1 font-[family-name:var(--font-display)] text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--pureon-muted)]">
                             {block.questionType.replace(/-/g, ' ')}
                           </span>
                         ) : null}
                       </div>
                       {block.instructions ? (
-                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-500">
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--pureon-muted)]">
                           {block.instructions}
                         </p>
                       ) : null}
@@ -2297,12 +2306,12 @@ export default function SectionContent() {
         )}
 
         {/* Navigation */}
-        <div className={`mt-10 flex items-center ${isLastSection ? 'justify-start' : 'justify-between'}`}>
+        <div className={`mt-10 flex items-center border-t border-[var(--border)] pt-6 ${isLastSection ? 'justify-start' : 'justify-between'}`}>
           <Button
             variant="outline"
             onClick={() => setCurrentSection(state.currentSectionIndex - 1)}
             disabled={state.currentSectionIndex === 0}
-            className="gap-2"
+            className="gap-2 border-[var(--pureon-teal)] bg-transparent text-[var(--pureon-teal)] hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
           >
             <ChevronLeft className="w-4 h-4" />
             Previous Section
@@ -2312,7 +2321,7 @@ export default function SectionContent() {
             <Button
               onClick={() => setCurrentSection(state.currentSectionIndex + 1)}
               disabled={isLastSection}
-              className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              className="gap-2 bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
             >
               Next Section
               <ChevronRight className="w-4 h-4" />

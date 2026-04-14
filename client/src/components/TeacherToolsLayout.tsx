@@ -13,6 +13,7 @@ import {
   Tags,
   Users,
 } from "lucide-react";
+import { PureonBrand, PureonBrandMark } from "@/components/PureonBrand";
 import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { trpc } from "@/lib/trpc";
@@ -62,25 +63,27 @@ function PrimaryLink({
       <button
         type="button"
         title={collapsed ? label : undefined}
-        className={`flex min-h-[56px] w-full items-center gap-3.5 rounded-[24px] px-4 py-3 text-left text-[15px] font-semibold leading-none tracking-[-0.01em] transition-colors ${
+        className={`flex min-h-[48px] w-full items-center gap-3 border-l-2 px-4 py-3 text-left text-[13px] leading-none transition-colors ${
           active
-            ? "bg-[#1E3A5F] text-white shadow-sm"
-            : "text-slate-600 hover:bg-slate-100 hover:text-[#1E3A5F]"
-        } ${collapsed ? "justify-center px-2" : ""}`}
+            ? "border-[var(--pureon-gold)] bg-white/6 text-[var(--pureon-gold)]"
+            : "border-transparent text-[rgba(245,239,224,0.72)] hover:bg-white/6 hover:text-[var(--pureon-paper)]"
+        } ${collapsed ? "justify-center px-3" : ""}`}
       >
         <span className="relative flex h-6 w-6 items-center justify-center">
           {icon}
           {collapsed && showBadge ? (
-            <span className="absolute -right-2 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+            <span className="absolute -right-2 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-[var(--pureon-gold)] bg-[var(--pureon-gold)] px-1 text-[10px] font-semibold leading-none text-[var(--pureon-ink)] shadow-sm">
               {badgeLabel}
             </span>
           ) : null}
         </span>
-        {!collapsed ? <span className="min-w-0 flex-1">{label}</span> : null}
+        {!collapsed ? <span className="min-w-0 flex-1 font-[family-name:var(--font-body)]">{label}</span> : null}
         {!collapsed && showBadge ? (
           <span
-            className={`ml-auto inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-2 text-[11px] font-bold leading-none ${
-              active ? "bg-white/18 text-white" : "bg-amber-100 text-amber-700"
+            className={`ml-auto inline-flex min-w-[28px] items-center justify-center border px-2 py-1 text-[10px] font-semibold leading-none tracking-[0.16em] ${
+              active
+                ? "border-[rgba(201,164,97,0.45)] bg-[rgba(201,164,97,0.18)] text-[var(--pureon-paper)]"
+                : "border-[rgba(201,164,97,0.28)] text-[var(--pureon-gold)]"
             }`}
           >
             {badgeLabel}
@@ -104,13 +107,13 @@ function SubjectLink({
     <Link href={href}>
       <button
         type="button"
-        className={`min-h-[44px] w-full rounded-2xl px-4 py-2.5 text-left text-[14px] font-medium tracking-[-0.01em] transition-colors ${
+        className={`min-h-[40px] w-full border-l border-[rgba(201,164,97,0.12)] px-4 py-2 text-left text-[12px] transition-colors ${
           active
-            ? "bg-sky-50 text-sky-700"
-            : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            ? "bg-[rgba(201,164,97,0.08)] text-[var(--pureon-paper)]"
+            : "text-[rgba(245,239,224,0.58)] hover:bg-white/5 hover:text-[var(--pureon-paper)]"
         }`}
       >
-        {label}
+        <span className="font-[family-name:var(--font-body)]">{label}</span>
       </button>
     </Link>
   );
@@ -129,7 +132,7 @@ function ExpandToggle({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex h-12 w-12 items-center justify-center rounded-[20px] text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+      className="inline-flex h-10 w-10 items-center justify-center border border-[rgba(201,164,97,0.18)] bg-white/5 text-[rgba(245,239,224,0.58)] transition hover:bg-white/10 hover:text-[var(--pureon-gold)]"
       title={expanded ? `Collapse ${label}` : `Expand ${label}`}
       aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`}
       aria-expanded={expanded}
@@ -164,7 +167,7 @@ function NavItemRow({
       {expandable && onToggle && toggleLabel ? (
         <ExpandToggle expanded={expanded} onToggle={onToggle} label={toggleLabel} />
       ) : (
-        <span aria-hidden="true" className="block h-12 w-12" />
+        <span aria-hidden="true" className="block h-10 w-10" />
       )}
     </div>
   );
@@ -210,165 +213,181 @@ export default function TeacherToolsLayout({
   const pendingTeacherReviewCount = pendingTeacherReviewQuery.data ?? 0;
 
   return (
-    <div className="min-h-screen bg-[#F6F8FB]">
+    <div className="min-h-screen bg-[var(--background)]">
       <aside
-        className={`hidden border-r border-slate-200 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur transition-[width] duration-200 md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:flex-col ${
+        className={`hidden border-r border-[rgba(201,164,97,0.16)] bg-[var(--pureon-teal)] shadow-[18px_0_40px_-24px_rgba(26,26,26,0.65)] transition-[width] duration-200 md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:flex-col ${
           collapsed ? "md:w-20" : "md:w-72"
         }`}
       >
         <div className="flex h-full flex-col">
-          <div className={`flex min-h-[76px] items-center border-b border-slate-200 px-4 py-2.5 ${collapsed ? "justify-center" : "justify-between"}`}>
+          <div
+            className={`flex min-h-[88px] items-center border-b border-[rgba(201,164,97,0.16)] px-4 py-4 ${
+              collapsed ? "justify-center" : "justify-between gap-3"
+            }`}
+          >
             {!collapsed ? (
-              <div>
-                <p className="text-lg font-bold tracking-tight text-[#1E3A5F]">Workspace Navigation</p>
-              </div>
-            ) : null}
+              <PureonBrand inverse compact />
+            ) : (
+              <PureonBrandMark inverse className="h-10 w-10" />
+            )}
             <button
               type="button"
               onClick={() => setCollapsed((current) => !current)}
-              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-slate-800"
+              className="inline-flex h-10 w-10 items-center justify-center border border-[rgba(201,164,97,0.18)] bg-white/5 text-[var(--pureon-gold)] transition hover:bg-white/10"
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
           </div>
 
-          <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-          <div className="space-y-1">
-            {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Overview</p> : null}
-            <PrimaryLink
-              href="/"
-              icon={<Home className="h-4 w-4" />}
-              label="Assessments Home"
-              active={activeTool === "home"}
-              collapsed={collapsed}
-            />
-          </div>
+          <nav className="flex-1 space-y-7 overflow-y-auto px-3 py-5">
+            <div className="space-y-1">
+              {!collapsed ? (
+                <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
+                  Overview
+                </p>
+              ) : null}
+              <PrimaryLink
+                href="/"
+                icon={<Home className="h-4 w-4" />}
+                label="Assessments Home"
+                active={activeTool === "home"}
+                collapsed={collapsed}
+              />
+            </div>
 
-          <div className="space-y-1">
-            {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Teacher Tools</p> : null}
-            {!collapsed ? (
-              <div className="space-y-1">
+            <div className="space-y-1">
+              {!collapsed ? (
+                <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
+                  Teacher Tools
+                </p>
+              ) : null}
+              {!collapsed ? (
+                <div className="space-y-1">
+                  <NavItemRow
+                    collapsed={false}
+                    expandable
+                    expanded={tagManagerExpanded}
+                    onToggle={() => setTagManagerExpanded((current) => !current)}
+                    toggleLabel="Paper Generator subjects"
+                    link={
+                      <PrimaryLink
+                        href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
+                        icon={<Tags className="h-4 w-4" />}
+                        label="Paper Generator"
+                        active={activeTool === "tag-manager"}
+                        collapsed={false}
+                      />
+                    }
+                  />
+                  {tagManagerExpanded ? (
+                    <div className="space-y-1 pl-10">
+                      {allowedSubjects.map((subject) => (
+                        <SubjectLink
+                          key={`tag-manager-${subject}`}
+                          href={`/tag-manager?subject=${subject}`}
+                          label={PAPER_SUBJECT_LABELS[subject]}
+                          active={activeTool === "tag-manager" && currentSubject === subject}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <PrimaryLink
+                  href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
+                  icon={<Tags className="h-4 w-4" />}
+                  label="Paper Generator"
+                  active={activeTool === "tag-manager"}
+                  collapsed={collapsed}
+                />
+              )}
+
+              {collapsed ? (
+                <PrimaryLink
+                  href={`/paper-intake?subject=${defaultSubject}`}
+                  icon={<FilePlus2 className="h-4 w-4" />}
+                  label="Question Intake"
+                  active={activeTool === "paper-intake"}
+                  collapsed={collapsed}
+                />
+              ) : (
                 <NavItemRow
                   collapsed={false}
-                  expandable
-                  expanded={tagManagerExpanded}
-                  onToggle={() => setTagManagerExpanded((current) => !current)}
-                  toggleLabel="Paper Generator subjects"
                   link={
                     <PrimaryLink
-                      href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
-                      icon={<Tags className="h-4 w-4" />}
-                      label="Paper Generator"
-                      active={activeTool === "tag-manager"}
+                      href={`/paper-intake?subject=${defaultSubject}`}
+                      icon={<FilePlus2 className="h-4 w-4" />}
+                      label="Question Intake"
+                      active={activeTool === "paper-intake"}
                       collapsed={false}
                     />
                   }
                 />
-                {tagManagerExpanded ? (
-                  <div className="space-y-1 pl-10">
-                    {allowedSubjects.map((subject) => (
-                      <SubjectLink
-                        key={`tag-manager-${subject}`}
-                        href={`/tag-manager?subject=${subject}`}
-                        label={PAPER_SUBJECT_LABELS[subject]}
-                        active={activeTool === "tag-manager" && currentSubject === subject}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
+              )}
+
               <PrimaryLink
-                href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
-                icon={<Tags className="h-4 w-4" />}
-                label="Paper Generator"
-                active={activeTool === "tag-manager"}
+                href="/question-bank"
+                icon={<Database className="h-4 w-4" />}
+                label="Question Bank"
+                active={activeTool === "question-bank"}
                 collapsed={collapsed}
               />
-            )}
 
-            {collapsed ? (
               <PrimaryLink
-                href={`/paper-intake?subject=${defaultSubject}`}
-                icon={<FilePlus2 className="h-4 w-4" />}
-                label="Question Intake"
-                active={activeTool === "paper-intake"}
+                href="/paper-manager"
+                icon={<BookCopy className="h-4 w-4" />}
+                label="Paper Manager"
+                active={activeTool === "paper-manager"}
                 collapsed={collapsed}
               />
-            ) : (
-              <NavItemRow
-                collapsed={false}
-                link={
-                  <PrimaryLink
-                    href={`/paper-intake?subject=${defaultSubject}`}
-                    icon={<FilePlus2 className="h-4 w-4" />}
-                    label="Question Intake"
-                    active={activeTool === "paper-intake"}
-                    collapsed={false}
-                  />
-                }
-              />
-            )}
 
-            <PrimaryLink
-              href="/question-bank"
-              icon={<Database className="h-4 w-4" />}
-              label="Question Bank"
-              active={activeTool === "question-bank"}
-              collapsed={collapsed}
-            />
+              {collapsed ? (
+                <PrimaryLink
+                  href="/test-history"
+                  icon={<History className="h-4 w-4" />}
+                  label="Test History"
+                  active={activeTool === "test-history"}
+                  collapsed={collapsed}
+                  badgeCount={pendingTeacherReviewCount}
+                />
+              ) : (
+                <NavItemRow
+                  collapsed={false}
+                  link={
+                    <PrimaryLink
+                      href="/test-history"
+                      icon={<History className="h-4 w-4" />}
+                      label="Test History"
+                      active={activeTool === "test-history"}
+                      collapsed={false}
+                      badgeCount={pendingTeacherReviewCount}
+                    />
+                  }
+                />
+              )}
+            </div>
 
-            <PrimaryLink
-              href="/paper-manager"
-              icon={<BookCopy className="h-4 w-4" />}
-              label="Paper Manager"
-              active={activeTool === "paper-manager"}
-              collapsed={collapsed}
-            />
-
-            {collapsed ? (
+            <div className="space-y-1">
+              {!collapsed ? (
+                <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
+                  Administration
+                </p>
+              ) : null}
               <PrimaryLink
-                href="/test-history"
-                icon={<History className="h-4 w-4" />}
-                label="Test History"
-                active={activeTool === "test-history"}
+                href="/user-manager"
+                icon={<Users className="h-4 w-4" />}
+                label="User Manager"
+                active={activeTool === "user-manager"}
                 collapsed={collapsed}
-                badgeCount={pendingTeacherReviewCount}
               />
-            ) : (
-              <NavItemRow
-                collapsed={false}
-                link={
-                  <PrimaryLink
-                    href="/test-history"
-                    icon={<History className="h-4 w-4" />}
-                    label="Test History"
-                    active={activeTool === "test-history"}
-                    collapsed={false}
-                    badgeCount={pendingTeacherReviewCount}
-                  />
-                }
-              />
-            )}
-          </div>
-
-          <div className="space-y-1">
-            {!collapsed ? <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Administration</p> : null}
-            <PrimaryLink
-              href="/user-manager"
-              icon={<Users className="h-4 w-4" />}
-              label="User Manager"
-              active={activeTool === "user-manager"}
-              collapsed={collapsed}
-            />
-          </div>
+            </div>
           </nav>
         </div>
       </aside>
 
       <div
-        className={`min-w-0 flex-1 transition-[padding-left] duration-200 ${
+        className={`min-w-0 flex-1 bg-[var(--background)] transition-[padding-left] duration-200 ${
           collapsed ? "md:pl-20" : "md:pl-72"
         }`}
       >

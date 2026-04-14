@@ -1,156 +1,157 @@
 import { useQuiz } from '@/contexts/QuizContext';
-import { BookOpen, PenTool, FileText, CheckCircle2, Headphones, Pencil, ScrollText, BookText } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
-
-const sectionIcons: Record<string, React.ReactNode> = {
-  vocabulary: <BookText className="w-4 h-4" />,
-  grammar: <PenTool className="w-4 h-4" />,
-  listening: <Headphones className="w-4 h-4" />,
-  reading: <FileText className="w-4 h-4" />,
-  writing: <Pencil className="w-4 h-4" />,
-};
-
-const activeColors: Record<string, string> = {
-  vocabulary: 'bg-emerald-50 border-emerald-300 text-emerald-700',
-  grammar: 'bg-amber-50 border-amber-300 text-amber-700',
-  listening: 'bg-purple-50 border-purple-300 text-purple-700',
-  reading: 'bg-indigo-50 border-indigo-300 text-indigo-700',
-  writing: 'bg-orange-50 border-orange-300 text-orange-700',
-};
-
-const progressColors: Record<string, string> = {
-  vocabulary: '[&>div]:bg-emerald-500',
-  grammar: '[&>div]:bg-amber-500',
-  listening: '[&>div]:bg-purple-500',
-  reading: '[&>div]:bg-indigo-500',
-  writing: '[&>div]:bg-orange-500',
-};
+import { Clock3, ScrollText } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface SidebarProps {
-  onNavigate: () => void;
+  onNavigate?: () => void;
 }
 
 function normalizeSummaryText(value?: string) {
   return value?.trim().replace(/\s+/g, ' ').toLowerCase() || '';
 }
 
+function isAnsweredValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value);
+  }
+  return false;
+}
+
+function formatDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const { state, sections, selectedPaper, setCurrentSection, getSectionProgress } = useQuiz();
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => (
+    state.startTime ? Math.max(0, Math.floor((Date.now() - state.startTime) / 1000)) : 0
+  ));
   const overviewTitle = selectedPaper?.subtitle?.trim();
   const overviewBody = selectedPaper?.description?.trim();
   const showOverviewTitle = Boolean(overviewTitle) && normalizeSummaryText(overviewTitle) !== normalizeSummaryText(overviewBody);
   const showOverview = Boolean(overviewBody || showOverviewTitle);
+  const currentSection = sections[state.currentSectionIndex];
 
-  const totalAnswered = sections.reduce((sum: number, s: { id: string }) => {
-    const p = getSectionProgress(s.id);
-    return sum + p.answered;
-  }, 0);
-  const totalQuestions = sections.reduce((sum: number, s: { id: string }) => {
-    const p = getSectionProgress(s.id);
-    return sum + p.total;
-  }, 0);
-  const overallProgress = totalQuestions > 0 ? (totalAnswered / totalQuestions) * 100 : 0;
+  useEffect(() => {
+    if (!state.startTime || state.submitted) return;
+
+    const tick = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - state.startTime!) / 1000)));
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [state.startTime, state.submitted]);
+
+  const questionEntries = useMemo(() => {
+    let currentNumber = 1;
+
+    return sections.flatMap((section, sectionIndex) =>
+      (section.questions || []).map((question) => {
+        const answer = state.answers[`${section.id}:${question.id}`];
+        const entry = {
+          id: `${section.id}:${question.id}`,
+          number: currentNumber,
+          sectionIndex,
+          sectionTitle: section.title,
+          answered: isAnsweredValue(answer),
+          current: sectionIndex === state.currentSectionIndex,
+        };
+        currentNumber += 1;
+        return entry;
+      }),
+    );
+  }, [sections, state.answers, state.currentSectionIndex]);
+
+  const totalAnswered = questionEntries.filter((entry) => entry.answered).length;
+  const totalQuestions = questionEntries.length;
+  const currentProgress = currentSection ? getSectionProgress(currentSection.id) : { answered: 0, total: 0 };
 
   return (
-    <div className="w-72 h-screen bg-white border-r border-slate-200 flex flex-col shadow-sm">
-      {/* Header */}
-      <div className="p-5 border-b border-slate-100">
-        <div className="space-y-3">
-          <h1 className="font-[family-name:var(--font-sans)] text-lg font-bold leading-tight tracking-tight text-[#1E3A5F]">
-            {selectedPaper?.title || 'English Assessment'}
-          </h1>
-          {showOverview ? (
-            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-50/60 px-3.5 py-3 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-                  <ScrollText className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    Paper Overview
-                  </p>
-                  {showOverviewTitle ? (
-                    <p className="mt-1 text-sm font-semibold leading-snug text-slate-700 line-clamp-2">
-                      {overviewTitle}
-                    </p>
-                  ) : null}
-                  {overviewBody ? (
-                    <p className="mt-1.5 text-xs leading-5 text-slate-500 line-clamp-4">
-                      {overviewBody}
-                    </p>
-                  ) : null}
-                </div>
+    <div className="pureon-practice-side">
+      <div className="pureon-side-card">
+        <h4>计时器 / Timer</h4>
+        <div className="pureon-timer">{formatDuration(elapsedSeconds)}</div>
+        <div className="pureon-timer-label">ELAPSED</div>
+      </div>
+
+      <div className="pureon-side-card">
+        <h4>题目导航 / Question Map</h4>
+        <div className="pureon-qnav">
+          {questionEntries.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              data-state={entry.current ? 'current' : entry.answered ? 'done' : 'idle'}
+              onClick={() => {
+                setCurrentSection(entry.sectionIndex);
+                onNavigate?.();
+              }}
+              title={`${entry.sectionTitle} · Question ${entry.number}`}
+            >
+              {entry.number}
+            </button>
+          ))}
+        </div>
+        <div className="pureon-qnav-meta">
+          <div>✓ 已答 {totalAnswered} · ○ 未答 {Math.max(totalQuestions - totalAnswered, 0)}</div>
+          {currentSection ? <div>当前部分 · {currentSection.title}</div> : null}
+        </div>
+      </div>
+
+      <div className="pureon-side-card">
+        <h4>本节统计 / Stats</h4>
+        <div className="space-y-2 text-[12px] leading-7 text-[var(--pureon-muted)]">
+          {currentSection ? (
+            <>
+              <div>
+                当前章节 · <strong className="text-[var(--pureon-teal)]">{currentSection.title}</strong>
               </div>
-            </div>
+              <div>
+                章节进度 · <strong className="text-[var(--pureon-teal)]">{currentProgress.answered}/{currentProgress.total}</strong>
+              </div>
+              <div>
+                总章节数 · <strong>{sections.length}</strong>
+              </div>
+              <div>
+                当前位置 · <strong>Part {state.currentSectionIndex + 1}</strong>
+              </div>
+            </>
           ) : null}
         </div>
       </div>
 
-      {/* Overall Progress */}
-      <div className="px-5 py-4 border-b border-slate-100">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overall Progress</span>
-          <span className="text-xs font-bold text-slate-700">{totalAnswered}/{totalQuestions}</span>
+      {showOverview ? (
+        <div className="pureon-side-card">
+          <h4>试卷说明 / Overview</h4>
+          <div className="flex items-start gap-3 text-[12px] leading-7 text-[var(--pureon-muted)]">
+            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center border border-[var(--border)] bg-[var(--pureon-paper)] text-[var(--pureon-teal)]">
+              <ScrollText className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              {showOverviewTitle ? (
+                <div className="font-semibold text-[var(--pureon-teal)]">{overviewTitle}</div>
+              ) : null}
+              {overviewBody ? <p>{overviewBody}</p> : null}
+            </div>
+          </div>
         </div>
-        <Progress value={overallProgress} className="h-2 bg-slate-100 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-indigo-500" />
-      </div>
-
-      {/* Section Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
-        {sections.map((section: { id: string; title: string }, index: number) => {
-          const isActive = state.currentSectionIndex === index;
-          const progress = getSectionProgress(section.id);
-          const isComplete = progress.answered === progress.total && progress.total > 0;
-
-          return (
-            <button
-              key={section.id}
-              onClick={() => {
-                setCurrentSection(index);
-                onNavigate();
-              }}
-              className={`
-                w-full text-left rounded-xl p-3 border transition-all duration-200
-                ${isActive
-                  ? activeColors[section.id] || 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'border-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-800'
-                }
-              `}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`
-                  w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
-                  ${isActive ? 'bg-white/60' : 'bg-slate-100'}
-                `}>
-                  {sectionIcons[section.id] || <BookOpen className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold truncate">{section.title}</span>
-                    {isComplete && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Progress
-                      value={progress.total > 0 ? (progress.answered / progress.total) * 100 : 0}
-                      className={`h-1 flex-1 bg-slate-200/60 ${progressColors[section.id] || '[&>div]:bg-blue-500'}`}
-                    />
-                    <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">
-                      {progress.answered}/{progress.total}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Tip at bottom */}
-      <div className="p-4 border-t border-slate-100">
-        <p className="text-xs text-slate-400 text-center">
-          Complete all sections then submit your assessment
-        </p>
-      </div>
+      ) : null}
     </div>
   );
 }

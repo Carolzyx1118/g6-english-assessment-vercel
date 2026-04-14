@@ -1,162 +1,187 @@
-/*
- * QuizLayout: Left sidebar navigation + right content area
- * Scandinavian minimal design with clear section navigation
- */
-
-import { useQuiz } from '@/contexts/QuizContext';
-
-import Sidebar from '@/components/Sidebar';
-import SectionContent from '@/components/SectionContent';
+import PureonFooter from '@/components/PureonFooter';
 import ResultsPage from '@/components/ResultsPage';
+import SectionContent from '@/components/SectionContent';
+import Sidebar from '@/components/Sidebar';
+import StudentWorkspaceTopBar from '@/components/StudentWorkspaceTopBar';
 import { Button } from '@/components/ui/button';
+import { useQuiz } from '@/contexts/QuizContext';
+import { PAPER_SUBJECT_LABELS } from '@/data/papers';
+import { AlertTriangle, LogOut, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, LogOut, Menu, Send, X } from 'lucide-react';
+
+function formatDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
 
 export default function QuizLayout() {
-  const { state, resetQuiz, submitQuiz, sections, getSectionProgress } = useQuiz();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { state, resetQuiz, submitQuiz, sections, selectedPaper, getSectionProgress } = useQuiz();
   const [activeConfirm, setActiveConfirm] = useState<'exit' | 'submit' | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => (
+    state.startTime ? Math.max(0, Math.floor((Date.now() - state.startTime) / 1000)) : 0
+  ));
 
   const totalAnswered = sections.reduce((sum, section) => sum + getSectionProgress(section.id).answered, 0);
   const totalQuestions = sections.reduce((sum, section) => sum + getSectionProgress(section.id).total, 0);
   const unanswered = totalQuestions - totalAnswered;
+  const progressPercent = sections.length > 0 ? ((state.currentSectionIndex + 1) / sections.length) * 100 : 0;
+  const currentSection = sections[state.currentSectionIndex];
 
   useEffect(() => {
     setActiveConfirm(null);
   }, [state.currentSectionIndex]);
+
+  useEffect(() => {
+    if (!state.startTime || state.submitted) return;
+
+    const tick = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - state.startTime!) / 1000)));
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [state.startTime, state.submitted]);
 
   if (state.submitted) {
     return <ResultsPage />;
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFBFD] flex">
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-xl bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
-      >
-        {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
+    <div className="min-h-screen bg-[var(--background)]">
+      <StudentWorkspaceTopBar
+        active="practice"
+        onHomeClick={() => setActiveConfirm('exit')}
+      />
 
-      {/* Overlay for mobile */}
-      {sidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/20 z-30"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`
-        fixed lg:sticky top-0 left-0 h-screen z-40
-        transform transition-transform duration-300 ease-in-out
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      `}>
-        <Sidebar onNavigate={() => setSidebarOpen(false)} />
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 min-h-screen overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-          <div className="relative mb-6 pt-10 lg:pt-0">
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setActiveConfirm('exit')}
-                className="h-10 min-w-[150px] gap-1.5 border-red-200 px-4 text-sm font-medium text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-              >
-                <LogOut className="h-4 w-4" />
-                Exit Test
-              </Button>
-
-              <Button
-                onClick={() => setActiveConfirm('submit')}
-                className="h-10 min-w-[150px] gap-1.5 px-4 text-sm font-medium bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-200 transition-all duration-300 hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl"
-              >
-                <Send className="h-4 w-4" />
-                Submit Assessment
-              </Button>
+      <div className="pureon-container">
+        <div className="pureon-page-head">
+          <div>
+            <div className="pureon-section-eyebrow">
+              Practice Mode · {selectedPaper ? PAPER_SUBJECT_LABELS[selectedPaper.subject] : 'Assessment'}
             </div>
+            <h1 className="pureon-page-title mt-2">{selectedPaper?.title || currentSection?.title || 'Practice'}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--pureon-muted)]">
+              {currentSection?.description || 'Work through each part in order, then submit for grading and review.'}
+            </p>
+          </div>
+          <div className="pureon-page-head-actions">
+            <Button
+              variant="outline"
+              onClick={() => setActiveConfirm('exit')}
+              className="border-[var(--pureon-red)] bg-transparent text-[var(--pureon-red)] hover:bg-[var(--pureon-red)] hover:text-[var(--pureon-paper)]"
+            >
+              <LogOut className="h-4 w-4" />
+              退出练习
+            </Button>
+            <Button
+              onClick={() => setActiveConfirm('submit')}
+              className="bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
+            >
+              <Send className="h-4 w-4" />
+              提交交卷
+            </Button>
+          </div>
+        </div>
 
-            {activeConfirm ? (
-              <div
-                className="absolute inset-x-0 top-full z-30 mt-3 flex justify-end"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="w-full max-w-xl rounded-[28px] border border-amber-200 bg-amber-50/95 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.14)] backdrop-blur-sm">
-                  {activeConfirm === 'exit' ? (
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-amber-900">Exit this assessment?</p>
-                        <p className="mt-1 text-sm text-amber-800">
-                          Your current answers and progress will be cleared, and you will return to the paper selection page.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setActiveConfirm(null);
-                              setSidebarOpen(false);
-                              resetQuiz();
-                            }}
-                          >
-                            Exit Test
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setActiveConfirm(null)}
-                          >
-                            Continue Test
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeConfirm === 'submit' ? (
-                    <>
-                      {unanswered > 0 ? (
-                        <div className="mb-3 flex items-start gap-2">
-                          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
-                          <span className="text-sm text-amber-700">
-                            You have <span className="font-bold">{unanswered}</span> unanswered question{unanswered > 1 ? 's' : ''}.
-                          </span>
-                        </div>
-                      ) : null}
-                      <p className="text-sm text-slate-600">
-                        Are you sure you want to submit your assessment? This action cannot be undone.
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          onClick={() => {
-                            submitQuiz();
-                            setActiveConfirm(null);
-                          }}
-                          className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                        >
-                          <Send className="h-4 w-4" />
-                          Yes, Submit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setActiveConfirm(null)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </>
-                  ) : null}
+        {activeConfirm ? (
+          <div className="mb-6 border border-[var(--pureon-gold)] bg-[rgba(201,164,97,0.08)] p-5">
+            {activeConfirm === 'exit' ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--pureon-gold)]" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-[var(--pureon-teal)]">退出当前练习？</div>
+                  <p className="mt-1 text-sm leading-7 text-[var(--pureon-muted)]">
+                    退出后会清空这次作答并返回试卷选择页。
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setActiveConfirm(null);
+                        resetQuiz();
+                      }}
+                    >
+                      确认退出
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[var(--pureon-teal)] bg-transparent text-[var(--pureon-teal)] hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+                      onClick={() => setActiveConfirm(null)}
+                    >
+                      继续作答
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--pureon-gold)]" />
+                <div className="min-w-0 flex-1">
+                  {unanswered > 0 ? (
+                    <div className="text-sm leading-7 text-[var(--pureon-muted)]">
+                      你还有 <strong className="text-[var(--pureon-red)]">{unanswered}</strong> 题未作答。
+                    </div>
+                  ) : null}
+                  <p className="text-sm leading-7 text-[var(--pureon-muted)]">
+                    确认提交后将进入评分与报告页面，当前作答不可撤销。
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => {
+                        submitQuiz();
+                        setActiveConfirm(null);
+                      }}
+                      className="bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
+                    >
+                      <Send className="h-4 w-4" />
+                      确认提交
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[var(--pureon-teal)] bg-transparent text-[var(--pureon-teal)] hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+                      onClick={() => setActiveConfirm(null)}
+                    >
+                      返回作答
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          <SectionContent />
+        ) : null}
+
+        <div className="pureon-practice-layout">
+          <div className="pureon-practice-main">
+            <div className="pureon-practice-progress">
+              <div className="pureon-progress-text">
+                <strong>第 {state.currentSectionIndex + 1} 部分</strong> / 共 {sections.length} 部分
+              </div>
+              <div className="pureon-progress-track">
+                <span style={{ width: `${progressPercent}%` }} />
+              </div>
+              <div className="pureon-progress-text">
+                已用 <strong>{formatDuration(elapsedSeconds)}</strong>
+              </div>
+            </div>
+            <SectionContent />
+          </div>
+
+          <Sidebar />
         </div>
-      </main>
+      </div>
+
+      <PureonFooter note="练习模式 / Practice Mode" />
     </div>
   );
 }
