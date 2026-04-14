@@ -10,6 +10,7 @@ import {
   FilePlus2,
   History,
   Home,
+  LogOut,
   Tags,
   Users,
 } from "lucide-react";
@@ -31,8 +32,11 @@ type TeacherToolKey =
 interface TeacherToolsLayoutProps {
   activeTool: TeacherToolKey;
   currentSubject?: PaperSubject | null;
+  showAccountPanel?: boolean;
   children: ReactNode;
 }
+
+type TeacherTopNavKey = "overview" | "bank" | "generator" | "papers" | "students" | "users";
 
 const SIDEBAR_STORAGE_KEY = "pureon_teacher_tools_sidebar_collapsed";
 
@@ -173,12 +177,44 @@ function NavItemRow({
   );
 }
 
+function TopNavLink({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <Link href={href}>
+      <button
+        type="button"
+        className="pureon-nav-link"
+        data-active={active ? "true" : "false"}
+      >
+        {label}
+      </button>
+    </Link>
+  );
+}
+
+function getTopNavKey(activeTool: TeacherToolKey): TeacherTopNavKey {
+  if (activeTool === "home") return "overview";
+  if (activeTool === "paper-intake" || activeTool === "question-bank") return "bank";
+  if (activeTool === "tag-manager" || activeTool === "paper-composer") return "generator";
+  if (activeTool === "paper-manager") return "papers";
+  if (activeTool === "test-history") return "students";
+  return "users";
+}
+
 export default function TeacherToolsLayout({
   activeTool,
   currentSubject = null,
+  showAccountPanel = false,
   children,
 }: TeacherToolsLayoutProps) {
-  const { user, isTeacher } = useLocalAuth();
+  const { user, isTeacher, logout, loading: authLoading } = useLocalAuth();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
@@ -211,6 +247,18 @@ export default function TeacherToolsLayout({
 
   const defaultSubject = allowedSubjects[0] ?? "english";
   const pendingTeacherReviewCount = pendingTeacherReviewQuery.data ?? 0;
+  const displayName = user?.displayName || user?.username || "Teacher";
+  const avatarLabel = displayName.slice(0, 2).toUpperCase();
+  const roleLabel = user?.role === "admin" ? "Admin" : "Teacher";
+  const activeTopNav = getTopNavKey(activeTool);
+  const topNavItems: Array<{ key: TeacherTopNavKey; label: string; href: string }> = [
+    { key: "overview", label: "总览", href: "/" },
+    { key: "bank", label: "题库", href: "/question-bank" },
+    { key: "generator", label: "组卷", href: `/tag-manager?subject=${currentSubject ?? defaultSubject}` },
+    { key: "papers", label: "试卷", href: "/paper-manager" },
+    { key: "students", label: "学生", href: "/test-history" },
+    { key: "users", label: "设置", href: "/user-manager" },
+  ];
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -244,13 +292,13 @@ export default function TeacherToolsLayout({
             <div className="space-y-1">
               {!collapsed ? (
                 <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
-                  Overview
+                  工作台
                 </p>
               ) : null}
               <PrimaryLink
                 href="/"
                 icon={<Home className="h-4 w-4" />}
-                label="Assessments Home"
+                label="教师总览"
                 active={activeTool === "home"}
                 collapsed={collapsed}
               />
@@ -259,7 +307,7 @@ export default function TeacherToolsLayout({
             <div className="space-y-1">
               {!collapsed ? (
                 <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
-                  Teacher Tools
+                  题库管理
                 </p>
               ) : null}
               {!collapsed ? (
@@ -274,7 +322,7 @@ export default function TeacherToolsLayout({
                       <PrimaryLink
                         href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
                         icon={<Tags className="h-4 w-4" />}
-                        label="Paper Generator"
+                        label="组卷体系"
                         active={activeTool === "tag-manager"}
                         collapsed={false}
                       />
@@ -297,7 +345,7 @@ export default function TeacherToolsLayout({
                 <PrimaryLink
                   href={`/tag-manager?subject=${currentSubject ?? defaultSubject}`}
                   icon={<Tags className="h-4 w-4" />}
-                  label="Paper Generator"
+                  label="组卷体系"
                   active={activeTool === "tag-manager"}
                   collapsed={collapsed}
                 />
@@ -307,7 +355,7 @@ export default function TeacherToolsLayout({
                 <PrimaryLink
                   href={`/paper-intake?subject=${defaultSubject}`}
                   icon={<FilePlus2 className="h-4 w-4" />}
-                  label="Question Intake"
+                  label="题目录入"
                   active={activeTool === "paper-intake"}
                   collapsed={collapsed}
                 />
@@ -318,7 +366,7 @@ export default function TeacherToolsLayout({
                     <PrimaryLink
                       href={`/paper-intake?subject=${defaultSubject}`}
                       icon={<FilePlus2 className="h-4 w-4" />}
-                      label="Question Intake"
+                      label="题目录入"
                       active={activeTool === "paper-intake"}
                       collapsed={false}
                     />
@@ -329,7 +377,7 @@ export default function TeacherToolsLayout({
               <PrimaryLink
                 href="/question-bank"
                 icon={<Database className="h-4 w-4" />}
-                label="Question Bank"
+                label="题库"
                 active={activeTool === "question-bank"}
                 collapsed={collapsed}
               />
@@ -337,7 +385,7 @@ export default function TeacherToolsLayout({
               <PrimaryLink
                 href="/paper-manager"
                 icon={<BookCopy className="h-4 w-4" />}
-                label="Paper Manager"
+                label="试卷管理"
                 active={activeTool === "paper-manager"}
                 collapsed={collapsed}
               />
@@ -346,7 +394,7 @@ export default function TeacherToolsLayout({
                 <PrimaryLink
                   href="/test-history"
                   icon={<History className="h-4 w-4" />}
-                  label="Test History"
+                  label="测试记录"
                   active={activeTool === "test-history"}
                   collapsed={collapsed}
                   badgeCount={pendingTeacherReviewCount}
@@ -358,7 +406,7 @@ export default function TeacherToolsLayout({
                     <PrimaryLink
                       href="/test-history"
                       icon={<History className="h-4 w-4" />}
-                      label="Test History"
+                      label="测试记录"
                       active={activeTool === "test-history"}
                       collapsed={false}
                       badgeCount={pendingTeacherReviewCount}
@@ -371,18 +419,52 @@ export default function TeacherToolsLayout({
             <div className="space-y-1">
               {!collapsed ? (
                 <p className="px-3 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.28em] text-[var(--pureon-gold)]">
-                  Administration
+                  系统
                 </p>
               ) : null}
               <PrimaryLink
                 href="/user-manager"
                 icon={<Users className="h-4 w-4" />}
-                label="User Manager"
+                label="用户管理"
                 active={activeTool === "user-manager"}
                 collapsed={collapsed}
               />
             </div>
           </nav>
+
+          {showAccountPanel && user ? (
+            <div className="border-t border-[rgba(201,164,97,0.16)] px-3 py-4">
+              {!collapsed ? (
+                <div className="mb-3 flex items-center gap-3 border border-[rgba(201,164,97,0.18)] bg-white/5 px-3 py-3 text-[rgba(245,239,224,0.78)]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--pureon-gold),var(--pureon-blue))] font-[family-name:var(--font-display)] text-[12px] font-semibold text-[var(--pureon-paper)]">
+                    {avatarLabel || "TE"}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-[family-name:var(--font-body)] text-[13px] text-[var(--pureon-paper)]">
+                      {displayName}
+                    </div>
+                    <div className="mt-1 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.18em] text-[rgba(245,239,224,0.5)]">
+                      {roleLabel}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={logout}
+                disabled={authLoading}
+                title="退出登录"
+                aria-label="退出登录"
+                className={`inline-flex min-h-[44px] items-center border border-[rgba(201,164,97,0.18)] bg-white/5 text-[rgba(245,239,224,0.76)] transition hover:bg-white/10 hover:text-[var(--pureon-gold)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                  collapsed ? "w-full justify-center px-3" : "w-full justify-center gap-2 px-4"
+                }`}
+              >
+                <LogOut className="h-4 w-4" />
+                {!collapsed ? <span className="font-[family-name:var(--font-body)] text-[13px]">退出登录</span> : null}
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -391,6 +473,46 @@ export default function TeacherToolsLayout({
           collapsed ? "md:pl-20" : "md:pl-72"
         }`}
       >
+        <div className="pureon-topbar sticky top-0 z-20">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-4 px-4 py-4 lg:px-8">
+            <div className="flex min-w-0 items-center gap-8">
+              <div className="min-w-0">
+                <PureonBrand />
+              </div>
+              <div className="hidden items-center gap-1 lg:flex">
+                {topNavItems.map((item) => (
+                  <TopNavLink key={item.key} href={item.href} label={item.label} active={activeTopNav === item.key} />
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {user ? (
+                <div className="inline-flex items-center gap-3 border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.7)] px-3 py-2 text-[13px] text-[var(--pureon-muted)]">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--pureon-gold),var(--pureon-blue))] font-[family-name:var(--font-display)] text-[14px] font-semibold text-[var(--pureon-paper)]">
+                    {avatarLabel || "TE"}
+                  </div>
+                  <div className="hidden min-w-0 sm:block">
+                    <div className="truncate font-[family-name:var(--font-body)] text-[14px] text-[var(--pureon-teal)]">
+                      {displayName}
+                    </div>
+                    <div className="mt-0.5 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.18em] text-[var(--pureon-muted)]">
+                      {roleLabel}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={logout}
+                disabled={authLoading}
+                className="inline-flex min-h-11 items-center gap-2 border border-[var(--pureon-rule)] bg-transparent px-4 py-2 text-[13px] text-[var(--pureon-muted)] transition-colors hover:border-[var(--pureon-teal)] hover:text-[var(--pureon-teal)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
+            </div>
+          </div>
+        </div>
         {children}
       </div>
     </div>

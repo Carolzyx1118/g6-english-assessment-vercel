@@ -74,13 +74,14 @@ export default function Register() {
   };
 
   return (
-    <div className="pureon-page-shell flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
-      <div className="pureon-panel grid w-full max-w-6xl overflow-hidden md:grid-cols-[1.02fr_0.98fr]">
-        <div className="relative overflow-hidden bg-[var(--pureon-teal)] px-8 py-10 text-[var(--pureon-paper)] sm:px-10 md:px-12 md:py-14">
+    <div className="pureon-page-shell flex min-h-[100dvh] items-center justify-center px-4 py-6 sm:px-6 md:py-8 xl:py-0">
+      <div className="pureon-panel grid w-full max-w-6xl overflow-hidden md:min-h-[760px] md:grid-cols-[1.02fr_0.98fr]">
+        <div className="relative flex overflow-hidden bg-[var(--pureon-teal)] px-8 py-10 text-[var(--pureon-paper)] sm:px-10 md:px-12 md:py-14">
           <div className="absolute right-[-4rem] top-[-4rem] h-64 w-64 rounded-full bg-[rgba(201,164,97,0.12)] blur-3xl" />
           <div className="absolute bottom-[-5rem] left-[-4rem] h-72 w-72 rounded-full bg-[rgba(43,88,118,0.22)] blur-3xl" />
-          <PureonBrand inverse className="relative z-10 mb-10" />
-          <div className="relative z-10 max-w-md">
+          <div className="relative z-10 flex w-full flex-col justify-center md:-translate-y-12 lg:-translate-y-14">
+            <PureonBrand inverse className="mb-10" />
+            <div className="max-w-md">
             <h1 className="font-[family-name:var(--font-body)] text-[2.2rem] font-semibold tracking-[0.24em] sm:text-[2.6rem]">
               创建学习账户
             </h1>
@@ -92,23 +93,20 @@ export default function Register() {
               <br />
               Create a focused account for practice, testing, and long-term progress tracking.
             </div>
-            <div className="mt-12 max-w-sm space-y-3 text-[13px] leading-7 text-[rgba(245,239,224,0.7)]">
-              <p>邀请码决定你的身份权限与可见科目，请向老师或管理员获取。</p>
-              <p className="font-[family-name:var(--font-display)] tracking-[0.18em] text-[var(--pureon-gold-soft)]">
-                One code. One workspace. One consistent learning record.
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-[rgba(245,239,224,0.88)] px-8 py-10 sm:px-10 md:px-12 md:py-14">
-          <div className="pureon-section-eyebrow">Create Account</div>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[0.1em] text-[var(--pureon-teal)]">
-            注册你的账户
-          </h2>
-          <p className="mt-2 text-sm text-[var(--pureon-muted)]">
-            Register with your invite code and start learning
-          </p>
+        <div className="flex flex-col justify-center bg-[rgba(245,239,224,0.88)] px-8 py-10 sm:px-10 md:px-12 md:py-14">
+          <div>
+            <div className="pureon-section-eyebrow">Create Account</div>
+            <h2 className="mt-3 text-[2rem] font-semibold tracking-[0.1em] text-[var(--pureon-teal)]">
+              注册你的账户
+            </h2>
+            <p className="mt-2 text-sm text-[var(--pureon-muted)]">
+              Register with your invite code and start learning
+            </p>
+          </div>
 
           <div className="mt-8 grid grid-cols-2 border border-[var(--pureon-rule)] text-center font-[family-name:var(--font-body)] text-sm">
             <button
@@ -116,7 +114,7 @@ export default function Register() {
               onClick={() => navigate("/login")}
               className="px-4 py-3 text-[var(--pureon-muted)] transition-colors hover:bg-[rgba(201,164,97,0.08)] hover:text-[var(--pureon-teal)]"
             >
-              登录 / Login
+              登录 / Log in
             </button>
             <div className="border-l border-[var(--pureon-rule)] bg-[var(--pureon-teal)] px-4 py-3 text-[var(--pureon-paper)]">
               注册 / Register
@@ -223,12 +221,6 @@ export default function Register() {
             </Button>
           </form>
 
-          <div className="mt-8">
-            <div className="pureon-brand-divider" />
-            <p className="mt-4 text-center text-[11px] tracking-[0.24em] text-[var(--pureon-muted)]">
-              INVITE ONLY · LOCAL ACCESS · FOCUSED WORKSPACE
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -128,18 +128,24 @@ export default function TestHistory() {
 
   return (
     <TeacherToolsLayout activeTool="test-history">
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="pureon-container">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="pureon-page-head">
             <div>
-              <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
-                <ArrowLeft className="h-4 w-4" />
-                Back to teacher home
-              </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Test History</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Click any saved assessment to expand the full report directly below the selected history card.
+              <div className="pureon-section-eyebrow">Teacher Tools · Test History</div>
+              <h1 className="pureon-page-title mt-2">测试记录</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--pureon-muted)]">
+                点击任一保存记录，可以直接在下方展开完整报告，不需要跳到另一张页面。
               </p>
+            </div>
+            <div className="pureon-page-head-actions">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 border border-[var(--pureon-teal)] px-4 py-2 text-sm text-[var(--pureon-teal)] transition-colors hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回老师首页
+              </Link>
             </div>
           </div>
 

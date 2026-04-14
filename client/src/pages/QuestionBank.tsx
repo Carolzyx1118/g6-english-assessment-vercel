@@ -816,20 +816,24 @@ export default function QuestionBank() {
 
   return (
     <TeacherToolsLayout activeTool="question-bank" currentSubject={subjectFilter}>
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="pureon-container">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div className="space-y-2">
+          <div className="pureon-page-head">
             <div>
-              <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Teacher Home
-              </Link>
-              <h1 className="mt-3 text-2xl font-bold tracking-tight text-[#1E3A5F] sm:text-3xl">
-                Question Bank
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Review the question-bank items used for random paper building. Each entry shows the saved tags and a live preview of the question content.
+              <div className="pureon-section-eyebrow">Teacher Tools · Question Bank</div>
+              <h1 className="pureon-page-title mt-2">题库</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--pureon-muted)]">
+                查看随机组卷使用的题库内容，每条记录都保留标签信息和实时题目预览。
               </p>
+            </div>
+            <div className="pureon-page-head-actions">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 border border-[var(--pureon-teal)] px-4 py-2 text-sm text-[var(--pureon-teal)] transition-colors hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回老师首页
+              </Link>
             </div>
           </div>
 

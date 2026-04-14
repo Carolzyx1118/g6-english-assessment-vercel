@@ -45,13 +45,14 @@ export default function Login() {
   };
 
   return (
-    <div className="pureon-page-shell flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
-      <div className="pureon-panel grid w-full max-w-6xl overflow-hidden md:grid-cols-[1.02fr_0.98fr]">
-        <div className="relative overflow-hidden bg-[var(--pureon-teal)] px-8 py-10 text-[var(--pureon-paper)] sm:px-10 md:px-12 md:py-14">
+    <div className="pureon-page-shell flex min-h-[100dvh] items-center justify-center px-4 py-6 sm:px-6 md:py-8 xl:py-0">
+      <div className="pureon-panel grid w-full max-w-6xl overflow-hidden md:min-h-[760px] md:grid-cols-[1.02fr_0.98fr]">
+        <div className="relative flex overflow-hidden bg-[var(--pureon-teal)] px-8 py-10 text-[var(--pureon-paper)] sm:px-10 md:px-12 md:py-14">
           <div className="absolute right-[-4rem] top-[-4rem] h-64 w-64 rounded-full bg-[rgba(201,164,97,0.12)] blur-3xl" />
           <div className="absolute bottom-[-5rem] left-[-4rem] h-72 w-72 rounded-full bg-[rgba(43,88,118,0.22)] blur-3xl" />
-          <PureonBrand inverse className="relative z-10 mb-10" />
-          <div className="relative z-10 max-w-md">
+          <div className="relative z-10 flex w-full flex-col justify-center md:-translate-y-8 lg:-translate-y-10">
+            <PureonBrand inverse className="mb-10" />
+            <div className="max-w-md">
             <h1 className="font-[family-name:var(--font-body)] text-[2.2rem] font-semibold tracking-[0.24em] sm:text-[2.6rem]">
               璞源教育
             </h1>
@@ -66,26 +67,23 @@ export default function Login() {
                 Li Ji · Xue Ji
               </div>
             </div>
-            <div className="mt-12 max-w-sm space-y-3 text-[13px] leading-7 text-[rgba(245,239,224,0.7)]">
-              <p>本地账号入口，适合学生、老师与管理员日常登录。</p>
-              <p className="font-[family-name:var(--font-display)] tracking-[0.18em] text-[var(--pureon-gold-soft)]">
-                Focused on learning, practice, and assessment.
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-[rgba(245,239,224,0.88)] px-8 py-10 sm:px-10 md:px-12 md:py-14">
-          <div className="pureon-section-eyebrow">Welcome Back</div>
-          <h2 className="mt-3 text-[2rem] font-semibold tracking-[0.1em] text-[var(--pureon-teal)]">
-            登录你的账户
-          </h2>
-          <p className="mt-2 text-sm text-[var(--pureon-muted)]">
-            Sign in to continue your learning journey
-          </p>
+        <div className="flex flex-col justify-center bg-[rgba(245,239,224,0.88)] px-8 py-10 sm:px-10 md:px-12 md:py-14">
+          <div>
+            <div className="pureon-section-eyebrow">Welcome Back</div>
+            <h2 className="mt-3 text-[2rem] font-semibold tracking-[0.1em] text-[var(--pureon-teal)]">
+              登录你的账户
+            </h2>
+            <p className="mt-2 text-sm text-[var(--pureon-muted)]">
+              Sign in to continue your learning journey
+            </p>
+          </div>
 
           <div className="mt-8 grid grid-cols-2 border border-[var(--pureon-rule)] text-center font-[family-name:var(--font-body)] text-sm">
-            <div className="bg-[var(--pureon-teal)] px-4 py-3 text-[var(--pureon-paper)]">本地登录 / Local</div>
+            <div className="bg-[var(--pureon-teal)] px-4 py-3 text-[var(--pureon-paper)]">登录 / Log in</div>
             <button
               type="button"
               onClick={() => navigate("/register")}
@@ -133,8 +131,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-[var(--pureon-muted)]">
-              <span>本地账号验证 / Local authentication</span>
+            <div className="flex items-center justify-end text-xs text-[var(--pureon-muted)]">
               <button
                 type="button"
                 onClick={() => navigate("/register")}

@@ -1,6 +1,7 @@
 import { PureonBrand } from "@/components/PureonBrand";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 
 type StudentWorkspaceTab = "home" | "filter" | "practice" | "wrong" | "writing" | "history";
 
@@ -44,7 +45,7 @@ export default function StudentWorkspaceTopBar({
   onPracticeClick,
   onWrongBookClick,
 }: StudentWorkspaceTopBarProps) {
-  const { user } = useLocalAuth();
+  const { user, logout, loading } = useLocalAuth();
   const displayName = user?.displayName || user?.username || "Student";
   const avatarLabel = displayName.slice(0, 2).toUpperCase();
 
@@ -60,9 +61,20 @@ export default function StudentWorkspaceTopBar({
           <NavButton active={active === "writing"} label="作文" disabled />
           <NavButton active={active === "history"} label="学习记录" disabled />
         </div>
-        <div className="pureon-user-chip">
-          <span>{displayName}</span>
-          <div className="pureon-avatar">{avatarLabel || "ST"}</div>
+        <div className="flex items-center gap-3">
+          <div className="pureon-user-chip">
+            <span>{displayName}</span>
+            <div className="pureon-avatar">{avatarLabel || "ST"}</div>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loading}
+            className="inline-flex min-h-9 items-center gap-2 border border-[var(--pureon-rule)] bg-transparent px-3 py-2 text-[12px] text-[var(--pureon-muted)] transition-colors hover:border-[var(--pureon-teal)] hover:text-[var(--pureon-teal)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">退出</span>
+          </button>
         </div>
       </div>
     </div>

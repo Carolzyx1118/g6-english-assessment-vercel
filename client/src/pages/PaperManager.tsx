@@ -455,11 +455,14 @@ export default function PaperManager() {
   if (!canManagePapers) {
     return (
       <TeacherToolsLayout activeTool="paper-manager" currentSubject={subjectFilter}>
-        <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="pureon-container">
           <div className="mx-auto max-w-3xl">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 border border-[var(--pureon-teal)] px-4 py-2 text-sm text-[var(--pureon-teal)] transition-colors hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+            >
               <ArrowLeft className="h-4 w-4" />
-              Back to Assessments
+              返回老师首页
             </Link>
 
             <Card className="mt-6 border-slate-200 shadow-sm">
@@ -481,19 +484,25 @@ export default function PaperManager() {
 
   return (
     <TeacherToolsLayout activeTool="paper-manager" currentSubject={subjectFilter}>
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="pureon-container">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div>
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Assessments
-            </Link>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
-              Paper Manager
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Manage the papers students can actually see. Question-bank containers are handled separately in Question Bank.
-            </p>
+          <div className="pureon-page-head">
+            <div>
+              <div className="pureon-section-eyebrow">Teacher Tools · Paper Manager</div>
+              <h1 className="pureon-page-title mt-2">试卷管理</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--pureon-muted)]">
+                管理学生真正能看到的试卷入口。题库容器和随机组卷内容会在题库页单独维护。
+              </p>
+            </div>
+            <div className="pureon-page-head-actions">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 border border-[var(--pureon-teal)] px-4 py-2 text-sm text-[var(--pureon-teal)] transition-colors hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回老师首页
+              </Link>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -323,272 +323,365 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
   const studentPageDescription = showStudentModules
     ? '从你可见的学科与试卷中选择一份开始练习，或先浏览错题与最近活动。'
     : '按学科筛选试卷后开始一套完整练习。';
+  const teacherPrimarySubject = currentTeacherSubject ?? visibleSubjectModules[0] ?? allowedSubjects[0] ?? 'english';
+  const teacherPagePapers = currentTeacherSubject ? filteredPapers : visiblePapers;
+  const teacherTotalQuestions = useMemo(
+    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
+    [visiblePapers],
+  );
+  const teacherTotalSections = useMemo(
+    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredSectionsCount ?? paper.sections.length), 0),
+    [visiblePapers],
+  );
+  const teacherCurrentQuestions = useMemo(
+    () => teacherPagePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
+    [teacherPagePapers],
+  );
+  const teacherCurrentSections = useMemo(
+    () => teacherPagePapers.reduce((sum, paper) => sum + (paper.configuredSectionsCount ?? paper.sections.length), 0),
+    [teacherPagePapers],
+  );
+  const teacherReadyCount = useMemo(
+    () => visiblePapers.filter((paper) => isPaperReadyToStart(paper)).length,
+    [visiblePapers],
+  );
+  const teacherDraftCount = Math.max(visiblePapers.length - teacherReadyCount, 0);
+  const teacherPageTitle = showTeacherModules
+    ? '教师工作台'
+    : `${currentTeacherSubject ? PAPER_SUBJECT_LABELS[currentTeacherSubject] : '学科'}模块`;
+  const teacherPageEyebrow = showTeacherModules
+    ? 'Admin Dashboard · Teacher Workspace'
+    : `${currentTeacherSubject ? PAPER_SUBJECT_LABELS[currentTeacherSubject] : 'Subject'} Workspace`;
+  const teacherPageDescription = showTeacherModules
+    ? '按学科进入工作模块，统一管理题目录入、题库、试卷和测试记录。整体视觉与后台稿保持同一套纸张档案风格。'
+    : `查看 ${currentTeacherSubject ? PAPER_SUBJECT_LABELS[currentTeacherSubject] : '当前学科'} 下的试卷入口，并进入录题、题库与试卷管理工具。`;
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
       {isTeacher ? (
         <TeacherToolsLayout activeTool="home" currentSubject={currentTeacherSubject}>
-          <TeacherWorkspaceTopBar />
-          <div className={`bg-[var(--background)] ${compactTeacherWorkspaceHome ? 'lg:flex lg:min-h-[calc(100vh-81px)] lg:flex-col' : ''}`}>
-            <div className={`relative ${compactTeacherWorkspaceHome ? 'lg:flex flex-1' : ''}`}>
-              <div className={`relative overflow-hidden ${heroShellClass}`}>
-                <div className="absolute inset-0 bg-gradient-to-br from-[#1E3A5F] via-[#2A4A6F] to-[#1E3A5F]" />
-                <div className="absolute inset-0 opacity-5" style={{
-                  backgroundImage: 'radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)',
-                  backgroundSize: '40px 40px'
-                }} />
-                <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A84B]/10 rounded-full blur-3xl" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D4A84B]/5 rounded-full blur-3xl" />
-
-                <div className={`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 relative z-10 ${heroBodySpacingClass}`}>
-                  <div className={`grid ${subjectHeroGridClass} ${heroGridOffsetClass}`}>
-                    <motion.div
-                      initial={{ opacity: 0, x: -30 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.6 }}
-                      className={subjectHeroTextClass}
-                    >
-                      <div className={`inline-flex self-start items-center gap-2 rounded-full border border-[#D4A84B]/25 bg-[#D4A84B]/15 mb-7 px-3 py-1.5 ${compactTeacherWorkspaceHome ? 'lg:-translate-y-2' : ''}`}>
-                        <Sparkles className="w-3.5 h-3.5 text-[#D4A84B]" />
-                        <span className="text-xs font-medium text-[#D4A84B]">
-                          {heroBadgeText}
-                        </span>
-                      </div>
-                      {activeSubjectHeroCopy ? (
-                        <div className={heroTitleStackClass} style={heroTitleFontStyle}>
-                          <div className={subjectHeroFirstLineClass}>
-                            <span className={`block text-white ${subjectHeroResolvedMainTitleClass}`}>
-                              Manage
-                            </span>
-                            <span className={`block text-[#E8C876] ${subjectHeroResolvedMainTitleClass}`}>
-                              {heroHighlightText}
-                            </span>
-                          </div>
-                          <h1 className={`${subjectHeroResolvedMainTitleClass} text-white/92`}>
-                            {heroTrailingText}
-                          </h1>
-                        </div>
-                      ) : (
-                        <div className={heroTitleStackClass} style={heroTitleFontStyle}>
-                          <h1 className="font-extrabold tracking-tight text-white leading-[0.98] text-[2.8rem] sm:text-[3.2rem] lg:text-[3.8rem]">
-                            Manage
-                          </h1>
-                          <div className="flex max-w-[820px] flex-wrap items-end gap-x-3 gap-y-0.5 sm:gap-x-4 sm:gap-y-1 font-extrabold tracking-tight">
-                            <span className="leading-[0.98] text-[3.35rem] sm:text-[3.9rem] lg:text-[4.55rem] text-[#E8C876]">
-                              {heroHighlightText}
-                            </span>
-                            <span className="leading-[0.98] text-[3rem] sm:text-[3.45rem] lg:text-[4.1rem] text-white/92">
-                              {heroTrailingText}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <p className={`max-w-xl text-white/60 leading-[1.5] ${compactTeacherWorkspaceHome ? 'mt-3 text-base xl:text-lg' : 'mt-5 text-lg'}`}>
-                        {heroDescription}
-                      </p>
-                      {hasSingleSubjectAccess && (
-                        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/75">
-                          <span className="text-[#D4A84B]">Access</span>
-                          <span>{PAPER_SUBJECT_LABELS[allowedSubjects[0]]} only</span>
-                        </div>
-                      )}
-                    </motion.div>
-
-                    <motion.div
-                      initial={{ opacity: 0, x: 30 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.6, delay: 0.2 }}
-                      className={`${subjectHeroImageClass} ${heroImageOffsetClass}`}
-                    >
-                      {compactTeacherWorkspaceHome ? (
-                        <div className="flex max-w-[780px] flex-col gap-3.5 lg:gap-4 lg:ml-auto">
-                          {heroWorkspaceSubjects.map((subject, index) => {
-                            const config = subjectModuleConfig[subject];
-
-                            return (
-                              <motion.button
-                                key={subject}
-                                type="button"
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.4, delay: 0.45 + index * 0.1 }}
-                                onClick={() => setSelectedSubject(subject)}
-                                className={`group flex min-h-[116px] w-full flex-col rounded-[22px] border bg-gradient-to-r ${config.surface} px-5 py-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:flex-row sm:items-center sm:gap-4`}
-                              >
-                                <div className="mb-3 flex items-start justify-between gap-4 sm:mb-0 sm:items-center">
-                                  <div className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-white shadow-sm ${config.accent}`}>
-                                    {config.icon}
-                                  </div>
-                                  <ArrowRight className="h-[18px] w-[18px] shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:hidden" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="text-[1.35rem] font-bold tracking-tight text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</h3>
-                                  <p className="mt-1.5 max-w-[26rem] text-[12px] leading-[1.75] text-slate-600">
-                                    {config.summary}
-                                  </p>
-                                </div>
-                                <div className="mt-4 flex items-center justify-between gap-4 text-[13px] sm:mt-0 sm:min-w-[156px] sm:flex-col sm:items-end sm:justify-center">
-                                  <span className="font-semibold text-[#1E3A5F]">{subjectCounts[subject] || 0} paper(s)</span>
-                                  <div className="flex items-center gap-2 text-slate-400">
-                                    <span>Enter module</span>
-                                    <ArrowRight className="hidden h-[18px] w-[18px] shrink-0 transition-transform group-hover:translate-x-1 group-hover:text-[#94A3B8] sm:block" />
-                                  </div>
-                                </div>
-                              </motion.button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="relative mx-auto max-w-[500px] xl:max-w-[540px]">
-                          <div className="absolute -inset-4 bg-[#D4A84B]/10 rounded-3xl blur-2xl" />
-                          <img
-                            src={dashboardHeroImage}
-                            alt={dashboardHeroAlt}
-                            className="relative w-full rounded-2xl opacity-90"
-                          />
-                        </div>
-                      )}
-                    </motion.div>
-                  </div>
-                </div>
-                {!compactTeacherWorkspaceHome && showTeacherSubjectPage && !hasSingleSubjectAccess ? (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-20 lg:bottom-24 z-20">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 lg:pl-14 xl:pl-16">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSubject(null)}
-                        className="pointer-events-auto inline-flex items-center gap-3.5 px-1 py-1 text-[15px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:text-white/90 lg:text-base"
-                      >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[#D4A84B]/30 bg-[#D4A84B]/16 text-[#F0C66A] shadow-[0_10px_24px_rgba(10,26,47,0.18)]">
-                          <ArrowLeft className="h-[18px] w-[18px]" />
-                        </span>
-                        <span className="pr-1">Back to Home</span>
-                      </button>
-                    </div>
-                  </div>
+          <div className="pureon-container">
+            <div className="pureon-page-head">
+              <div>
+                <div className="pureon-section-eyebrow">{teacherPageEyebrow}</div>
+                <h1 className="pureon-page-title mt-2">{teacherPageTitle}</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--pureon-muted)]">
+                  {teacherPageDescription}
+                </p>
+              </div>
+              <div className="pureon-page-head-actions">
+                {!showTeacherModules && !hasSingleSubjectAccess ? (
+                  <Button
+                    variant="outline"
+                    className="border-[var(--pureon-teal)] bg-transparent text-[var(--pureon-teal)] hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+                    onClick={() => setSelectedSubject(null)}
+                  >
+                    返回总览
+                  </Button>
                 ) : null}
+                <Button
+                  variant="outline"
+                  className="border-[var(--pureon-teal)] bg-transparent text-[var(--pureon-teal)] hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+                  onClick={() => navigate(`/paper-intake?subject=${teacherPrimarySubject}`)}
+                >
+                  题目录入
+                </Button>
+                <Button
+                  className="bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
+                  onClick={() => navigate(showTeacherModules ? "/question-bank" : "/paper-manager")}
+                >
+                  {showTeacherModules ? '查看题库' : '试卷管理'}
+                </Button>
               </div>
             </div>
 
-            {!compactTeacherWorkspaceHome ? (
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-              >
-                {showTeacherModules ? (
-                  <>
-                    <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">Choose a Subject Module</h2>
-                    <p className="text-slate-500 mb-8">
-                      Start by entering a subject, then choose one of the papers inside that module.
-                    </p>
-                  </>
-                ) : showTeacherSubjectPage && activeSubject ? (
-                  <>
-                    <h2 className="text-2xl font-bold text-[#1E3A5F] mb-2">{PAPER_SUBJECT_LABELS[activeSubject]} Assessments</h2>
-                    <p className="text-slate-500 mb-5">
-                      Choose a paper inside the {PAPER_SUBJECT_LABELS[activeSubject]} module.
-                    </p>
-                  </>
-                ) : null}
-              </motion.div>
+            <div className="pureon-stat-grid" data-columns="4">
+              <div className="pureon-stat-card" data-accent="teal">
+                <div className="pureon-stat-label">{showTeacherModules ? '学科模块' : '当前试卷'}</div>
+                <div className="pureon-stat-value">
+                  {showTeacherModules ? visibleSubjectModules.length : teacherPagePapers.length}
+                </div>
+                <div className="pureon-stat-foot">
+                  {showTeacherModules ? '可进入的学科数量' : '当前模块里的试卷数量'}
+                </div>
+              </div>
+              <div className="pureon-stat-card" data-accent="blue">
+                <div className="pureon-stat-label">题量覆盖</div>
+                <div className="pureon-stat-value">
+                  {showTeacherModules ? teacherTotalQuestions : teacherCurrentQuestions}
+                </div>
+                <div className="pureon-stat-foot">questions in workspace</div>
+              </div>
+              <div className="pureon-stat-card">
+                <div className="pureon-stat-label">章节总数</div>
+                <div className="pureon-stat-value">
+                  {showTeacherModules ? teacherTotalSections : teacherCurrentSections}
+                </div>
+                <div className="pureon-stat-foot">configured sections</div>
+              </div>
+              <div className="pureon-stat-card" data-accent={teacherDraftCount > 0 ? 'red' : 'teal'}>
+                <div className="pureon-stat-label">{showTeacherModules ? '待完善试卷' : '可直接使用'}</div>
+                <div className="pureon-stat-value">
+                  {showTeacherModules ? teacherDraftCount : teacherReadyCount}
+                </div>
+                <div className="pureon-stat-foot">
+                  {showTeacherModules ? '需要继续补内容的卷子' : '可直接开始练习的卷子'}
+                </div>
+              </div>
+            </div>
 
-              {showTeacherModules ? (
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  {visibleSubjectModules.map((subject, index) => {
+            {showTeacherModules ? (
+              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)]">
+                <div className="space-y-6">
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Workspace Summary</div>
+                    <div className="pureon-card-title">模块总览</div>
+                    <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                      <p>老师端现在统一进入后台工作台，不再用学生侧的大片 hero 结构。</p>
+                      <p>按学科进入后，可以继续管理题目录入、题库、试卷与测试记录，整体视觉跟你发来的后台 HTML 统一。</p>
+                      {hasSingleSubjectAccess ? (
+                        <p>
+                          当前账号锁定在 <strong className="text-[var(--pureon-teal)]">{PAPER_SUBJECT_LABELS[teacherPrimarySubject]}</strong> 学科。
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="pureon-activity-list mt-5">
+                      {heroWorkspaceSubjects.map((subject) => (
+                        <button
+                          key={`teacher-summary-${subject}`}
+                          type="button"
+                          onClick={() => setSelectedSubject(subject)}
+                          className="pureon-activity-item text-left"
+                        >
+                          <span className="pureon-activity-dot" />
+                          <div className="min-w-0">
+                            <div className="text-sm text-[var(--pureon-ink)]">{PAPER_SUBJECT_LABELS[subject]}</div>
+                            <div className="pureon-activity-meta">{subjectModuleConfig[subject].summary}</div>
+                          </div>
+                          <div className="pureon-activity-score">{subjectCounts[subject] || 0}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Quick Actions</div>
+                    <div className="pureon-card-title">常用入口</div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate(`/paper-intake?subject=${teacherPrimarySubject}`)}
+                      >
+                        录入新题
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate(`/tag-manager?subject=${teacherPrimarySubject}`)}
+                      >
+                        管理组卷
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate("/question-bank")}
+                      >
+                        打开题库
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate("/test-history")}
+                      >
+                        查看记录
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {heroWorkspaceSubjects.map((subject, index) => {
                     const config = subjectModuleConfig[subject];
+
                     return (
                       <motion.button
                         key={subject}
                         type="button"
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 14 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.45 + index * 0.1 }}
+                        transition={{ duration: 0.25, delay: 0.06 * index }}
                         onClick={() => setSelectedSubject(subject)}
-                        className={`group text-left rounded-3xl border bg-gradient-to-br ${config.surface} p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl`}
+                        className={`group flex min-h-[132px] w-full items-center gap-4 border bg-gradient-to-r ${config.surface} px-5 py-5 text-left shadow-[0_20px_40px_-30px_rgba(45,74,62,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-28px_rgba(45,74,62,0.42)]`}
                       >
-                        <div className={`mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ${config.accent}`}>
+                        <div className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border border-white/70 bg-white/85 shadow-sm ${config.accent}`}>
                           {config.icon}
                         </div>
-                        <div className="mb-3 flex items-center justify-between gap-4">
-                          <h3 className="text-2xl font-bold text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</h3>
-                          <ArrowRight className="w-5 h-5 text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-[#D4A84B]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[1.15rem] font-semibold text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</div>
+                          <div className="mt-2 text-sm leading-7 text-slate-600">{config.summary}</div>
                         </div>
-                        <p className="text-sm leading-relaxed text-slate-600">{config.summary}</p>
-                        <div className="mt-6 flex items-center justify-between text-sm">
-                          <span className="font-semibold text-slate-700">{subjectCounts[subject] || 0} paper(s)</span>
-                          <span className="text-slate-400">Enter module</span>
+                        <div className="text-right">
+                          <div className="font-[family-name:var(--font-display)] text-[1.05rem] text-[#1E3A5F]">
+                            {subjectCounts[subject] || 0} paper(s)
+                          </div>
+                          <div className="mt-3 inline-flex items-center gap-2 text-sm text-slate-400 transition-colors group-hover:text-[#1E3A5F]">
+                            <span>Enter module</span>
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                          </div>
                         </div>
                       </motion.button>
                     );
                   })}
                 </div>
-              ) : (
-                <>
-                  <div className="grid sm:grid-cols-2 gap-6">
-                    {filteredPapers.map((paper: Paper, i: number) => {
-                      const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
-                      const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
-                      const paperDisplayIcon = getPaperDisplayIcon(paper);
-
-                      return (
-                        <motion.button
-                          key={paper.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.4, delay: 0.5 + i * 0.15 }}
-                          onClick={() => onSelectPaper(paper.id)}
-                          className="group relative text-left rounded-2xl border-2 border-slate-200/80 bg-white p-8 hover:shadow-xl hover:border-[#D4A84B]/40 transition-all duration-300 hover:-translate-y-1"
-                        >
-                          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ArrowRight className="w-5 h-5 text-[#D4A84B]" />
-                          </div>
-                          <div className="flex items-center gap-4 mb-4">
-                            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl ${paperDisplayIcon.surface}`}>
-                              <span className="leading-none">{paperDisplayIcon.glyph}</span>
-                            </div>
-                            <div>
-                              <h3 className="font-[family-name:var(--font-body)] text-lg font-bold tracking-normal text-[#1E3A5F] transition-colors group-hover:text-[#D4A84B]">{paper.title}</h3>
-                            </div>
-                          </div>
-                          <div className="mb-4 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                              {PAPER_SUBJECT_LABELS[paper.subject]}
-                            </span>
-                            <span className="inline-flex items-center rounded-full bg-[#D4A84B]/10 px-3 py-1 text-xs font-semibold text-[#A97C21]">
-                              {PAPER_CATEGORY_LABELS[paper.category]}
-                            </span>
-                            {paper.tags?.slice(0, 2).map((tag) => (
-                              <span key={tag} className="inline-flex items-center rounded-full bg-[#1E3A5F]/5 px-3 py-1 text-xs font-medium text-[#1E3A5F]">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-sm text-slate-600 leading-relaxed mb-5">{paper.description}</p>
-                          <div className="flex flex-wrap gap-3">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1E3A5F]/5 text-[#1E3A5F] text-xs font-semibold">
-                              <BookOpen className="w-3.5 h-3.5" />
-                              {displaySectionsCount} Sections
-                            </span>
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-semibold">
-                              <GraduationCap className="w-3.5 h-3.5" />
-                              {displayQuestionsCount} Questions
-                            </span>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)]">
+                <div className="space-y-6">
+                  <div className="pureon-filter-bar">
+                    <div className="pureon-filter-row">
+                      <div className="pureon-filter-label">模块</div>
+                      <div className="pureon-pill-list">
+                        <span className="pureon-pill" data-active="true">
+                          {currentTeacherSubject ? PAPER_SUBJECT_LABELS[currentTeacherSubject] : 'Current Subject'}
+                        </span>
+                        <span className="pureon-pill">
+                          {teacherPagePapers.length} papers
+                        </span>
+                        <span className="pureon-pill">
+                          {teacherCurrentQuestions} questions
+                        </span>
+                      </div>
+                    </div>
+                    <div className="pureon-filter-row">
+                      <div className="pureon-filter-label">说明</div>
+                      <div className="text-sm leading-7 text-[var(--pureon-muted)]">
+                        点击任一试卷可以直接预览；右侧保留当前学科的工具入口，方便继续去录题、题库或试卷管理页。
+                      </div>
+                    </div>
                   </div>
-                  {filteredPapers.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-slate-500">
-                      No papers in this subject yet. Add one later and it will appear here automatically.
+
+                  {filteredPapers.length > 0 ? (
+                    <div className="pureon-list">
+                      {filteredPapers.map((paper, index) => {
+                        const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                        const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                        const isReady = isPaperReadyToStart(paper);
+
+                        return (
+                          <motion.button
+                            key={paper.id}
+                            type="button"
+                            onClick={() => onSelectPaper(paper.id)}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25, delay: 0.05 * index }}
+                            className="pureon-list-item text-left"
+                          >
+                            <div className="pureon-list-num">{String(index + 1).padStart(2, '0')}</div>
+                            <div className="min-w-0">
+                              <div className="pureon-list-tags">
+                                <span className="pureon-tag">{PAPER_SUBJECT_LABELS[paper.subject]}</span>
+                                <span className="pureon-tag" data-tone="gold">{PAPER_CATEGORY_LABELS[paper.category]}</span>
+                                <span className="pureon-tag" data-tone={isReady ? 'green' : 'red'}>
+                                  {isReady ? 'Ready' : 'Draft'}
+                                </span>
+                              </div>
+                              <div className="text-[1rem] font-semibold text-[var(--pureon-teal)]">{paper.title}</div>
+                              <div className="pureon-list-text mt-2">
+                                {paper.description || 'Open this paper to preview sections and continue management.'}
+                              </div>
+                            </div>
+                            <div className="pureon-list-stats">
+                              <strong>{displayQuestionsCount}Q</strong>
+                              <span>{displaySectionsCount} sections</span>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="pureon-card text-center">
+                      <div className="pureon-card-title">当前模块还没有试卷</div>
+                      <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                        先去题目录入或组卷体系页补内容，新的试卷会自动出现在这里。
+                      </p>
                     </div>
                   )}
-                </>
-              )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Subject Tools</div>
+                    <div className="pureon-card-title">模块工具</div>
+                    <div className="mt-5 grid gap-3">
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate(`/paper-intake?subject=${teacherPrimarySubject}`)}
+                      >
+                        继续录题
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate(`/tag-manager?subject=${teacherPrimarySubject}`)}
+                      >
+                        编辑组卷体系
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate("/question-bank")}
+                      >
+                        查看题库
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
+                        onClick={() => navigate("/paper-manager")}
+                      >
+                        管理试卷
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Coverage</div>
+                    <div className="pureon-card-title">当前模块概览</div>
+                    <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                      <p>
+                        当前模块共有 <strong className="text-[var(--pureon-teal)]">{teacherPagePapers.length}</strong> 份试卷，
+                        覆盖 <strong className="text-[var(--pureon-teal)]">{teacherCurrentSections}</strong> 个章节。
+                      </p>
+                      <p>
+                        已经可以直接练习的卷子有 <strong className="text-[var(--pureon-teal)]">{teacherReadyCount}</strong> 份，
+                        其余可继续完善后再开放。
+                      </p>
+                    </div>
+                    <div className="pureon-activity-list mt-5">
+                      {filteredPapers.slice(0, 4).map((paper) => (
+                        <button
+                          key={`teacher-paper-${paper.id}`}
+                          type="button"
+                          onClick={() => onSelectPaper(paper.id)}
+                          className="pureon-activity-item text-left"
+                        >
+                          <span className="pureon-activity-dot" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm text-[var(--pureon-ink)]">{paper.title}</div>
+                            <div className="pureon-activity-meta">
+                              {paper.sections.length} parts · {(paper.configuredQuestionsCount ?? paper.totalQuestions)} questions
+                            </div>
+                          </div>
+                          <div className="pureon-activity-score">{isPaperReadyToStart(paper) ? 'Ready' : 'Draft'}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-            ) : null}
+            )}
 
             <PureonFooter note="Teacher Workspace" />
           </div>

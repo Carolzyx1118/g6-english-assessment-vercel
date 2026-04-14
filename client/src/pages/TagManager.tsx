@@ -498,18 +498,24 @@ export default function TagManager() {
 
   return (
     <TeacherToolsLayout activeTool="tag-manager" currentSubject={subjectFilter}>
-      <div className="min-h-screen bg-[#F6F8FB] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="pureon-container">
         <div className="mx-auto max-w-6xl space-y-6">
-          <div className="space-y-4">
+          <div className="pureon-page-head">
             <div>
-              <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Teacher Home
-              </Link>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">Paper Generator</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Manage paper names, system types, parts, and practice filters here. Question intake reads these settings directly.
+              <div className="pureon-section-eyebrow">Teacher Tools · Paper Generator</div>
+              <h1 className="pureon-page-title mt-2">组卷体系</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--pureon-muted)]">
+                在这里管理试卷名称、系统模式、章节结构和练习规则，题目录入页会直接读取这些配置。
               </p>
+            </div>
+            <div className="pureon-page-head-actions">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 border border-[var(--pureon-teal)] px-4 py-2 text-sm text-[var(--pureon-teal)] transition-colors hover:bg-[var(--pureon-teal)] hover:text-[var(--pureon-paper)]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回老师首页
+              </Link>
             </div>
           </div>
 
