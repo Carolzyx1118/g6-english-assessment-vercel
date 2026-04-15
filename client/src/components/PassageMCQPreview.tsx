@@ -114,8 +114,8 @@ function BlankSlot({
             transition-all duration-150 cursor-pointer
             ${
               selectedAnswer
-                ? "border-[#1E3A5F] bg-[#1E3A5F]/5 text-[#1E3A5F] hover:bg-[#1E3A5F]/10"
-                : "border-dashed border-[#D4A84B] bg-amber-50 text-amber-700 hover:bg-amber-100"
+                ? "border-[var(--pureon-teal)] bg-[rgba(45,74,62,0.08)] text-[var(--pureon-teal)] hover:bg-[rgba(45,74,62,0.14)]"
+                : "border-dashed border-[var(--pureon-gold)] bg-[rgba(201,164,97,0.14)] text-[#8c6a2f] hover:bg-[rgba(201,164,97,0.2)]"
             }
           `}
         >
@@ -131,7 +131,10 @@ function BlankSlot({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto min-w-[200px] max-w-[300px] p-2" align="start">
+      <PopoverContent
+        className="w-auto min-w-[200px] max-w-[300px] border-[var(--pureon-rule)] bg-[var(--pureon-paper)] p-2 text-[var(--pureon-ink)]"
+        align="start"
+      >
         <p className="mb-2 px-2 text-xs font-semibold text-slate-500">
           Blank {blankNumber} — Choose one:
         </p>
@@ -146,8 +149,8 @@ function BlankSlot({
                   flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors
                   ${
                     selectedAnswer === option.label
-                      ? "bg-[#1E3A5F] text-white font-medium"
-                      : "hover:bg-slate-100 text-slate-700"
+                      ? "bg-[var(--pureon-teal)] text-[var(--pureon-paper)] font-medium"
+                      : "text-slate-700 hover:bg-[rgba(201,164,97,0.12)]"
                   }
                 `}
               >
@@ -156,8 +159,8 @@ function BlankSlot({
                     flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold
                     ${
                       selectedAnswer === option.label
-                        ? "bg-white text-[#1E3A5F]"
-                        : "bg-slate-200 text-slate-600"
+                        ? "bg-[var(--pureon-paper)] text-[var(--pureon-teal)]"
+                        : "bg-[rgba(201,164,97,0.18)] text-[var(--pureon-muted)]"
                     }
                   `}
                 >

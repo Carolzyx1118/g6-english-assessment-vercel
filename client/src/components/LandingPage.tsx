@@ -3,15 +3,22 @@ import PureonFooter from '@/components/PureonFooter';
 import { PureonBrand } from '@/components/PureonBrand';
 import StudentWorkspaceTopBar from '@/components/StudentWorkspaceTopBar';
 import { Button } from '@/components/ui/button';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import StudentInfoForm from '@/components/StudentInfoForm';
+import StudentPracticePage from '@/components/StudentPracticePage';
 import { PAPER_CATEGORY_LABELS, PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type Paper, type PaperSubject, type Section } from '@/data/papers';
 import { motion } from 'framer-motion';
 import { BookOpen, PenTool, FileText, ArrowRight, Headphones, Pencil, ArrowLeft, GraduationCap, LogOut, Sparkles, Languages, Calculator, BookText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis } from 'recharts';
 import { Link, useLocation } from 'wouter';
 import { useLocalAuth } from '@/hooks/useLocalAuth';
+import { trpc } from '@/lib/trpc';
 import { getPaperReadinessMessage, isPaperReadyToStart } from '@/lib/paperReadiness';
+import { buildTagSystemPapers } from '@/lib/tagSystemPapers';
+import type { EnglishExamTagSystem, SubjectTagSystem } from '@shared/englishQuestionTags';
 import TeacherToolsLayout from '@/components/TeacherToolsLayout';
+import type { ManualPaperBlueprint } from '@shared/manualPaperBlueprint';
 
 const DASHBOARD_HERO_IMAGE = '/teacher-workspace-hero.svg';
 const ENGLISH_DASHBOARD_HERO_IMAGE = '/teacher-english-hero.svg';
@@ -83,6 +90,15 @@ function normalizeSummaryText(value?: string) {
   return value?.trim().replace(/\s+/g, ' ').toLowerCase() || '';
 }
 
+function formatDashboardDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleDateString('en-SG', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 const sectionIcons: Record<string, React.ReactNode> = {
   vocabulary: <BookText className="w-6 h-6" />,
   grammar: <PenTool className="w-6 h-6" />,
@@ -99,24 +115,18 @@ const iconBgColors: Record<string, string> = {
   writing: 'bg-orange-100 text-orange-700',
 };
 
-const subjectModuleConfig: Record<PaperSubject, { icon: React.ReactNode; accent: string; surface: string; summary: string }> = {
+const subjectModuleConfig: Record<PaperSubject, { icon: React.ReactNode; focus: string[] }> = {
   english: {
     icon: <Languages className="w-7 h-7" />,
-    accent: 'text-sky-700',
-    surface: 'from-sky-50 to-indigo-50 border-sky-200/70',
-    summary: 'Reading, writing, speaking, grammar, and vocabulary assessments.',
+    focus: ['Reading', 'Writing', 'Speaking'],
   },
   math: {
     icon: <Calculator className="w-7 h-7" />,
-    accent: 'text-emerald-700',
-    surface: 'from-emerald-50 to-teal-50 border-emerald-200/70',
-    summary: 'Problem solving, calculation, reasoning, and future math papers.',
+    focus: ['Calculation', 'Reasoning', 'Application'],
   },
   vocabulary: {
     icon: <BookText className="w-7 h-7" />,
-    accent: 'text-amber-700',
-    surface: 'from-amber-50 to-orange-50 border-amber-200/70',
-    summary: 'Word study, meaning match, memorization, and vocabulary drills.',
+    focus: ['Meaning', 'Memory', 'Drills'],
   },
 };
 
@@ -137,6 +147,47 @@ const subjectHeroCopy: Record<PaperSubject, { badge: string; highlight: string; 
     description: "Review word study, meaning match, memorization, and vocabulary drills from one focused vocabulary workspace.",
   },
 };
+
+type StudentTagSystemConfig = EnglishExamTagSystem | SubjectTagSystem;
+
+type StudentQuestionBankSource = {
+  paperId: string;
+  title: string;
+  blueprint: ManualPaperBlueprint;
+};
+
+const teacherCoverageChartConfig = {
+  ready: {
+    label: 'Ready',
+    color: 'var(--pureon-teal)',
+  },
+  draft: {
+    label: 'Draft',
+    color: 'var(--pureon-gold)',
+  },
+} satisfies ChartConfig;
+
+const teacherTrendChartConfig = {
+  submissions: {
+    label: 'Submissions',
+    color: 'var(--pureon-blue)',
+  },
+} satisfies ChartConfig;
+
+const teacherReportStatusChartConfig = {
+  completed: {
+    label: 'Completed',
+    color: 'var(--pureon-teal)',
+  },
+  pending: {
+    label: 'Pending',
+    color: 'var(--pureon-gold)',
+  },
+  raw: {
+    label: 'Raw',
+    color: 'var(--pureon-muted)',
+  },
+} satisfies ChartConfig;
 
 function TeacherWorkspaceTopBar() {
   const { user, isAuthenticated, isTeacher, logout } = useLocalAuth();
@@ -184,11 +235,39 @@ function TeacherWorkspaceTopBar() {
 
 // ========== PAPER SELECTION PAGE ==========
 
-function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string) => void }) {
-  const { papers } = useQuiz();
+function PaperSelectionPage({
+  onSelectPaper,
+  studentMode = 'test',
+  onStudentModeChange,
+}: {
+  onSelectPaper: (paperId: string) => void;
+  studentMode?: 'test' | 'practice';
+  onStudentModeChange?: (mode: 'test' | 'practice') => void;
+}) {
+  const { papers, previewPaper } = useQuiz();
   const { user, isTeacher } = useLocalAuth();
   const [, navigate] = useLocation();
   const [selectedSubject, setSelectedSubject] = useState<PaperSubject | null>(null);
+  const questionBankQuery = trpc.papers.listQuestionBankPapers.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !isTeacher,
+  });
+  const englishTagSystemsQuery = trpc.papers.getEnglishTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !isTeacher,
+  });
+  const mathTagSystemsQuery = trpc.papers.getMathTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !isTeacher,
+  });
+  const vocabularyTagSystemsQuery = trpc.papers.getVocabularyTagSystems.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !isTeacher,
+  });
   const visiblePapers = useMemo(
     () => papers.filter((paper) => !paper.hiddenFromStudentSelection),
     [papers],
@@ -223,12 +302,58 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ),
     [visiblePapers, activeSubject],
   );
-  const subjectCounts = useMemo(
-    () => Object.fromEntries(
-      visibleSubjectModules.map((subject) => [subject, visiblePapers.filter((paper) => paper.subject === subject).length]),
-    ) as Record<PaperSubject, number>,
-    [visiblePapers, visibleSubjectModules],
+  const tagSystemsBySubject = useMemo<Record<PaperSubject, StudentTagSystemConfig[]>>(
+    () => ({
+      english: englishTagSystemsQuery.data ?? [],
+      math: mathTagSystemsQuery.data ?? [],
+      vocabulary: vocabularyTagSystemsQuery.data ?? [],
+    }),
+    [
+      englishTagSystemsQuery.data,
+      mathTagSystemsQuery.data,
+      vocabularyTagSystemsQuery.data,
+    ],
   );
+  const questionBankSourceBySubject = useMemo<Record<PaperSubject, StudentQuestionBankSource[]>>(
+    () => (
+      (questionBankQuery.data ?? []).reduce<Record<PaperSubject, StudentQuestionBankSource[]>>((accumulator, paper) => {
+        const subject = PAPER_SUBJECT_ORDER.includes(paper.subject as PaperSubject)
+          ? (paper.subject as PaperSubject)
+          : null;
+        if (!subject || !allowedSubjects.includes(subject)) {
+          return accumulator;
+        }
+
+        try {
+          accumulator[subject].push({
+            paperId: paper.paperId,
+            title: paper.title,
+            blueprint: JSON.parse(paper.blueprintJson) as ManualPaperBlueprint,
+          });
+        } catch {
+          return accumulator;
+        }
+
+        return accumulator;
+      }, {
+        english: [],
+        math: [],
+        vocabulary: [],
+      })
+    ),
+    [allowedSubjects, questionBankQuery.data],
+  );
+  const assessmentSystemConfigByPaperId = useMemo(() => {
+    const configMap = new Map<string, StudentTagSystemConfig>();
+    (Object.entries(tagSystemsBySubject) as Array<[PaperSubject, StudentTagSystemConfig[]]>).forEach(([subject, systems]) => {
+      systems
+        .filter((system) => system.published !== false && system.systemMode === 'assessment')
+        .forEach((system) => {
+          configMap.set(`tag-system-${subject}-${system.id}`, system);
+        });
+    });
+    return configMap;
+  }, [tagSystemsBySubject]);
   useEffect(() => {
     if (hasSingleSubjectAccess) {
       setSelectedSubject(allowedSubjects[0]);
@@ -246,6 +371,24 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       setSelectedSubject(null);
     }
   }, [allowedSubjects, hasSingleSubjectAccess, isTeacher, selectedSubject]);
+  const handleStudentPaperSelect = (paper: Paper) => {
+    const systemConfig = assessmentSystemConfigByPaperId.get(paper.id);
+    if (systemConfig && paper.category === 'assessment' && paper.isGeneratedPaper) {
+      const regeneratedPaper = buildTagSystemPapers(
+        paper.subject,
+        [systemConfig],
+        questionBankSourceBySubject[paper.subject],
+      )[0];
+
+      previewPaper({
+        ...(regeneratedPaper || paper),
+        isEphemeralPaper: true,
+      });
+      return;
+    }
+
+    onSelectPaper(paper.id);
+  };
 
   const currentTeacherSubject = showTeacherSubjectPage && activeSubject
     ? activeSubject
@@ -299,40 +442,40 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     ? 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4 lg:flex-nowrap'
     : 'flex flex-wrap items-baseline gap-x-3 gap-y-2 sm:gap-x-4';
   const studentPagePapers = showStudentModules ? visiblePapers : filteredPapers;
-  const studentTotalQuestions = useMemo(
-    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
-    [visiblePapers],
+  const studentAssessmentPapers = useMemo(
+    () => studentPagePapers.filter((paper) => paper.isGeneratedPaper && paper.category === 'assessment'),
+    [studentPagePapers],
   );
-  const studentTotalSections = useMemo(
-    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredSectionsCount ?? paper.sections.length), 0),
-    [visiblePapers],
+  const studentDirectPapers = useMemo(
+    () => studentPagePapers.filter((paper) => !(paper.isGeneratedPaper && paper.category === 'assessment')),
+    [studentPagePapers],
+  );
+  const studentTotalQuestions = useMemo(
+    () => studentAssessmentPapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
+    [studentAssessmentPapers],
   );
   const studentRecentPapers = useMemo(
-    () => (showStudentModules ? visiblePapers : filteredPapers).slice(0, 4),
-    [filteredPapers, showStudentModules, visiblePapers],
+    () => [...studentAssessmentPapers, ...studentDirectPapers].slice(0, 4),
+    [studentAssessmentPapers, studentDirectPapers],
   );
-  const studentPrimaryActionPaper = (activeSubject ? filteredPapers[0] : visiblePapers[0]) ?? null;
+  const studentPrimaryActionPaper = (studentAssessmentPapers[0] ?? studentDirectPapers[0]) ?? null;
   const studentPageTitle = showStudentModules
-    ? '学习概览'
+    ? '测试模式'
     : activeSubject
-      ? `${PAPER_SUBJECT_LABELS[activeSubject]}题库`
-      : '我的题库';
+      ? `${PAPER_SUBJECT_LABELS[activeSubject]}测试`
+      : '我的测试';
   const studentPageEyebrow = showStudentModules
-    ? `Good afternoon, ${user?.displayName || user?.username || 'Student'}`
-    : `Question Bank · ${activeSubject ? PAPER_SUBJECT_LABELS[activeSubject] : 'All Subjects'}`;
+    ? `Test Mode · ${user?.displayName || user?.username || 'Student'}`
+    : `Assessment Systems · ${activeSubject ? PAPER_SUBJECT_LABELS[activeSubject] : 'All Subjects'}`;
   const studentPageDescription = showStudentModules
-    ? '从你可见的学科与试卷中选择一份开始练习，或先浏览错题与最近活动。'
-    : '按学科筛选试卷后开始一套完整练习。';
+    ? '测试模式会按老师配置的组卷体系随机生成整份试卷；如果老师单独分发了试卷，也会在这里一起显示。'
+    : '先选学科，再从组卷体系里随机生成一套测试。';
   const teacherPrimarySubject = currentTeacherSubject ?? visibleSubjectModules[0] ?? allowedSubjects[0] ?? 'english';
+  const teacherResultsQuery = trpc.results.list.useQuery(undefined, {
+    enabled: isTeacher,
+    staleTime: 30_000,
+  });
   const teacherPagePapers = currentTeacherSubject ? filteredPapers : visiblePapers;
-  const teacherTotalQuestions = useMemo(
-    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
-    [visiblePapers],
-  );
-  const teacherTotalSections = useMemo(
-    () => visiblePapers.reduce((sum, paper) => sum + (paper.configuredSectionsCount ?? paper.sections.length), 0),
-    [visiblePapers],
-  );
   const teacherCurrentQuestions = useMemo(
     () => teacherPagePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0),
     [teacherPagePapers],
@@ -346,6 +489,121 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
     [visiblePapers],
   );
   const teacherDraftCount = Math.max(visiblePapers.length - teacherReadyCount, 0);
+  const teacherSubjectOverview = useMemo(
+    () => heroWorkspaceSubjects.map((subject) => {
+      const papersForSubject = visiblePapers.filter((paper) => paper.subject === subject);
+      const readyCount = papersForSubject.filter((paper) => isPaperReadyToStart(paper)).length;
+      const draftCount = Math.max(papersForSubject.length - readyCount, 0);
+      const sectionsCount = papersForSubject.reduce(
+        (sum, paper) => sum + (paper.configuredSectionsCount ?? paper.sections.length),
+        0,
+      );
+      const questionsCount = papersForSubject.reduce(
+        (sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions),
+        0,
+      );
+
+      return {
+        subject,
+        papersCount: papersForSubject.length,
+        readyCount,
+        draftCount,
+        sectionsCount,
+        questionsCount,
+      };
+    }),
+    [heroWorkspaceSubjects, visiblePapers],
+  );
+  const teacherResults = useMemo(
+    () => (teacherResultsQuery.data ?? [])
+      .filter((item) => !item.paperSubject || allowedSubjects.includes(item.paperSubject as PaperSubject))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [allowedSubjects, teacherResultsQuery.data],
+  );
+  const teacherReadyRate = visiblePapers.length > 0
+    ? Math.round((teacherReadyCount / visiblePapers.length) * 100)
+    : 0;
+  const teacherAverageScore = useMemo(() => {
+    const scorableResults = teacherResults.filter((item) => item.totalQuestions > 0);
+    if (scorableResults.length === 0) {
+      return 0;
+    }
+
+    const totalPercentage = scorableResults.reduce((sum, item) => (
+      sum + ((item.totalCorrect / item.totalQuestions) * 100)
+    ), 0);
+
+    return Math.round(totalPercentage / scorableResults.length);
+  }, [teacherResults]);
+  const teacherRecentSubmissionCount = useMemo(() => {
+    const sevenDaysAgo = Date.now() - (6 * 24 * 60 * 60 * 1000);
+    return teacherResults.filter((item) => new Date(item.createdAt).getTime() >= sevenDaysAgo).length;
+  }, [teacherResults]);
+  const teacherResultsBySubject = useMemo(() => {
+    const counts: Record<PaperSubject, number> = {
+      english: 0,
+      math: 0,
+      vocabulary: 0,
+    };
+
+    teacherResults.forEach((item) => {
+      if (PAPER_SUBJECT_ORDER.includes(item.paperSubject as PaperSubject)) {
+        counts[item.paperSubject as PaperSubject] += 1;
+      }
+    });
+
+    return counts;
+  }, [teacherResults]);
+  const teacherCoverageChartData = useMemo(
+    () => teacherSubjectOverview.map((item) => ({
+      subject: PAPER_SUBJECT_LABELS[item.subject],
+      ready: item.readyCount,
+      draft: item.draftCount,
+      papers: item.papersCount,
+      questions: item.questionsCount,
+      submissions: teacherResultsBySubject[item.subject],
+    })),
+    [teacherResultsBySubject, teacherSubjectOverview],
+  );
+  const teacherSubmissionTrend = useMemo(() => {
+    return Array.from({ length: 7 }, (_, offset) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - (6 - offset));
+
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+
+      const dayResults = teacherResults.filter((item) => {
+        const createdAt = new Date(item.createdAt).getTime();
+        return createdAt >= date.getTime() && createdAt < nextDate.getTime();
+      });
+
+      return {
+        label: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
+        submissions: dayResults.length,
+      };
+    });
+  }, [teacherResults]);
+  const teacherTrendHasData = teacherSubmissionTrend.some((item) => item.submissions > 0);
+  const teacherReportStatusData = useMemo(() => {
+    const completed = teacherResults.filter((item) => item.reportStatus === 'completed').length;
+    const pending = teacherResults.filter((item) => item.reportStatus === 'pending-review').length;
+    const raw = teacherResults.length - completed - pending;
+
+    return [
+      { key: 'completed', label: 'Completed', value: completed, fill: 'var(--color-completed)' },
+      { key: 'pending', label: 'Pending', value: pending, fill: 'var(--color-pending)' },
+      { key: 'raw', label: 'Raw', value: Math.max(raw, 0), fill: 'var(--color-raw)' },
+    ];
+  }, [teacherResults]);
+  const teacherReportStatusTotal = teacherReportStatusData.reduce((sum, item) => sum + item.value, 0);
+  const teacherRecentResults = teacherResults.slice(0, 5);
+  const teacherMostActiveSubject = useMemo(() => {
+    const entries = Object.entries(teacherResultsBySubject) as Array<[PaperSubject, number]>;
+    const topEntry = entries.sort((left, right) => right[1] - left[1])[0];
+    return topEntry && topEntry[1] > 0 ? PAPER_SUBJECT_LABELS[topEntry[0]] : 'No results yet';
+  }, [teacherResultsBySubject]);
   const teacherPageTitle = showTeacherModules
     ? '教师工作台'
     : `${currentTeacherSubject ? PAPER_SUBJECT_LABELS[currentTeacherSubject] : '学科'}模块`;
@@ -395,144 +653,320 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               </div>
             </div>
 
-            <div className="pureon-stat-grid" data-columns="4">
-              <div className="pureon-stat-card" data-accent="teal">
-                <div className="pureon-stat-label">{showTeacherModules ? '学科模块' : '当前试卷'}</div>
-                <div className="pureon-stat-value">
-                  {showTeacherModules ? visibleSubjectModules.length : teacherPagePapers.length}
+            {!showTeacherModules ? (
+              <div className="pureon-stat-grid" data-columns="4">
+                <div className="pureon-stat-card" data-accent="teal">
+                  <div className="pureon-stat-label">当前试卷</div>
+                  <div className="pureon-stat-value">{teacherPagePapers.length}</div>
+                  <div className="pureon-stat-foot">当前模块里的试卷数量</div>
                 </div>
-                <div className="pureon-stat-foot">
-                  {showTeacherModules ? '可进入的学科数量' : '当前模块里的试卷数量'}
+                <div className="pureon-stat-card" data-accent="gold">
+                  <div className="pureon-stat-label">题量覆盖</div>
+                  <div className="pureon-stat-value">{teacherCurrentQuestions}</div>
+                  <div className="pureon-stat-foot">questions in workspace</div>
                 </div>
-              </div>
-              <div className="pureon-stat-card" data-accent="blue">
-                <div className="pureon-stat-label">题量覆盖</div>
-                <div className="pureon-stat-value">
-                  {showTeacherModules ? teacherTotalQuestions : teacherCurrentQuestions}
+                <div className="pureon-stat-card" data-accent="blue">
+                  <div className="pureon-stat-label">章节总数</div>
+                  <div className="pureon-stat-value">{teacherCurrentSections}</div>
+                  <div className="pureon-stat-foot">configured sections</div>
                 </div>
-                <div className="pureon-stat-foot">questions in workspace</div>
-              </div>
-              <div className="pureon-stat-card">
-                <div className="pureon-stat-label">章节总数</div>
-                <div className="pureon-stat-value">
-                  {showTeacherModules ? teacherTotalSections : teacherCurrentSections}
-                </div>
-                <div className="pureon-stat-foot">configured sections</div>
-              </div>
-              <div className="pureon-stat-card" data-accent={teacherDraftCount > 0 ? 'red' : 'teal'}>
-                <div className="pureon-stat-label">{showTeacherModules ? '待完善试卷' : '可直接使用'}</div>
-                <div className="pureon-stat-value">
-                  {showTeacherModules ? teacherDraftCount : teacherReadyCount}
-                </div>
-                <div className="pureon-stat-foot">
-                  {showTeacherModules ? '需要继续补内容的卷子' : '可直接开始练习的卷子'}
+                <div className="pureon-stat-card" data-accent={teacherDraftCount > 0 ? 'red' : 'teal'}>
+                  <div className="pureon-stat-label">可直接使用</div>
+                  <div className="pureon-stat-value">{teacherReadyCount}</div>
+                  <div className="pureon-stat-foot">可直接开始练习的卷子</div>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {showTeacherModules ? (
-              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)]">
-                <div className="space-y-6">
+              <div className="mt-6 space-y-6">
+                <div className="pureon-stat-grid" data-columns="4">
+                  <div className="pureon-stat-card" data-accent="teal">
+                    <div className="pureon-stat-label">学科模块</div>
+                    <div className="pureon-stat-value">{visibleSubjectModules.length}</div>
+                    <div className="pureon-stat-foot">active workspaces</div>
+                  </div>
+                  <div className="pureon-stat-card" data-accent="blue">
+                    <div className="pureon-stat-label">就绪比例</div>
+                    <div className="pureon-stat-value">{teacherReadyRate}%</div>
+                    <div className="pureon-stat-foot">{teacherReadyCount} / {visiblePapers.length} ready papers</div>
+                  </div>
+                  <div className="pureon-stat-card" data-accent="gold">
+                    <div className="pureon-stat-label">近 7 天提交</div>
+                    <div className="pureon-stat-value">{teacherRecentSubmissionCount}</div>
+                    <div className="pureon-stat-foot">saved test records</div>
+                  </div>
+                  <div className="pureon-stat-card" data-accent="red">
+                    <div className="pureon-stat-label">平均得分</div>
+                    <div className="pureon-stat-value">{teacherAverageScore}%</div>
+                    <div className="pureon-stat-foot">across saved submissions</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)] xl:items-start">
                   <div className="pureon-card">
-                    <div className="pureon-card-eyebrow">Workspace Summary</div>
-                    <div className="pureon-card-title">模块总览</div>
-                    <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--pureon-muted)]">
-                      <p>老师端现在统一进入后台工作台，不再用学生侧的大片 hero 结构。</p>
-                      <p>按学科进入后，可以继续管理题目录入、题库、试卷与测试记录，整体视觉跟你发来的后台 HTML 统一。</p>
-                      {hasSingleSubjectAccess ? (
-                        <p>
-                          当前账号锁定在 <strong className="text-[var(--pureon-teal)]">{PAPER_SUBJECT_LABELS[teacherPrimarySubject]}</strong> 学科。
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="pureon-activity-list mt-5">
-                      {heroWorkspaceSubjects.map((subject) => (
-                        <button
-                          key={`teacher-summary-${subject}`}
-                          type="button"
-                          onClick={() => setSelectedSubject(subject)}
-                          className="pureon-activity-item text-left"
-                        >
-                          <span className="pureon-activity-dot" />
-                          <div className="min-w-0">
-                            <div className="text-sm text-[var(--pureon-ink)]">{PAPER_SUBJECT_LABELS[subject]}</div>
-                            <div className="pureon-activity-meta">{subjectModuleConfig[subject].summary}</div>
-                          </div>
-                          <div className="pureon-activity-score">{subjectCounts[subject] || 0}</div>
-                        </button>
-                      ))}
+                    <div className="pureon-card-eyebrow">Coverage Chart</div>
+                    <div className="pureon-card-title">学科覆盖与就绪情况</div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                      先看每个学科当前有多少 ready / draft 试卷，再决定老师端这周先补哪一块。
+                    </p>
+                    <ChartContainer config={teacherCoverageChartConfig} className="mt-5 h-[250px] w-full aspect-auto">
+                      <BarChart data={teacherCoverageChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="subject"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={10}
+                        />
+                        <ChartTooltip
+                          cursor={false}
+                          content={<ChartTooltipContent indicator="line" />}
+                        />
+                        <Bar dataKey="ready" stackId="papers" fill="var(--color-ready)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="draft" stackId="papers" fill="var(--color-draft)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Most Active Subject</div>
+                        <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
+                          {teacherMostActiveSubject}
+                        </div>
+                      </div>
+                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Question Coverage</div>
+                        <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
+                          {visiblePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0)}
+                        </div>
+                      </div>
+                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Draft Queue</div>
+                        <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
+                          {teacherDraftCount}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="pureon-card">
-                    <div className="pureon-card-eyebrow">Quick Actions</div>
-                    <div className="pureon-card-title">常用入口</div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      <Button
-                        variant="outline"
-                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
-                        onClick={() => navigate(`/paper-intake?subject=${teacherPrimarySubject}`)}
-                      >
-                        录入新题
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
-                        onClick={() => navigate(`/tag-manager?subject=${teacherPrimarySubject}`)}
-                      >
-                        管理组卷
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
-                        onClick={() => navigate("/question-bank")}
-                      >
-                        打开题库
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)]"
-                        onClick={() => navigate("/test-history")}
-                      >
-                        查看记录
-                      </Button>
+                  <div className="space-y-6">
+                    <div className="pureon-card">
+                      <div className="pureon-card-eyebrow">Submission Trend</div>
+                      <div className="pureon-card-title">最近 7 天提交走势</div>
+                      {teacherTrendHasData ? (
+                        <ChartContainer config={teacherTrendChartConfig} className="mt-5 h-[220px] w-full aspect-auto">
+                          <LineChart data={teacherSubmissionTrend} margin={{ top: 8, right: 12, left: -20, bottom: 0 }}>
+                            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="label"
+                              tickLine={false}
+                              axisLine={false}
+                              tickMargin={10}
+                            />
+                            <ChartTooltip
+                              cursor={false}
+                              content={<ChartTooltipContent indicator="line" />}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="submissions"
+                              stroke="var(--color-submissions)"
+                              strokeWidth={2.5}
+                              dot={{ fill: 'var(--color-submissions)', r: 3 }}
+                              activeDot={{ r: 4 }}
+                            />
+                          </LineChart>
+                        </ChartContainer>
+                      ) : (
+                        <div className="mt-5 border border-dashed border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.4)] px-4 py-8 text-sm leading-7 text-[var(--pureon-muted)]">
+                          还没有可展示的提交趋势。等学生开始做题后，这里会显示最近一周的提交节奏。
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pureon-card">
+                      <div className="pureon-card-eyebrow">Report Mix</div>
+                      <div className="pureon-card-title">批改状态分布</div>
+                      <div className="mt-5 grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
+                        {teacherReportStatusTotal > 0 ? (
+                          <ChartContainer config={teacherReportStatusChartConfig} className="mx-auto h-[180px] w-full max-w-[180px] aspect-square">
+                            <PieChart>
+                              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                              <Pie
+                                data={teacherReportStatusData}
+                                dataKey="value"
+                                nameKey="label"
+                                innerRadius={46}
+                                outerRadius={72}
+                                strokeWidth={2}
+                              >
+                                {teacherReportStatusData.map((item) => (
+                                  <Cell key={item.key} fill={item.fill} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </ChartContainer>
+                        ) : (
+                          <div className="mx-auto flex h-[180px] w-[180px] items-center justify-center border border-dashed border-[var(--pureon-rule)] text-center text-sm text-[var(--pureon-muted)]">
+                            No results
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          {teacherReportStatusData.map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3 border-b border-dashed border-[rgba(200,189,160,0.62)] pb-3 last:border-b-0 last:pb-0">
+                              <div className="flex items-center gap-3">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                                <span className="text-sm text-[var(--pureon-muted)]">{item.label}</span>
+                              </div>
+                              <strong className="font-[family-name:var(--font-display)] text-[1rem] text-[var(--pureon-teal)]">{item.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {heroWorkspaceSubjects.map((subject, index) => {
-                    const config = subjectModuleConfig[subject];
+                <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.76fr)_minmax(0,1.24fr)] xl:items-start">
+                  <div className="space-y-6">
+                    <div className="pureon-card">
+                      <div className="pureon-card-eyebrow">Queue</div>
+                      <div className="pureon-card-title">当前队列</div>
+                      <div className="pureon-queue-list mt-5">
+                        {teacherSubjectOverview.map((item) => (
+                          <button
+                            key={`teacher-queue-${item.subject}`}
+                            type="button"
+                            onClick={() => setSelectedSubject(item.subject)}
+                            className="pureon-queue-item text-left"
+                          >
+                            <div>
+                              <div className="text-sm font-semibold text-[var(--pureon-teal)]">
+                                {PAPER_SUBJECT_LABELS[item.subject]}
+                              </div>
+                              <div className="pureon-activity-meta">
+                                {item.papersCount} 份试卷 · {item.sectionsCount} 个章节
+                              </div>
+                            </div>
+                            <div className="pureon-queue-meta">
+                              <span>{item.readyCount} ready</span>
+                              <strong>{item.draftCount} draft</strong>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                    return (
-                      <motion.button
-                        key={subject}
-                        type="button"
-                        initial={{ opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.25, delay: 0.06 * index }}
-                        onClick={() => setSelectedSubject(subject)}
-                        className={`group flex min-h-[132px] w-full items-center gap-4 border bg-gradient-to-r ${config.surface} px-5 py-5 text-left shadow-[0_20px_40px_-30px_rgba(45,74,62,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-28px_rgba(45,74,62,0.42)]`}
-                      >
-                        <div className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border border-white/70 bg-white/85 shadow-sm ${config.accent}`}>
-                          {config.icon}
+                    <div className="pureon-card">
+                      <div className="pureon-card-eyebrow">Recent Results</div>
+                      <div className="pureon-card-title">最近提交记录</div>
+                      {teacherResultsQuery.isLoading ? (
+                        <div className="mt-5 text-sm text-[var(--pureon-muted)]">Loading recent submissions...</div>
+                      ) : teacherRecentResults.length > 0 ? (
+                        <div className="pureon-activity-list mt-5">
+                          {teacherRecentResults.map((item) => {
+                            const percentage = item.totalQuestions > 0
+                              ? Math.round((item.totalCorrect / item.totalQuestions) * 100)
+                              : 0;
+
+                            return (
+                              <button
+                                key={`teacher-result-${item.id}`}
+                                type="button"
+                                onClick={() => navigate(`/test-history?id=${item.id}`)}
+                                className="pureon-activity-item w-full text-left"
+                              >
+                                <span className="pureon-activity-dot" />
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm text-[var(--pureon-ink)]">
+                                    {item.studentName} · {item.paperTitle}
+                                  </div>
+                                  <div className="pureon-activity-meta">
+                                    {PAPER_SUBJECT_ORDER.includes(item.paperSubject as PaperSubject)
+                                      ? PAPER_SUBJECT_LABELS[item.paperSubject as PaperSubject]
+                                      : 'Unknown Subject'}
+                                    {' · '}
+                                    {formatDashboardDate(item.createdAt)}
+                                  </div>
+                                </div>
+                                <div className="pureon-activity-score">{percentage}%</div>
+                              </button>
+                            );
+                          })}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[1.15rem] font-semibold text-[#1E3A5F]">{PAPER_SUBJECT_LABELS[subject]}</div>
-                          <div className="mt-2 text-sm leading-7 text-slate-600">{config.summary}</div>
+                      ) : (
+                        <div className="mt-5 border border-dashed border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.4)] px-4 py-6 text-sm leading-7 text-[var(--pureon-muted)]">
+                          还没有学生提交记录。等第一次测试保存后，这里会开始显示最近结果。
                         </div>
-                        <div className="text-right">
-                          <div className="font-[family-name:var(--font-display)] text-[1.05rem] text-[#1E3A5F]">
-                            {subjectCounts[subject] || 0} paper(s)
-                          </div>
-                          <div className="mt-3 inline-flex items-center gap-2 text-sm text-slate-400 transition-colors group-hover:text-[#1E3A5F]">
-                            <span>Enter module</span>
-                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                          </div>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Subject Modules</div>
+                    <div className="pureon-card-title">进入学科模块</div>
+                    <div className="pureon-module-grid pureon-module-grid--stack mt-6">
+                      {teacherSubjectOverview.map((item, index) => {
+                        const subject = item.subject;
+                        const config = subjectModuleConfig[subject];
+
+                        return (
+                          <motion.button
+                            key={subject}
+                            type="button"
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25, delay: 0.06 * index }}
+                            onClick={() => setSelectedSubject(subject)}
+                            data-subject={subject}
+                            className="group pureon-module-card pureon-module-card--compact flex min-h-[144px] w-full items-start gap-3 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1"
+                          >
+                            <div className="pureon-module-icon inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px]">
+                              {config.icon}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="pureon-module-title text-[1.02rem] font-semibold">{PAPER_SUBJECT_LABELS[subject]}</div>
+                                <span className="pureon-tag" data-tone={item.draftCount > 0 ? 'gold' : 'green'}>
+                                  {item.draftCount > 0 ? `${item.draftCount} draft` : 'ready'}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {config.focus.map((focus) => (
+                                  <span key={`${subject}-${focus}`} className="pureon-tag pureon-module-focus">
+                                    {focus}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="pureon-module-stats pureon-module-stats--compact mt-3">
+                                <div className="pureon-module-stat">
+                                  <span>试卷</span>
+                                  <strong>{item.papersCount}</strong>
+                                </div>
+                                <div className="pureon-module-stat">
+                                  <span>章节</span>
+                                  <strong>{item.sectionsCount}</strong>
+                                </div>
+                                <div className="pureon-module-stat">
+                                  <span>题量</span>
+                                  <strong>{item.questionsCount}</strong>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="pureon-module-status font-[family-name:var(--font-display)] text-[0.8rem] uppercase tracking-[0.12em]">
+                                {item.readyCount} ready
+                              </div>
+                              <div className="pureon-module-action mt-2 inline-flex items-center gap-2 text-[0.9rem] transition-colors">
+                                <span>Enter module</span>
+                                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                              </div>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -689,7 +1123,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
       ) : (
         <div className="min-h-screen bg-[var(--background)]">
           <StudentWorkspaceTopBar
-            active={showStudentModules ? 'home' : 'filter'}
+            active={showStudentModules ? 'home' : studentMode === 'practice' ? 'practice' : 'filter'}
             onHomeClick={() => setSelectedSubject(null)}
             onQuestionBankClick={() => {
               if (showStudentModules) {
@@ -697,8 +1131,12 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               }
             }}
             onPracticeClick={() => {
+              if (onStudentModeChange) {
+                onStudentModeChange('practice');
+                return;
+              }
               if (studentPrimaryActionPaper) {
-                onSelectPaper(studentPrimaryActionPaper.id);
+                handleStudentPaperSelect(studentPrimaryActionPaper);
                 return;
               }
               if (visibleSubjectModules[0]) {
@@ -716,6 +1154,26 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--pureon-muted)]">
                   {studentPageDescription}
                 </p>
+                {!isTeacher ? (
+                  <div className="pureon-pill-list mt-5">
+                    <button
+                      type="button"
+                      className="pureon-pill"
+                      data-active={studentMode === 'test' ? 'true' : 'false'}
+                      onClick={() => onStudentModeChange?.('test')}
+                    >
+                      测试模式
+                    </button>
+                    <button
+                      type="button"
+                      className="pureon-pill"
+                      data-active={studentMode === 'practice' ? 'true' : 'false'}
+                      onClick={() => onStudentModeChange?.('practice')}
+                    >
+                      刷题模式
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className="pureon-page-head-actions">
                 {!showStudentModules ? (
@@ -739,7 +1197,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   className="bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
                   onClick={() => {
                     if (studentPrimaryActionPaper) {
-                      onSelectPaper(studentPrimaryActionPaper.id);
+                      handleStudentPaperSelect(studentPrimaryActionPaper);
                       return;
                     }
                     if (visibleSubjectModules[0]) {
@@ -748,31 +1206,31 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   }}
                   disabled={!studentPrimaryActionPaper && visibleSubjectModules.length === 0}
                 >
-                  开始练习
+                  开始测试
                 </Button>
               </div>
             </div>
 
             <div className="pureon-stat-grid" data-columns="4">
               <div className="pureon-stat-card" data-accent="teal">
-                <div className="pureon-stat-label">可用试卷</div>
-                <div className="pureon-stat-value">{visiblePapers.length}</div>
-                <div className="pureon-stat-foot">已开放练习入口</div>
+                <div className="pureon-stat-label">考试体系</div>
+                <div className="pureon-stat-value">{studentAssessmentPapers.length}</div>
+                <div className="pureon-stat-foot">published systems</div>
               </div>
               <div className="pureon-stat-card" data-accent="blue">
-                <div className="pureon-stat-label">覆盖题量</div>
+                <div className="pureon-stat-label">随机题量</div>
                 <div className="pureon-stat-value">{studentTotalQuestions}</div>
-                <div className="pureon-stat-foot">累计题目 / questions</div>
+                <div className="pureon-stat-foot">configured questions</div>
               </div>
               <div className="pureon-stat-card">
+                <div className="pureon-stat-label">补充试卷</div>
+                <div className="pureon-stat-value">{studentDirectPapers.length}</div>
+                <div className="pureon-stat-foot">teacher assigned / fixed</div>
+              </div>
+              <div className="pureon-stat-card" data-accent="red">
                 <div className="pureon-stat-label">学科数</div>
                 <div className="pureon-stat-value">{visibleSubjectModules.length}</div>
                 <div className="pureon-stat-foot">当前账号可见科目</div>
-              </div>
-              <div className="pureon-stat-card" data-accent="red">
-                <div className="pureon-stat-label">章节总数</div>
-                <div className="pureon-stat-value">{studentTotalSections}</div>
-                <div className="pureon-stat-foot">sections in all papers</div>
               </div>
             </div>
 
@@ -780,16 +1238,18 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <div>
                 <div className="pureon-filter-bar">
                   <div className="pureon-filter-row">
-                    <div className="pureon-filter-label">筛选</div>
+                    <div className="pureon-filter-label">学科</div>
                     <div className="pureon-pill-list">
-                      <button
-                        type="button"
-                        className="pureon-pill"
-                        data-active={showStudentModules ? 'true' : 'false'}
-                        onClick={() => setSelectedSubject(null)}
-                      >
-                        全部 {visiblePapers.length}
-                      </button>
+                      {!hasSingleSubjectAccess ? (
+                        <button
+                          type="button"
+                          className="pureon-pill"
+                          data-active={showStudentModules ? 'true' : 'false'}
+                          onClick={() => setSelectedSubject(null)}
+                        >
+                          全部 {studentAssessmentPapers.length}
+                        </button>
+                      ) : null}
                       {visibleSubjectModules.map((subject) => (
                         <button
                           key={subject}
@@ -798,7 +1258,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                           data-active={activeSubject === subject ? 'true' : 'false'}
                           onClick={() => setSelectedSubject(subject)}
                         >
-                          {PAPER_SUBJECT_LABELS[subject]} {subjectCounts[subject] || 0}
+                          {PAPER_SUBJECT_LABELS[subject]} {studentAssessmentPapers.filter((paper) => paper.subject === subject).length}
                         </button>
                       ))}
                     </div>
@@ -807,61 +1267,155 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                     <div className="pureon-filter-label">说明</div>
                     <div className="text-sm leading-7 text-[var(--pureon-muted)]">
                       {showStudentModules
-                        ? '先按学科缩小范围，再进入一份完整试卷。'
-                        : '当前列表已经按学科过滤，点击任一试卷即可直接进入练习。'}
+                        ? '上面是老师发布的组卷体系，点击后会按 part 数量和题型即时随机生成一张测试卷。'
+                        : '当前列表已经按学科过滤，点击任一体系都会重新随机生成一张测试卷。'}
                     </div>
                   </div>
                 </div>
 
-                {studentPagePapers.length > 0 ? (
-                  <div className="pureon-list">
-                    {studentPagePapers.map((paper, index) => {
-                      const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
-                      const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
-                      const isReady = isPaperReadyToStart(paper);
-                      const hasPaperSubtitle = Boolean(paper.subtitle?.trim())
-                        && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
-                      const paperSummary = hasPaperSubtitle && paper.subtitle?.trim()
-                        ? `${paper.subtitle.trim()} · ${paper.description}`
-                        : paper.description;
+                {studentAssessmentPapers.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="pureon-card">
+                      <div className="pureon-card-eyebrow">Assessment Systems</div>
+                      <div className="pureon-card-title">按组卷体系随机生成</div>
+                      <div className="pureon-list mt-5">
+                        {studentAssessmentPapers.map((paper, index) => {
+                          const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                          const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                          const isReady = isPaperReadyToStart(paper);
+                          const hasPaperSubtitle = Boolean(paper.subtitle?.trim())
+                            && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
+                          const paperSummary = hasPaperSubtitle && paper.subtitle?.trim()
+                            ? `${paper.subtitle.trim()} · ${paper.description}`
+                            : paper.description;
 
-                      return (
-                        <motion.button
-                          key={paper.id}
-                          type="button"
-                          onClick={() => onSelectPaper(paper.id)}
-                          initial={{ opacity: 0, y: 12 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.25, delay: 0.05 * index }}
-                          className="pureon-list-item text-left"
-                        >
-                          <div className="pureon-list-num">№{index + 1}</div>
-                          <div className="min-w-0">
-                            <div className="pureon-list-tags">
-                              <span className="pureon-tag">{PAPER_SUBJECT_LABELS[paper.subject]}</span>
-                              <span className="pureon-tag" data-tone="gold">{PAPER_CATEGORY_LABELS[paper.category]}</span>
-                              <span className="pureon-tag" data-tone={isReady ? 'green' : 'red'}>
-                                {isReady ? 'Ready' : 'Draft'}
-                              </span>
+                          return (
+                            <motion.button
+                              key={paper.id}
+                              type="button"
+                              onClick={() => handleStudentPaperSelect(paper)}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.25, delay: 0.05 * index }}
+                              className="pureon-list-item text-left"
+                            >
+                              <div className="pureon-list-num">№{index + 1}</div>
+                              <div className="min-w-0">
+                                <div className="pureon-list-tags">
+                                  <span className="pureon-tag">{PAPER_SUBJECT_LABELS[paper.subject]}</span>
+                                  <span className="pureon-tag" data-tone="gold">随机组卷</span>
+                                  <span className="pureon-tag" data-tone={isReady ? 'green' : 'red'}>
+                                    {isReady ? 'Ready' : 'Draft'}
+                                  </span>
+                                </div>
+                                <div className="text-[1rem] font-semibold text-[var(--pureon-teal)]">{paper.title}</div>
+                                <div className="pureon-list-text mt-2">
+                                  {paperSummary || 'Open this system to generate a full assessment paper.'}
+                                </div>
+                              </div>
+                              <div className="pureon-list-stats">
+                                <strong>{displayQuestionsCount}Q</strong>
+                                <span>{displaySectionsCount} parts</span>
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {studentDirectPapers.length > 0 ? (
+                      <div className="pureon-card">
+                        <div className="pureon-card-eyebrow">Assigned Papers</div>
+                        <div className="pureon-card-title">老师单独发来的试卷</div>
+                        <div className="pureon-list mt-5">
+                          {studentDirectPapers.map((paper, index) => {
+                            const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                            const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                            const isReady = isPaperReadyToStart(paper);
+
+                            return (
+                              <motion.button
+                                key={`direct-${paper.id}`}
+                                type="button"
+                                onClick={() => onSelectPaper(paper.id)}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.25, delay: 0.05 * index }}
+                                className="pureon-list-item text-left"
+                              >
+                                <div className="pureon-list-num">{String(index + 1).padStart(2, '0')}</div>
+                                <div className="min-w-0">
+                                  <div className="pureon-list-tags">
+                                    <span className="pureon-tag">{PAPER_SUBJECT_LABELS[paper.subject]}</span>
+                                    <span className="pureon-tag" data-tone="gold">{PAPER_CATEGORY_LABELS[paper.category]}</span>
+                                    <span className="pureon-tag" data-tone={isReady ? 'green' : 'red'}>
+                                      {isReady ? 'Ready' : 'Draft'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[1rem] font-semibold text-[var(--pureon-teal)]">{paper.title}</div>
+                                  <div className="pureon-list-text mt-2">
+                                    {paper.description || 'Open this paper to preview sections and start the assigned test.'}
+                                  </div>
+                                </div>
+                                <div className="pureon-list-stats">
+                                  <strong>{displayQuestionsCount}Q</strong>
+                                  <span>{displaySectionsCount} sections</span>
+                                </div>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : studentDirectPapers.length > 0 ? (
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Assigned Papers</div>
+                    <div className="pureon-card-title">老师单独发来的试卷</div>
+                    <div className="pureon-list mt-5">
+                      {studentDirectPapers.map((paper, index) => {
+                        const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
+                        const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
+                        const isReady = isPaperReadyToStart(paper);
+
+                        return (
+                          <motion.button
+                            key={`direct-fallback-${paper.id}`}
+                            type="button"
+                            onClick={() => onSelectPaper(paper.id)}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25, delay: 0.05 * index }}
+                            className="pureon-list-item text-left"
+                          >
+                            <div className="pureon-list-num">№{index + 1}</div>
+                            <div className="min-w-0">
+                              <div className="pureon-list-tags">
+                                <span className="pureon-tag">{PAPER_SUBJECT_LABELS[paper.subject]}</span>
+                                <span className="pureon-tag" data-tone="gold">{PAPER_CATEGORY_LABELS[paper.category]}</span>
+                                <span className="pureon-tag" data-tone={isReady ? 'green' : 'red'}>
+                                  {isReady ? 'Ready' : 'Draft'}
+                                </span>
+                              </div>
+                              <div className="text-[1rem] font-semibold text-[var(--pureon-teal)]">{paper.title}</div>
+                              <div className="pureon-list-text mt-2">
+                                {paper.description || 'Open this paper to preview sections and start the assigned test.'}
+                              </div>
                             </div>
-                            <div className="text-[1rem] font-semibold text-[var(--pureon-teal)]">{paper.title}</div>
-                            <div className="pureon-list-text mt-2">
-                              {paperSummary || 'Open this paper to review sections and begin practice.'}
+                            <div className="pureon-list-stats">
+                              <strong>{displayQuestionsCount}Q</strong>
+                              <span>{displaySectionsCount} sections</span>
                             </div>
-                          </div>
-                          <div className="pureon-list-stats">
-                            <strong>{displayQuestionsCount}Q</strong>
-                            <span>{displaySectionsCount} sections</span>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
                   <div className="pureon-card text-center">
-                    <div className="pureon-card-title">这个筛选下还没有试卷</div>
+                    <div className="pureon-card-title">这个筛选下还没有可用测试</div>
                     <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
-                      你可以切换到其他学科，或者返回总览页查看全部可见练习。
+                      你可以切换到其他学科，或者等老师先发布一套组卷体系。
                     </p>
                   </div>
                 )}
@@ -870,7 +1424,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
               <div className="space-y-4">
                 <div className="pureon-card">
                   <div className="pureon-card-eyebrow">Recent Activity</div>
-                  <div className="pureon-card-title">最近可练习内容</div>
+                  <div className="pureon-card-title">最近可进入的测试</div>
                   <div className="pureon-activity-list mt-4">
                     {studentRecentPapers.map((paper, index) => {
                       const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
@@ -878,14 +1432,14 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                         <button
                           key={`student-activity-${paper.id}`}
                           type="button"
-                          onClick={() => onSelectPaper(paper.id)}
+                          onClick={() => handleStudentPaperSelect(paper)}
                           className="pureon-activity-item text-left"
                         >
                           <span className="pureon-activity-dot" />
                           <div className="min-w-0">
                             <div className="truncate text-sm text-[var(--pureon-ink)]">{paper.title}</div>
                             <div className="pureon-activity-meta">
-                              {PAPER_SUBJECT_LABELS[paper.subject]} · {paper.sections.length} parts
+                              {PAPER_SUBJECT_LABELS[paper.subject]} · {(paper.configuredSectionsCount ?? paper.sections.length)} parts
                             </div>
                           </div>
                           <div className="pureon-activity-score">{displayQuestionsCount}Q</div>
@@ -900,7 +1454,7 @@ function PaperSelectionPage({ onSelectPaper }: { onSelectPaper: (paperId: string
                   <div className="pureon-card-title">账号可见范围</div>
                   <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--pureon-muted)]">
                     <p>
-                      当前账号可进入 {visibleSubjectModules.length} 个学科模块，并查看 {visiblePapers.length} 份练习试卷。
+                      当前账号可进入 {visibleSubjectModules.length} 个学科模块，并使用 {studentAssessmentPapers.length} 个已发布测试体系。
                     </p>
                     {hasSingleSubjectAccess ? (
                       <p>
@@ -949,6 +1503,9 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
   const hasDistinctSubtitle = Boolean(paper.subtitle?.trim())
     && normalizeSummaryText(paper.subtitle) !== normalizeSummaryText(paper.description);
   const isReadyToStart = isPaperReadyToStart(paper);
+  const isAssessmentPaper = paper.category === 'assessment';
+  const startLabel = paper.category === 'assessment' ? '开始测试' : '开始练习';
+  const enterLabel = paper.category === 'assessment' ? '进入这份测试' : '进入这份试卷';
   const displaySectionsCount = paper.configuredSectionsCount ?? paper.sections.length;
   const displayQuestionsCount = paper.configuredQuestionsCount ?? paper.totalQuestions;
   const readinessMessage = getPaperReadinessMessage(paper);
@@ -1003,7 +1560,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               disabled={!isReadyToStart}
               className="bg-[var(--pureon-teal)] text-[var(--pureon-paper)] hover:bg-[var(--pureon-ink)]"
             >
-              开始练习
+              {startLabel}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -1052,7 +1609,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <div className="pureon-filter-row">
                 <div className="pureon-filter-label">说明</div>
                 <div className="text-sm leading-7 text-[var(--pureon-muted)]">
-                  进入后会先填写学生信息，再按 section 顺序完成整份练习。
+                  进入后会先填写学生信息，再按 section 顺序完成整份{isAssessmentPaper ? '测试' : '练习'}。
                 </div>
               </div>
               {!isReadyToStart ? (
@@ -1126,7 +1683,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
               <div className="pureon-card-title">开始前须知</div>
               <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--pureon-muted)]">
                 <p>进入试卷后会先填写学生姓名与年级，再正式开始答题。</p>
-                <p>练习过程支持逐题切换、右侧题号导航和统一提交结果。</p>
+                <p>{isAssessmentPaper ? '测试' : '练习'}过程支持逐题切换、右侧题号导航和统一提交结果。</p>
                 <p>
                   当前试卷包含 <strong className="text-[var(--pureon-teal)]">{displaySectionsCount}</strong> 个章节，
                   共 <strong className="text-[var(--pureon-teal)]">{displayQuestionsCount}</strong> 题。
@@ -1138,7 +1695,7 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
                   onClick={() => setShowStudentInfoForm(true)}
                   disabled={!isReadyToStart}
                 >
-                  进入这份试卷
+                  {enterLabel}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -1156,10 +1713,22 @@ function PaperLandingPage({ paper, onBack }: { paper: Paper; onBack: () => void 
 
 export default function LandingPage() {
   const { selectedPaper, selectPaper } = useQuiz();
+  const { isTeacher } = useLocalAuth();
+  const [studentMode, setStudentMode] = useState<'test' | 'practice'>('test');
 
   if (selectedPaper) {
     return <PaperLandingPage paper={selectedPaper} onBack={() => selectPaper('')} />;
   }
 
-  return <PaperSelectionPage onSelectPaper={selectPaper} />;
+  if (!isTeacher && studentMode === 'practice') {
+    return <StudentPracticePage onBackToTests={() => setStudentMode('test')} />;
+  }
+
+  return (
+    <PaperSelectionPage
+      onSelectPaper={selectPaper}
+      studentMode={studentMode}
+      onStudentModeChange={setStudentMode}
+    />
+  );
 }

@@ -293,6 +293,8 @@ export interface Paper {
   tags?: string[];
   hiddenFromStudentSelection?: boolean;
   isGeneratedPaper?: boolean;
+  isEphemeralPaper?: boolean;
+  instantFeedbackMode?: boolean;
   generationWarnings?: string[];
   configuredSectionsCount?: number;
   configuredQuestionsCount?: number;

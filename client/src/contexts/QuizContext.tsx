@@ -50,6 +50,8 @@ interface QuizContextType {
   // Paper selection
   selectedPaper: Paper | null;
   selectPaper: (paperId: string) => void;
+  previewPaper: (paper: Paper) => void;
+  startAdHocPaper: (paper: Paper, info?: StudentInfo) => void;
   papers: Paper[];
   // Current section
   currentSection: Section;
@@ -488,6 +490,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!selectedPaper) return;
     if (state.submitted) return;
+    if (selectedPaper.isEphemeralPaper) return;
 
     const stillAllowed = allPapers.some((paper) => paper.id === selectedPaper.id);
     if (stillAllowed) return;
@@ -504,6 +507,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!selectedPaper) return;
+    if (selectedPaper.isEphemeralPaper) return;
 
     const latestPaper = allPapers.find((paper) => paper.id === selectedPaper.id);
     if (!latestPaper || latestPaper === selectedPaper) return;
@@ -550,6 +554,49 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       currentSectionIdRef.current = paper.sections[0]?.id || '';
     }
   }, [allPapers]);
+
+  const previewPaper = useCallback((paper: Paper) => {
+    clearSubmittedAssessmentSnapshot();
+    sectionTimingsRef.current = {};
+    sectionEnteredAtRef.current = null;
+    currentSectionIdRef.current = paper.sections[0]?.id || '';
+    setSelectedPaper(paper);
+    setStudentInfoState(null);
+    setIsStarted(false);
+    setState(createInitialQuizState());
+  }, []);
+
+  const startAdHocPaper = useCallback((paper: Paper, info?: StudentInfo) => {
+    if (!paper.sections.length) return;
+
+    clearSubmittedAssessmentSnapshot();
+
+    const now = Date.now();
+    const fallbackName = info?.name?.trim()
+      || studentInfo?.name?.trim()
+      || user?.displayName?.trim()
+      || user?.username?.trim()
+      || 'Student';
+    const fallbackGrade = info?.grade ?? studentInfo?.grade ?? '';
+
+    sectionTimingsRef.current = {};
+    sectionEnteredAtRef.current = now;
+    currentSectionIdRef.current = paper.sections[0]?.id || '';
+
+    setSelectedPaper(paper);
+    setStudentInfoState({
+      name: fallbackName,
+      grade: fallbackGrade,
+    });
+    setIsStarted(true);
+    setState({
+      currentSectionIndex: 0,
+      answers: {},
+      submitted: false,
+      startTime: now,
+      endTime: null,
+    });
+  }, [studentInfo?.grade, studentInfo?.name, user?.displayName, user?.username]);
 
   const setStudentInfo = useCallback((info: StudentInfo) => {
     setStudentInfoState(info);
@@ -836,6 +883,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setStudentInfo,
     selectedPaper,
     selectPaper,
+    previewPaper,
+    startAdHocPaper,
     papers: allPapers,
     currentSection,
     sections: currentSections,
@@ -851,7 +900,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     getSectionProgress,
     getSectionTimings,
     getTotalTime,
-  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, allPapers, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, isRestoringSession, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
+  }), [state, studentInfo, setStudentInfo, selectedPaper, selectPaper, previewPaper, startAdHocPaper, allPapers, currentSection, currentSections, setCurrentSection, setAnswer, getAnswer, submitQuiz, resetQuiz, startQuiz, isStarted, isRestoringSession, getScore, getSectionProgress, getSectionTimings, getTotalTime]);
 
   return (
     <QuizContext.Provider value={value}>

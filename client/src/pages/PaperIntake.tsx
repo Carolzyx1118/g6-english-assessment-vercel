@@ -4767,8 +4767,8 @@ export default function PaperIntake() {
   if (isEditing && editPaperQuery.isLoading && !hasHydratedEditState) {
     return (
       <TeacherToolsLayout activeTool="paper-intake" currentSubject={paperSubject}>
-        <div className="min-h-screen bg-[#F6F8FB]">
-          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="paper-intake-page pureon-page-shell">
+          <div className="pureon-container">
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex items-center justify-center gap-3 py-10 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -4783,21 +4783,24 @@ export default function PaperIntake() {
 
   return (
     <TeacherToolsLayout activeTool="paper-intake" currentSubject={paperSubject}>
-      <div className="min-h-screen bg-[#F6F8FB]">
-        <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="paper-intake-page pureon-page-shell">
+        <div className="pureon-container paper-intake-page__container">
+        <div className="pureon-page-head paper-intake-page__head">
           <div>
             <Link
               href={isEditing ? managerHref : "/"}
-              className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-700"
+              className="paper-intake-backlink"
             >
               <ArrowLeft className="h-4 w-4" />
               {isEditing ? "Back to Paper Manager" : "Back to Assessments"}
             </Link>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3A5F]">
+            <div className="pureon-section-eyebrow mt-6">
+              Teacher Tools · {isEditing ? "Question Set Editor" : "Question Intake"}
+            </div>
+            <h1 className="pureon-page-title mt-3">
               {isEditing ? `Edit ${PAPER_SUBJECT_LABELS[paperSubject]} Question Set` : `${PAPER_SUBJECT_LABELS[paperSubject]} Question Intake`}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500 md:max-w-none md:whitespace-nowrap">
+            <p className="mt-3 max-w-4xl text-sm leading-7 text-[var(--pureon-muted)]">
               {isEditing
                 ? "Update a saved paper. The builder is prefilled with the current content so you can fix mistakes and save changes."
                 : isMathPaper
@@ -4805,7 +4808,7 @@ export default function PaperIntake() {
                   : "Build a paper manually by section, big question, and question type. The right side shows a student-facing preview while you work."}
             </p>
             {isEditing && editingPaperMeta ? (
-              <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+              <p className="paper-intake-meta">
                 Editing paper ID: {editingPaperMeta.paperId}
               </p>
             ) : null}
@@ -4835,11 +4838,8 @@ export default function PaperIntake() {
                         disabled={isEditing}
                         aria-pressed={isActive}
                         onClick={() => handleSubjectSelection(subject)}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                          isActive
-                            ? "bg-[#1E3A5F] text-white shadow-sm"
-                            : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
-                        } ${isEditing ? "cursor-not-allowed opacity-70" : ""}`}
+                        data-active={isActive ? "true" : "false"}
+                        className={`paper-intake-choice ${isEditing ? "cursor-not-allowed opacity-70" : ""}`}
                       >
                         {PAPER_SUBJECT_LABELS[subject]}
                       </button>
@@ -4857,11 +4857,8 @@ export default function PaperIntake() {
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <label
-                    className={`inline-flex cursor-pointer items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                      isQuestionBankMode
-                        ? "bg-[#1E3A5F] text-white shadow-sm"
-                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
-                    }`}
+                    className="paper-intake-choice"
+                    data-active={isQuestionBankMode ? "true" : "false"}
                   >
                     <input
                       type="radio"
@@ -4872,11 +4869,8 @@ export default function PaperIntake() {
                     Random
                   </label>
                   <label
-                    className={`inline-flex cursor-pointer items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                      buildMode === "fixed" && visibilityMode === "student"
-                        ? "bg-[#1E3A5F] text-white shadow-sm"
-                        : "border border-slate-200 bg-white text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
-                    }`}
+                    className="paper-intake-choice"
+                    data-active={buildMode === "fixed" && visibilityMode === "student" ? "true" : "false"}
                   >
                     <input
                       type="radio"
@@ -4887,7 +4881,7 @@ export default function PaperIntake() {
                     Fix
                   </label>
                   {buildMode === "generated" ? (
-                    <label className="inline-flex cursor-pointer items-center rounded-full bg-[#1E3A5F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors">
+                    <label className="paper-intake-choice" data-active="true">
                       <input
                         type="radio"
                         className="sr-only"
@@ -5035,7 +5029,7 @@ export default function PaperIntake() {
                     {section.subsections.map((subsection, subsectionIndex) => (
                       <div
                         key={subsection.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                        className="paper-intake-subsection-shell rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
                         {...getSubsectionTrackingProps(subsection.id)}
                       >
                         {(() => {
@@ -7513,26 +7507,26 @@ export default function PaperIntake() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {!effectiveTitle.trim() && !effectiveDescription.trim() && previewBlueprint.sections.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+                  <div className="paper-intake-empty-state rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
                     {isQuestionBankMode ? "Start recording questions on the left." : "Start building the paper on the left."}
                   </div>
                 )}
 
                 {buildMode === "generated" && previewBlueprint.sections.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+                  <div className="paper-intake-empty-state rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
                     配好组卷分区和规则后，这里会显示一份随机生成的预览卷。
                   </div>
                 ) : null}
 
                 {!isQuestionBankMode ? (
-                  <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="paper-intake-preview-summary rounded-2xl bg-slate-50 p-4">
                     <p className="text-lg font-semibold text-slate-800">{effectiveTitle || "Untitled Paper"}</p>
                     <p className="mt-2 text-sm text-slate-500">{effectiveDescription || "No description yet."}</p>
                   </div>
                 ) : null}
 
                 {previewBlueprint.sections.map((section) => (
-                  <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div key={section.id} className="paper-intake-preview-section rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-sm font-semibold text-slate-800">
                       {section.partLabel} · {MANUAL_SECTION_TYPE_LABELS[section.sectionType]}
                     </p>
@@ -7542,7 +7536,8 @@ export default function PaperIntake() {
                         <div
                           key={subsection.id}
                           data-preview-subsection-id={subsection.id}
-                          className={`rounded-xl p-4 transition-colors ${
+                          data-active={activePreviewSubsectionId === subsection.id ? "true" : "false"}
+                          className={`paper-intake-preview-subsection rounded-xl p-4 transition-colors ${
                             activePreviewSubsectionId === subsection.id
                               ? "bg-sky-50 ring-2 ring-sky-200"
                               : "bg-slate-50"
@@ -7578,7 +7573,7 @@ export default function PaperIntake() {
                           )}
 
                           {subsection.audio && (
-                            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
+                            <div className="paper-intake-accent-panel paper-intake-accent-panel--listening mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <Volume2 className="h-3.5 w-3.5 text-sky-700" />
                                 <p className="text-xs font-semibold text-sky-800">Listening Audio</p>
@@ -8147,11 +8142,11 @@ export default function PaperIntake() {
 
             {showPreviewActionCard ? (
               <div className="flex flex-nowrap items-center gap-3 overflow-x-auto px-1 pb-1">
-                <div className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                <div className={`paper-intake-status-chip shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                   {currentPublished ? "Status: Published" : "Status: Draft"}
                 </div>
                 {saveFeedback ? (
-                  <div className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
+                  <div className="paper-intake-feedback-chip flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
                     <Check className="h-4 w-4" />
                     <span className="font-medium">{saveFeedback}</span>
                   </div>
@@ -8162,7 +8157,7 @@ export default function PaperIntake() {
                     variant="outline"
                     disabled={isPersisting || !editingPaperMeta}
                     onClick={handleSaveAsCopy}
-                    className="shrink-0 gap-2 border-slate-200 px-4 whitespace-nowrap"
+                    className="paper-intake-outline-button shrink-0 gap-2 px-4 whitespace-nowrap"
                   >
                     <FilePlus2 className="h-4 w-4" />
                     Save as Copy
@@ -8174,7 +8169,7 @@ export default function PaperIntake() {
                   variant="outline"
                   disabled={saveDisabled}
                   onClick={handleSaveDraft}
-                  className="shrink-0 gap-2 border-slate-200 px-4 whitespace-nowrap"
+                  className="paper-intake-outline-button shrink-0 gap-2 px-4 whitespace-nowrap"
                 >
                   {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
                   {draftActionLabel}
@@ -8184,7 +8179,7 @@ export default function PaperIntake() {
                   type="button"
                   disabled={saveDisabled}
                   onClick={handlePublishPaper}
-                  className="shrink-0 gap-2 bg-[#1E3A5F] px-5 text-white shadow-lg transition-all whitespace-nowrap hover:bg-[#2a4f7a] hover:shadow-xl"
+                  className="paper-intake-primary-button shrink-0 gap-2 px-5 whitespace-nowrap"
                 >
                   {isPersisting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -8201,11 +8196,11 @@ export default function PaperIntake() {
         {/* ── Confirm / Save Button ── */}
         {buildMode !== "fixed" ? (
         <div className="mt-8 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
-          <div className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          <div className={`paper-intake-status-chip shrink-0 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${currentPublished ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
             {currentPublished ? "Status: Published" : "Status: Draft"}
           </div>
           {saveFeedback ? (
-            <div className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
+            <div className="paper-intake-feedback-chip flex shrink-0 items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-emerald-700 whitespace-nowrap">
               <Check className="h-4 w-4" />
               <span className="font-medium">{saveFeedback}</span>
             </div>
@@ -8217,7 +8212,7 @@ export default function PaperIntake() {
               variant="outline"
               disabled={isPersisting || !editingPaperMeta}
               onClick={handleSaveAsCopy}
-              className="shrink-0 gap-2 border-slate-200 whitespace-nowrap"
+              className="paper-intake-outline-button shrink-0 gap-2 whitespace-nowrap"
             >
               <FilePlus2 className="h-4 w-4" />
               Save as Copy
@@ -8230,7 +8225,7 @@ export default function PaperIntake() {
             variant="outline"
             disabled={saveDisabled}
             onClick={handleSaveDraft}
-            className="shrink-0 gap-2 border-slate-200 whitespace-nowrap"
+            className="paper-intake-outline-button shrink-0 gap-2 whitespace-nowrap"
           >
             {isPersisting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
             {draftActionLabel}
@@ -8241,7 +8236,7 @@ export default function PaperIntake() {
             size="lg"
             disabled={saveDisabled}
             onClick={handlePublishPaper}
-            className="shrink-0 gap-2 bg-[#1E3A5F] px-8 text-white shadow-lg transition-all whitespace-nowrap hover:bg-[#2a4f7a] hover:shadow-xl"
+            className="paper-intake-primary-button shrink-0 gap-2 px-8 whitespace-nowrap"
           >
             {isPersisting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
