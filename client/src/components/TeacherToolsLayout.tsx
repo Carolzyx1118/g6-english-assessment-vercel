@@ -2,7 +2,7 @@ import { type ReactNode, useMemo } from "react";
 import { Link } from "wouter";
 import { LogOut } from "lucide-react";
 import { PureonBrand } from "@/components/PureonBrand";
-import { PAPER_SUBJECT_LABELS, PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
+import { PAPER_SUBJECT_ORDER, type PaperSubject } from "@/data/papers";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { trpc } from "@/lib/trpc";
 
@@ -85,14 +85,8 @@ export default function TeacherToolsLayout({
   const displayName = user?.displayName || user?.username || "Teacher";
   const avatarLabel = displayName.slice(0, 2).toUpperCase();
   const roleLabel = user?.role === "admin" ? "Admin" : "Teacher";
-  const activeSubject = currentSubject ?? defaultSubject;
-  const subjectSwitchBasePath = (
-    activeTool === "tag-manager" || activeTool === "paper-composer"
-      ? "/tag-manager"
-      : activeTool === "paper-intake"
-        ? "/paper-intake"
-        : null
-  );
+  const topbarAccountClass = "inline-flex w-full min-w-0 items-center gap-3 rounded-[28px] border border-[var(--pureon-rule)] bg-[linear-gradient(135deg,rgba(245,239,224,0.94),rgba(227,217,190,0.78))] px-3 py-2.5 text-[13px] text-[var(--pureon-muted)] shadow-[0_18px_40px_-32px_rgba(45,74,62,0.35),inset_0_1px_0_rgba(255,250,239,0.48)] sm:w-auto sm:min-w-[206px]";
+  const topbarActionClass = "inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.48)] px-4 text-[13px] text-[var(--pureon-muted)] shadow-[0_14px_30px_-28px_rgba(45,74,62,0.3)] transition-colors hover:border-[var(--pureon-teal)] hover:bg-[rgba(201,164,97,0.08)] hover:text-[var(--pureon-teal)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
 
   const navItems: Array<{
     active: boolean;
@@ -167,18 +161,20 @@ export default function TeacherToolsLayout({
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
             {user ? (
-              <div className="inline-flex items-center gap-3 border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.7)] px-3 py-2 text-[13px] text-[var(--pureon-muted)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--pureon-gold),var(--pureon-blue))] font-[family-name:var(--font-display)] text-[14px] font-semibold text-[var(--pureon-paper)]">
+              <div className={topbarAccountClass}>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--pureon-gold),var(--pureon-blue))] font-[family-name:var(--font-display)] text-[14px] font-semibold text-[var(--pureon-paper)] shadow-[0_14px_30px_-20px_rgba(45,74,62,0.55)]">
                   {avatarLabel || "TE"}
                 </div>
-                <div className="hidden min-w-0 sm:block">
-                  <div className="truncate font-[family-name:var(--font-body)] text-[14px] text-[var(--pureon-teal)]">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-[family-name:var(--font-body)] text-[15px] font-semibold tracking-[0.04em] text-[var(--pureon-teal)]">
                     {displayName}
                   </div>
-                  <div className="mt-0.5 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-[0.18em] text-[var(--pureon-muted)]">
-                    {roleLabel}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="pureon-tag" data-tone={user?.role === "admin" ? "gold" : "green"}>
+                      {roleLabel}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -188,39 +184,15 @@ export default function TeacherToolsLayout({
               type="button"
               onClick={logout}
               disabled={authLoading}
-              className="inline-flex min-h-11 items-center gap-2 border border-[var(--pureon-rule)] bg-transparent px-4 py-2 text-[13px] text-[var(--pureon-muted)] transition-colors hover:border-[var(--pureon-teal)] hover:text-[var(--pureon-teal)] disabled:cursor-not-allowed disabled:opacity-60"
+              className={topbarActionClass}
             >
-              <LogOut className="h-4 w-4" />
-              <span>Sign out</span>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(201,164,97,0.14)] text-[var(--pureon-gold)]">
+                <LogOut className="h-4 w-4" />
+              </span>
+              <span className="font-[family-name:var(--font-body)] text-[15px] font-semibold tracking-[0.04em]">Sign out</span>
             </button>
           </div>
         </div>
-
-        {subjectSwitchBasePath && allowedSubjects.length > 1 ? (
-          <div className="border-t border-[var(--pureon-rule)]">
-            <div className="mx-auto flex w-full max-w-[1680px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-              <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.22em] text-[var(--pureon-muted)]">
-                {activeTool === "tag-manager" || activeTool === "paper-composer" ? "组卷学科" : "录题学科"}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {allowedSubjects.map((subject) => (
-                  <Link key={`teacher-subject-${subject}`} href={`${subjectSwitchBasePath}?subject=${subject}`}>
-                    <button
-                      type="button"
-                      className={`inline-flex items-center border px-3 py-1.5 text-sm transition-colors ${
-                        activeSubject === subject
-                          ? "border-[var(--pureon-teal)] bg-[var(--pureon-teal)] text-[var(--pureon-paper)]"
-                          : "border-[var(--pureon-rule)] bg-transparent text-[var(--pureon-muted)] hover:border-[var(--pureon-teal)] hover:text-[var(--pureon-teal)]"
-                      }`}
-                    >
-                      {PAPER_SUBJECT_LABELS[subject]}
-                    </button>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className={showAccountPanel ? "min-w-0" : "min-w-0"}>

@@ -703,135 +703,147 @@ function PaperSelectionPage({
                   </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)] xl:items-start">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] xl:items-start">
                   <div className="pureon-card">
-                    <div className="pureon-card-eyebrow">Coverage Chart</div>
+                    <div className="pureon-card-eyebrow">Workspace Health</div>
                     <div className="pureon-card-title">学科覆盖与就绪情况</div>
                     <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
-                      先看每个学科当前有多少 ready / draft 试卷，再决定老师端这周先补哪一块。
+                      把试卷覆盖、提交节奏和批改状态收在一个主视图里，先看哪里 ready 足够，哪里还在堆 draft。
                     </p>
-                    <ChartContainer config={teacherCoverageChartConfig} className="mt-5 h-[250px] w-full aspect-auto">
-                      <BarChart data={teacherCoverageChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="subject"
-                          tickLine={false}
-                          axisLine={false}
-                          tickMargin={10}
-                        />
-                        <ChartTooltip
-                          cursor={false}
-                          content={<ChartTooltipContent indicator="line" />}
-                        />
-                        <Bar dataKey="ready" stackId="papers" fill="var(--color-ready)" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="draft" stackId="papers" fill="var(--color-draft)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ChartContainer>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                    <div className="mt-5 rounded-[28px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-5">
+                      <ChartContainer config={teacherCoverageChartConfig} className="h-[260px] w-full aspect-auto">
+                        <BarChart data={teacherCoverageChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="subject"
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={10}
+                          />
+                          <ChartTooltip
+                            cursor={false}
+                            content={<ChartTooltipContent indicator="line" />}
+                          />
+                          <Bar dataKey="ready" stackId="papers" fill="var(--color-ready)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="draft" stackId="papers" fill="var(--color-draft)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ChartContainer>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-[22px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-4">
                         <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Most Active Subject</div>
                         <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
                           {teacherMostActiveSubject}
                         </div>
+                        <div className="mt-2 text-xs leading-6 text-[var(--pureon-muted)]">按最近提交记录统计当前最活跃模块。</div>
                       </div>
-                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                      <div className="rounded-[22px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-4">
                         <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Question Coverage</div>
                         <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
                           {visiblePapers.reduce((sum, paper) => sum + (paper.configuredQuestionsCount ?? paper.totalQuestions), 0)}
                         </div>
+                        <div className="mt-2 text-xs leading-6 text-[var(--pureon-muted)]">当前老师工作台可调度的总题量。</div>
                       </div>
-                      <div className="border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.45)] p-3">
+                      <div className="rounded-[22px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-4">
                         <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Draft Queue</div>
                         <div className="mt-2 font-[family-name:var(--font-body)] text-lg font-semibold text-[var(--pureon-teal)]">
                           {teacherDraftCount}
                         </div>
+                        <div className="mt-2 text-xs leading-6 text-[var(--pureon-muted)]">还需要继续补题或调整规则的试卷数。</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="pureon-card">
-                      <div className="pureon-card-eyebrow">Submission Trend</div>
-                      <div className="pureon-card-title">最近 7 天提交走势</div>
-                      {teacherTrendHasData ? (
-                        <ChartContainer config={teacherTrendChartConfig} className="mt-5 h-[220px] w-full aspect-auto">
-                          <LineChart data={teacherSubmissionTrend} margin={{ top: 8, right: 12, left: -20, bottom: 0 }}>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                            <XAxis
-                              dataKey="label"
-                              tickLine={false}
-                              axisLine={false}
-                              tickMargin={10}
-                            />
-                            <ChartTooltip
-                              cursor={false}
-                              content={<ChartTooltipContent indicator="line" />}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="submissions"
-                              stroke="var(--color-submissions)"
-                              strokeWidth={2.5}
-                              dot={{ fill: 'var(--color-submissions)', r: 3 }}
-                              activeDot={{ r: 4 }}
-                            />
-                          </LineChart>
-                        </ChartContainer>
-                      ) : (
-                        <div className="mt-5 border border-dashed border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.4)] px-4 py-8 text-sm leading-7 text-[var(--pureon-muted)]">
-                          还没有可展示的提交趋势。等学生开始做题后，这里会显示最近一周的提交节奏。
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pureon-card">
-                      <div className="pureon-card-eyebrow">Report Mix</div>
-                      <div className="pureon-card-title">批改状态分布</div>
-                      <div className="mt-5 grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
-                        {teacherReportStatusTotal > 0 ? (
-                          <ChartContainer config={teacherReportStatusChartConfig} className="mx-auto h-[180px] w-full max-w-[180px] aspect-square">
-                            <PieChart>
-                              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                              <Pie
-                                data={teacherReportStatusData}
-                                dataKey="value"
-                                nameKey="label"
-                                innerRadius={46}
-                                outerRadius={72}
-                                strokeWidth={2}
-                              >
-                                {teacherReportStatusData.map((item) => (
-                                  <Cell key={item.key} fill={item.fill} />
-                                ))}
-                              </Pie>
-                            </PieChart>
+                  <div className="pureon-card">
+                    <div className="pureon-card-eyebrow">Workspace Pulse</div>
+                    <div className="pureon-card-title">提交与批改</div>
+                    <div className="mt-5 space-y-4">
+                      <div className="rounded-[24px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-4">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Submission Trend</div>
+                        <div className="mt-2 text-base font-semibold text-[var(--pureon-teal)]">最近 7 天提交走势</div>
+                        {teacherTrendHasData ? (
+                          <ChartContainer config={teacherTrendChartConfig} className="mt-4 h-[200px] w-full aspect-auto">
+                            <LineChart data={teacherSubmissionTrend} margin={{ top: 8, right: 12, left: -20, bottom: 0 }}>
+                              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                              <XAxis
+                                dataKey="label"
+                                tickLine={false}
+                                axisLine={false}
+                                tickMargin={10}
+                              />
+                              <ChartTooltip
+                                cursor={false}
+                                content={<ChartTooltipContent indicator="line" />}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="submissions"
+                                stroke="var(--color-submissions)"
+                                strokeWidth={2.5}
+                                dot={{ fill: 'var(--color-submissions)', r: 3 }}
+                                activeDot={{ r: 4 }}
+                              />
+                            </LineChart>
                           </ChartContainer>
                         ) : (
-                          <div className="mx-auto flex h-[180px] w-[180px] items-center justify-center border border-dashed border-[var(--pureon-rule)] text-center text-sm text-[var(--pureon-muted)]">
-                            No results
+                          <div className="mt-4 border border-dashed border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.3)] px-4 py-7 text-sm leading-7 text-[var(--pureon-muted)]">
+                            还没有可展示的提交趋势。等学生开始做题后，这里会显示最近一周的提交节奏。
                           </div>
                         )}
-                        <div className="space-y-3">
-                          {teacherReportStatusData.map((item) => (
-                            <div key={item.key} className="flex items-center justify-between gap-3 border-b border-dashed border-[rgba(200,189,160,0.62)] pb-3 last:border-b-0 last:pb-0">
-                              <div className="flex items-center gap-3">
-                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                                <span className="text-sm text-[var(--pureon-muted)]">{item.label}</span>
-                              </div>
-                              <strong className="font-[family-name:var(--font-display)] text-[1rem] text-[var(--pureon-teal)]">{item.value}</strong>
+                      </div>
+
+                      <div className="rounded-[24px] border border-[var(--pureon-rule)] bg-[rgba(245,239,224,0.42)] p-4">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--pureon-muted)]">Report Mix</div>
+                        <div className="mt-2 text-base font-semibold text-[var(--pureon-teal)]">批改状态分布</div>
+                        <div className="mt-4 grid gap-5 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
+                          {teacherReportStatusTotal > 0 ? (
+                            <ChartContainer config={teacherReportStatusChartConfig} className="mx-auto h-[160px] w-full max-w-[160px] aspect-square">
+                              <PieChart>
+                                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                                <Pie
+                                  data={teacherReportStatusData}
+                                  dataKey="value"
+                                  nameKey="label"
+                                  innerRadius={42}
+                                  outerRadius={64}
+                                  strokeWidth={2}
+                                >
+                                  {teacherReportStatusData.map((item) => (
+                                    <Cell key={item.key} fill={item.fill} />
+                                  ))}
+                                </Pie>
+                              </PieChart>
+                            </ChartContainer>
+                          ) : (
+                            <div className="mx-auto flex h-[160px] w-[160px] items-center justify-center border border-dashed border-[var(--pureon-rule)] text-center text-sm text-[var(--pureon-muted)]">
+                              No results
                             </div>
-                          ))}
+                          )}
+                          <div className="space-y-3">
+                            {teacherReportStatusData.map((item) => (
+                              <div key={item.key} className="flex items-center justify-between gap-3 border-b border-dashed border-[rgba(200,189,160,0.62)] pb-3 last:border-b-0 last:pb-0">
+                                <div className="flex items-center gap-3">
+                                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                                  <span className="text-sm text-[var(--pureon-muted)]">{item.label}</span>
+                                </div>
+                                <strong className="font-[family-name:var(--font-display)] text-[1rem] text-[var(--pureon-teal)]">{item.value}</strong>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.76fr)_minmax(0,1.24fr)] xl:items-start">
+                <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)] xl:items-start">
                   <div className="space-y-6">
                     <div className="pureon-card">
                       <div className="pureon-card-eyebrow">Queue</div>
                       <div className="pureon-card-title">当前队列</div>
+                      <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                        按学科看 ready / draft 比例，先点开需要补内容最多的模块。
+                      </p>
                       <div className="pureon-queue-list mt-5">
                         {teacherSubjectOverview.map((item) => (
                           <button
@@ -905,6 +917,9 @@ function PaperSelectionPage({
                   <div className="pureon-card">
                     <div className="pureon-card-eyebrow">Subject Modules</div>
                     <div className="pureon-card-title">进入学科模块</div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--pureon-muted)]">
+                      学科模块作为主入口放在右侧，点击后直接进入对应工作区，不再和队列信息抢视觉层级。
+                    </p>
                     <div className="pureon-module-grid pureon-module-grid--stack mt-6">
                       {teacherSubjectOverview.map((item, index) => {
                         const subject = item.subject;
@@ -919,7 +934,7 @@ function PaperSelectionPage({
                             transition={{ duration: 0.25, delay: 0.06 * index }}
                             onClick={() => setSelectedSubject(subject)}
                             data-subject={subject}
-                            className="group pureon-module-card pureon-module-card--compact flex min-h-[144px] w-full items-start gap-3 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1"
+                            className="group pureon-module-card pureon-module-card--compact flex min-h-[148px] w-full items-start gap-3 px-4 py-4 text-left transition-all duration-300 hover:-translate-y-1"
                           >
                             <div className="pureon-module-icon inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px]">
                               {config.icon}

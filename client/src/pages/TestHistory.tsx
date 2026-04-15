@@ -277,7 +277,7 @@ export default function TestHistory() {
                             </button>
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="softDestructive"
                               disabled={deleting}
                               onClick={() => {
                                 setDeleteTarget({
@@ -286,7 +286,7 @@ export default function TestHistory() {
                                   paperTitle: item.paperTitle,
                                 });
                               }}
-                              className="h-9 rounded-2xl border border-rose-200 bg-white px-3 text-rose-600 shadow-sm hover:bg-rose-50 hover:text-rose-700"
+                              className="px-3"
                             >
                               {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                               Delete

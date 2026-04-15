@@ -217,30 +217,19 @@ export default function UserManager() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>Total Users</CardDescription>
-                <CardTitle className="text-2xl">{summary.total}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>Active</CardDescription>
-                <CardTitle className="text-2xl text-emerald-700">{summary.active}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>Inactive</CardDescription>
-                <CardTitle className="text-2xl text-amber-700">{summary.inactive}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>Full Workspace Access</CardDescription>
-                <CardTitle className="text-2xl text-[#1E3A5F]">{summary.teachers}</CardTitle>
-              </CardHeader>
-            </Card>
+            {[
+              { label: "Total Users", value: summary.total, tone: "text-[var(--pureon-ink)]" },
+              { label: "Active", value: summary.active, tone: "text-emerald-700" },
+              { label: "Inactive", value: summary.inactive, tone: "text-amber-700" },
+              { label: "Full Workspace Access", value: summary.teachers, tone: "text-[#1E3A5F]" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-[rgba(245,239,224,0.78)] p-5 shadow-sm">
+                <div className="border border-[var(--border)] bg-[rgba(245,239,224,0.18)] p-4">
+                  <p className="text-sm text-[var(--pureon-muted)]">{item.label}</p>
+                  <p className={`mt-4 font-[family-name:var(--font-display)] text-2xl ${item.tone}`}>{item.value}</p>
+                </div>
+              </div>
+            ))}
           </div>
 
           {!isTeacher ? (
@@ -270,33 +259,36 @@ export default function UserManager() {
                 const isDeleting = deletingUserId === managedUser.id;
 
                 return (
-                  <Card key={managedUser.id} className="border-slate-200 shadow-sm">
-                    <CardContent className="space-y-5 p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-3">
+                  <Card
+                    key={managedUser.id}
+                    className="rounded-[24px] border border-[var(--pureon-rule)] bg-white shadow-sm before:hidden"
+                  >
+                    <CardContent className="space-y-4 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-2.5">
                           <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-[rgba(245,239,224,0.72)] text-slate-600">
                               {hasFullAccess ? <ShieldCheck className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}
                             </div>
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="text-lg font-semibold text-[#1E3A5F]">
+                                <h2 className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">
                                   {managedUser.displayName || managedUser.username}
                                 </h2>
                                 <Badge
-                                  className={`rounded-full px-2.5 py-1 text-xs ${
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
                                     draft.isActive
-                                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                                      : "bg-amber-100 text-amber-700 hover:bg-amber-100"
+                                      ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                                      : "bg-amber-50 text-amber-700 hover:bg-amber-50"
                                   }`}
                                 >
                                   {draft.isActive ? "Active" : "Inactive"}
                                 </Badge>
-                                <Badge className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100">
+                                <Badge className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">
                                   {hasFullAccess ? "Full Workspace Access" : "Limited Access"}
                                 </Badge>
                                 {isSelf ? (
-                                  <Badge className="rounded-full bg-sky-100 px-2.5 py-1 text-xs text-sky-700 hover:bg-sky-100">
+                                  <Badge className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50">
                                     Current User
                                   </Badge>
                                 ) : null}
@@ -310,9 +302,9 @@ export default function UserManager() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-end gap-3">
-                          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <p className="text-sm font-medium text-slate-700">Account Status</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex h-10 items-center gap-3 rounded-[20px] border border-[var(--pureon-rule)] bg-white px-4 text-sm font-medium text-slate-500 shadow-sm">
+                            <span>Account Status</span>
                             <Switch
                               checked={draft.isActive}
                               onCheckedChange={(checked) => void handleToggleActive(managedUser, checked)}
@@ -321,8 +313,8 @@ export default function UserManager() {
                           </div>
                           <Button
                             type="button"
-                            variant="outline"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            variant="softDestructive"
+                            className="h-10 rounded-[20px] px-4"
                             onClick={() => setDeleteTarget(managedUser)}
                             disabled={isSelf || isSaving || isDeleting}
                           >
@@ -332,20 +324,20 @@ export default function UserManager() {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-[22px] border border-slate-200 bg-[rgba(245,239,224,0.38)] p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <p className="text-sm font-medium text-slate-700">Visible Subjects</p>
                           <p className="text-xs text-slate-500">
                             {isSaving ? "Saving..." : savedUserIds[managedUser.id] ? "Saved" : "Auto-save enabled"}
                           </p>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-4">
+                        <div className="mt-3 flex flex-wrap gap-2.5">
                           {PAPER_SUBJECT_ORDER.map((subject) => {
                             const checked = draft.allowedSubjects.includes(subject);
                             return (
                               <label
                                 key={`${managedUser.id}-${subject}`}
-                                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                                className="flex items-center gap-2 rounded-[18px] border border-[var(--pureon-rule)] bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
                               >
                                 <Checkbox
                                   checked={checked}

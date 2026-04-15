@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, FilePenLine, Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -838,43 +837,35 @@ export default function QuestionBank() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>Total Question Banks</CardDescription>
-                <CardTitle className="text-2xl">{paperCounts.all}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>{PAPER_SUBJECT_LABELS.english} Papers</CardDescription>
-                <CardTitle className="text-2xl text-[#1E3A5F]">{paperCounts.english}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>{PAPER_SUBJECT_LABELS.math} Papers</CardDescription>
-                <CardTitle className="text-2xl text-emerald-700">{paperCounts.math}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardDescription>{PAPER_SUBJECT_LABELS.vocabulary} Papers</CardDescription>
-                <CardTitle className="text-2xl text-amber-700">{paperCounts.vocabulary}</CardTitle>
-              </CardHeader>
-            </Card>
+            {[
+              { label: "Total Question Banks", value: paperCounts.all, tone: "text-[var(--pureon-ink)]" },
+              { label: `${PAPER_SUBJECT_LABELS.english} Papers`, value: paperCounts.english, tone: "text-[#1E3A5F]" },
+              { label: `${PAPER_SUBJECT_LABELS.math} Papers`, value: paperCounts.math, tone: "text-emerald-700" },
+              { label: `${PAPER_SUBJECT_LABELS.vocabulary} Papers`, value: paperCounts.vocabulary, tone: "text-amber-700" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-[rgba(245,239,224,0.78)] p-5 shadow-sm">
+                <div className="border border-[var(--border)] bg-[rgba(245,239,224,0.18)] p-4">
+                  <p className="text-sm text-[var(--pureon-muted)]">{item.label}</p>
+                  <p className={`mt-4 font-[family-name:var(--font-display)] text-2xl ${item.tone}`}>{item.value}</p>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <Card className="gap-4 border-slate-200 py-5 shadow-sm">
-            <CardContent className="space-y-4">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-700">Keyword</p>
-                  <Input
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    placeholder="Search ID, prompt, title..."
-                    className="rounded-2xl border-slate-200 shadow-sm"
-                  />
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={searchText}
+                      onChange={(event) => setSearchText(event.target.value)}
+                      placeholder="Search ID, prompt, title..."
+                      className="rounded-2xl border-slate-200 pl-9 shadow-sm"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-700">Exam System</p>
@@ -904,15 +895,8 @@ export default function QuestionBank() {
                     ))}
                   </select>
                 </div>
-                {hasActiveFilters ? (
-                  <div className="flex justify-end md:col-span-2 xl:col-span-3">
-                    <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
-                      Clear Filters
-                    </Button>
-                  </div>
-                ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {([
                   { key: "all", label: "All Subjects", count: paperCounts.all },
                   ...PAPER_SUBJECT_ORDER.map((subject) => ({
@@ -935,29 +919,32 @@ export default function QuestionBank() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                {summary.totalItems} matching item{summary.totalItems === 1 ? "" : "s"}
-              </p>
-            </CardContent>
-          </Card>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  {summary.totalItems} matching item{summary.totalItems === 1 ? "" : "s"}
+                </p>
+                {hasActiveFilters ? (
+                  <Button type="button" variant="outline" className="border-slate-200" onClick={clearFilters}>
+                    Clear Filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           {listQuery.isLoading ? (
-            <Card className="border-slate-200 shadow-sm">
-              <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Loading question bank...
-              </CardContent>
-            </Card>
+            <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading question bank...
+            </div>
           ) : filteredPapers.length === 0 ? (
-            <Card className="border-slate-200 shadow-sm">
-              <CardContent className="py-16 text-center text-sm text-slate-500">
-                {hasActiveFilters
-                  ? "No question-bank items match the current filters."
-                  : (subjectFilter
-                    ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} question-bank papers have been recorded yet. Add some from Question Intake first.`
-                    : "No question-bank papers have been recorded yet. Add some from Question Intake first.")}
-              </CardContent>
-            </Card>
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+              {hasActiveFilters
+                ? "No question-bank items match the current filters."
+                : (subjectFilter
+                  ? `No ${PAPER_SUBJECT_LABELS[subjectFilter]} question-bank papers have been recorded yet. Add some from Question Intake first.`
+                  : "No question-bank papers have been recorded yet. Add some from Question Intake first.")}
+            </div>
           ) : (
             <div className="space-y-4">
               {filteredPapers.map((paperView) => {
@@ -970,68 +957,68 @@ export default function QuestionBank() {
                 const itemIdSummary = getQuestionBankItemIdSummary(items);
 
                 return (
-                  <Card key={paper.id} className="border-slate-200 shadow-sm">
-                    <CardHeader className="space-y-4">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">{paper.title}</CardTitle>
-                            <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
-                            <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                              {itemCountLabel}
-                            </Badge>
-                          </div>
-                          <CardDescription className="text-xs sm:text-sm">
-                            {itemIdSummary} · Updated {formatDate(paper.updatedAt)}
-                          </CardDescription>
+                  <div key={paper.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+                    <div className="flex flex-wrap items-start gap-6">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">{paper.title}</h2>
+                          <Badge variant="secondary">{PAPER_SUBJECT_LABELS[paper.subject as PaperSubject] || paper.subject}</Badge>
+                          <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
+                            {itemCountLabel}
+                          </Badge>
                         </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <Link href={`/paper-intake?subject=${paper.subject}&edit=${paper.paperId}`}>
-                            <Button variant="outline" className="border-slate-200">
-                              <FilePenLine className="mr-2 h-4 w-4" />
-                              Edit
-                            </Button>
-                          </Link>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-slate-200"
-                            onClick={() => toggleExpanded(paper.id)}
-                          >
-                            {expanded ? (
-                              <ChevronUp className="mr-2 h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="mr-2 h-4 w-4" />
-                            )}
-                            {expanded ? "Hide" : "View"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            disabled={Boolean(pendingDeleteKey)}
-                            onClick={() =>
-                              setDeleteTarget({
-                                kind: "paper",
-                                key: `paper-${paper.id}`,
-                                paper,
-                              })
-                            }
-                          >
-                            {pendingDeleteKey === `paper-${paper.id}` && deleteMutation.isPending ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="mr-2 h-4 w-4" />
-                            )}
-                            Delete
-                          </Button>
-                        </div>
+                        <p className="text-xs sm:text-sm text-slate-500">
+                          {itemIdSummary} · Updated {formatDate(paper.updatedAt)}
+                        </p>
+                        {paper.description ? (
+                          <p className="text-sm leading-6 text-slate-600">{paper.description}</p>
+                        ) : null}
                       </div>
-                    </CardHeader>
+
+                      <div className="shrink-0 flex flex-wrap items-center justify-end gap-3 self-start">
+                        <Link href={`/paper-intake?subject=${paper.subject}&edit=${paper.paperId}`}>
+                          <Button variant="outline" className="border-slate-200 bg-white">
+                            <FilePenLine className="mr-2 h-4 w-4" />
+                            Edit
+                          </Button>
+                        </Link>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-slate-200 bg-white"
+                          onClick={() => toggleExpanded(paper.id)}
+                        >
+                          {expanded ? (
+                            <ChevronUp className="mr-2 h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="mr-2 h-4 w-4" />
+                          )}
+                          {expanded ? "Hide" : "View"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="softDestructive"
+                          disabled={Boolean(pendingDeleteKey)}
+                          onClick={() =>
+                            setDeleteTarget({
+                              kind: "paper",
+                              key: `paper-${paper.id}`,
+                              paper,
+                            })
+                          }
+                        >
+                          {pendingDeleteKey === `paper-${paper.id}` && deleteMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="mr-2 h-4 w-4" />
+                          )}
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
 
                     {expanded ? (
-                      <CardContent className="space-y-3">
+                      <div className="mt-5 space-y-3 border-t border-slate-200 pt-5">
                         {items.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                             {hasActiveFilters
@@ -1046,20 +1033,20 @@ export default function QuestionBank() {
                             return (
                               <div
                                 key={`${paper.paperId}-${item.section.id}`}
-                                className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                                className="rounded-xl border border-[var(--border)] bg-[rgba(245,239,224,0.72)] p-4"
                               >
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div className="space-y-2">
+                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                  <div className="min-w-0 flex-1 space-y-3">
                                     <div className="flex flex-wrap items-center gap-2">
                                       {item.questionTypes.map((questionType) => (
-                                        <Badge key={`${item.section.id}-${questionType}`} className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
+                                        <span key={`${item.section.id}-${questionType}`} className="pureon-tag" data-tone="gold">
                                           {MANUAL_QUESTION_TYPE_LABELS[questionType] ?? questionType}
-                                        </Badge>
+                                        </span>
                                       ))}
                                       {item.displayTags.map((tag) => (
-                                        <Badge key={`${item.section.id}-${tag}`} variant="outline">
+                                        <span key={`${item.section.id}-${tag}`} className="pureon-tag">
                                           {tag}
-                                        </Badge>
+                                        </span>
                                       ))}
                                     </div>
                                     <p className="text-sm text-slate-500">
@@ -1080,8 +1067,7 @@ export default function QuestionBank() {
                                   </div>
                                   <Button
                                     type="button"
-                                    variant="outline"
-                                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    variant="softDestructive"
                                     disabled={Boolean(pendingDeleteKey) || !blueprint}
                                     onClick={() => {
                                       if (!blueprint) return;
@@ -1108,9 +1094,9 @@ export default function QuestionBank() {
                             );
                           })
                         )}
-                      </CardContent>
+                      </div>
                     ) : null}
-                  </Card>
+                  </div>
                 );
               })}
             </div>

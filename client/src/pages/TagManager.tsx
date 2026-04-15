@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { Link, useSearch } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, GripVertical, Layers3, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, GripVertical, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TeacherToolsLayout from "@/components/TeacherToolsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -297,6 +297,12 @@ export default function TagManager() {
 
   const isSaving = saveEnglishMutation.isPending || saveMathMutation.isPending || saveVocabularyMutation.isPending;
   const systems = subjectFilter === "english" ? englishSystems : basicSystems;
+  const systemSummary = useMemo(() => ({
+    total: systems.length,
+    assessment: systems.filter((system) => system.systemMode !== "textbook-practice").length,
+    practice: systems.filter((system) => system.systemMode === "textbook-practice").length,
+    totalParts: systems.reduce((sum, system) => sum + getDisplayedPartCount(subjectFilter, system), 0),
+  }), [subjectFilter, systems]);
 
   const setUnitsForSystem = (systemId: string, nextUnits: string[]) => {
     if (subjectFilter === "english") {
@@ -520,48 +526,83 @@ export default function TagManager() {
           </div>
 
           {query.isLoading ? (
-            <Card className="border-slate-200 shadow-sm">
-              <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Loading paper generator...
-              </CardContent>
-            </Card>
+            <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading paper generator...
+            </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                    {systems.length} papers
-                  </Badge>
-                  <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                    {PAPER_SUBJECT_LABELS[subjectFilter]}
-                  </Badge>
-                </div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "Total Generators", value: systemSummary.total, tone: "text-[var(--pureon-ink)]" },
+                  { label: "Assessment Modes", value: systemSummary.assessment, tone: "text-[#1E3A5F]" },
+                  { label: "Practice Modes", value: systemSummary.practice, tone: "text-emerald-700" },
+                  { label: "Configured Parts", value: systemSummary.totalParts, tone: "text-amber-700" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-slate-200 bg-[rgba(245,239,224,0.78)] p-5 shadow-sm">
+                    <div className="border border-[var(--border)] bg-[rgba(245,239,224,0.18)] p-4">
+                      <p className="text-sm text-[var(--pureon-muted)]">{item.label}</p>
+                      <p className={`mt-4 font-[family-name:var(--font-display)] text-2xl ${item.tone}`}>{item.value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-slate-200"
-                  onClick={() => {
-                    if (subjectFilter === "english") {
-                      const nextSystem = createEmptyEnglishSystem(englishSystems.length);
-                      setEnglishSystems((current) => [...current, nextSystem]);
-                      setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
-                    } else {
-                      const nextSystem = createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", basicSystems.length);
-                      setBasicSystems((current) => [...current, nextSystem]);
-                      setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
-                    }
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Paper
-                </Button>
+              <div className="rounded-[28px] border border-slate-200 bg-[rgba(245,239,224,0.78)] p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {PAPER_SUBJECT_ORDER.map((subject) => (
+                        <Link key={`tag-manager-subject-${subject}`} href={`/tag-manager?subject=${subject}`}>
+                          <button
+                            type="button"
+                            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                              subjectFilter === subject
+                                ? "bg-[#1E3A5F] text-white shadow-sm"
+                                : "border border-slate-200 bg-[rgba(245,239,224,0.45)] text-slate-600 hover:border-[#1E3A5F]/20 hover:text-[#1E3A5F]"
+                            }`}
+                          >
+                            {PAPER_SUBJECT_LABELS[subject]}
+                          </button>
+                        </Link>
+                      ))}
+                    </div>
+                    <p className="max-w-3xl text-sm leading-6 text-slate-500">
+                      按学科维护随机组卷所需的系统名称、模式和 part 规则。学生进入测试模式时，会直接按这里的配置生成试卷。
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="pureon-tag">{systems.length} Papers</span>
+                      <span className="pureon-tag" data-tone="gold">Assessment {systemSummary.assessment}</span>
+                      <span className="pureon-tag" data-tone="green">Practice {systemSummary.practice}</span>
+                      <span className="pureon-tag">{systemSummary.totalParts} Parts</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-slate-200 bg-white"
+                    onClick={() => {
+                      if (subjectFilter === "english") {
+                        const nextSystem = createEmptyEnglishSystem(englishSystems.length);
+                        setEnglishSystems((current) => [...current, nextSystem]);
+                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
+                      } else {
+                        const nextSystem = createEmptyBasicSystem(subjectFilter as "math" | "vocabulary", basicSystems.length);
+                        setBasicSystems((current) => [...current, nextSystem]);
+                        setExpandedSystemIds((current) => (current.includes(nextSystem.id) ? current : [...current, nextSystem.id]));
+                      }
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Paper
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-4">
                 {systems.map((system, index) => (
-                  <Card key={system.id} className="border-slate-200 shadow-sm">
+                  <Card key={system.id} className="gap-4 rounded-[28px] border border-slate-200 bg-white py-0 shadow-sm before:hidden">
                     {(() => {
                       const generatedPaperPlaceholder = buildGeneratedPaperConfig(
                         subjectFilter,
@@ -588,38 +629,47 @@ export default function TagManager() {
 
                       return (
                     <>
-                    <CardHeader className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-                            <Layers3 className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <CardTitle className="font-[family-name:var(--font-body)] text-sm font-extrabold tracking-normal text-[#1E3A5F] sm:text-base">
+                    <CardHeader className="space-y-3 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle className="font-[family-name:var(--font-body)] text-lg font-extrabold tracking-normal text-[#1E3A5F]">
                               {system.label.trim() || `Exam ${index + 1}`}
                             </CardTitle>
-                            <CardDescription className="text-xs sm:text-sm">Paper ID: {system.id}</CardDescription>
+                            <Badge
+                              className={system.published
+                                ? "rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700 hover:bg-emerald-50"
+                                : "rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-500 hover:bg-slate-100"}
+                            >
+                              {system.published ? "Published" : "Hidden"}
+                            </Badge>
+                            <Badge className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-500 hover:bg-slate-100">
+                              {PAPER_SUBJECT_LABELS[subjectFilter]}
+                            </Badge>
+                            <Badge className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-500 hover:bg-slate-100">
+                              {SYSTEM_MODE_LABELS[system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"]}
+                            </Badge>
                           </div>
+                          <div className="mt-1 text-sm text-slate-500">Paper ID: {system.id}</div>
                         </div>
-
                         <div className="flex items-center gap-2">
                           <Button
                             type="button"
-                            variant="outline"
-                            className="border-slate-200"
+                            variant="ghost"
+                            className="h-9 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-500 shadow-sm hover:bg-slate-50 hover:text-slate-700"
                             onClick={() => toggleSystemExpanded(system.id)}
                           >
+                            <span>{expandedSystemIds.includes(system.id) ? "Hide" : "View"}</span>
                             {expandedSystemIds.includes(system.id) ? (
-                              <ChevronUp className="mr-2 h-4 w-4" />
+                              <ChevronUp className="ml-2 h-4 w-4" />
                             ) : (
-                              <ChevronDown className="mr-2 h-4 w-4" />
+                              <ChevronDown className="ml-2 h-4 w-4" />
                             )}
-                            {expandedSystemIds.includes(system.id) ? "Collapse" : "Expand"}
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            variant="softDestructive"
+                            className="px-3"
                             onClick={() => {
                               void handleDeleteSystem(system.id);
                             }}
@@ -630,24 +680,36 @@ export default function TagManager() {
                           </Button>
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 hover:bg-indigo-50">
-                          {SYSTEM_MODE_LABELS[system.systemMode === "textbook-practice" ? "textbook-practice" : "assessment"]}
-                        </Badge>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span>{getDisplayedPartCount(subjectFilter, system)} configured parts</span>
                         {system.systemMode === "textbook-practice" ? (
-                          <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
-                            {getUnitCount(system.units)} Units
-                          </Badge>
+                          <span>{getUnitCount(system.units)} configured units</span>
                         ) : null}
-                        <Badge className="rounded-full bg-sky-100 px-3 py-1 text-sky-700 hover:bg-sky-100">
-                          {getDisplayedPartCount(subjectFilter, system)} Parts
-                        </Badge>
                       </div>
+                      <div className="flex flex-wrap gap-2">
+                        {system.systemMode === "textbook-practice" ? (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-500">
+                            Practice Rules
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                            Assessment Rules
+                          </span>
+                        )}
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-500">
+                          {getDisplayedPartCount(subjectFilter, system)} Parts
+                        </span>
+                      </div>
+                      <p className="text-sm leading-6 text-slate-500">
+                        {system.systemMode === "textbook-practice"
+                          ? "Practice rules will be used by the student brush-up mode to generate question-by-question drills."
+                          : "Assessment rules define how student test mode builds a full random paper from your tagged bank."}
+                      </p>
                     </CardHeader>
 
                     {expandedSystemIds.includes(system.id) ? (
-                      <CardContent className="grid gap-5 lg:grid-cols-2">
+                      <CardContent className="px-4 pb-4 pt-0">
+                        <div className="grid gap-4 rounded-[24px] border border-slate-200 bg-[rgba(245,239,224,0.38)] p-4 lg:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Type</Label>
                           <select
@@ -836,8 +898,8 @@ export default function TagManager() {
 
                                           <Button
                                             type="button"
-                                            variant="outline"
-                                            className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                            variant="softDestructive"
+                                            className="px-3"
                                             onClick={() =>
                                               updateGeneratedPaper(system.id, (current) => ({
                                                 ...current,
@@ -1038,8 +1100,8 @@ export default function TagManager() {
 
                                       <Button
                                         type="button"
-                                        variant="outline"
-                                        className="border-red-200 px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                        variant="softDestructive"
+                                        className="px-3"
                                         onClick={() => {
                                           if (subjectFilter === "english") {
                                             updateEnglishAssessmentParts(system.id, (currentRows) =>
@@ -1104,6 +1166,7 @@ export default function TagManager() {
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                             Save Tag Configuration
                           </Button>
+                        </div>
                         </div>
                       </CardContent>
                     ) : null}
